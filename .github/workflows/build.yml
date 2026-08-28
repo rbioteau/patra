@@ -32,7 +32,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter build apk --debug
-      - uses: actions/upload-artifact@v7
+      # Installable artifacts only from code that reached main: a fork PR
+      # must not be able to publish an APK/IPA someone might sideload.
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
         with:
           name: verso-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
@@ -52,11 +55,13 @@ jobs:
       # forbids outside a debugger. TestFlight upload will come later.
       - run: flutter build ios --release --no-codesign
       - name: Package unsigned IPA
+        if: github.event_name == 'push'
         run: |
           mkdir Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -qr verso-unsigned.ipa Payload
-      - uses: actions/upload-artifact@v7
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
         with:
           name: verso-unsigned-ipa
           path: verso-unsigned.ipa
