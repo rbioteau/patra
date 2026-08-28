@@ -56,7 +56,7 @@ jobs:
           mkdir Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -qr verso-unsigned.ipa Payload
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: verso-unsigned-ipa
           path: verso-unsigned.ipa
