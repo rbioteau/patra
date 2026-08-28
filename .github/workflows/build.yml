@@ -46,6 +46,17 @@ jobs:
         with:
           channel: stable
           cache: true
-      # Unsigned build: verifies iOS compiles without an Apple Developer
-      # account. Signing + TestFlight upload will be added at release time.
-      - run: flutter build ios --debug --no-codesign
+      # Unsigned release build: no Apple Developer account. The IPA artifact
+      # can be sideloaded on a device after re-signing (AltStore/Sideloadly);
+      # release mode is required — debug Flutter builds need JIT, which iOS
+      # forbids outside a debugger. TestFlight upload will come later.
+      - run: flutter build ios --release --no-codesign
+      - name: Package unsigned IPA
+        run: |
+          mkdir Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -qr verso-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verso-unsigned-ipa
+          path: verso-unsigned.ipa
