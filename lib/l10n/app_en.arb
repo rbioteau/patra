@@ -1,0 +1,64 @@
+{
+  "@@locale": "en",
+  "appTagline": "A Kavita client",
+  "@appTagline": {
+    "description": "Subtitle under the app name on the login screen"
+  },
+  "serverAddress": "Server address",
+  "serverAddressHint": "https://kavita.example.com",
+  "serverAddressRequired": "Server address is required",
+  "serverAddressInvalid": "Invalid address (http(s)://…)",
+  "username": "Username",
+  "usernameRequired": "Username is required",
+  "password": "Password",
+  "passwordRequired": "Password is required",
+  "signIn": "Sign in",
+  "loginFailed": "Could not sign in: {error}",
+  "@loginFailed": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "librariesTitle": "Libraries",
+  "signOut": "Sign out",
+  "retry": "Retry",
+  "volumesTitle": "Volumes",
+  "@volumesTitle": {
+    "description": "Section header for the volumes of a series"
+  },
+  "volumeLabel": "Volume {name}",
+  "@volumeLabel": {
+    "description": "Section header for a volume; name is Kavita's volume number as a string, e.g. '1' or '1-2'",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "chaptersTitle": "Chapters",
+  "@chaptersTitle": {
+    "description": "Section header for chapters that belong to no volume, shown only when the series also has real volumes"
+  },
+  "specialsTitle": "Specials",
+  "@specialsTitle": {
+    "description": "Section header for special chapters (one-shots, extras)"
+  },
+  "chapterLabel": "Chapter {range}",
+  "@chapterLabel": {
+    "description": "Fallback chapter list label when the chapter has no title; range is Kavita's chapter number or number range, e.g. '12' or '12-14'",
+    "placeholders": {
+      "range": {"type": "String"}
+    }
+  },
+  "pageCount": "{count} pages",
+  "@pageCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "pageProgress": "Page {current} / {total}",
+  "@pageProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  }
+}
