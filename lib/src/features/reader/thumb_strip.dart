@@ -165,6 +165,36 @@ class ThumbLoadQueue {
   }
 }
 
+// --- the strip's geometry ----------------------------------------------------
+//
+// The handoff drew a 34x48 thumbnail. On a real device that is a stamp: this
+// strip is not read, it is *aimed at*, and a page you cannot recognise is a
+// page you cannot scrub to. So the thumbnails are drawn at twice the handoff's
+// size on a phone and [_tabletScale] again on a tablet, while the strip's own
+// margins stay where they were — the extra height goes into the pictures.
+const _phoneBaseWidth = 68.0;
+const _phoneBaseHeight = 96.0;
+const _phoneNearWidth = 80.0;
+const _phoneNearHeight = 112.0;
+const _phoneCurrentWidth = 92.0;
+const _phoneCurrentHeight = 128.0;
+const _phoneGap = 8.0;
+const _phoneHPadding = 12.0;
+const _phoneVPadding = 6.0;
+const _tabletScale = 1.35;
+
+/// Every length in the strip is the phone's, taken through this: a tablet gets
+/// the same strip drawn larger, so the accordion's law is untouched and only
+/// the numbers change.
+double _scaleFor(BuildContext context) =>
+    isTabletLayout(context) ? _tabletScale : 1;
+
+/// How far inside the strip Material sets a `Slider`'s handle at either end of
+/// its track, measured against this theme rather than assumed. The strip's own
+/// end centres are further in than that, so the slider is padded by the
+/// difference — see [ThumbStrip.sliderPadding].
+const _sliderThumbInset = 26.0;
+
 /// The reader's page scrubber: one thumbnail per page, the current one swollen
 /// and its two neighbours halfway there.
 ///
@@ -194,27 +224,62 @@ class ThumbStrip extends StatefulWidget {
   final ImageProvider? Function(int page) providerBuilder;
   final ValueChanged<int> onTap;
 
+  /// The width of the swollen thumbnail on this screen. The reader decodes its
+  /// thumbnails to it: a picture decoded at a third of the size it is drawn at
+  /// is the blur this strip exists to avoid.
+  static double thumbWidth(BuildContext context) =>
+      _phoneCurrentWidth * _scaleFor(context);
+
+  /// Where the first and last thumbnail centres sit, in from the strip's edge:
+  /// half a swollen thumbnail past the padding.
+  static double edgeInset(BuildContext context) =>
+      (_phoneHPadding + _phoneCurrentWidth / 2) * _scaleFor(context);
+
+  /// The horizontal padding the slider under the strip must be given so its
+  /// handle starts and ends exactly where the bulge does.
+  ///
+  /// The two are the chrome's only "you are here" markers and they sit one
+  /// above the other, so they must agree at the ends as well as in the middle
+  /// — and the bulge's ends move whenever the thumbnails change size, which is
+  /// what makes this a computation rather than a number.
+  static double sliderPadding(BuildContext context) {
+    final inset = edgeInset(context) - _sliderThumbInset;
+    return inset < 0 ? 0 : inset;
+  }
+
   @override
   State<ThumbStrip> createState() => _ThumbStripState();
 }
 
 class _ThumbStripState extends State<ThumbStrip> {
-  // 34×48 is the handoff's thumbnail; the accordion grows from it.
-  static const _baseWidth = 34.0;
-  static const _baseHeight = 48.0;
-  static const _nearWidth = 40.0;
-  static const _nearHeight = 56.0;
-  static const _currentWidth = 46.0;
-  static const _currentHeight = 64.0;
-  static const _gap = 6.0;
-  static const _hPadding = 12.0;
   static const _grow = Duration(milliseconds: 200);
+
+  /// Read in [didChangeDependencies], not in the getters below: those are
+  /// called from scroll callbacks, where an inherited-widget lookup has no
+  /// business being.
+  double _scale = 1;
+
+  double get _baseWidth => _phoneBaseWidth * _scale;
+  double get _baseHeight => _phoneBaseHeight * _scale;
+  double get _nearWidth => _phoneNearWidth * _scale;
+  double get _nearHeight => _phoneNearHeight * _scale;
+  double get _currentWidth => _phoneCurrentWidth * _scale;
+  double get _currentHeight => _phoneCurrentHeight * _scale;
+  double get _gap => _phoneGap * _scale;
+  double get _hPadding => _phoneHPadding * _scale;
+  double get _vPadding => _phoneVPadding * _scale;
 
   /// The closest two centres may come before the current thumbnail and its
   /// neighbour lose their gap.
-  static const _minStep = (_currentWidth + _nearWidth) / 2 + _gap;
+  double get _minStep => (_currentWidth + _nearWidth) / 2 + _gap;
 
   final _controller = ScrollController();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scale = _scaleFor(context);
+  }
 
   @override
   void initState() {
@@ -308,16 +373,21 @@ class _ThumbStripState extends State<ThumbStrip> {
   EdgeInsetsDirectional _padding(double? spread, double viewport) {
     if (widget.pages == 1) {
       final side = (viewport - _currentWidth) / 2;
-      return EdgeInsetsDirectional.fromSTEB(side, 6, side, 6);
+      return EdgeInsetsDirectional.fromSTEB(side, _vPadding, side, _vPadding);
     }
     if (spread == null) {
-      return const EdgeInsetsDirectional.fromSTEB(_hPadding, 6, _hPadding, 6);
+      return EdgeInsetsDirectional.fromSTEB(
+        _hPadding,
+        _vPadding,
+        _hPadding,
+        _vPadding,
+      );
     }
     return EdgeInsetsDirectional.fromSTEB(
       _hPadding + (_currentWidth - _width(0)) / 2,
-      6,
+      _vPadding,
       _hPadding + (_currentWidth - _width(widget.pages - 1)) / 2,
-      6,
+      _vPadding,
     );
   }
 
@@ -368,11 +438,11 @@ class _ThumbStripState extends State<ThumbStrip> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: _currentHeight + 12,
+      height: _currentHeight + _vPadding * 2,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final spread = _spread(constraints.maxWidth);
-          return ListView.separated(
+          return ListView.custom(
             controller: _controller,
             scrollDirection: Axis.horizontal,
             // Spread out, the content is exactly the viewport: any scroll is
@@ -382,59 +452,100 @@ class _ThumbStripState extends State<ThumbStrip> {
                 ? null
                 : const NeverScrollableScrollPhysics(),
             padding: _padding(spread, constraints.maxWidth),
-            itemCount: widget.pages,
-            separatorBuilder: (_, page) => AnimatedContainer(
-              duration: _grow,
-              curve: Curves.easeOut,
-              width: _gapAfter(page, spread),
-            ),
-            itemBuilder: (context, page) {
-              final selected = page == widget.current;
-              final provider = widget.queue.isReady(page)
-                  ? widget.providerBuilder(page)
-                  : null;
-              return Align(
-                // The strip is centred on its tallest thumbnail, so the
-                // accordion opens both ways.
-                alignment: Alignment.center,
-                widthFactor: 1,
-                child: GestureDetector(
-                  onTap: () => widget.onTap(page),
-                  child: AnimatedContainer(
-                    key: ValueKey(page),
-                    duration: _grow,
-                    curve: Curves.easeOut,
-                    width: _width(page),
-                    height: _height(page),
-                    decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(radiusThumb),
-                      border: Border.all(
-                        color: selected ? patraAccent : Colors.white24,
-                        width: selected ? 2 : 1,
+            childrenDelegate: _StripDelegate(
+              childCount: widget.pages,
+              // What the whole strip measures, which the strip knows exactly.
+              // A lazy list otherwise averages the children it has built and
+              // applies that to the rest — and three of these are half again
+              // as wide as the others, so the guess is wrong by tens of points
+              // and the scroll to the last page stops short of it, leaving the
+              // bulge behind the slider's handle. It is also steady while the
+              // accordion animates, which the guess is not.
+              extent: _leadingEdge(widget.pages) - _gap,
+              builder: (context, page) {
+                final selected = page == widget.current;
+                final provider = widget.queue.isReady(page)
+                    ? widget.providerBuilder(page)
+                    : null;
+                return Row(
+                  children: [
+                    Align(
+                      // The strip is centred on its tallest thumbnail, so the
+                      // accordion opens both ways.
+                      alignment: Alignment.center,
+                      widthFactor: 1,
+                      child: GestureDetector(
+                        onTap: () => widget.onTap(page),
+                        child: AnimatedContainer(
+                          key: ValueKey(page),
+                          duration: _grow,
+                          curve: Curves.easeOut,
+                          width: _width(page),
+                          height: _height(page),
+                          decoration: BoxDecoration(
+                            color: Colors.white10,
+                            borderRadius: BorderRadius.circular(radiusThumb),
+                            border: Border.all(
+                              color: selected ? patraAccent : Colors.white24,
+                              width: selected ? 2 : 1,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              radiusThumb - 1,
+                            ),
+                            // Until the queue has had its turn the thumbnail is
+                            // just its frame: no request, nothing to shuffle
+                            // around.
+                            child: provider == null
+                                ? const SizedBox.shrink()
+                                : Image(
+                                    image: provider,
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                    errorBuilder: (_, _, _) =>
+                                        const SizedBox.shrink(),
+                                  ),
+                          ),
+                        ),
                       ),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(radiusThumb - 1),
-                      // Until the queue has had its turn the thumbnail is just
-                      // its frame: no request, nothing to shuffle around.
-                      child: provider == null
-                          ? const SizedBox.shrink()
-                          : Image(
-                              image: provider,
-                              fit: BoxFit.cover,
-                              gaplessPlayback: true,
-                              errorBuilder: (_, _, _) =>
-                                  const SizedBox.shrink(),
-                            ),
-                    ),
-                  ),
-                ),
-              );
-            },
+                    // The gap travels with the thumbnail before it: one child
+                    // per page is what lets the delegate below state the
+                    // strip's extent exactly.
+                    if (page < widget.pages - 1)
+                      AnimatedContainer(
+                        duration: _grow,
+                        curve: Curves.easeOut,
+                        width: _gapAfter(page, spread),
+                      ),
+                  ],
+                );
+              },
+            ),
           );
         },
       ),
     );
   }
+}
+
+/// A list delegate that knows what its children measure instead of guessing.
+class _StripDelegate extends SliverChildBuilderDelegate {
+  _StripDelegate({
+    required NullableIndexedWidgetBuilder builder,
+    required int childCount,
+    required this.extent,
+  }) : super(builder, childCount: childCount);
+
+  /// The strip's whole length, padding aside.
+  final double extent;
+
+  @override
+  double? estimateMaxScrollOffset(
+    int firstIndex,
+    int lastIndex,
+    double leadingScrollOffset,
+    double trailingScrollOffset,
+  ) => extent;
 }

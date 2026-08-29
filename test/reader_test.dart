@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
@@ -28,9 +29,13 @@ class _ReaderAdapter implements HttpClientAdapter {
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
     if (options.path == '/api/Reader/progress') {
       posted.add((options.data as Map<String, dynamic>)['pageNum'] as int);
-      return ResponseBody.fromString('{}', 200, headers: {
-        Headers.contentTypeHeader: [Headers.jsonContentType],
-      });
+      return ResponseBody.fromString(
+        '{}',
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
     }
     if (options.path == '/api/Reader/chapter-info') {
       return ResponseBody.fromString(
@@ -84,6 +89,7 @@ Future<List<int>> _pumpReader(
   required int initialPage,
   ReadingDirection direction = ReadingDirection.webtoon,
   int? savedPagesRead,
+  SliderComponentShape? sliderThumb,
 }) async {
   final dir = mockPathProvider();
   final downloads = Directory('${dir.path}/downloads')..createSync();
@@ -115,7 +121,12 @@ Future<List<int>> _pumpReader(
         theme: patraTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: ReaderScreen(chapterId: 7, initialPage: initialPage),
+        home: sliderThumb == null
+            ? ReaderScreen(chapterId: 7, initialPage: initialPage)
+            : SliderTheme(
+                data: SliderThemeData(thumbShape: sliderThumb),
+                child: ReaderScreen(chapterId: 7, initialPage: initialPage),
+              ),
       ),
     ),
   );
@@ -125,6 +136,36 @@ Future<List<int>> _pumpReader(
   await tester.pump(const Duration(milliseconds: 100));
   await tester.pump(const Duration(milliseconds: 100));
   return posted;
+}
+
+/// Reports where the slider actually paints its handle, which nothing else in
+/// a widget test can see.
+class _ProbeThumb extends SliderComponentShape {
+  _ProbeThumb(this.centres);
+
+  /// The handle's centre, in global coordinates, once per paint.
+  final List<double> centres;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(20, 20);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    centres.add(center.dx + parentBox.localToGlobal(Offset.zero).dx);
+  }
 }
 
 void main() {
@@ -167,5 +208,81 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(posted, [20]);
+  });
+
+  testWidgets('the slider handle sits under the swollen thumbnail', (
+    tester,
+  ) async {
+    // The chrome's two "you are here" markers sit one above the other, so they
+    // have to agree at the ends as well as in the middle — and the strip's end
+    // centres move whenever the thumbnails change size, which is what makes
+    // the slider's padding a computation rather than a number.
+    final centres = <double>[];
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      direction: ReadingDirection.leftToRight,
+      sliderThumb: _ProbeThumb(centres),
+    );
+    await tester.tapAt(tester.getCenter(find.byType(PageView)));
+    // Not pumpAndSettle: the page behind the chrome spins forever against a
+    // server that serves no images. This is long enough for the strip to have
+    // placed itself and the accordion to have opened.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(centres, isNotEmpty, reason: 'the slider never painted its handle');
+    expect(
+      centres.last,
+      moreOrLessEquals(
+        tester.getCenter(find.byKey(const ValueKey(0))).dx,
+        epsilon: 1,
+      ),
+    );
+  });
+
+  testWidgets('the system bars come and go with the reader\'s own chrome', (
+    tester,
+  ) async {
+    // Every fullscreen mode hides the status bar and the home indicator on
+    // iOS; `edgeToEdge` is the app's normal state everywhere else.
+    final modes = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemChrome.setEnabledSystemUIMode') {
+          modes.add(call.arguments as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      direction: ReadingDirection.leftToRight,
+    );
+    expect(modes.last, 'SystemUiMode.immersiveSticky');
+
+    // The middle third of the screen toggles the chrome; the clock is one tap
+    // away rather than gone for the length of the chapter.
+    await tester.tapAt(tester.getCenter(find.byType(PageView)));
+    await tester.pump();
+    expect(modes.last, 'SystemUiMode.edgeToEdge');
+
+    await tester.tapAt(tester.getCenter(find.byType(PageView)));
+    await tester.pump();
+    expect(modes.last, 'SystemUiMode.immersiveSticky');
+
+    // Leaving the chapter hands the bars back.
+    await tester.pumpWidget(const SizedBox());
+    expect(modes.last, 'SystemUiMode.edgeToEdge');
   });
 }

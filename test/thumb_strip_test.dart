@@ -207,7 +207,21 @@ void main() {
   });
 
   group('ThumbStrip', () {
-    Future<void> pump(WidgetTester tester, int current, {int pages = 40}) async {
+    Future<void> pump(
+      WidgetTester tester,
+      int current, {
+      int pages = 40,
+      bool tablet = false,
+      double width = 300,
+    }) async {
+      // The strip reads its scale off the screen, so a test that pins its
+      // geometry has to say which screen it is on. The default test surface
+      // (800x600) is a tablet by the app's own rule.
+      tester.view.physicalSize = tablet
+          ? const Size(1640, 2360) // an iPad in portrait
+          : const Size(1170, 2532); // a phone
+      tester.view.devicePixelRatio = tablet ? 2 : 3;
+      addTearDown(tester.view.reset);
       // No delay: the strip owns none of the queue's timers any more, and a
       // widget test refuses to end with one still pending.
       final queue = ThumbLoadQueue(
@@ -220,7 +234,7 @@ void main() {
           home: Scaffold(
             body: Center(
               child: SizedBox(
-                width: 300,
+                width: width,
                 child: ThumbStrip(
                   pages: pages,
                   current: current,
@@ -245,11 +259,11 @@ void main() {
     ) async {
       await pump(tester, 20);
 
-      expect(sizeOf(tester, 20), const Size(46, 64));
-      expect(sizeOf(tester, 19), const Size(40, 56));
-      expect(sizeOf(tester, 21), const Size(40, 56));
-      expect(sizeOf(tester, 18), const Size(34, 48));
-      expect(sizeOf(tester, 22), const Size(34, 48));
+      expect(sizeOf(tester, 20), const Size(92, 128));
+      expect(sizeOf(tester, 19), const Size(80, 112));
+      expect(sizeOf(tester, 21), const Size(80, 112));
+      expect(sizeOf(tester, 18), const Size(68, 96));
+      expect(sizeOf(tester, 22), const Size(68, 96));
     });
 
     testWidgets('the swollen thumbnail travels where the slider handle does', (
@@ -261,7 +275,7 @@ void main() {
       const pages = 41;
       // Half the current thumbnail plus the strip's own padding: the inset
       // the handle also starts from.
-      const inset = 12 + 46 / 2;
+      const inset = 12 + 92 / 2;
 
       await pump(tester, 0, pages: pages);
       final strip = tester.getRect(find.byType(ThumbStrip));
@@ -284,12 +298,14 @@ void main() {
     });
 
     testWidgets('a chapter that fits spreads across the strip', (tester) async {
-      // Five pages cannot fill a scrolling strip, so the thumbnails spread out
-      // instead: each one lands under the slider handle for its own page,
-      // which is what the scrolling strip achieves by moving.
-      const pages = 5;
-      const inset = 12 + 46 / 2;
-      await pump(tester, 1, pages: pages);
+      // A handful of pages cannot fill a scrolling strip, so the thumbnails
+      // spread out instead: each one lands under the slider handle for its own
+      // page, which is what the scrolling strip achieves by moving.
+      const pages = 3;
+      const inset = 12 + 92 / 2;
+      // Wide enough that thumbnails this size can spread without the two
+      // widest touching, which is where spreading gives up.
+      await pump(tester, 1, pages: pages, width: 340);
 
       final strip = tester.getRect(find.byType(ThumbStrip));
       final travel = strip.width - inset * 2;
@@ -319,9 +335,36 @@ void main() {
       await pump(tester, 20);
       await pump(tester, 21);
 
-      expect(sizeOf(tester, 21), const Size(46, 64));
-      expect(sizeOf(tester, 20), const Size(40, 56));
-      expect(sizeOf(tester, 19), const Size(34, 48));
+      expect(sizeOf(tester, 21), const Size(92, 128));
+      expect(sizeOf(tester, 20), const Size(80, 112));
+      expect(sizeOf(tester, 19), const Size(68, 96));
+    });
+
+    testWidgets('a tablet gets the same strip, drawn larger', (tester) async {
+      // The scrubber is aimed at, not merely read: 34pt of it on an iPad is a
+      // stamp. Every length scales together, so the accordion's law — widest
+      // in the middle, its neighbours halfway — is the one pinned above.
+      // Wide enough to hold the current page and two on either side: they
+      // are what the accordion is made of.
+      await pump(tester, 20, tablet: true, width: 600);
+
+      final current = sizeOf(tester, 20);
+      final near = sizeOf(tester, 19);
+      final base = sizeOf(tester, 18);
+      expect(current.width, greaterThan(120));
+      expect(base.width, greaterThan(90));
+      expect(current.width / current.height, closeTo(92 / 128, 0.001));
+      expect(near.width / base.width, closeTo(80 / 68, 0.001));
+      // Still an accordion, and still centred on the tallest.
+      expect(current.height, greaterThan(near.height));
+      expect(near.height, greaterThan(base.height));
+      expect(
+        tester.getCenter(find.byKey(const ValueKey(20))).dy,
+        moreOrLessEquals(
+          tester.getCenter(find.byKey(const ValueKey(18))).dy,
+          epsilon: 0.5,
+        ),
+      );
     });
   });
 }

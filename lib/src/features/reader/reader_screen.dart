@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -57,13 +58,42 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _page = widget.initialPage;
     // Starts from the saved preference; changing it here is per-chapter.
     _direction = ref.read(defaultReadingDirectionProvider);
+    // The chapter opens with no chrome of ours, and none of the system's.
+    _setSystemChrome(visible: false);
   }
 
   @override
   void dispose() {
+    // The clock belongs to the rest of the app: hand it back on the way out.
+    // `edgeToEdge` is what every other screen runs under — it is Flutter's
+    // default on iOS and on the Android SDK level we target.
+    _setSystemChrome(visible: true);
     // Leaving the chapter ends the backfill with it: nothing is left to scrub.
     _thumbs.dispose();
     super.dispose();
+  }
+
+  /// The reader's chrome and the system's come and go together.
+  ///
+  /// While reading there is nothing on the screen but the page — no clock, no
+  /// battery, no home indicator — because a page of a book is the whole point
+  /// of the screen. The tap that brings the title bar back brings the rest
+  /// back with it, so the time is always one tap away rather than gone.
+  ///
+  /// iOS hides the status bar and the home indicator for any of the fullscreen
+  /// modes. Android honours it below API 36 and ignores it above, where the
+  /// system enforces edge-to-edge; that is the platform's call, not ours.
+  void _setSystemChrome({required bool visible}) {
+    SystemChrome.setEnabledSystemUIMode(
+      visible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
+    );
+  }
+
+  /// Shows or hides both at once. Every path that changes [_showChrome] goes
+  /// through here, or the system bars would drift out of step with ours.
+  void _showChromeAndBars(bool visible) {
+    if (visible != _showChrome) setState(() => _showChrome = visible);
+    _setSystemChrome(visible: visible);
   }
 
   // --- progress -------------------------------------------------------------
@@ -189,9 +219,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// tells it how long the chapter is.
   late final ThumbLoadQueue _thumbs = ThumbLoadQueue(load: _loadThumb);
 
+  /// What a strip thumbnail is decoded at: the size it is actually drawn at,
+  /// in device pixels, capped at what Kavita's thumbnail endpoint serves.
+  ///
+  /// The precache and the widget that shows it must ask for the *same* width:
+  /// `ResizeImage` puts it in the cache key, so a mismatch quietly precaches
+  /// one image and displays another. Asking for less than the strip draws is
+  /// the blur the strip exists to avoid; asking for more only costs memory,
+  /// since there is no more detail in the source.
+  int get _thumbCacheWidth =>
+      (ThumbStrip.thumbWidth(context) * MediaQuery.devicePixelRatioOf(context))
+          .round()
+          .clamp(96, 320);
+
   Future<void> _loadThumb(int page) {
     if (!mounted) return Future.value();
-    final provider = _imageProvider(page, cacheWidth: 96, thumbnail: true);
+    final provider = _imageProvider(
+      page,
+      cacheWidth: _thumbCacheWidth,
+      thumbnail: true,
+    );
     if (provider == null) return Future.value();
     return precacheImage(provider, context, onError: (_, _) {});
   }
@@ -345,7 +392,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       flex: 40,
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
-                        onTap: () => setState(() => _showChrome = !_showChrome),
+                        onTap: () => _showChromeAndBars(!_showChrome),
                       ),
                     ),
                     Expanded(
@@ -362,7 +409,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () => setState(() => _showChrome = !_showChrome),
+                  onTap: () => _showChromeAndBars(!_showChrome),
                 ),
               ),
 
@@ -372,10 +419,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     ? chapter.title
                     : chapter.seriesName,
                 direction: direction,
-                onDirectionChanged: (next) => setState(() {
-                  _direction = next;
-                  _showChrome = false;
-                }),
+                onDirectionChanged: (next) {
+                  setState(() => _direction = next);
+                  _showChromeAndBars(false);
+                },
               ),
               _BottomChrome(
                 chapter: chapter,
@@ -383,8 +430,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 span: spread ? 2 : 1,
                 rtl: rtl,
                 thumbQueue: _thumbs,
-                thumbProvider: (page) =>
-                    _imageProvider(page, cacheWidth: 96, thumbnail: true),
+                thumbProvider: (page) => _imageProvider(
+                  page,
+                  cacheWidth: _thumbCacheWidth,
+                  thumbnail: true,
+                ),
                 onSeek: (page) => _goTo(page, chapter),
               ),
             ],
@@ -863,7 +913,11 @@ class _BottomChrome extends StatelessWidget {
                       ),
                       if (chapter.pages > 1)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          // The handle has to start and end where the strip's
+                          // bulge does: the strip works out how far in that is.
+                          padding: EdgeInsets.symmetric(
+                            horizontal: ThumbStrip.sliderPadding(context),
+                          ),
                           child: Slider(
                             value: page.toDouble().clamp(
                               0,
