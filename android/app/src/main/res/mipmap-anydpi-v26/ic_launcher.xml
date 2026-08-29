@@ -2,4 +2,5 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
   <background android:drawable="@color/verso_ink"/>   <!-- #16141C -->
   <foreground android:drawable="@drawable/verso_mark"/>
+  <monochrome android:drawable="@drawable/verso_mark_mono"/>
 </adaptive-icon>
