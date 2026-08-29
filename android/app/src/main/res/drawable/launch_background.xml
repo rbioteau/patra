@@ -2,9 +2,9 @@
 <!-- Launch screen for Android 11 and below: the ink field with the mark
      centred, so it matches the app's own background exactly. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/verso_ink" />
+    <item android:drawable="@color/patra_ink" />
     <item
-        android:drawable="@drawable/verso_mark"
+        android:drawable="@drawable/patra_mark"
         android:gravity="center"
         android:width="192dp"
         android:height="192dp" />

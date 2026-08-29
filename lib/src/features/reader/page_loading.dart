@@ -57,7 +57,7 @@ class _PageLoadingState extends State<PageLoading> {
               height: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: _explaining ? versoAccent : Colors.white24,
+                color: _explaining ? patraAccent : Colors.white24,
               ),
             ),
             AnimatedSize(
@@ -71,7 +71,7 @@ class _PageLoadingState extends State<PageLoading> {
                         Text(
                           l10n.pdfPreparing,
                           textAlign: TextAlign.center,
-                          style: VersoText.rowTitle(),
+                          style: PatraText.rowTitle(),
                         ),
                         const SizedBox(height: 6),
                         ConstrainedBox(
@@ -79,7 +79,7 @@ class _PageLoadingState extends State<PageLoading> {
                           child: Text(
                             l10n.pdfPreparingBody,
                             textAlign: TextAlign.center,
-                            style: VersoText.metadata(),
+                            style: PatraText.metadata(),
                           ),
                         ),
                       ],

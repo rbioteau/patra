@@ -1,14 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/downloads/image_cache_store.dart';
+import 'package:patra/src/downloads/image_cache_store.dart';
 
 void main() {
   late Directory dir;
   late ImageCacheStore store;
 
   setUp(() {
-    dir = Directory.systemTemp.createTempSync('verso-cache-test');
+    dir = Directory.systemTemp.createTempSync('patra-cache-test');
     store = ImageCacheStore(root: dir);
   });
 

@@ -31,7 +31,7 @@ Future<void> main() async {
         initialImageCacheLimitProvider.overrideWithValue(cacheLimit),
         imageCacheStoreProvider.overrideWithValue(imageCache),
       ],
-      child: const VersoApp(),
+      child: const PatraApp(),
     ),
   );
 }

@@ -5,12 +5,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/api/kavita_client.dart';
-import 'package:verso/src/app.dart';
-import 'package:verso/src/auth/session.dart';
-import 'package:verso/src/downloads/downloads_provider.dart';
-import 'package:verso/src/downloads/downloads_service.dart';
-import 'package:verso/src/features/login/login_screen.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/app.dart';
+import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/features/login/login_screen.dart';
 
 /// A Kavita server with one library and one series.
 class _StubAdapter implements HttpClientAdapter {
@@ -76,7 +76,7 @@ Widget _app({AuthState auth = const AuthState(), Directory? downloadsRoot}) {
           DownloadsService(root: downloadsRoot),
         ),
     ],
-    child: const VersoApp(),
+    child: const PatraApp(),
   );
 }
 
@@ -114,7 +114,7 @@ void main() {
   });
 
   testWidgets('an active session lands on the four-tab shell', (tester) async {
-    final root = Directory.systemTemp.createTempSync('verso-widget-test');
+    final root = Directory.systemTemp.createTempSync('patra-widget-test');
     addTearDown(() => root.deleteSync(recursive: true));
     // Room for the shelves, so nothing overflows during the test.
     tester.view.physicalSize = const Size(1200, 2200);
@@ -156,7 +156,7 @@ void main() {
   testWidgets('the navigation bar drops its labels when they do not fit', (
     tester,
   ) async {
-    final root = Directory.systemTemp.createTempSync('verso-nav-test');
+    final root = Directory.systemTemp.createTempSync('patra-nav-test');
     addTearDown(() => root.deleteSync(recursive: true));
     addTearDown(tester.view.reset);
 

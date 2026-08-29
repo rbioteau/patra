@@ -49,5 +49,5 @@ app.*.map.json
 /.claude/
 
 # CI artifacts downloaded for sideloading
-/verso-debug-apk/
-/verso-unsigned-ipa/
+/patra-debug-apk/
+/patra-unsigned-ipa/

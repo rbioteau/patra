@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/api/models.dart';
+import 'package:patra/src/api/models.dart';
 
 void main() {
   group('Kavita sentinel numbers', () {

@@ -79,7 +79,7 @@ ScreenMetrics liveScreenMetrics() {
 ///
 /// The last one is a deliberate compromise: its parser is a regex hard-wired
 /// to the web UI's `web-app/…` syntax and stamps *every* client that sends it
-/// as a Web App, so Verso wears a "Web App" badge it does not deserve. Kavita
+/// as a Web App, so Patra wears a "Web App" badge it does not deserve. Kavita
 /// has no client type for a third-party app at all, so the alternative is not
 /// a truer badge, only an emptier card. A value that fails the regex is worse
 /// than none: the fallback still says Web App and drops everything else.
@@ -96,7 +96,7 @@ class ClientIdentity {
   /// Used before the real identity has been resolved, and by tests.
   const ClientIdentity.unknown() : this(deviceId: '');
 
-  static const appName = 'Verso';
+  static const appName = 'Patra';
 
   /// Kept in sync with `version:` in pubspec.yaml by
   /// `test/client_identity_test.dart`.
@@ -107,7 +107,7 @@ class ClientIdentity {
   /// Random per-installation UUID. Not a hardware id and not a secret: it
   /// exists so Kavita can tell two of the user's phones apart, since its
   /// fallback fingerprint (client type + platform + device type) hashes every
-  /// Verso install on Android to the same value.
+  /// Patra install on Android to the same value.
   final String deviceId;
   final ClientPlatform platform;
   final String osVersion;
@@ -126,8 +126,8 @@ class ClientIdentity {
   /// time main() resolves the identity there is no view to measure yet.
   final ScreenMetrics Function() screen;
 
-  /// e.g. `Verso/0.1.0 (Android 15; Pixel 8; Flutter)`,
-  /// `Verso/0.1.0 (iPhone; iOS 18.6; iPhone 15 Pro; Flutter)`.
+  /// e.g. `Patra/0.1.0 (Android 15; Pixel 8; Flutter)`,
+  /// `Patra/0.1.0 (iPhone; iOS 18.6; iPhone 15 Pro; Flutter)`.
   String get userAgent {
     final environment = <String>[
       // iOS puts its marker first because "iPhone" is not part of the OS name;
@@ -157,7 +157,7 @@ class ClientIdentity {
   /// The header that fills Kavita's device card. Its syntax is not ours to
   /// choose: `ClientInfoMiddleware` matches it with
   /// `web-app/<v> (<browser>/<v>; <platform>; <deviceType>; <w>x<h>; <o>)`
-  /// and keeps nothing when the match fails. Verso goes in the browser slot,
+  /// and keeps nothing when the match fails. Patra goes in the browser slot,
   /// which is also the slot Kavita builds the device name from.
   ///
   /// Null until there is a screen to report: a header the regex rejects costs
@@ -187,7 +187,7 @@ class ClientIdentity {
   }
 
   /// True while [name] is still a name a machine chose — one of ours, or
-  /// Kavita's `<client> on <platform>`, which reads "Verso on IOs" once it
+  /// Kavita's `<client> on <platform>`, which reads "Patra on IOs" once it
   /// knows our name and spells the platform from its own enum. A name the
   /// user typed in Kavita's UI is theirs and must not be overwritten.
   static bool isGeneratedName(String name) =>

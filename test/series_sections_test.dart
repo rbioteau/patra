@@ -5,14 +5,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/l10n/generated/app_localizations.dart';
-import 'package:verso/src/api/kavita_client.dart';
-import 'package:verso/src/api/models.dart';
-import 'package:verso/src/auth/session.dart';
-import 'package:verso/src/downloads/downloads_provider.dart';
-import 'package:verso/src/downloads/downloads_service.dart';
-import 'package:verso/src/features/series/series_detail_screen.dart';
-import 'package:verso/src/theme.dart';
+import 'package:patra/l10n/generated/app_localizations.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
+import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/features/series/series_detail_screen.dart';
+import 'package:patra/src/theme.dart';
 
 import 'test_support.dart';
 
@@ -171,7 +171,7 @@ Future<void> _pump(
         ),
       ],
       child: MaterialApp(
-        theme: versoTheme(),
+        theme: patraTheme(),
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,

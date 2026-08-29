@@ -1,5 +1,5 @@
-name: verso
-description: "A new Flutter project."
+name: patra
+description: "A Flutter client for Kavita — manga, comics and books from your own server."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -38,11 +38,11 @@ flutter:
 # The ink tile colour matches the brand mark, so the Android adaptive
 # foreground can sit on it seamlessly.
 flutter_launcher_icons:
-  image_path: "assets/icon/verso-1024.png"
+  image_path: "assets/icon/patra-1024.png"
   android: true
   ios: true
   remove_alpha_ios: true
   # The Android adaptive icon is not generated: its foreground is the vector
-  # drawable/verso_mark.xml, shared with the splash screen, and this tool can
+  # drawable/patra_mark.xml, shared with the splash screen, and this tool can
   # only rasterise a PNG foreground (and would rewrite the XML with an inset
   # that double-pads it). Do not add adaptive_icon_* keys here.

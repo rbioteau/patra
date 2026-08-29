@@ -115,7 +115,7 @@
   "@formatNotSupported": {
     "description": "Shown on a chapter the image reader cannot open (EPUB, PDF)"
   },
-  "formatNotSupportedBody": "This series is an EPUB. Verso reads image formats and PDFs for now; EPUB support is on the way.",
+  "formatNotSupportedBody": "This series is an EPUB. Patra reads image formats and PDFs for now; EPUB support is on the way.",
   "@formatNotSupportedBody": {
     "description": "Explanation shown in place of the reader for a format it cannot open"
   },

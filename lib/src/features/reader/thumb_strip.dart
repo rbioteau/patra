@@ -335,7 +335,7 @@ class _ThumbStripState extends State<ThumbStrip> {
                       color: Colors.white10,
                       borderRadius: BorderRadius.circular(radiusThumb),
                       border: Border.all(
-                        color: selected ? versoAccent : Colors.white24,
+                        color: selected ? patraAccent : Colors.white24,
                         width: selected ? 2 : 1,
                       ),
                     ),

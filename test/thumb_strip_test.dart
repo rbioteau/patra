@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/features/reader/thumb_strip.dart';
+import 'package:patra/src/features/reader/thumb_strip.dart';
 
 void main() {
   group('ThumbLoadQueue', () {

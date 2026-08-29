@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// throws MissingPluginException asynchronously and fails the test at a
 /// random moment.
 Directory mockPathProvider() {
-  final dir = Directory.systemTemp.createTempSync('verso-test');
+  final dir = Directory.systemTemp.createTempSync('patra-test');
   const channel = MethodChannel('plugins.flutter.io/path_provider');
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(channel, (call) async => dir.path);

@@ -37,7 +37,7 @@ jobs:
       - if: github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
-          name: verso-debug-apk
+          name: patra-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
 
   build-ios:
@@ -59,9 +59,9 @@ jobs:
         run: |
           mkdir Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -qr verso-unsigned.ipa Payload
+          zip -qr patra-unsigned.ipa Payload
       - if: github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
-          name: verso-unsigned-ipa
-          path: verso-unsigned.ipa
+          name: patra-unsigned-ipa
+          path: patra-unsigned.ipa

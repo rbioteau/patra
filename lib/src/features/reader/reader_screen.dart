@@ -214,7 +214,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       body: switch ((chapter, info)) {
         (null, AsyncError()) => const _ReaderError(),
         (null, _) => const Center(
-          child: CircularProgressIndicator(color: versoAccent),
+          child: CircularProgressIndicator(color: patraAccent),
         ),
         (final ChapterInfoDto chapter, _) => _buildReader(
           context,
@@ -443,7 +443,7 @@ class _PagedViewState extends State<_PagedView> {
         }
         final second = first + 1;
         final pages = [if (second < widget.pages) second];
-        // verso left, recto right — mirrored when reading right to left, so
+        // patra left, recto right — mirrored when reading right to left, so
         // the first page of the pair always leads.
         final ordered = widget.reverse ? [...pages, first] : [first, ...pages];
         return InteractiveViewer(
@@ -668,7 +668,7 @@ class _TopChrome extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: VersoText.rowTitle(color: Colors.white),
+                    style: PatraText.rowTitle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -704,7 +704,7 @@ class _DirectionPill extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return PopupMenuButton<ReadingDirection>(
       tooltip: tooltip,
-      color: versoSurface,
+      color: patraSurface,
       initialValue: direction,
       onSelected: onChanged,
       itemBuilder: (context) => [
@@ -715,13 +715,13 @@ class _DirectionPill extends StatelessWidget {
               children: [
                 DirectionIcon(
                   option,
-                  color: option == direction ? versoAccent : versoText,
+                  color: option == direction ? patraAccent : patraText,
                 ),
                 const SizedBox(width: 12),
                 Text(
                   option.label(l10n),
-                  style: VersoText.body(
-                    color: option == direction ? versoAccent : versoText,
+                  style: PatraText.body(
+                    color: option == direction ? patraAccent : patraText,
                   ),
                 ),
               ],
@@ -823,7 +823,7 @@ class _BottomChrome extends StatelessWidget {
                 ),
                 Directionality(
                   textDirection: TextDirection.ltr,
-                  child: Text(counter, style: VersoText.pageNumeral()),
+                  child: Text(counter, style: PatraText.pageNumeral()),
                 ),
               ],
             ),
@@ -859,13 +859,13 @@ class _UnsupportedFormat extends StatelessWidget {
                 Text(
                   l10n.formatNotSupported,
                   textAlign: TextAlign.center,
-                  style: VersoText.rowTitle(),
+                  style: PatraText.rowTitle(),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   l10n.formatNotSupportedBody,
                   textAlign: TextAlign.center,
-                  style: VersoText.metadata(),
+                  style: PatraText.metadata(),
                 ),
               ],
             ),
@@ -892,7 +892,7 @@ class _ReaderError extends StatelessWidget {
             child: Text(
               l10n.serverUnreachable,
               textAlign: TextAlign.center,
-              style: VersoText.body(color: Colors.white70),
+              style: PatraText.body(color: Colors.white70),
             ),
           ),
         ),

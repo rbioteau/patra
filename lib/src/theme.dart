@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Design tokens from the Claude Design handoff (`Verso Design System.dc.html`).
+/// Design tokens from the Claude Design handoff (`.claude/design/HANDOFF.md`).
 /// The app commits to a single dark look: the reader canvas is pure black and
 /// the whole chrome is built around it.
 
-const versoBg = Color(0xFF0E0E10);
-const versoSurface = Color(0xFF1A1A1E);
-const versoSurfaceHi = Color(0xFF222226);
-const versoChrome = Color(0xFF141416); // bars
+const patraBg = Color(0xFF0E0E10);
+const patraSurface = Color(0xFF1A1A1E);
+const patraSurfaceHi = Color(0xFF222226);
+const patraChrome = Color(0xFF141416); // bars
 
 /// Reading progress + identity ONLY. Never for downloads.
-const versoAccent = Color(0xFF7C5CFF);
+const patraAccent = Color(0xFF7C5CFF);
 
 /// Downloads / offline ONLY. Never for progress.
-const versoOffline = Color(0xFF2DD4BF);
+const patraOffline = Color(0xFF2DD4BF);
 
-const versoOnline = Color(0xFF3DDC84);
-const versoDanger = Color(0xFFFF7B92);
-const versoText = Color(0xFFE8E8EA);
+const patraOnline = Color(0xFF3DDC84);
+const patraDanger = Color(0xFFFF7B92);
+const patraText = Color(0xFFE8E8EA);
 
-final versoTextMuted = versoText.withValues(alpha: .45);
-final versoBorder = Colors.white.withValues(alpha: .08);
+final patraTextMuted = patraText.withValues(alpha: .45);
+final patraBorder = Colors.white.withValues(alpha: .08);
 
 /// Radii
 const radiusThumb = 6.0;
@@ -38,13 +38,13 @@ const minHitTarget = 44.0;
 const coverAspectRatio = 2 / 3;
 
 /// Text styles that the Material text theme cannot express on its own.
-abstract final class VersoText {
+abstract final class PatraText {
   /// Titles of works, wordmark, reader page numbers — the only serif uses.
   static TextStyle serifTitle({double size = 21, Color? color}) =>
       GoogleFonts.sourceSerif4(
         fontSize: size,
         fontWeight: FontWeight.w600,
-        color: color ?? versoText,
+        color: color ?? patraText,
         height: 1.25,
       );
 
@@ -52,20 +52,20 @@ abstract final class VersoText {
     fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 1.5,
-    color: versoTextMuted,
+    color: patraTextMuted,
   );
 
   static TextStyle rowTitle({Color? color}) => GoogleFonts.spaceGrotesk(
     fontSize: 13.5,
     fontWeight: FontWeight.w600,
-    color: color ?? versoText,
+    color: color ?? patraText,
   );
 
   static TextStyle body({Color? color}) =>
-      GoogleFonts.spaceGrotesk(fontSize: 14, color: color ?? versoText);
+      GoogleFonts.spaceGrotesk(fontSize: 14, color: color ?? patraText);
 
   static TextStyle metadata({Color? color, double size = 11}) =>
-      GoogleFonts.spaceGrotesk(fontSize: size, color: color ?? versoTextMuted);
+      GoogleFonts.spaceGrotesk(fontSize: size, color: color ?? patraTextMuted);
 
   /// Bottom navigation label. Exposed so the shell can measure it and decide
   /// whether the labels fit before showing them.
@@ -73,7 +73,7 @@ abstract final class VersoText {
       GoogleFonts.spaceGrotesk(
         fontSize: 11,
         fontWeight: FontWeight.w600,
-        color: selected ? versoAccent : versoTextMuted,
+        color: selected ? patraAccent : patraTextMuted,
       );
 
   /// Page numerals in the reader: serif, and always laid out left-to-right
@@ -86,84 +86,84 @@ abstract final class VersoText {
   );
 }
 
-ThemeData versoTheme() {
+ThemeData patraTheme() {
   final base = ThemeData.dark(useMaterial3: true);
   final colors = ColorScheme.dark(
-    primary: versoAccent,
+    primary: patraAccent,
     onPrimary: Colors.white,
-    secondary: versoOffline,
+    secondary: patraOffline,
     onSecondary: const Color(0xFF04322C),
-    surface: versoSurface,
-    onSurface: versoText,
-    surfaceContainerHighest: versoSurfaceHi,
-    error: versoDanger,
+    surface: patraSurface,
+    onSurface: patraText,
+    surfaceContainerHighest: patraSurfaceHi,
+    error: patraDanger,
     onError: const Color(0xFF3A0512),
     outline: Colors.white.withValues(alpha: .08),
   );
 
   return base.copyWith(
     colorScheme: colors,
-    scaffoldBackgroundColor: versoBg,
-    canvasColor: versoBg,
-    dividerColor: versoBorder,
+    scaffoldBackgroundColor: patraBg,
+    canvasColor: patraBg,
+    dividerColor: patraBorder,
     textTheme: GoogleFonts.spaceGroteskTextTheme(base.textTheme)
-        .apply(bodyColor: versoText, displayColor: versoText),
+        .apply(bodyColor: patraText, displayColor: patraText),
     appBarTheme: AppBarTheme(
-      backgroundColor: versoChrome,
+      backgroundColor: patraChrome,
       surfaceTintColor: Colors.transparent,
-      foregroundColor: versoText,
+      foregroundColor: patraText,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: GoogleFonts.spaceGrotesk(
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        color: versoText,
+        color: patraText,
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: versoChrome,
+      backgroundColor: patraChrome,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: versoAccent.withValues(alpha: .16),
+      indicatorColor: patraAccent.withValues(alpha: .16),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           size: 22,
           color: states.contains(WidgetState.selected)
-              ? versoAccent
-              : versoTextMuted,
+              ? patraAccent
+              : patraTextMuted,
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) =>
-            VersoText.navLabel(selected: states.contains(WidgetState.selected)),
+            PatraText.navLabel(selected: states.contains(WidgetState.selected)),
       ),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: versoAccent,
+      color: patraAccent,
       linearMinHeight: 3,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: versoSurface,
-      hintStyle: VersoText.body(color: versoTextMuted),
-      labelStyle: VersoText.body(color: versoTextMuted),
+      fillColor: patraSurface,
+      hintStyle: PatraText.body(color: patraTextMuted),
+      labelStyle: PatraText.body(color: patraTextMuted),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusCover),
-        borderSide: BorderSide(color: versoBorder),
+        borderSide: BorderSide(color: patraBorder),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusCover),
-        borderSide: BorderSide(color: versoBorder),
+        borderSide: BorderSide(color: patraBorder),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusCover),
-        borderSide: const BorderSide(color: versoAccent, width: 1.5),
+        borderSide: const BorderSide(color: patraAccent, width: 1.5),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: versoAccent,
+        backgroundColor: patraAccent,
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(minHitTarget + 4),
         textStyle: GoogleFonts.spaceGrotesk(
@@ -177,8 +177,8 @@ ThemeData versoTheme() {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: versoText,
-        side: BorderSide(color: versoBorder),
+        foregroundColor: patraText,
+        side: BorderSide(color: patraBorder),
         minimumSize: const Size.fromHeight(minHitTarget),
         textStyle: GoogleFonts.spaceGrotesk(
           fontSize: 14,
@@ -190,38 +190,38 @@ ThemeData versoTheme() {
       ),
     ),
     cardTheme: CardThemeData(
-      color: versoSurface,
+      color: patraSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusCard),
-        side: BorderSide(color: versoBorder),
+        side: BorderSide(color: patraBorder),
       ),
     ),
     listTileTheme: ListTileThemeData(
       minVerticalPadding: 10,
-      iconColor: versoTextMuted,
-      titleTextStyle: VersoText.rowTitle(),
-      subtitleTextStyle: VersoText.metadata(),
+      iconColor: patraTextMuted,
+      titleTextStyle: PatraText.rowTitle(),
+      subtitleTextStyle: PatraText.metadata(),
     ),
     bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: versoSurface,
+      backgroundColor: patraSurface,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(radiusCard)),
       ),
     ),
     sliderTheme: SliderThemeData(
-      activeTrackColor: versoAccent,
+      activeTrackColor: patraAccent,
       inactiveTrackColor: Colors.white.withValues(alpha: .22),
-      thumbColor: versoAccent,
+      thumbColor: patraAccent,
       trackHeight: 3,
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: versoSurfaceHi,
-      contentTextStyle: VersoText.body(),
+      backgroundColor: patraSurfaceHi,
+      contentTextStyle: PatraText.body(),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusCover),
@@ -242,7 +242,7 @@ class SectionLabel extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(text.toUpperCase(), style: VersoText.sectionLabel()),
+          child: Text(text.toUpperCase(), style: PatraText.sectionLabel()),
         ),
         ?trailing,
       ],
@@ -270,7 +270,7 @@ class CoverProgressBar extends StatelessWidget {
         child: FractionallySizedBox(
           alignment: Alignment.centerLeft,
           widthFactor: progress.clamp(0.0, 1.0),
-          child: Container(color: versoAccent),
+          child: Container(color: patraAccent),
         ),
       ),
     );
@@ -323,7 +323,7 @@ class _SkeletonState extends State<Skeleton>
                 gradient: LinearGradient(
                   begin: Alignment(t - 1, 0),
                   end: Alignment(t, 0),
-                  colors: [versoSurface, versoSurfaceHi, versoSurface],
+                  colors: [patraSurface, patraSurfaceHi, patraSurface],
                 ),
               ),
               child: const SizedBox.expand(),

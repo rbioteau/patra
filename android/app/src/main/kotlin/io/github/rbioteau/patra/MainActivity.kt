@@ -1,4 +1,4 @@
-package io.github.rbioteau.verso
+package io.github.rbioteau.patra
 
 import io.flutter.embedding.android.FlutterActivity
 

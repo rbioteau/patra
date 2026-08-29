@@ -89,10 +89,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: versoSurface,
+        backgroundColor: patraSurface,
         title: Text(
           l10n.forgetServerConfirm(server.host),
-          style: VersoText.body(),
+          style: PatraText.body(),
         ),
         actions: [
           TextButton(
@@ -103,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               l10n.forgetServer,
-              style: VersoText.body(color: versoDanger),
+              style: PatraText.body(color: patraDanger),
             ),
           ),
         ],
@@ -222,7 +222,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           const SizedBox(height: gutter),
           if (_error != null) ...[
-            Text(_error!, style: VersoText.metadata(color: versoDanger)),
+            Text(_error!, style: PatraText.metadata(color: patraDanger)),
             const SizedBox(height: 12),
           ],
           FilledButton(
@@ -244,7 +244,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-/// Wordmark plus tagline: lowercase serif "verso" and the accent period.
+/// Wordmark plus tagline: lowercase serif "patra" and the accent period.
 class _Masthead extends StatelessWidget {
   const _Masthead();
 
@@ -255,18 +255,18 @@ class _Masthead extends StatelessWidget {
       children: [
         Text.rich(
           TextSpan(
-            text: 'verso',
-            style: VersoText.serifTitle(size: 40),
+            text: 'patra',
+            style: PatraText.serifTitle(size: 40),
             children: [
               TextSpan(
                 text: '.',
-                style: VersoText.serifTitle(size: 40, color: versoAccent),
+                style: PatraText.serifTitle(size: 40, color: patraAccent),
               ),
             ],
           ),
         ),
         const SizedBox(height: 6),
-        Text(l10n.appTagline, style: VersoText.metadata()),
+        Text(l10n.appTagline, style: PatraText.metadata()),
       ],
     );
   }
@@ -289,7 +289,7 @@ class _ServerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Material(
-      color: versoSurface,
+      color: patraSurface,
       borderRadius: BorderRadius.circular(radiusCard),
       child: InkWell(
         onTap: onTap,
@@ -298,7 +298,7 @@ class _ServerRow extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radiusCard),
-            border: Border.all(color: versoBorder),
+            border: Border.all(color: patraBorder),
           ),
           child: Row(
             children: [
@@ -308,7 +308,7 @@ class _ServerRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   // A live session opens with one tap; otherwise a password
                   // is still needed.
-                  color: server.hasSession ? versoOnline : versoTextMuted,
+                  color: server.hasSession ? patraOnline : patraTextMuted,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -321,11 +321,11 @@ class _ServerRow extends StatelessWidget {
                       server.host,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: VersoText.rowTitle(),
+                      style: PatraText.rowTitle(),
                     ),
                     if (server.username.isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text(server.username, style: VersoText.metadata()),
+                      Text(server.username, style: PatraText.metadata()),
                     ],
                   ],
                 ),

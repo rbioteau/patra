@@ -1,8 +1,8 @@
-# Verso
+# Patra
 
 A mobile client for [Kavita](https://www.kavitareader.com/), built with Flutter for iOS, iPadOS and Android.
 
-*Verso* — the left-hand page of an open book, and a nod to the verse behind Kavita's name (कविता, "poem").
+*Patra* — the left-hand page of an open book, and a nod to the verse behind Kavita's name (कविता, "poem").
 
 ## Status
 
@@ -25,9 +25,9 @@ Usable, still young. What works:
 
 ## Install
 
-**Android** — grab the `verso-debug-apk` artifact from the latest [Actions run](../../actions) on `main` and install it.
+**Android** — grab the `patra-debug-apk` artifact from the latest [Actions run](../../actions) on `main` and install it.
 
-**iOS / iPadOS** — the CI also builds an unsigned `verso-unsigned-ipa`. Without an Apple Developer account it has to be re-signed with your own Apple ID (AltStore or Sideloadly, from a Windows or Mac machine); a free account's signature lasts 7 days.
+**iOS / iPadOS** — the CI also builds an unsigned `patra-unsigned-ipa`. Without an Apple Developer account it has to be re-signed with your own Apple ID (AltStore or Sideloadly, from a Windows or Mac machine); a free account's signature lasts 7 days.
 
 ## Development
 

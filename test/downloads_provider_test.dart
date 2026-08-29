@@ -5,10 +5,10 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/api/kavita_client.dart';
-import 'package:verso/src/auth/session.dart';
-import 'package:verso/src/downloads/downloads_provider.dart';
-import 'package:verso/src/downloads/downloads_service.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
 
 /// Mimics Kavita: `/api/Reader/image` binds `apiKey` as a non-nullable
 /// parameter, so a request without it is answered 400 — the bearer token is
@@ -75,7 +75,7 @@ void main() {
   late ProviderContainer container;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('verso-downloads-provider');
+    root = Directory.systemTemp.createTempSync('patra-downloads-provider');
     adapter = _KavitaLikeAdapter();
     final client = KavitaClient(
       baseUrl: 'http://kavita.test',
