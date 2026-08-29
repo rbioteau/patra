@@ -98,11 +98,17 @@ abstract class AppLocalizations {
     Locale('fr'),
   ];
 
-  /// Subtitle under the app name on the login screen
+  /// Subtitle under the wordmark on the login screen. 'patra' is Sanskrit for leaf, hence the opening.
   ///
   /// In en, this message translates to:
-  /// **'A Kavita client'**
+  /// **'Leaf by leaf. A reader for your Kavita library.'**
   String get appTagline;
+
+  /// Reassurance note pinned to the bottom of the login screen
+  ///
+  /// In en, this message translates to:
+  /// **'Requires a Kavita server v0.9+ · Tokens kept in secure storage'**
+  String get loginFooter;
 
   /// No description provided for @serverAddress.
   ///
@@ -175,6 +181,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add a server'**
   String get addServer;
+
+  /// Call to action on a saved server that still has a live session: one tap and it opens
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get openServer;
+
+  /// Leaves the sign-in form for the list of saved servers
+  ///
+  /// In en, this message translates to:
+  /// **'Back to your servers'**
+  String get backToServers;
 
   /// No description provided for @editServer.
   ///

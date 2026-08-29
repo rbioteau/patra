@@ -1,8 +1,12 @@
 {
   "@@locale": "en",
-  "appTagline": "A Kavita client",
+  "appTagline": "Leaf by leaf. A reader for your Kavita library.",
   "@appTagline": {
-    "description": "Subtitle under the app name on the login screen"
+    "description": "Subtitle under the wordmark on the login screen. 'patra' is Sanskrit for leaf, hence the opening."
+  },
+  "loginFooter": "Requires a Kavita server v0.9+ · Tokens kept in secure storage",
+  "@loginFooter": {
+    "description": "Reassurance note pinned to the bottom of the login screen"
   },
   "serverAddress": "Server address",
   "serverAddressHint": "https://kavita.example.com",
@@ -24,6 +28,14 @@
     "description": "Section label above the list of previously used servers"
   },
   "addServer": "Add a server",
+  "openServer": "Open",
+  "@openServer": {
+    "description": "Call to action on a saved server that still has a live session: one tap and it opens"
+  },
+  "backToServers": "Back to your servers",
+  "@backToServers": {
+    "description": "Leaves the sign-in form for the list of saved servers"
+  },
   "editServer": "Edit",
   "forgetServer": "Forget",
   "forgetServerConfirm": "Forget {server}?",

@@ -71,7 +71,11 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(l10n.appTagline, style: PatraText.metadata()),
+                  // The tagline is a sentence: it wraps here rather than
+                  // running off the row.
+                  Expanded(
+                    child: Text(l10n.appTagline, style: PatraText.metadata()),
+                  ),
                 ],
               ),
             ),

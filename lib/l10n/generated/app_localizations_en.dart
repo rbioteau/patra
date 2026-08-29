@@ -10,7 +10,11 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTagline => 'A Kavita client';
+  String get appTagline => 'Leaf by leaf. A reader for your Kavita library.';
+
+  @override
+  String get loginFooter =>
+      'Requires a Kavita server v0.9+ · Tokens kept in secure storage';
 
   @override
   String get serverAddress => 'Server address';
@@ -49,6 +53,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addServer => 'Add a server';
+
+  @override
+  String get openServer => 'Open';
+
+  @override
+  String get backToServers => 'Back to your servers';
 
   @override
   String get editServer => 'Edit';

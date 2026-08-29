@@ -91,7 +91,12 @@ void main() {
     // Tests run under the default 'en' locale.
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
-    expect(find.text('Server address'), findsOneWidget);
+    // Fields carry their label above them, in the section-label style.
+    expect(find.text('SERVER ADDRESS'), findsOneWidget);
+    expect(
+      find.text('Leaf by leaf. A reader for your Kavita library.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a remembered server is listed instead of the form', (
@@ -110,7 +115,7 @@ void main() {
     expect(find.text('YOUR SERVERS'), findsOneWidget);
     expect(find.text('a.example'), findsOneWidget);
     expect(find.text('Add a server'), findsOneWidget);
-    expect(find.text('Server address'), findsNothing);
+    expect(find.text('SERVER ADDRESS'), findsNothing);
   });
 
   testWidgets('an active session lands on the four-tab shell', (tester) async {

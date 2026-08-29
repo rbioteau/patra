@@ -1,9 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../auth/session.dart';
 import '../../theme.dart';
+
+/// Horizontal breathing room from the handoff's login screen — wider than the
+/// app gutter, because this screen holds a single column and nothing else.
+const _loginGutter = 32.0;
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -116,21 +122,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final servers = ref.watch(authProvider).servers;
     final showList = servers.isNotEmpty && !_showForm;
 
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(gutter),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: showList
-                  ? _buildServerList(servers)
-                  : _buildForm(canGoBack: servers.isNotEmpty),
+        child: Column(
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: _loginGutter,
+                    vertical: gutter,
+                  ),
+                  child: ConstrainedBox(
+                    // Masthead and fields sit at the optical centre while they
+                    // fit, and the column scrolls once the keyboard is up.
+                    constraints: BoxConstraints(
+                      minHeight: math.max(
+                        0,
+                        constraints.maxHeight - gutter * 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: showList
+                            ? _buildServerList(servers)
+                            : _buildForm(canGoBack: servers.isNotEmpty),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
+            // The footer is pinned to the bottom edge, never centred with the
+            // rest: it is a note about the app, not part of the form.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                _loginGutter,
+                8,
+                _loginGutter,
+                24,
+              ),
+              child: Text(
+                l10n.loginFooter,
+                textAlign: TextAlign.center,
+                style: PatraText.metadata(
+                  color: patraText.withValues(alpha: .35),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -152,14 +197,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             onEdit: () => _openForm(prefill: server, focusPassword: true),
             onForget: () => _forget(server),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => _openForm(),
-          icon: const Icon(Icons.add, size: 18),
-          label: Text(l10n.addServer),
-        ),
+        const SizedBox(height: 4),
+        _AddServerButton(onPressed: () => _openForm()),
       ],
     );
   }
@@ -171,54 +212,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (canGoBack)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() {
-                  _showForm = false;
-                  _error = null;
-                }),
-              ),
-            ),
           const _Masthead(),
           const SizedBox(height: sectionGap * 1.5),
-          TextFormField(
-            controller: _serverController,
-            decoration: InputDecoration(
-              labelText: l10n.serverAddress,
-              hintText: l10n.serverAddressHint,
+          _Field(
+            label: l10n.serverAddress,
+            child: TextFormField(
+              controller: _serverController,
+              decoration: InputDecoration(hintText: l10n.serverAddressHint),
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              validator: (v) {
+                final value = v?.trim() ?? '';
+                if (value.isEmpty) return l10n.serverAddressRequired;
+                final uri = Uri.tryParse(value);
+                if (uri == null || !uri.hasScheme) {
+                  return l10n.serverAddressInvalid;
+                }
+                return null;
+              },
             ),
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            validator: (v) {
-              final value = v?.trim() ?? '';
-              if (value.isEmpty) return l10n.serverAddressRequired;
-              final uri = Uri.tryParse(value);
-              if (uri == null || !uri.hasScheme) {
-                return l10n.serverAddressInvalid;
-              }
-              return null;
-            },
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _usernameController,
-            decoration: InputDecoration(labelText: l10n.username),
-            autocorrect: false,
-            validator: (v) =>
-                (v?.trim().isEmpty ?? true) ? l10n.usernameRequired : null,
+          const SizedBox(height: 14),
+          _Field(
+            label: l10n.username,
+            child: TextFormField(
+              controller: _usernameController,
+              autocorrect: false,
+              validator: (v) =>
+                  (v?.trim().isEmpty ?? true) ? l10n.usernameRequired : null,
+            ),
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _passwordController,
-            focusNode: _passwordFocus,
-            decoration: InputDecoration(labelText: l10n.password),
-            obscureText: true,
-            onFieldSubmitted: (_) => _submit(),
-            validator: (v) =>
-                (v?.isEmpty ?? true) ? l10n.passwordRequired : null,
+          const SizedBox(height: 14),
+          _Field(
+            label: l10n.password,
+            child: TextFormField(
+              controller: _passwordController,
+              focusNode: _passwordFocus,
+              obscureText: true,
+              onFieldSubmitted: (_) => _submit(),
+              validator: (v) =>
+                  (v?.isEmpty ?? true) ? l10n.passwordRequired : null,
+            ),
           ),
           const SizedBox(height: gutter),
           if (_error != null) ...[
@@ -238,13 +272,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   )
                 : Text(l10n.signIn),
           ),
+          // The way back sits under the button rather than in a top-left
+          // arrow: the masthead owns the top of this screen.
+          if (canGoBack) ...[
+            const SizedBox(height: 6),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => setState(() {
+                  _showForm = false;
+                  _error = null;
+                }),
+                style: TextButton.styleFrom(foregroundColor: patraTextMuted),
+                icon: const Icon(Icons.chevron_left, size: 18),
+                label: Text(l10n.backToServers),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-/// Wordmark plus tagline: lowercase serif "patra" and the accent period.
+/// Wordmark and tagline, aligned to the left edge of the column.
 class _Masthead extends StatelessWidget {
   const _Masthead();
 
@@ -252,6 +302,7 @@ class _Masthead extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text.rich(
           TextSpan(
@@ -265,9 +316,29 @@ class _Masthead extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(l10n.appTagline, style: PatraText.metadata()),
+        const SizedBox(height: 8),
+        Text(
+          l10n.appTagline,
+          style: PatraText.metadata(size: 13).copyWith(height: 1.5),
+        ),
       ],
+    );
+  }
+}
+
+/// A field under its own uppercase label, rather than a floating one: the
+/// labels stay readable while typing and line up with the section labels.
+class _Field extends StatelessWidget {
+  const _Field({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [SectionLabel(label), const SizedBox(height: 7), child],
     );
   }
 }
@@ -288,6 +359,18 @@ class _ServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // A live session opens with one tap; otherwise a password is still needed,
+    // and both the chip and the call to action say so.
+    final live = server.hasSession;
+    final initial = server.host.isEmpty
+        ? '?'
+        : server.host.substring(0, 1).toUpperCase();
+    final cta = live ? l10n.openServer : l10n.signIn;
+    final ctaStyle = PatraText.metadata(
+      size: 12,
+      color: live ? patraAccent : patraTextMuted,
+    ).copyWith(fontWeight: FontWeight.w600);
+
     return Material(
       color: patraSurface,
       borderRadius: BorderRadius.circular(radiusCard),
@@ -295,55 +378,176 @@ class _ServerRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(radiusCard),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
+          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radiusCard),
             border: Border.all(color: patraBorder),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  // A live session opens with one tap; otherwise a password
-                  // is still needed.
-                  color: server.hasSession ? patraOnline : patraTextMuted,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      server.host,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: PatraText.rowTitle(),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // The call to action is the first thing to go: "Se connecter" is
+              // half again as long as "Sign in", and on a small phone it would
+              // leave the host name no room. The chip already says, in colour,
+              // whether this server opens straight away.
+              final ctaWidth = _measureWidth(context, cta, ctaStyle);
+              final showCta =
+                  constraints.maxWidth - _serverRowFixedWidth - ctaWidth >=
+                  _serverRowMinHostWidth;
+              return Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: live ? patraAccent : patraSurfaceHi,
+                      borderRadius: BorderRadius.circular(radiusCover),
                     ),
-                    if (server.username.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(server.username, style: PatraText.metadata()),
-                    ],
+                    child: Text(
+                      initial,
+                      style: PatraText.rowTitle(
+                        color: live ? Colors.white : patraTextMuted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          server.host,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: PatraText.rowTitle(),
+                        ),
+                        if (server.username.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            server.username,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: PatraText.metadata(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (showCta) ...[
+                    const SizedBox(width: 8),
+                    Text(cta, style: ctaStyle),
                   ],
-                ),
-              ),
-              IconButton(
-                tooltip: l10n.editServer,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                onPressed: onEdit,
-              ),
-              IconButton(
-                tooltip: l10n.forgetServer,
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: onForget,
-              ),
-            ],
+                  IconButton(
+                    tooltip: l10n.editServer,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    onPressed: onEdit,
+                  ),
+                  IconButton(
+                    tooltip: l10n.forgetServer,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: onForget,
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+/// Everything in a server row that is not the host name or the call to action:
+/// the chip, its gaps and the two compact icon buttons.
+const _serverRowFixedWidth = 12 + 38 + 12 + 8 + 40 + 40 + 4;
+
+/// What the host name is worth keeping, ellipsis included.
+const _serverRowMinHostWidth = 96.0;
+
+double _measureWidth(BuildContext context, String text, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  return painter.width;
+}
+
+/// The empty slot at the end of the server list: dashed, so it reads as a
+/// place to fill rather than as a second button competing with "Sign in".
+class _AddServerButton extends StatelessWidget {
+  const _AddServerButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final color = patraText.withValues(alpha: .7);
+    return SizedBox(
+      height: minHitTarget + 6,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(color: patraText.withValues(alpha: .25)),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(radiusCard),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add, size: 18, color: color),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    l10n.addServer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: PatraText.rowTitle(color: color),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  const _DashedBorderPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final outline = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(radiusCard),
+        ),
+      );
+    const dash = 6.0;
+    const gap = 4.0;
+    for (final metric in outline.computeMetrics()) {
+      for (var start = 0.0; start < metric.length; start += dash + gap) {
+        canvas.drawPath(
+          metric.extractPath(start, math.min(start + dash, metric.length)),
+          paint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

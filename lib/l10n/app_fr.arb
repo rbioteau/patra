@@ -1,6 +1,7 @@
 {
   "@@locale": "fr",
-  "appTagline": "Un client Kavita",
+  "appTagline": "Feuille après feuille. Un lecteur pour votre bibliothèque Kavita.",
+  "loginFooter": "Nécessite un serveur Kavita v0.9+ · Jetons conservés dans le stockage sécurisé",
   "serverAddress": "Adresse du serveur",
   "serverAddressHint": "https://kavita.example.com",
   "serverAddressRequired": "Adresse requise",
@@ -13,6 +14,8 @@
   "loginFailed": "Connexion impossible : {error}",
   "savedServers": "Vos serveurs",
   "addServer": "Ajouter un serveur",
+  "openServer": "Ouvrir",
+  "backToServers": "Retour à vos serveurs",
   "editServer": "Modifier",
   "forgetServer": "Oublier",
   "forgetServerConfirm": "Oublier {server} ?",
