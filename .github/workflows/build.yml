@@ -171,7 +171,14 @@ jobs:
           # App Store Connect refuses a build number it has already seen, so
           # pubspec's frozen "+1" cannot be the one that ships. run_number only
           # ever grows.
-          flutter build ios --release --config-only \
+          # --no-codesign despite this being the signed path, and it is load
+          # bearing: the flutter tool looks for a *development* identity before
+          # it honours --config-only (ios/mac.dart), and this runner only ever
+          # holds a distribution certificate, so the check can never pass. The
+          # flag cannot weaken the archive below — it only adds
+          # CODE_SIGNING_ALLOWED=NO to an xcodebuild invocation that
+          # --config-only returns before ever making.
+          flutter build ios --release --config-only --no-codesign \
             --build-number="$GITHUB_RUN_NUMBER"
 
           # Signing is passed on the command line rather than committed to the
