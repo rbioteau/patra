@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../auth/session.dart';
+import '../../theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +17,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _serverController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocus = FocusNode();
+
+  /// The form replaces the server list when adding or editing, and whenever
+  /// there is no saved server at all.
+  bool _showForm = false;
   bool _busy = false;
   String? _error;
 
@@ -24,7 +30,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _serverController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _passwordFocus.dispose();
     super.dispose();
+  }
+
+  void _openForm({ServerEntry? prefill, bool focusPassword = false}) {
+    _serverController.text = prefill?.baseUrl ?? '';
+    _usernameController.text = prefill?.username ?? '';
+    _passwordController.clear();
+    setState(() {
+      _showForm = true;
+      _error = null;
+    });
+    if (focusPassword) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _passwordFocus.requestFocus(),
+      );
+    }
   }
 
   Future<void> _submit() async {
@@ -36,7 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       await ref
-          .read(sessionProvider.notifier)
+          .read(authProvider.notifier)
           .login(
             baseUrl: _serverController.text.trim(),
             username: _usernameController.text.trim(),
@@ -50,99 +72,272 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _connect(ServerEntry server) async {
+    if (server.hasSession) {
+      await ref.read(authProvider.notifier).resume(server);
+      return;
+    }
+    // Remembered but signed out: only the password is missing.
+    _openForm(prefill: server, focusPassword: true);
+  }
+
+  Future<void> _forget(ServerEntry server) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: versoSurface,
+        title: Text(
+          l10n.forgetServerConfirm(server.host),
+          style: VersoText.body(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              l10n.forgetServer,
+              style: VersoText.body(color: versoDanger),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) {
+      await ref.read(authProvider.notifier).forget(server.baseUrl);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final servers = ref.watch(authProvider).servers;
+    final showList = servers.isNotEmpty && !_showForm;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(gutter),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: showList
+                  ? _buildServerList(servers)
+                  : _buildForm(canGoBack: servers.isNotEmpty),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerList(List<ServerEntry> servers) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _Masthead(),
+        const SizedBox(height: sectionGap * 1.5),
+        SectionLabel(l10n.savedServers),
+        const SizedBox(height: 12),
+        for (final server in servers) ...[
+          _ServerRow(
+            server: server,
+            onTap: () => _connect(server),
+            onEdit: () => _openForm(prefill: server, focusPassword: true),
+            onForget: () => _forget(server),
+          ),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => _openForm(),
+          icon: const Icon(Icons.add, size: 18),
+          label: Text(l10n.addServer),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForm({required bool canGoBack}) {
+    final l10n = AppLocalizations.of(context);
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (canGoBack)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() {
+                  _showForm = false;
+                  _error = null;
+                }),
+              ),
+            ),
+          const _Masthead(),
+          const SizedBox(height: sectionGap * 1.5),
+          TextFormField(
+            controller: _serverController,
+            decoration: InputDecoration(
+              labelText: l10n.serverAddress,
+              hintText: l10n.serverAddressHint,
+            ),
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            validator: (v) {
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return l10n.serverAddressRequired;
+              final uri = Uri.tryParse(value);
+              if (uri == null || !uri.hasScheme) {
+                return l10n.serverAddressInvalid;
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _usernameController,
+            decoration: InputDecoration(labelText: l10n.username),
+            autocorrect: false,
+            validator: (v) =>
+                (v?.trim().isEmpty ?? true) ? l10n.usernameRequired : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _passwordController,
+            focusNode: _passwordFocus,
+            decoration: InputDecoration(labelText: l10n.password),
+            obscureText: true,
+            onFieldSubmitted: (_) => _submit(),
+            validator: (v) =>
+                (v?.isEmpty ?? true) ? l10n.passwordRequired : null,
+          ),
+          const SizedBox(height: gutter),
+          if (_error != null) ...[
+            Text(_error!, style: VersoText.metadata(color: versoDanger)),
+            const SizedBox(height: 12),
+          ],
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: _busy
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(l10n.signIn),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Wordmark plus tagline: lowercase serif "verso" and the accent period.
+class _Masthead extends StatelessWidget {
+  const _Masthead();
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Verso',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.displaySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.appTagline,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _serverController,
-                    decoration: InputDecoration(
-                      labelText: l10n.serverAddress,
-                      hintText: l10n.serverAddressHint,
-                      border: const OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    validator: (v) {
-                      final value = v?.trim() ?? '';
-                      if (value.isEmpty) return l10n.serverAddressRequired;
-                      final uri = Uri.tryParse(value);
-                      if (uri == null || !uri.hasScheme) {
-                        return l10n.serverAddressInvalid;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _usernameController,
-                    decoration: InputDecoration(
-                      labelText: l10n.username,
-                      border: const OutlineInputBorder(),
-                    ),
-                    autocorrect: false,
-                    validator: (v) => (v?.trim().isEmpty ?? true)
-                        ? l10n.usernameRequired
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: InputDecoration(
-                      labelText: l10n.password,
-                      border: const OutlineInputBorder(),
-                    ),
-                    obscureText: true,
-                    onFieldSubmitted: (_) => _submit(),
-                    validator: (v) =>
-                        (v?.isEmpty ?? true) ? l10n.passwordRequired : null,
-                  ),
-                  const SizedBox(height: 24),
-                  if (_error != null) ...[
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  FilledButton(
-                    onPressed: _busy ? null : _submit,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(l10n.signIn),
-                  ),
-                ],
+    return Column(
+      children: [
+        Text.rich(
+          TextSpan(
+            text: 'verso',
+            style: VersoText.serifTitle(size: 40),
+            children: [
+              TextSpan(
+                text: '.',
+                style: VersoText.serifTitle(size: 40, color: versoAccent),
               ),
-            ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(l10n.appTagline, style: VersoText.metadata()),
+      ],
+    );
+  }
+}
+
+class _ServerRow extends StatelessWidget {
+  const _ServerRow({
+    required this.server,
+    required this.onTap,
+    required this.onEdit,
+    required this.onForget,
+  });
+
+  final ServerEntry server;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Material(
+      color: versoSurface,
+      borderRadius: BorderRadius.circular(radiusCard),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radiusCard),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radiusCard),
+            border: Border.all(color: versoBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  // A live session opens with one tap; otherwise a password
+                  // is still needed.
+                  color: server.hasSession ? versoOnline : versoTextMuted,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      server.host,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: VersoText.rowTitle(),
+                    ),
+                    if (server.username.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(server.username, style: VersoText.metadata()),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: l10n.editServer,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                onPressed: onEdit,
+              ),
+              IconButton(
+                tooltip: l10n.forgetServer,
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: onForget,
+              ),
+            ],
           ),
         ),
       ),

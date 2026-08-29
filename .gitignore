@@ -46,3 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+/.claude/
+
+# CI artifacts downloaded for sideloading
+/verso-debug-apk/
+/verso-unsigned-ipa/

@@ -1,0 +1,343 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../l10n/generated/app_localizations.dart';
+import '../../auth/session.dart';
+import '../../downloads/downloads_provider.dart';
+import '../../downloads/image_cache_store.dart';
+import '../../format.dart';
+import '../../settings/reading_settings.dart';
+import '../../theme.dart';
+import '../../widgets/direction_icon.dart';
+
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final session = ref.watch(sessionProvider);
+    final direction = ref.watch(defaultReadingDirectionProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.settingsTitle)),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: sectionGap),
+          children: [
+            _Section(label: l10n.serverSectionLabel),
+            if (session != null)
+              _ServerCard(
+                host: session.host,
+                username: session.username,
+                actionLabel: l10n.switchServer,
+                onTap: () => ref.read(authProvider.notifier).switchServer(),
+              ),
+
+            _Section(label: l10n.readingSectionLabel),
+            _SettingRow(
+              icon: DirectionIcon(direction, color: versoAccent),
+              title: l10n.defaultReadingDirection,
+              value: direction.label(l10n),
+              onTap: () => _pickDirection(context, ref, direction),
+            ),
+
+            _Section(label: l10n.storageSectionLabel),
+            const _StorageRows(),
+
+            _Section(label: l10n.aboutSectionLabel),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: gutter,
+                vertical: 6,
+              ),
+              child: Row(
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      text: 'verso',
+                      style: VersoText.serifTitle(size: 18),
+                      children: [
+                        TextSpan(
+                          text: '.',
+                          style: VersoText.serifTitle(
+                            size: 18,
+                            color: versoAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(l10n.appTagline, style: VersoText.metadata()),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: sectionGap),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              child: OutlinedButton(
+                onPressed: () => ref.read(authProvider.notifier).signOut(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: versoDanger,
+                  side: BorderSide(color: versoDanger.withValues(alpha: .45)),
+                ),
+                child: Text(l10n.signOut),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDirection(
+    BuildContext context,
+    WidgetRef ref,
+    ReadingDirection current,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<ReadingDirection>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
+              child: SectionLabel(l10n.readingDirection),
+            ),
+            for (final option in ReadingDirection.values)
+              ListTile(
+                leading: DirectionIcon(
+                  option,
+                  color: option == current ? versoAccent : versoText,
+                ),
+                title: Text(
+                  option.label(l10n),
+                  style: VersoText.body(
+                    color: option == current ? versoAccent : versoText,
+                  ),
+                ),
+                trailing: option == current
+                    ? const Icon(Icons.check, color: versoAccent, size: 18)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(option),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) {
+      await ref.read(defaultReadingDirectionProvider.notifier).set(picked);
+    }
+  }
+}
+
+/// What the app is keeping on the device, and the one thing worth clearing.
+class _StorageRows extends ConsumerWidget {
+  const _StorageRows();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final downloads = ref.watch(downloadsProvider).value;
+    final cacheSize = ref.watch(imageCacheSizeProvider);
+
+    return Column(
+      children: [
+        // Saved chapters: shown for context, managed in the Downloads tab.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 22,
+                child: Icon(Icons.download_done, size: 18, color: versoOffline),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  l10n.downloadedChapters(downloads?.saved.length ?? 0),
+                  style: VersoText.body(),
+                ),
+              ),
+              Text(
+                formatBytes(l10n, downloads?.totalBytes ?? 0),
+                style: VersoText.metadata(),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 22,
+                child: Icon(Icons.image_outlined, size: 18),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l10n.imageCacheLabel,
+                            style: VersoText.body(),
+                          ),
+                        ),
+                        Text(
+                          formatBytes(l10n, cacheSize.value ?? 0),
+                          style: VersoText.metadata(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(l10n.imageCacheCaption, style: VersoText.metadata()),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: () async {
+                        await ref.read(imageCacheStoreProvider).clear();
+                        ref.invalidate(imageCacheSizeProvider);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: Text(l10n.clearCache),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
+      child: SectionLabel(label),
+    );
+  }
+}
+
+class _ServerCard extends StatelessWidget {
+  const _ServerCard({
+    required this.host,
+    required this.username,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  final String host;
+  final String username;
+  final String actionLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: gutter),
+      child: Material(
+        color: versoSurface,
+        borderRadius: BorderRadius.circular(radiusCard),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(radiusCard),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radiusCard),
+              border: Border.all(color: versoBorder),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: versoOnline,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        host,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: VersoText.rowTitle(),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(username, style: VersoText.metadata()),
+                    ],
+                  ),
+                ),
+                Text(
+                  actionLabel,
+                  style: VersoText.metadata(color: versoAccent),
+                ),
+                const Icon(Icons.chevron_right, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onTap,
+  });
+
+  final Widget icon;
+  final String title;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: minHitTarget),
+        padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
+        child: Row(
+          children: [
+            SizedBox(width: 22, child: Center(child: icon)),
+            const SizedBox(width: 14),
+            Expanded(child: Text(title, style: VersoText.body())),
+            Text(value, style: VersoText.metadata()),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}

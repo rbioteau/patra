@@ -1,0 +1,266 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../l10n/generated/app_localizations.dart';
+import '../../api/models.dart';
+import '../../auth/session.dart';
+import '../../theme.dart';
+import '../../widgets/cover.dart';
+import '../../widgets/offline_banner.dart';
+
+final librariesProvider = FutureProvider.autoDispose<List<LibraryDto>>(
+  (ref) => ref.watch(kavitaClientProvider).libraries(),
+);
+
+final seriesForLibraryProvider = FutureProvider.autoDispose
+    .family<List<SeriesDto>, int>((ref, libraryId) {
+      return ref.watch(kavitaClientProvider).allSeriesForLibrary(libraryId);
+    });
+
+/// Which library the Library tab is showing. Null means "the first one",
+/// resolved once the library list arrives.
+class SelectedLibraryNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void select(int libraryId) => state = libraryId;
+}
+
+final selectedLibraryProvider = NotifierProvider<SelectedLibraryNotifier, int?>(
+  SelectedLibraryNotifier.new,
+);
+
+class LibraryScreen extends ConsumerWidget {
+  const LibraryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final libraries = ref.watch(librariesProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.navLibrary)),
+      body: SafeArea(
+        top: false,
+        child: libraries.when(
+          loading: () => const _LibraryGridSkeleton(),
+          error: (error, _) =>
+              _ErrorState(onRetry: () => ref.invalidate(librariesProvider)),
+          data: (items) {
+            if (items.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(gutter),
+                  child: Text(
+                    l10n.homeEmpty,
+                    textAlign: TextAlign.center,
+                    style: VersoText.body(color: versoTextMuted),
+                  ),
+                ),
+              );
+            }
+            final selected = ref.watch(selectedLibraryProvider);
+            final current = items.any((l) => l.id == selected)
+                ? selected!
+                : items.first.id;
+            return Column(
+              children: [
+                const OfflineBanner(),
+                _LibraryPills(
+                  libraries: items,
+                  selectedId: current,
+                  onSelected: (id) =>
+                      ref.read(selectedLibraryProvider.notifier).select(id),
+                ),
+                Expanded(child: _SeriesGrid(libraryId: current)),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryPills extends StatelessWidget {
+  const _LibraryPills({
+    required this.libraries,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final List<LibraryDto> libraries;
+  final int selectedId;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 10),
+        itemCount: libraries.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final library = libraries[index];
+          final selected = library.id == selectedId;
+          return InkWell(
+            onTap: () => onSelected(library.id),
+            borderRadius: BorderRadius.circular(radiusPill),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? versoAccent.withValues(alpha: .16)
+                    : versoSurface,
+                borderRadius: BorderRadius.circular(radiusPill),
+                border: Border.all(color: selected ? versoAccent : versoBorder),
+              ),
+              child: Text(
+                library.name,
+                style: VersoText.rowTitle(
+                  color: selected ? versoAccent : versoText,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SeriesGrid extends ConsumerWidget {
+  const _SeriesGrid({required this.libraryId});
+
+  final int libraryId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final client = ref.watch(kavitaClientProvider);
+    final series = ref.watch(seriesForLibraryProvider(libraryId));
+
+    return series.when(
+      loading: () => const _LibraryGridSkeleton(),
+      error: (error, _) => _ErrorState(
+        onRetry: () => ref.invalidate(seriesForLibraryProvider(libraryId)),
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return Center(
+            child: Text(
+              l10n.libraryEmpty,
+              style: VersoText.body(color: versoTextMuted),
+            ),
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () =>
+              ref.refresh(seriesForLibraryProvider(libraryId).future),
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, gutter),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 0.5,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 18,
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final s = items[index];
+              final progress = s.pages > 0 ? s.pagesRead / s.pages : 0.0;
+              return CoverTile(
+                url: client.seriesCoverUrl(s.id),
+                headers: client.imageHeaders,
+                title: s.name,
+                serifTitle: true,
+                progress: progress,
+                read: s.pages > 0 && s.pagesRead >= s.pages,
+                onTap: () async {
+                  await context.push(
+                    Uri(
+                      path: '/series/${s.id}',
+                      queryParameters: {
+                        'name': s.name,
+                        'library': '$libraryId',
+                      },
+                    ).toString(),
+                  );
+                  // Progress may have changed while reading.
+                  ref.invalidate(seriesForLibraryProvider(libraryId));
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LibraryGridSkeleton extends StatelessWidget {
+  const _LibraryGridSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, gutter),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 18,
+      ),
+      itemCount: 9,
+      itemBuilder: (context, index) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const AspectRatio(
+            aspectRatio: coverAspectRatio,
+            child: Skeleton(radius: radiusCover),
+          ),
+          const SizedBox(height: 8),
+          const Skeleton(height: 10),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends ConsumerWidget {
+  const _ErrorState({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final offline = ref.watch(offlineProvider);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(gutter),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              offline ? Icons.cloud_off_outlined : Icons.error_outline,
+              color: versoTextMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              offline ? l10n.offlineBanner : l10n.serverUnreachable,
+              textAlign: TextAlign.center,
+              style: VersoText.body(color: versoTextMuted),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(onPressed: onRetry, child: Text(l10n.retry)),
+          ],
+        ),
+      ),
+    );
+  }
+}

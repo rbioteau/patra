@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "unfinished page" mark, drawn as a vector so the splash screen never
+     upscales a bitmap. Geometry mirrors assets/icon/verso-1024.png; the
+     colours are the parchment tones already composited over the ink tile.
+     Regenerate rather than hand-edit: see CLAUDE.md. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <path
+        android:fillColor="#7C5CFF"
+        android:pathData="M300.3,328.8 H479.1 A32.4,32.4 0 0 1 511.6,361.2 V662.8 A32.4,32.4 0 0 1 479.1,695.2 H300.3 A32.4,32.4 0 0 1 267.9,662.8 V361.2 A32.4,32.4 0 0 1 300.3,328.8 Z" />
+    <path
+        android:fillColor="#BEB9AB"
+        android:pathData="M561.5,327.9 H707.9 A8.8,8.8 0 0 1 716.7,336.7 V360.4 A8.8,8.8 0 0 1 707.9,369.1 H561.5 A8.8,8.8 0 0 1 552.8,360.4 V336.7 A8.8,8.8 0 0 1 561.5,327.9 Z" />
+    <path
+        android:fillColor="#89857E"
+        android:pathData="M561.5,409.4 H748.2 A8.8,8.8 0 0 1 757.0,418.2 V442.8 A8.8,8.8 0 0 1 748.2,451.5 H561.5 A8.8,8.8 0 0 1 552.8,442.8 V418.2 A8.8,8.8 0 0 1 561.5,409.4 Z" />
+    <path
+        android:fillColor="#5F5C5B"
+        android:pathData="M561.5,491.0 H687.8 A8.8,8.8 0 0 1 696.5,499.7 V524.3 A8.8,8.8 0 0 1 687.8,533.0 H561.5 A8.8,8.8 0 0 1 552.8,524.3 V499.7 A8.8,8.8 0 0 1 561.5,491.0 Z" />
+    <path
+        android:fillColor="#3C393C"
+        android:pathData="M561.5,572.5 H728.1 A8.8,8.8 0 0 1 736.8,581.2 V605.8 A8.8,8.8 0 0 1 728.1,614.6 H561.5 A8.8,8.8 0 0 1 552.8,605.8 V581.2 A8.8,8.8 0 0 1 561.5,572.5 Z" />
+    <path
+        android:fillColor="#262429"
+        android:pathData="M561.5,654.9 H646.6 A8.8,8.8 0 0 1 655.3,663.6 V687.3 A8.8,8.8 0 0 1 646.6,696.1 H561.5 A8.8,8.8 0 0 1 552.8,687.3 V663.6 A8.8,8.8 0 0 1 561.5,654.9 Z" />
+</vector>

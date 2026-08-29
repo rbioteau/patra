@@ -164,11 +164,95 @@ abstract class AppLocalizations {
   /// **'Could not sign in: {error}'**
   String loginFailed(String error);
 
+  /// Section label above the list of previously used servers
+  ///
+  /// In en, this message translates to:
+  /// **'Your servers'**
+  String get savedServers;
+
+  /// No description provided for @addServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a server'**
+  String get addServer;
+
+  /// No description provided for @editServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get editServer;
+
+  /// No description provided for @forgetServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get forgetServer;
+
+  /// Confirmation title; server is a host name
+  ///
+  /// In en, this message translates to:
+  /// **'Forget {server}?'**
+  String forgetServerConfirm(String server);
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @navHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get navHome;
+
+  /// No description provided for @navLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get navLibrary;
+
+  /// No description provided for @navDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get navDownloads;
+
+  /// No description provided for @navSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get navSettings;
+
+  /// Home section listing works the user has started reading
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueSection;
+
+  /// Home section listing the next thing to read in each series
+  ///
+  /// In en, this message translates to:
+  /// **'On deck'**
+  String get onDeckSection;
+
   /// No description provided for @librariesTitle.
   ///
   /// In en, this message translates to:
   /// **'Libraries'**
   String get librariesTitle;
+
+  /// No description provided for @homeEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to read yet. Your libraries will show up here once the server has scanned them.'**
+  String get homeEmpty;
+
+  /// No description provided for @libraryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This library is empty.'**
+  String get libraryEmpty;
 
   /// No description provided for @signOut.
   ///
@@ -212,6 +296,48 @@ abstract class AppLocalizations {
   /// **'Chapter {range}'**
   String chapterLabel(String range);
 
+  /// Chapter tally in the series hero
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No chapters} =1{1 chapter} other{{count} chapters}}'**
+  String seriesChapterCount(int count);
+
+  /// Volume tally in the series hero, used when the series is organised in volumes rather than loose chapters
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 volume} other{{count} volumes}}'**
+  String seriesVolumeCount(int count);
+
+  /// Hero button for a volume with no chapter breakdown; volume is its number
+  ///
+  /// In en, this message translates to:
+  /// **'Continue — Vol. {volume}'**
+  String seriesContinueVolume(String volume);
+
+  /// Hero button when a chapter is already started; chapter is its number or range
+  ///
+  /// In en, this message translates to:
+  /// **'Continue — Ch. {chapter}'**
+  String seriesContinue(String chapter);
+
+  /// No description provided for @seriesStartReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Start reading'**
+  String get seriesStartReading;
+
+  /// No description provided for @seriesReadAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get seriesReadAgain;
+
+  /// Short uppercase tag marking a finished chapter
+  ///
+  /// In en, this message translates to:
+  /// **'READ'**
+  String get readTag;
+
   /// No description provided for @pageCount.
   ///
   /// In en, this message translates to:
@@ -223,6 +349,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Page {current} / {total}'**
   String pageProgress(int current, int total);
+
+  /// Compact page counter in the reader chrome
+  ///
+  /// In en, this message translates to:
+  /// **'{current} / {total}'**
+  String pageCounter(int current, int total);
+
+  /// Page counter for a landscape two-page spread
+  ///
+  /// In en, this message translates to:
+  /// **'{first}–{last} / {total}'**
+  String pageSpreadCounter(int first, int last, int total);
+
+  /// Title of the reader menu that picks how pages advance
+  ///
+  /// In en, this message translates to:
+  /// **'Reading direction'**
+  String get readingDirection;
+
+  /// Full phrase, never an acronym like LTR
+  ///
+  /// In en, this message translates to:
+  /// **'Left to right'**
+  String get readingDirectionLtr;
+
+  /// Full phrase, never an acronym like RTL; the manga direction
+  ///
+  /// In en, this message translates to:
+  /// **'Right to left'**
+  String get readingDirectionRtl;
+
+  /// Continuous vertical scrolling mode
+  ///
+  /// In en, this message translates to:
+  /// **'Webtoon (vertical)'**
+  String get readingModeWebtoon;
+
+  /// Download action on a chapter; always worded, never icon-only
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get savePill;
+
+  /// Download in progress; tapping cancels
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String downloadingPct(int percent);
+
+  /// Chapter is available offline; tapping removes it
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get savedPill;
+
+  /// No description provided for @downloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get downloadsTitle;
+
+  /// No description provided for @emptyDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved chapters yet. Save a chapter from a series to read it without the server.'**
+  String get emptyDownloads;
+
+  /// Storage meter caption; size is a preformatted string such as '124 MB'
+  ///
+  /// In en, this message translates to:
+  /// **'{size} on this device'**
+  String storageUsed(String size);
+
+  /// No description provided for @removeDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get removeDownload;
+
+  /// No description provided for @removeDownloadConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the saved copy of {title}?'**
+  String removeDownloadConfirm(String title);
+
+  /// No description provided for @serverUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Server unreachable'**
+  String get serverUnreachable;
+
+  /// No description provided for @offlineBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Server unreachable — offline mode. Saved chapters remain readable.'**
+  String get offlineBanner;
+
+  /// No description provided for @storageSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage'**
+  String get storageSectionLabel;
+
+  /// No description provided for @imageCacheLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Image cache'**
+  String get imageCacheLabel;
+
+  /// No description provided for @imageCacheCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers and pages read online. Clearing it never touches saved chapters.'**
+  String get imageCacheCaption;
+
+  /// No description provided for @clearCache.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get clearCache;
+
+  /// No description provided for @downloadedChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No saved chapter} =1{1 saved chapter} other{{count} saved chapters}}'**
+  String downloadedChapters(int count);
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// No description provided for @serverSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get serverSectionLabel;
+
+  /// No description provided for @switchServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch server'**
+  String get switchServer;
+
+  /// No description provided for @readingSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading'**
+  String get readingSectionLabel;
+
+  /// No description provided for @defaultReadingDirection.
+  ///
+  /// In en, this message translates to:
+  /// **'Default reading direction'**
+  String get defaultReadingDirection;
+
+  /// No description provided for @aboutSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get aboutSectionLabel;
+
+  /// No description provided for @sizeBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} B'**
+  String sizeBytes(int count);
+
+  /// No description provided for @sizeMegabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} MB'**
+  String sizeMegabytes(String count);
+
+  /// No description provided for @sizeGigabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} GB'**
+  String sizeGigabytes(String count);
 }
 
 class _AppLocalizationsDelegate

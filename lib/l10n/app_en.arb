@@ -19,7 +19,36 @@
       "error": {"type": "String"}
     }
   },
+  "savedServers": "Your servers",
+  "@savedServers": {
+    "description": "Section label above the list of previously used servers"
+  },
+  "addServer": "Add a server",
+  "editServer": "Edit",
+  "forgetServer": "Forget",
+  "forgetServerConfirm": "Forget {server}?",
+  "@forgetServerConfirm": {
+    "description": "Confirmation title; server is a host name",
+    "placeholders": {
+      "server": {"type": "String"}
+    }
+  },
+  "cancel": "Cancel",
+  "navHome": "Home",
+  "navLibrary": "Library",
+  "navDownloads": "Downloads",
+  "navSettings": "Settings",
+  "continueSection": "Continue",
+  "@continueSection": {
+    "description": "Home section listing works the user has started reading"
+  },
+  "onDeckSection": "On deck",
+  "@onDeckSection": {
+    "description": "Home section listing the next thing to read in each series"
+  },
   "librariesTitle": "Libraries",
+  "homeEmpty": "Nothing to read yet. Your libraries will show up here once the server has scanned them.",
+  "libraryEmpty": "This library is empty.",
   "signOut": "Sign out",
   "retry": "Retry",
   "volumesTitle": "Volumes",
@@ -48,6 +77,40 @@
       "range": {"type": "String"}
     }
   },
+  "seriesChapterCount": "{count, plural, =0{No chapters} =1{1 chapter} other{{count} chapters}}",
+  "@seriesChapterCount": {
+    "description": "Chapter tally in the series hero",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "seriesVolumeCount": "{count, plural, =1{1 volume} other{{count} volumes}}",
+  "@seriesVolumeCount": {
+    "description": "Volume tally in the series hero, used when the series is organised in volumes rather than loose chapters",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "seriesContinueVolume": "Continue — Vol. {volume}",
+  "@seriesContinueVolume": {
+    "description": "Hero button for a volume with no chapter breakdown; volume is its number",
+    "placeholders": {
+      "volume": {"type": "String"}
+    }
+  },
+  "seriesContinue": "Continue — Ch. {chapter}",
+  "@seriesContinue": {
+    "description": "Hero button when a chapter is already started; chapter is its number or range",
+    "placeholders": {
+      "chapter": {"type": "String"}
+    }
+  },
+  "seriesStartReading": "Start reading",
+  "seriesReadAgain": "Read again",
+  "readTag": "READ",
+  "@readTag": {
+    "description": "Short uppercase tag marking a finished chapter"
+  },
   "pageCount": "{count} pages",
   "@pageCount": {
     "placeholders": {
@@ -59,6 +122,106 @@
     "placeholders": {
       "current": {"type": "int"},
       "total": {"type": "int"}
+    }
+  },
+  "pageCounter": "{current} / {total}",
+  "@pageCounter": {
+    "description": "Compact page counter in the reader chrome",
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "pageSpreadCounter": "{first}–{last} / {total}",
+  "@pageSpreadCounter": {
+    "description": "Page counter for a landscape two-page spread",
+    "placeholders": {
+      "first": {"type": "int"},
+      "last": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "readingDirection": "Reading direction",
+  "@readingDirection": {
+    "description": "Title of the reader menu that picks how pages advance"
+  },
+  "readingDirectionLtr": "Left to right",
+  "@readingDirectionLtr": {
+    "description": "Full phrase, never an acronym like LTR"
+  },
+  "readingDirectionRtl": "Right to left",
+  "@readingDirectionRtl": {
+    "description": "Full phrase, never an acronym like RTL; the manga direction"
+  },
+  "readingModeWebtoon": "Webtoon (vertical)",
+  "@readingModeWebtoon": {
+    "description": "Continuous vertical scrolling mode"
+  },
+  "savePill": "Save",
+  "@savePill": {
+    "description": "Download action on a chapter; always worded, never icon-only"
+  },
+  "downloadingPct": "{percent}%",
+  "@downloadingPct": {
+    "description": "Download in progress; tapping cancels",
+    "placeholders": {
+      "percent": {"type": "int"}
+    }
+  },
+  "savedPill": "Saved",
+  "@savedPill": {
+    "description": "Chapter is available offline; tapping removes it"
+  },
+  "downloadsTitle": "Downloads",
+  "emptyDownloads": "No saved chapters yet. Save a chapter from a series to read it without the server.",
+  "storageUsed": "{size} on this device",
+  "@storageUsed": {
+    "description": "Storage meter caption; size is a preformatted string such as '124 MB'",
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "removeDownload": "Remove",
+  "removeDownloadConfirm": "Remove the saved copy of {title}?",
+  "@removeDownloadConfirm": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "serverUnreachable": "Server unreachable",
+  "offlineBanner": "Server unreachable — offline mode. Saved chapters remain readable.",
+  "storageSectionLabel": "Storage",
+  "imageCacheLabel": "Image cache",
+  "imageCacheCaption": "Covers and pages read online. Clearing it never touches saved chapters.",
+  "clearCache": "Clear",
+  "downloadedChapters": "{count, plural, =0{No saved chapter} =1{1 saved chapter} other{{count} saved chapters}}",
+  "@downloadedChapters": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "settingsTitle": "Settings",
+  "serverSectionLabel": "Server",
+  "switchServer": "Switch server",
+  "readingSectionLabel": "Reading",
+  "defaultReadingDirection": "Default reading direction",
+  "aboutSectionLabel": "About",
+  "sizeBytes": "{count} B",
+  "@sizeBytes": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "sizeMegabytes": "{count} MB",
+  "@sizeMegabytes": {
+    "placeholders": {
+      "count": {"type": "String"}
+    }
+  },
+  "sizeGigabytes": "{count} GB",
+  "@sizeGigabytes": {
+    "placeholders": {
+      "count": {"type": "String"}
     }
   }
 }

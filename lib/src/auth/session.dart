@@ -1,15 +1,22 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../api/kavita_client.dart';
 
-class Session {
-  const Session({
+/// A Kavita server the user has connected to at least once.
+///
+/// Tokens are stored so a saved server can be reopened without retyping a
+/// password; the password itself is never persisted. An empty [token] means
+/// the entry is remembered but signed out.
+class ServerEntry {
+  const ServerEntry({
     required this.baseUrl,
     required this.username,
-    required this.token,
-    required this.refreshToken,
-    required this.apiKey,
+    this.token = '',
+    this.refreshToken = '',
+    this.apiKey = '',
   });
 
   final String baseUrl;
@@ -18,78 +25,174 @@ class Session {
   final String refreshToken;
   final String apiKey;
 
-  Session copyWith({String? token, String? refreshToken}) => Session(
+  bool get hasSession => token.isNotEmpty;
+
+  /// Host part of [baseUrl], for display; falls back to the raw value so a
+  /// malformed address still labels its row.
+  String get host {
+    final parsed = Uri.tryParse(baseUrl)?.host ?? '';
+    return parsed.isEmpty ? baseUrl : parsed;
+  }
+
+  ServerEntry copyWith({
+    String? username,
+    String? token,
+    String? refreshToken,
+    String? apiKey,
+  }) => ServerEntry(
     baseUrl: baseUrl,
-    username: username,
+    username: username ?? this.username,
     token: token ?? this.token,
     refreshToken: refreshToken ?? this.refreshToken,
-    apiKey: apiKey,
+    apiKey: apiKey ?? this.apiKey,
   );
+
+  Map<String, dynamic> toJson() => {
+    'baseUrl': baseUrl,
+    'username': username,
+    'token': token,
+    'refreshToken': refreshToken,
+    'apiKey': apiKey,
+  };
+
+  static ServerEntry? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final baseUrl = json['baseUrl'];
+    if (baseUrl is! String || baseUrl.isEmpty) return null;
+    return ServerEntry(
+      baseUrl: baseUrl,
+      username: json['username'] as String? ?? '',
+      token: json['token'] as String? ?? '',
+      refreshToken: json['refreshToken'] as String? ?? '',
+      apiKey: json['apiKey'] as String? ?? '',
+    );
+  }
 }
 
-/// Persists the session in the platform keychain/keystore.
+/// The active server, once it holds a live session.
+typedef Session = ServerEntry;
+
+class AuthState {
+  const AuthState({this.servers = const [], this.activeUrl});
+
+  final List<ServerEntry> servers;
+  final String? activeUrl;
+
+  /// Null while signed out, which is what the router redirect keys off.
+  Session? get active {
+    for (final server in servers) {
+      if (server.baseUrl == activeUrl && server.hasSession) return server;
+    }
+    return null;
+  }
+}
+
+/// Persists servers in the platform keychain/keystore.
 class SessionStorage {
   static const _storage = FlutterSecureStorage();
+  static const _serversKey = 'servers';
+  static const _activeKey = 'activeServer';
 
-  static Future<Session?> load() async {
+  static Future<AuthState> load() async {
     final Map<String, String> values;
     try {
       values = await _storage.readAll();
     } on Exception {
       // Unreadable keystore (device restore, keystore corruption…): fall
       // back to the login screen rather than crash-looping at startup.
-      return null;
+      return const AuthState();
     }
+
+    final raw = values[_serversKey];
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        final servers = <ServerEntry>[
+          if (decoded is List)
+            for (final entry in decoded) ?ServerEntry.fromJson(entry),
+        ];
+        return AuthState(servers: servers, activeUrl: values[_activeKey]);
+      } on FormatException {
+        return const AuthState();
+      }
+    }
+
+    // Migration from the single-server layout shipped earlier.
     final baseUrl = values['baseUrl'];
     final token = values['token'];
-    if (baseUrl == null || token == null) return null;
-    return Session(
-      baseUrl: baseUrl,
-      username: values['username'] ?? '',
-      token: token,
-      refreshToken: values['refreshToken'] ?? '',
-      apiKey: values['apiKey'] ?? '',
+    if (baseUrl == null || token == null) return const AuthState();
+    final migrated = AuthState(
+      servers: [
+        ServerEntry(
+          baseUrl: baseUrl,
+          username: values['username'] ?? '',
+          token: token,
+          refreshToken: values['refreshToken'] ?? '',
+          apiKey: values['apiKey'] ?? '',
+        ),
+      ],
+      activeUrl: baseUrl,
     );
+    await save(migrated);
+    return migrated;
   }
 
-  static Future<void> save(Session session) async {
-    await _storage.write(key: 'baseUrl', value: session.baseUrl);
-    await _storage.write(key: 'username', value: session.username);
-    await _storage.write(key: 'token', value: session.token);
-    await _storage.write(key: 'refreshToken', value: session.refreshToken);
-    await _storage.write(key: 'apiKey', value: session.apiKey);
+  static Future<void> save(AuthState state) async {
+    try {
+      await _storage.write(
+        key: _serversKey,
+        value: jsonEncode([for (final s in state.servers) s.toJson()]),
+      );
+      final active = state.activeUrl;
+      if (active == null) {
+        await _storage.delete(key: _activeKey);
+      } else {
+        await _storage.write(key: _activeKey, value: active);
+      }
+    } on Exception {
+      // A write we cannot make is not worth losing the running session over.
+    }
   }
-
-  static Future<void> clear() => _storage.deleteAll();
 }
 
-/// Session restored from storage before the app started; injected in main().
-final initialSessionProvider = Provider<Session?>((ref) => null);
+/// Auth state restored from storage before the app started; injected in main().
+final initialAuthStateProvider = Provider<AuthState>(
+  (ref) => const AuthState(),
+);
 
-class SessionNotifier extends Notifier<Session?> {
+class AuthNotifier extends Notifier<AuthState> {
   @override
-  Session? build() => ref.read(initialSessionProvider);
+  AuthState build() => ref.read(initialAuthStateProvider);
 
+  static String _normalize(String baseUrl) =>
+      baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+
+  /// Authenticates against [baseUrl] and makes it the active server.
   Future<void> login({
     required String baseUrl,
     required String username,
     required String password,
   }) async {
-    final normalized = baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final url = _normalize(baseUrl);
     final user = await KavitaClient.login(
-      baseUrl: normalized,
+      baseUrl: url,
       username: username,
       password: password,
     );
-    final session = Session(
-      baseUrl: normalized,
-      username: user.username,
+    final entry = ServerEntry(
+      baseUrl: url,
+      username: user.username.isEmpty ? username : user.username,
       token: user.token,
       refreshToken: user.refreshToken,
       apiKey: user.apiKey,
     );
-    await SessionStorage.save(session);
-    state = session;
+    await _commit(AuthState(servers: _upsert(entry), activeUrl: url));
+  }
+
+  /// Reopens a saved server that still holds tokens.
+  Future<void> resume(ServerEntry server) async {
+    if (!server.hasSession) return;
+    await _commit(AuthState(servers: state.servers, activeUrl: server.baseUrl));
   }
 
   /// Called by the API client after a successful token refresh.
@@ -97,22 +200,80 @@ class SessionNotifier extends Notifier<Session?> {
     required String token,
     required String refreshToken,
   }) async {
-    final current = state;
-    if (current == null) return;
-    final session = current.copyWith(token: token, refreshToken: refreshToken);
-    await SessionStorage.save(session);
-    state = session;
+    final active = state.active;
+    if (active == null) return;
+    final updated = active.copyWith(token: token, refreshToken: refreshToken);
+    await _commit(
+      AuthState(servers: _upsert(updated), activeUrl: state.activeUrl),
+    );
   }
 
-  Future<void> logout() async {
-    await SessionStorage.clear();
-    state = null;
+  /// Leaves the current server without forgetting it: the entry keeps its
+  /// address and username, and asks for a password next time.
+  Future<void> signOut() async {
+    final active = state.active;
+    final servers = active == null
+        ? state.servers
+        : _upsert(
+            ServerEntry(baseUrl: active.baseUrl, username: active.username),
+          );
+    await _commit(AuthState(servers: servers, activeUrl: null));
+  }
+
+  /// Goes back to the server list while keeping tokens, so switching back is
+  /// a single tap.
+  Future<void> switchServer() async {
+    await _commit(AuthState(servers: state.servers, activeUrl: null));
+  }
+
+  Future<void> forget(String baseUrl) async {
+    final servers = [
+      for (final server in state.servers)
+        if (server.baseUrl != baseUrl) server,
+    ];
+    await _commit(
+      AuthState(
+        servers: servers,
+        activeUrl: state.activeUrl == baseUrl ? null : state.activeUrl,
+      ),
+    );
+  }
+
+  List<ServerEntry> _upsert(ServerEntry entry) => [
+    entry,
+    for (final server in state.servers)
+      if (server.baseUrl != entry.baseUrl) server,
+  ];
+
+  Future<void> _commit(AuthState next) async {
+    state = next;
+    await SessionStorage.save(next);
   }
 }
 
-final sessionProvider = NotifierProvider<SessionNotifier, Session?>(
-  SessionNotifier.new,
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(
+  AuthNotifier.new,
 );
+
+/// The live session, or null while signed out.
+final sessionProvider = Provider<Session?>(
+  (ref) => ref.watch(authProvider).active,
+);
+
+/// True once a request failed to reach the server; reset by the next success.
+/// Drives the offline banner and the greying-out of unsaved chapters.
+final offlineProvider = NotifierProvider<OfflineNotifier, bool>(
+  OfflineNotifier.new,
+);
+
+class OfflineNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool offline) {
+    if (state != offline) state = offline;
+  }
+}
 
 /// Kept across rebuilds so screens still unmounting after a logout get a
 /// usable (if doomed) client instead of a build-time crash, and so a
@@ -147,9 +308,11 @@ final kavitaClientProvider = Provider<KavitaClient>(
       refreshToken: session.refreshToken,
       apiKey: session.apiKey,
       onTokensRefreshed: (token, refreshToken) => ref
-          .read(sessionProvider.notifier)
+          .read(authProvider.notifier)
           .updateTokens(token: token, refreshToken: refreshToken),
-      onSessionExpired: () => ref.read(sessionProvider.notifier).logout(),
+      onSessionExpired: () => ref.read(authProvider.notifier).signOut(),
+      onReachabilityChanged: (reachable) =>
+          ref.read(offlineProvider.notifier).set(!reachable),
     );
     _lastClient?.close();
     _lastClient = client;

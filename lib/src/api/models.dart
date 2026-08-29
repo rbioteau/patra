@@ -45,6 +45,7 @@ class SeriesDto {
     required this.id,
     required this.name,
     required this.libraryId,
+    required this.libraryName,
     required this.pages,
     required this.pagesRead,
   });
@@ -52,6 +53,7 @@ class SeriesDto {
   final int id;
   final String name;
   final int libraryId;
+  final String libraryName;
   final int pages;
   final int pagesRead;
 
@@ -59,9 +61,41 @@ class SeriesDto {
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
     libraryId: json['libraryId'] as int? ?? 0,
+    libraryName: json['libraryName'] as String? ?? '',
     pages: json['pages'] as int? ?? 0,
     pagesRead: json['pagesRead'] as int? ?? 0,
   );
+}
+
+/// The handful of metadata fields the series hero shows.
+class SeriesMetadataDto {
+  const SeriesMetadataDto({
+    this.summary = '',
+    this.writers = const [],
+    this.genres = const [],
+    this.releaseYear = 0,
+  });
+
+  final String summary;
+  final List<String> writers;
+  final List<String> genres;
+  final int releaseYear;
+
+  static List<String> _names(Object? list, String key) => [
+    for (final entry in (list as List<dynamic>? ?? []))
+      if (entry is Map &&
+          entry[key] is String &&
+          (entry[key] as String).isNotEmpty)
+        entry[key] as String,
+  ];
+
+  factory SeriesMetadataDto.fromJson(Map<String, dynamic> json) =>
+      SeriesMetadataDto(
+        summary: json['summary'] as String? ?? '',
+        writers: _names(json['writers'], 'name'),
+        genres: _names(json['genres'], 'title'),
+        releaseYear: json['releaseYear'] as int? ?? 0,
+      );
 }
 
 class VolumeDto {
@@ -74,10 +108,12 @@ class VolumeDto {
     required this.chapters,
   });
 
-  /// Kavita sentinel volume numbers (see Parser in the Kavita codebase):
-  /// chapters not belonging to any volume, and specials.
-  static const looseLeafNumber = -100000;
-  static const specialsNumber = -100001;
+  /// Kavita sentinel volume numbers (Parser.LooseLeafVolumeNumber and
+  /// SpecialVolumeNumber): the pseudo-volumes holding chapters that belong to
+  /// no volume, and specials. Compared on the absolute value because the sign
+  /// has differed between Kavita versions — no real volume comes near 100000.
+  static const looseLeafNumber = 100000;
+  static const specialsNumber = 100001;
 
   final int id;
   final String name;
@@ -86,8 +122,8 @@ class VolumeDto {
   final int pagesRead;
   final List<ChapterDto> chapters;
 
-  bool get isLooseLeaf => minNumber == looseLeafNumber;
-  bool get isSpecials => minNumber == specialsNumber;
+  bool get isLooseLeaf => minNumber.abs() == looseLeafNumber;
+  bool get isSpecials => minNumber.abs() == specialsNumber;
 
   factory VolumeDto.fromJson(Map<String, dynamic> json) => VolumeDto(
     id: json['id'] as int,
@@ -114,8 +150,9 @@ class ChapterDto {
   });
 
   /// Kavita sentinel for the placeholder chapter of a volume that has no
-  /// chapter breakdown: such a chapter represents the whole volume.
-  static const defaultNumber = -100000;
+  /// chapter breakdown (Parser.DefaultChapterNumber): such a chapter
+  /// represents the whole volume. Sign-insensitive, as above.
+  static const defaultNumber = 100000;
 
   final int id;
 
@@ -131,7 +168,8 @@ class ChapterDto {
 
   /// True for the placeholder chapter Kavita creates inside a volume with no
   /// chapter breakdown.
-  bool get isVolumePlaceholder => minNumber == defaultNumber && !isSpecial;
+  bool get isVolumePlaceholder =>
+      minNumber.abs() == defaultNumber && !isSpecial;
 
   factory ChapterDto.fromJson(Map<String, dynamic> json) => ChapterDto(
     id: json['id'] as int,
@@ -145,6 +183,39 @@ class ChapterDto {
   );
 }
 
+/// Pixel size of one page, as measured by the server. Lets the webtoon view
+/// lay pages out before their images have loaded.
+class PageDimension {
+  const PageDimension({
+    required this.pageNumber,
+    required this.width,
+    required this.height,
+    required this.isWide,
+  });
+
+  final int pageNumber;
+  final int width;
+  final int height;
+  final bool isWide;
+
+  double get aspectRatio => height == 0 ? defaultAspectRatio : width / height;
+
+  /// Portrait comic page, used when the server reports no dimensions.
+  static const defaultAspectRatio = 2 / 3;
+
+  static PageDimension? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final page = json['pageNumber'];
+    if (page is! int) return null;
+    return PageDimension(
+      pageNumber: page,
+      width: json['width'] as int? ?? 0,
+      height: json['height'] as int? ?? 0,
+      isWide: json['isWide'] as bool? ?? false,
+    );
+  }
+}
+
 class ChapterInfoDto {
   const ChapterInfoDto({
     required this.seriesId,
@@ -153,6 +224,7 @@ class ChapterInfoDto {
     required this.pages,
     required this.seriesName,
     required this.title,
+    this.pageDimensions = const {},
   });
 
   final int seriesId;
@@ -162,6 +234,17 @@ class ChapterInfoDto {
   final String seriesName;
   final String title;
 
+  /// Keyed by the page number the server reported, which may be 0- or
+  /// 1-based depending on the source file — [aspectRatioFor] tries both.
+  final Map<int, PageDimension> pageDimensions;
+
+  double aspectRatioFor(int page) =>
+      (pageDimensions[page] ?? pageDimensions[page + 1])?.aspectRatio ??
+      PageDimension.defaultAspectRatio;
+
+  bool isWide(int page) =>
+      (pageDimensions[page] ?? pageDimensions[page + 1])?.isWide ?? false;
+
   factory ChapterInfoDto.fromJson(Map<String, dynamic> json) => ChapterInfoDto(
     seriesId: json['seriesId'] as int,
     volumeId: json['volumeId'] as int? ?? 0,
@@ -169,5 +252,12 @@ class ChapterInfoDto {
     pages: json['pages'] as int? ?? 0,
     seriesName: json['seriesName'] as String? ?? '',
     title: json['title'] as String? ?? '',
+    pageDimensions: {
+      for (final dimension
+          in (json['pageDimensions'] as List<dynamic>? ?? [])
+              .map(PageDimension.fromJson)
+              .nonNulls)
+        dimension.pageNumber: dimension,
+    },
   );
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand ink tile from the design handoff; the adaptive icon background. -->
+    <color name="verso_ink">#16141C</color>
+    <!-- Alias: the name flutter_launcher_icons writes if it is ever re-run. -->
+    <color name="ic_launcher_background">@color/verso_ink</color>
+</resources>

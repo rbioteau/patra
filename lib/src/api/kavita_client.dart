@@ -14,6 +14,7 @@ class KavitaClient {
     required this.apiKey,
     this.onTokensRefreshed,
     this.onSessionExpired,
+    this.onReachabilityChanged,
   }) : _token = token,
        _dio = Dio(
          BaseOptions(
@@ -32,10 +33,31 @@ class KavitaClient {
          ),
        ) {
     _dio.interceptors.add(
+      // Not queued: reachability must not serialize concurrent responses.
+      InterceptorsWrapper(
+        onResponse: (response, handler) {
+          onReachabilityChanged?.call(true);
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          if (_isUnreachable(error)) onReachabilityChanged?.call(false);
+          handler.next(error);
+        },
+      ),
+    );
+    _dio.interceptors.add(
       // Queued so concurrent 401s refresh once, then retry in order.
       QueuedInterceptorsWrapper(onError: _onError),
     );
   }
+
+  static bool _isUnreachable(DioException error) => switch (error.type) {
+    DioExceptionType.connectionError ||
+    DioExceptionType.connectionTimeout ||
+    DioExceptionType.sendTimeout ||
+    DioExceptionType.receiveTimeout => true,
+    _ => false,
+  };
 
   final String baseUrl;
   final String apiKey;
@@ -47,6 +69,10 @@ class KavitaClient {
   /// Notified when the refresh token itself is rejected: the user must log
   /// in again.
   final void Function()? onSessionExpired;
+
+  /// Notified with false when the server could not be reached at all, and
+  /// with true on the next successful response.
+  final void Function(bool reachable)? onReachabilityChanged;
 
   String _token;
   String _refreshToken;
@@ -183,6 +209,41 @@ class KavitaClient {
     }
   }
 
+  /// Series the user has started but not finished — the "Continue" shelf.
+  Future<List<SeriesDto>> currentlyReading({int pageSize = 20}) async {
+    final res = await _dio.get<List<dynamic>>(
+      '/api/Series/currently-reading',
+      queryParameters: {'PageNumber': 1, 'PageSize': pageSize},
+    );
+    return res.data!
+        .map((e) => SeriesDto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Next thing to read in each series — the "On deck" shelf.
+  Future<List<SeriesDto>> onDeck({int pageSize = 20}) async {
+    final res = await _dio.post<List<dynamic>>(
+      '/api/Series/on-deck',
+      queryParameters: {'PageNumber': 1, 'PageSize': pageSize},
+    );
+    return res.data!
+        .map((e) => SeriesDto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SeriesDto> series(int seriesId) async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/Series/$seriesId');
+    return SeriesDto.fromJson(res.data!);
+  }
+
+  Future<SeriesMetadataDto> seriesMetadata(int seriesId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/Series/metadata',
+      queryParameters: {'seriesId': seriesId},
+    );
+    return SeriesMetadataDto.fromJson(res.data!);
+  }
+
   Future<List<VolumeDto>> volumes(int seriesId) async {
     final res = await _dio.get<List<dynamic>>(
       '/api/Series/volumes',
@@ -196,7 +257,9 @@ class KavitaClient {
   Future<ChapterInfoDto> chapterInfo(int chapterId) async {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/Reader/chapter-info',
-      queryParameters: {'chapterId': chapterId},
+      // Page dimensions are opt-in; without them the webtoon view cannot
+      // size pages before their images load.
+      queryParameters: {'chapterId': chapterId, 'includeDimensions': true},
     );
     return ChapterInfoDto.fromJson(res.data!);
   }
@@ -218,6 +281,24 @@ class KavitaClient {
     },
   );
 
+  /// Downloads one reader page as bytes, for offline storage.
+  Future<List<int>> readerImageBytes(
+    int chapterId,
+    int page, {
+    CancelToken? cancelToken,
+  }) async {
+    final res = await _dio.get<List<int>>(
+      '/api/Reader/image',
+      // apiKey is not optional server-side: Kavita binds it as a non-nullable
+      // parameter, so omitting it answers 400 rather than falling back to the
+      // bearer token.
+      queryParameters: _readerImageQuery(chapterId, page),
+      options: Options(responseType: ResponseType.bytes),
+      cancelToken: cancelToken,
+    );
+    return res.data!;
+  }
+
   /// Headers to pass to image widgets — Kavita image endpoints accept the
   /// JWT like any other endpoint.
   Map<String, String> get imageHeaders => {'Authorization': 'Bearer $_token'};
@@ -231,6 +312,27 @@ class KavitaClient {
   String chapterCoverUrl(int chapterId) =>
       '$baseUrl/api/Image/chapter-cover?chapterId=$chapterId&apiKey=$apiKey';
 
+  /// Single source of truth for the reader-image query, so the URL used by
+  /// image widgets and the one used by downloads cannot drift apart.
+  Map<String, dynamic> _readerImageQuery(int chapterId, int page) => {
+    'chapterId': chapterId,
+    'page': page,
+    'apiKey': apiKey,
+  };
+
   String readerImageUrl(int chapterId, int page) =>
-      '$baseUrl/api/Reader/image?chapterId=$chapterId&page=$page&apiKey=$apiKey';
+      Uri.parse('$baseUrl/api/Reader/image')
+          .replace(
+            queryParameters: _readerImageQuery(
+              chapterId,
+              page,
+            ).map((key, value) => MapEntry(key, '$value')),
+          )
+          .toString();
+
+  /// Server-rendered page thumbnail, for the reader's page strip: far lighter
+  /// than pulling every full-size page.
+  String readerThumbnailUrl(int chapterId, int page) =>
+      '$baseUrl/api/Reader/thumbnail?chapterId=$chapterId&pageNum=$page'
+      '&apiKey=$apiKey';
 }

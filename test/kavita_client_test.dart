@@ -197,4 +197,83 @@ void main() {
     expect(series.first.name, 'Series 0');
     expect(series.last.name, 'Series 249');
   });
+
+  group('request shapes Kavita is strict about', () {
+    late RequestOptions? lastRequest;
+
+    KavitaClient recordingClient() {
+      final client = KavitaClient(
+        baseUrl: 'http://kavita.test',
+        token: 'token',
+        refreshToken: 'refresh',
+        apiKey: 'the-api-key',
+      );
+      final recorder = _RecordingAdapter((options) => lastRequest = options);
+      client.httpClient.httpClientAdapter = recorder;
+      client.refreshHttpClient.httpClientAdapter = recorder;
+      return client;
+    }
+
+    setUp(() => lastRequest = null);
+
+    test('reader image bytes carry the apiKey', () async {
+      // Kavita binds apiKey as a non-nullable parameter: without it the
+      // endpoint answers 400 and downloads fail.
+      await recordingClient().readerImageBytes(7, 2);
+
+      expect(lastRequest!.path, '/api/Reader/image');
+      expect(lastRequest!.queryParameters['apiKey'], 'the-api-key');
+      expect(lastRequest!.queryParameters['chapterId'], 7);
+      expect(lastRequest!.queryParameters['page'], 2);
+    });
+
+    test('chapter info asks for page dimensions', () async {
+      // They are opt-in, and the webtoon view needs them to size pages.
+      await recordingClient().chapterInfo(7);
+
+      expect(lastRequest!.queryParameters['includeDimensions'], true);
+    });
+
+    test('image URLs carry the apiKey too', () {
+      final client = recordingClient();
+
+      expect(client.readerImageUrl(7, 2), contains('apiKey=the-api-key'));
+      expect(client.readerImageUrl(7, 2), contains('page=2'));
+      expect(
+        client.readerThumbnailUrl(7, 2),
+        'http://kavita.test/api/Reader/thumbnail'
+        '?chapterId=7&pageNum=2&apiKey=the-api-key',
+      );
+      expect(client.seriesCoverUrl(4), contains('apiKey=the-api-key'));
+    });
+  });
+}
+
+/// Captures the request that was sent, then answers something harmless.
+class _RecordingAdapter implements HttpClientAdapter {
+  _RecordingAdapter(this.onRequest);
+
+  final void Function(RequestOptions options) onRequest;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    onRequest(options);
+    if (options.responseType == ResponseType.bytes) {
+      return ResponseBody.fromBytes(const [1, 2, 3], 200);
+    }
+    return ResponseBody.fromString(
+      jsonEncode({'seriesId': 1, 'pages': 1}),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
