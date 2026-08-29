@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:verso/src/api/client_identity.dart';
 import 'package:verso/src/api/kavita_client.dart';
 
 /// Simulates a Kavita server whose current valid token is [validToken]:
@@ -99,6 +100,8 @@ KavitaClient _client(
   client.refreshHttpClient.httpClientAdapter = adapter;
   return client;
 }
+
+ScreenMetrics _phoneScreen() => const ScreenMetrics(412, 915);
 
 void main() {
   test('a 401 triggers a token refresh and the call is retried', () async {
@@ -232,6 +235,41 @@ void main() {
       await recordingClient().chapterInfo(7);
 
       expect(lastRequest!.queryParameters['includeDimensions'], true);
+    });
+
+    test('every request identifies the client to the server', () async {
+      // Kavita registers a device per (user, X-Device-Id) and reads the
+      // platform out of the User-Agent; a request missing them lands as one
+      // more anonymous device.
+      const identity = ClientIdentity(
+        deviceId: 'device-uuid',
+        platform: ClientPlatform.android,
+        osVersion: '15',
+        deviceModel: 'CPH2663',
+        screen: _phoneScreen,
+      );
+      final client = KavitaClient(
+        baseUrl: 'http://kavita.test',
+        token: 'token',
+        refreshToken: 'refresh',
+        apiKey: 'the-api-key',
+        identity: identity,
+      );
+      final recorder = _RecordingAdapter((options) => lastRequest = options);
+      client.httpClient.httpClientAdapter = recorder;
+      client.refreshHttpClient.httpClientAdapter = recorder;
+
+      await client.chapterInfo(7);
+
+      expect(lastRequest!.headers['user-agent'], identity.userAgent);
+      expect(lastRequest!.headers['X-Device-Id'], 'device-uuid');
+      expect(
+        lastRequest!.headers['X-Kavita-Client'],
+        identity.kavitaClientHeader,
+      );
+      // Covers and pages go out through image widgets, not dio.
+      expect(client.imageHeaders['X-Device-Id'], 'device-uuid');
+      expect(client.imageHeaders['user-agent'], identity.userAgent);
     });
 
     test('image URLs carry the apiKey too', () {

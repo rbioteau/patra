@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../api/client_device.dart';
+import '../api/client_identity.dart';
 import '../api/kavita_client.dart';
 
 /// A Kavita server the user has connected to at least once.
@@ -160,6 +163,12 @@ final initialAuthStateProvider = Provider<AuthState>(
   (ref) => const AuthState(),
 );
 
+/// How the app identifies itself to a server; resolved before the app started
+/// and injected in main(). Unidentified by default, which is what tests get.
+final clientIdentityProvider = Provider<ClientIdentity>(
+  (ref) => const ClientIdentity.unknown(),
+);
+
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() => ref.read(initialAuthStateProvider);
@@ -178,6 +187,7 @@ class AuthNotifier extends Notifier<AuthState> {
       baseUrl: url,
       username: username,
       password: password,
+      identity: ref.read(clientIdentityProvider),
     );
     final entry = ServerEntry(
       baseUrl: url,
@@ -307,6 +317,7 @@ final kavitaClientProvider = Provider<KavitaClient>(
       token: session.token,
       refreshToken: session.refreshToken,
       apiKey: session.apiKey,
+      identity: ref.read(clientIdentityProvider),
       onTokensRefreshed: (token, refreshToken) => ref
           .read(authProvider.notifier)
           .updateTokens(token: token, refreshToken: refreshToken),
@@ -316,6 +327,10 @@ final kavitaClientProvider = Provider<KavitaClient>(
     );
     _lastClient?.close();
     _lastClient = client;
+    // Once per session, not per request: naming the device is cosmetic and the
+    // server has better things to do than field an identity reminder behind
+    // every cover.
+    unawaited(announceDevice(client));
     return client;
   },
 );

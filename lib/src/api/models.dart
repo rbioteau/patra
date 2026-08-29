@@ -261,3 +261,27 @@ class ChapterInfoDto {
     },
   );
 }
+
+/// A device Kavita has registered for the current user, as returned by
+/// `GET /api/Device/client/devices`. Only the three fields the rename flow
+/// needs are mapped.
+class ClientDeviceDto {
+  const ClientDeviceDto({
+    required this.id,
+    required this.friendlyName,
+    required this.uiFingerprint,
+  });
+
+  final int id;
+  final String friendlyName;
+
+  /// The `X-Device-Id` the device sent, or empty for clients that send none.
+  final String uiFingerprint;
+
+  factory ClientDeviceDto.fromJson(Map<String, dynamic> json) =>
+      ClientDeviceDto(
+        id: json['id'] as int? ?? 0,
+        friendlyName: json['friendlyName'] as String? ?? '',
+        uiFingerprint: json['uiFingerprint'] as String? ?? '',
+      );
+}
