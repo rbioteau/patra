@@ -113,6 +113,11 @@ class DownloadsService {
   static String pageFileName(int page) =>
       'page_${page.toString().padLeft(5, '0')}';
 
+  /// The page [pageFileName] wrote, or null for anything else in the directory
+  /// — `meta.json`, most of all.
+  static int? pageOfFileName(String name) =>
+      name.startsWith('page_') ? int.tryParse(name.substring(5)) : null;
+
   Future<File> pageFile(int chapterId, int page) async =>
       File('${(await chapterDir(chapterId)).path}/${pageFileName(page)}');
 

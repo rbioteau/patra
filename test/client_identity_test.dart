@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/api/client_device.dart';
-import 'package:verso/src/api/client_identity.dart';
-import 'package:verso/src/api/kavita_client.dart';
-import 'package:verso/src/api/models.dart';
+import 'package:patra/src/api/client_device.dart';
+import 'package:patra/src/api/client_identity.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 
 ScreenMetrics _phone() => const ScreenMetrics(412, 915);
 ScreenMetrics _landscape() => const ScreenMetrics(915, 412);
@@ -31,7 +31,7 @@ ClientDeviceDto _device({
 void main() {
   group('user agent', () {
     test('names the app, then the platform token Kavita greps for', () {
-      expect(_android.userAgent, 'Verso/0.1.0 (Android 15; CPH2663; Flutter)');
+      expect(_android.userAgent, 'Patra/0.1.0 (Android 15; CPH2663; Flutter)');
     });
 
     test('says iPhone on iOS, because Kavita does not look for "iOS"', () {
@@ -43,7 +43,7 @@ void main() {
       );
       expect(
         identity.userAgent,
-        'Verso/0.1.0 (iPhone; iOS 18.6; iPhone 15 Pro; Flutter)',
+        'Patra/0.1.0 (iPhone; iOS 18.6; iPhone 15 Pro; Flutter)',
       );
       expect(identity.userAgent.toLowerCase(), contains('iphone'));
     });
@@ -54,10 +54,10 @@ void main() {
         platform: ClientPlatform.android,
         screen: _phone,
       );
-      expect(identity.userAgent, 'Verso/0.1.0 (Android; Flutter)');
+      expect(identity.userAgent, 'Patra/0.1.0 (Android; Flutter)');
       expect(
         const ClientIdentity.unknown().userAgent,
-        'Verso/0.1.0 (Flutter)',
+        'Patra/0.1.0 (Flutter)',
       );
     });
 
@@ -87,7 +87,7 @@ void main() {
       // web-app/<v> (<browser>/<v>; <platform>; <deviceType>; <w>x<h>; <o>)
       expect(
         _android.kavitaClientHeader,
-        'web-app/0.1.0 (Verso/0.1.0; Android; Mobile; 412x915; portrait)',
+        'web-app/0.1.0 (Patra/0.1.0; Android; Mobile; 412x915; portrait)',
       );
     });
 
@@ -138,7 +138,7 @@ void main() {
       // Build.MODEL is "CPH2663" on this phone; the name its owner sees in
       // Settings is "Nord 4". The card names the platform in its own field,
       // so the name is free to identify the device itself.
-      expect(_android.friendlyName, 'Verso on Nord 4');
+      expect(_android.friendlyName, 'Patra on Nord 4');
       expect(_android.userAgent, contains('CPH2663'));
     });
 
@@ -149,14 +149,14 @@ void main() {
         deviceModel: 'CPH2663',
         screen: _phone,
       );
-      expect(unnamed.friendlyName, 'Verso on CPH2663');
+      expect(unnamed.friendlyName, 'Patra on CPH2663');
       expect(
         const ClientIdentity(
           deviceId: 'device-uuid',
           platform: ClientPlatform.android,
           screen: _phone,
         ).friendlyName,
-        'Verso on Android',
+        'Patra on Android',
       );
     });
 
@@ -166,7 +166,7 @@ void main() {
         platform: ClientPlatform.iphone,
         screen: _phone,
       );
-      expect(identity.friendlyName, 'Verso on iOS');
+      expect(identity.friendlyName, 'Patra on iOS');
     });
   });
 
@@ -185,20 +185,20 @@ void main() {
 
     test('is nothing when the name is already right', () {
       expect(
-        renameTarget([_device(name: 'Verso on Nord 4')], _android),
+        renameTarget([_device(name: 'Patra on Nord 4')], _android),
         isNull,
       );
     });
 
     test('replaces the name Kavita generates from our own browser slot', () {
       // With X-Kavita-Client set, Kavita names the device itself — spelling
-      // the platform from its enum description: "Verso on IOs".
+      // the platform from its enum description: "Patra on IOs".
       const identity = ClientIdentity(
         deviceId: 'device-uuid',
         platform: ClientPlatform.iphone,
         screen: _phone,
       );
-      expect(renameTarget([_device(name: 'Verso on IOs')], identity)?.id, 42);
+      expect(renameTarget([_device(name: 'Patra on IOs')], identity)?.id, 42);
     });
 
     test('leaves a name the user typed alone', () {
@@ -209,7 +209,7 @@ void main() {
       // The entry follows the device id, so it survives a change of platform
       // name or of app naming scheme.
       expect(
-        renameTarget([_device(name: 'Verso on Pixel 6')], _android)?.id,
+        renameTarget([_device(name: 'Patra on Pixel 6')], _android)?.id,
         42,
       );
     });
@@ -220,11 +220,11 @@ void main() {
       final adapter = _DeviceAdapter(name: 'Unknown Client on Android');
       await announceDevice(_clientWith(_android, adapter));
 
-      expect(adapter.renamed, {'deviceId': 42, 'name': 'Verso on Nord 4'});
+      expect(adapter.renamed, {'deviceId': 42, 'name': 'Patra on Nord 4'});
     });
 
     test('says nothing when the name is already ours', () async {
-      final adapter = _DeviceAdapter(name: 'Verso on Nord 4');
+      final adapter = _DeviceAdapter(name: 'Patra on Nord 4');
       await announceDevice(_clientWith(_android, adapter));
 
       expect(adapter.renamed, isNull);

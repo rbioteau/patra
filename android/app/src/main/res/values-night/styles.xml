@@ -6,6 +6,6 @@
     </style>
     <!-- Window behind the Flutter UI once it is running. -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@color/verso_ink</item>
+        <item name="android:windowBackground">@color/patra_ink</item>
     </style>
 </resources>

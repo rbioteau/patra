@@ -22,10 +22,10 @@ class SavePill extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: versoSurface,
+        backgroundColor: patraSurface,
         title: Text(
           l10n.removeDownloadConfirm(request.label),
-          style: VersoText.body(),
+          style: PatraText.body(),
         ),
         actions: [
           TextButton(
@@ -36,7 +36,7 @@ class SavePill extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               l10n.removeDownload,
-              style: VersoText.body(color: versoDanger),
+              style: PatraText.body(color: patraDanger),
             ),
           ),
         ],
@@ -59,7 +59,7 @@ class SavePill extends ConsumerWidget {
       return _Pill(
         label: l10n.downloadingPct((progress * 100).round()),
         icon: Icons.arrow_downward,
-        color: versoOffline,
+        color: patraOffline,
         onTap: () =>
             ref.read(downloadsProvider.notifier).cancel(request.chapterId),
       );
@@ -77,10 +77,10 @@ class SavePill extends ConsumerWidget {
             height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: versoOffline.withValues(alpha: .14),
+              color: patraOffline.withValues(alpha: .14),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check, size: 16, color: versoOffline),
+            child: const Icon(Icons.check, size: 16, color: patraOffline),
           ),
         ),
       );
@@ -90,7 +90,7 @@ class SavePill extends ConsumerWidget {
     return _Pill(
       label: failed ? l10n.retry : l10n.savePill,
       icon: failed ? Icons.refresh : Icons.save_alt,
-      color: failed ? versoDanger : versoTextMuted,
+      color: failed ? patraDanger : patraTextMuted,
       onTap: () => ref.read(downloadsProvider.notifier).save(request),
     );
   }
@@ -131,7 +131,7 @@ class _Pill extends StatelessWidget {
             const SizedBox(width: 5),
             Text(
               label,
-              style: VersoText.metadata(
+              style: PatraText.metadata(
                 color: color,
                 size: 11.5,
               ).copyWith(fontWeight: FontWeight.w600),

@@ -38,12 +38,12 @@ class CoverImage extends StatelessWidget {
             fit: BoxFit.cover,
             memCacheWidth: memCacheWidth,
             fadeInDuration: const Duration(milliseconds: 150),
-            placeholder: (_, _) => const ColoredBox(color: versoSurface),
+            placeholder: (_, _) => const ColoredBox(color: patraSurface),
             errorWidget: (_, _, _) => ColoredBox(
-              color: versoSurface,
+              color: patraSurface,
               child: Icon(
                 Icons.menu_book_outlined,
-                color: versoTextMuted,
+                color: patraTextMuted,
                 size: 20,
               ),
             ),
@@ -60,7 +60,7 @@ class CoverImage extends StatelessWidget {
               ),
               child: const Padding(
                 padding: EdgeInsets.all(2),
-                child: Icon(Icons.check, size: 13, color: versoAccent),
+                child: Icon(Icons.check, size: 13, color: patraAccent),
               ),
             ),
           ),
@@ -120,8 +120,8 @@ class CoverTile extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: serifTitle
-                ? VersoText.serifTitle(size: 14)
-                : VersoText.rowTitle(),
+                ? PatraText.serifTitle(size: 14)
+                : PatraText.rowTitle(),
           ),
         ],
       ),

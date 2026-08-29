@@ -148,7 +148,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get formatNotSupportedBody =>
-      'Cette série est un EPUB. Verso lit les formats image et les PDF pour l\'instant ; la prise en charge de l\'EPUB arrive.';
+      'Cette série est un EPUB. Patra lit les formats image et les PDF pour l\'instant ; la prise en charge de l\'EPUB arrive.';
 
   @override
   String seriesChapterCount(int count) {

@@ -49,5 +49,16 @@ app.*.map.json
 /.claude/
 
 # CI artifacts downloaded for sideloading
-/verso-debug-apk/
-/verso-unsigned-ipa/
+/patra-debug-apk/
+/patra-unsigned-ipa/
+
+# iOS signing material — the private key, the certificate it belongs to and
+# the App Store Connect API key. Never in the repo: these are what lets
+# anything ship under the team's identity. They live in ~/keys/patra-ios.
+*.key
+*.p12
+*.p8
+*.cer
+*.certSigningRequest
+*.csr
+*.mobileprovision

@@ -2,10 +2,10 @@
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="android:windowSplashScreenBackground">@color/verso_ink</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/verso_mark</item>
+        <item name="android:windowSplashScreenBackground">@color/patra_ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/patra_mark</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@color/verso_ink</item>
+        <item name="android:windowBackground">@color/patra_ink</item>
     </style>
 </resources>

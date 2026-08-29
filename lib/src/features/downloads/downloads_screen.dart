@@ -24,10 +24,10 @@ class DownloadsScreen extends ConsumerWidget {
         top: false,
         child: downloads.when(
           loading: () => const Center(
-            child: CircularProgressIndicator(color: versoOffline),
+            child: CircularProgressIndicator(color: patraOffline),
           ),
           error: (error, _) => Center(
-            child: Text('$error', style: VersoText.body(color: versoTextMuted)),
+            child: Text('$error', style: PatraText.body(color: patraTextMuted)),
           ),
           data: (state) {
             final saved = state.saved.values.toList()
@@ -44,14 +44,14 @@ class DownloadsScreen extends ConsumerWidget {
                     children: [
                       const Icon(
                         Icons.download_outlined,
-                        color: versoOffline,
+                        color: patraOffline,
                         size: 28,
                       ),
                       const SizedBox(height: 14),
                       Text(
                         l10n.emptyDownloads,
                         textAlign: TextAlign.center,
-                        style: VersoText.body(color: versoTextMuted),
+                        style: PatraText.body(color: patraTextMuted),
                       ),
                     ],
                   ),
@@ -85,9 +85,9 @@ class _StorageMeter extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(gutter, gutter, gutter, 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: versoSurface,
+        color: patraSurface,
         borderRadius: BorderRadius.circular(radiusCard),
-        border: Border.all(color: versoBorder),
+        border: Border.all(color: patraBorder),
       ),
       child: Row(
         children: [
@@ -96,12 +96,12 @@ class _StorageMeter extends StatelessWidget {
             height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: versoOffline.withValues(alpha: .14),
+              color: patraOffline.withValues(alpha: .14),
               borderRadius: BorderRadius.circular(radiusThumb),
             ),
             child: const Icon(
               Icons.sd_storage_outlined,
-              color: versoOffline,
+              color: patraOffline,
               size: 19,
             ),
           ),
@@ -112,12 +112,12 @@ class _StorageMeter extends StatelessWidget {
               children: [
                 Text(
                   l10n.storageUsed(formatBytes(l10n, bytes)),
-                  style: VersoText.rowTitle(color: versoOffline),
+                  style: PatraText.rowTitle(color: patraOffline),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   l10n.downloadedChapters(chapters),
-                  style: VersoText.metadata(),
+                  style: PatraText.metadata(),
                 ),
               ],
             ),
@@ -170,7 +170,7 @@ class _SavedRow extends ConsumerWidget {
                         : chapter.seriesName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: VersoText.rowTitle(),
+                    style: PatraText.rowTitle(),
                   ),
                   if (chapter.seriesName.isNotEmpty &&
                       chapter.title.isNotEmpty) ...[
@@ -179,7 +179,7 @@ class _SavedRow extends ConsumerWidget {
                       chapter.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: VersoText.metadata(),
+                      style: PatraText.metadata(),
                     ),
                   ],
                   const SizedBox(height: 3),
@@ -189,7 +189,7 @@ class _SavedRow extends ConsumerWidget {
                         child: Text(
                           '${l10n.pageCount(chapter.pages)} · '
                           '${formatBytes(l10n, chapter.bytes)}',
-                          style: VersoText.metadata(),
+                          style: PatraText.metadata(),
                         ),
                       ),
                       if (chapter.isRead) ...[
@@ -210,7 +210,7 @@ class _SavedRow extends ConsumerWidget {
                           value: chapter.progress,
                           minHeight: 2,
                           backgroundColor: Colors.white.withValues(alpha: .07),
-                          valueColor: const AlwaysStoppedAnimation(versoAccent),
+                          valueColor: const AlwaysStoppedAnimation(patraAccent),
                         ),
                       ),
                     ),
@@ -222,7 +222,7 @@ class _SavedRow extends ConsumerWidget {
             IconButton(
               tooltip: l10n.removeDownload,
               icon: const Icon(Icons.delete_outline, size: 20),
-              color: versoTextMuted,
+              color: patraTextMuted,
               onPressed: () async {
                 if (await _confirmRemove(context, l10n)) {
                   await ref
@@ -244,10 +244,10 @@ class _SavedRow extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: versoSurface,
+        backgroundColor: patraSurface,
         title: Text(
           l10n.removeDownloadConfirm(chapter.label),
-          style: VersoText.body(),
+          style: PatraText.body(),
         ),
         actions: [
           TextButton(
@@ -258,7 +258,7 @@ class _SavedRow extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               l10n.removeDownload,
-              style: VersoText.body(color: versoDanger),
+              style: PatraText.body(color: patraDanger),
             ),
           ),
         ],
@@ -269,8 +269,8 @@ class _SavedRow extends ConsumerWidget {
 }
 
 /// Same quiet accent mark the series rows use for a finished chapter.
-final _readTagStyle = VersoText.metadata(
-  color: versoAccent,
+final _readTagStyle = PatraText.metadata(
+  color: patraAccent,
   size: 10.5,
 ).copyWith(fontWeight: FontWeight.w600, letterSpacing: .5);
 
@@ -282,12 +282,12 @@ class _LocalThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final directory = dir;
-    if (directory == null) return const ColoredBox(color: versoSurface);
+    if (directory == null) return const ColoredBox(color: patraSurface);
     final file = File('${directory.path}/${DownloadsService.pageFileName(0)}');
     if (!file.existsSync()) {
       return ColoredBox(
-        color: versoSurface,
-        child: Icon(Icons.menu_book_outlined, size: 18, color: versoTextMuted),
+        color: patraSurface,
+        child: Icon(Icons.menu_book_outlined, size: 18, color: patraTextMuted),
       );
     }
     return Image.file(file, fit: BoxFit.cover, cacheWidth: 138);

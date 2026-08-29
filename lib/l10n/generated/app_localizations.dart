@@ -347,7 +347,7 @@ abstract class AppLocalizations {
   /// Explanation shown in place of the reader for a format it cannot open
   ///
   /// In en, this message translates to:
-  /// **'This series is an EPUB. Verso reads image formats and PDFs for now; EPUB support is on the way.'**
+  /// **'This series is an EPUB. Patra reads image formats and PDFs for now; EPUB support is on the way.'**
   String get formatNotSupportedBody;
 
   /// Chapter tally in the series hero

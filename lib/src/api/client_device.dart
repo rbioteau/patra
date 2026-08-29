@@ -7,7 +7,7 @@ import 'models.dart';
 /// Gives this installation a readable name in Kavita's device list.
 ///
 /// Kavita generates the name from the client info it parsed: "Unknown Client
-/// on Android" with the User-Agent alone, or "Verso on IOs" once
+/// on Android" with the User-Agent alone, or "Patra on IOs" once
 /// `X-Kavita-Client` puts our name in its browser slot — that one spells the
 /// platform from its own enum's description. Renaming is the only part of the
 /// record the API lets a client set, so this is where the entry gets the name
@@ -36,7 +36,7 @@ Future<void> announceDevice(KavitaClient client) async {
 /// The device to rename, or null when there is nothing to do.
 ///
 /// Matching is by `X-Device-Id`: Kavita's own fallback fingerprint hashes
-/// client type, platform and device type, so every Verso install on Android
+/// client type, platform and device type, so every Patra install on Android
 /// would otherwise collide into one entry. A name the user typed in Kavita is
 /// left alone — this only replaces a generated one.
 ClientDeviceDto? renameTarget(

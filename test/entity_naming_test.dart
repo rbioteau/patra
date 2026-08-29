@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/l10n/generated/app_localizations_en.dart';
-import 'package:verso/l10n/generated/app_localizations_fr.dart';
-import 'package:verso/src/api/models.dart';
-import 'package:verso/src/entity_naming.dart';
+import 'package:patra/l10n/generated/app_localizations_en.dart';
+import 'package:patra/l10n/generated/app_localizations_fr.dart';
+import 'package:patra/src/api/models.dart';
+import 'package:patra/src/entity_naming.dart';
 
 void main() {
   final en = AppLocalizationsEn();

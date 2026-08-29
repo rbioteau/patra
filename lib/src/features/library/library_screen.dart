@@ -70,7 +70,7 @@ class LibraryScreen extends ConsumerWidget {
                   child: Text(
                     l10n.homeEmpty,
                     textAlign: TextAlign.center,
-                    style: VersoText.body(color: versoTextMuted),
+                    style: PatraText.body(color: patraTextMuted),
                   ),
                 ),
               );
@@ -129,15 +129,15 @@ class _LibraryPills extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: selected
-                    ? versoAccent.withValues(alpha: .16)
-                    : versoSurface,
+                    ? patraAccent.withValues(alpha: .16)
+                    : patraSurface,
                 borderRadius: BorderRadius.circular(radiusPill),
-                border: Border.all(color: selected ? versoAccent : versoBorder),
+                border: Border.all(color: selected ? patraAccent : patraBorder),
               ),
               child: Text(
                 library.name,
-                style: VersoText.rowTitle(
-                  color: selected ? versoAccent : versoText,
+                style: PatraText.rowTitle(
+                  color: selected ? patraAccent : patraText,
                 ),
               ),
             ),
@@ -169,7 +169,7 @@ class _SeriesGrid extends ConsumerWidget {
           return Center(
             child: Text(
               l10n.libraryEmpty,
-              style: VersoText.body(color: versoTextMuted),
+              style: PatraText.body(color: patraTextMuted),
             ),
           );
         }
@@ -267,13 +267,13 @@ class _ErrorState extends ConsumerWidget {
           children: [
             Icon(
               offline ? Icons.cloud_off_outlined : Icons.error_outline,
-              color: versoTextMuted,
+              color: patraTextMuted,
             ),
             const SizedBox(height: 12),
             Text(
               offline ? l10n.offlineBanner : l10n.serverUnreachable,
               textAlign: TextAlign.center,
-              style: VersoText.body(color: versoTextMuted),
+              style: PatraText.body(color: patraTextMuted),
             ),
             const SizedBox(height: 16),
             OutlinedButton(onPressed: onRetry, child: Text(l10n.retry)),

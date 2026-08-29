@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.rbioteau.verso"
+    namespace = "io.github.rbioteau.patra"
     // flutter_secure_storage compiles against SDK 37; Flutter's default is 36.
     compileSdk = maxOf(37, flutter.compileSdkVersion)
     ndkVersion = flutter.ndkVersion
@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "io.github.rbioteau.verso"
+        applicationId = "io.github.rbioteau.patra"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

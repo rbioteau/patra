@@ -18,16 +18,16 @@ class OfflineBanner extends ConsumerWidget {
       margin: const EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: versoDanger.withValues(alpha: .12),
+        color: patraDanger.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(radiusCover),
-        border: Border.all(color: versoDanger.withValues(alpha: .35)),
+        border: Border.all(color: patraDanger.withValues(alpha: .35)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_outlined, size: 18, color: versoDanger),
+          const Icon(Icons.cloud_off_outlined, size: 18, color: patraDanger),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(l10n.offlineBanner, style: VersoText.metadata()),
+            child: Text(l10n.offlineBanner, style: PatraText.metadata()),
           ),
         ],
       ),

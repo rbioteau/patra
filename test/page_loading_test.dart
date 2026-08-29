@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/l10n/generated/app_localizations.dart';
-import 'package:verso/src/features/reader/page_loading.dart';
-import 'package:verso/src/theme.dart';
+import 'package:patra/l10n/generated/app_localizations.dart';
+import 'package:patra/src/features/reader/page_loading.dart';
+import 'package:patra/src/theme.dart';
 
 void main() {
   Future<void> pump(WidgetTester tester, {required bool explain}) =>
       tester.pumpWidget(
         MaterialApp(
-          theme: versoTheme(),
+          theme: patraTheme(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(body: PageLoading(explain: explain)),

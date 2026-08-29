@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/features/reader/thumb_strip.dart';
+import 'package:patra/src/features/reader/thumb_strip.dart';
 
 void main() {
   group('ThumbLoadQueue', () {
@@ -27,7 +27,7 @@ void main() {
       );
       addTearDown(queue.dispose);
 
-      queue.update(visible: {4, 5, 6, 7, 8, 9, 10}, current: 7);
+      queue.update(visible: {4, 5, 6, 7, 8, 9, 10}, current: 7, pages: 11);
       await pumpEventQueue();
       expect(started, [7]);
 
@@ -46,13 +46,18 @@ void main() {
       );
       addTearDown(queue.dispose);
 
-      queue.update(visible: {0, 1, 2, 3, 4, 5}, current: 3);
+      queue.update(visible: {0, 1, 2, 3, 4, 5}, current: 3, pages: 6);
       await pumpEventQueue();
-      expect(started, [3, 2]);
+      // The first goes alone; the cap governs everything after it.
+      expect(started, [3]);
 
       gates[3]!.complete();
       await pumpEventQueue();
       expect(started, [3, 2, 4]);
+
+      gates[2]!.complete();
+      await pumpEventQueue();
+      expect(started, [3, 2, 4, 1]);
     });
 
     test('holds everything back for the start delay', () async {
@@ -62,7 +67,7 @@ void main() {
       );
       addTearDown(queue.dispose);
 
-      queue.update(visible: {0, 1, 2}, current: 1);
+      queue.update(visible: {0, 1, 2}, current: 1, pages: 3);
       await pumpEventQueue();
       expect(started, isEmpty);
 
@@ -78,10 +83,104 @@ void main() {
       );
       addTearDown(queue.dispose);
 
-      queue.update(visible: {0, 1, 2}, current: 1);
-      queue.update(visible: {40, 41, 42}, current: 41);
+      queue.update(visible: {0, 1, 2}, current: 1, pages: 43);
+      queue.update(visible: {40, 41, 42}, current: 41, pages: 43);
       await Future<void>.delayed(const Duration(milliseconds: 120));
       expect(started, [41]);
+    });
+
+    test('scrolling does not push the start delay back', () async {
+      // The strip calls update on every scroll frame, and glides for 200 ms on
+      // every page turn. If each call rescheduled the delay, nothing would
+      // start loading until the strip stood perfectly still.
+      final queue = ThumbLoadQueue(
+        load: load,
+        startDelay: const Duration(milliseconds: 60),
+        maxConcurrent: 1,
+      );
+      addTearDown(queue.dispose);
+
+      for (var frame = 0; frame < 12; frame++) {
+        queue.update(
+          visible: {frame, frame + 1, frame + 2},
+          current: 1,
+          pages: 20,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(started, isNotEmpty);
+    });
+
+    test('the first fetch of a chapter goes alone', () async {
+      // Kavita renders every page's thumbnail inside the first request for a
+      // chapter, and guards that on a directory nothing has created yet: a
+      // second request sent before the first answers makes the server do the
+      // whole chapter twice.
+      final queue = ThumbLoadQueue(
+        load: load,
+        startDelay: Duration.zero,
+        maxConcurrent: 4,
+      );
+      addTearDown(queue.dispose);
+
+      queue.update(visible: {0, 1, 2, 3, 4, 5}, current: 2, pages: 6);
+      await pumpEventQueue();
+      expect(started, [2]);
+
+      // Answered: the chapter is rendered, and the rest may go in parallel.
+      gates[2]!.complete();
+      await pumpEventQueue();
+      expect(started.length, 5);
+    });
+
+    test('an idle strip works through the rest of the chapter', () async {
+      // A thumbnail costs ~200 ms to fetch and ~2 ms to read back, so the
+      // scrubber that has been left open once is instant the next time.
+      final queue = ThumbLoadQueue(
+        load: load,
+        startDelay: Duration.zero,
+        maxConcurrent: 4,
+      );
+      addTearDown(queue.dispose);
+
+      queue.update(visible: {0, 1, 2}, current: 1, pages: 8);
+      await pumpEventQueue();
+      expect(started, [1]);
+
+      gates[1]!.complete();
+      await pumpEventQueue();
+      expect(started, [1, 0, 2], reason: 'the rest of the screen, in parallel');
+
+      gates[0]!.complete();
+      gates[2]!.complete();
+      await pumpEventQueue();
+      expect(started, [1, 0, 2, 3], reason: 'then off screen, one at a time');
+
+      gates[3]!.complete();
+      await pumpEventQueue();
+      expect(started, [1, 0, 2, 3, 4]);
+    });
+
+    test('the backfill never gets ahead of what is on screen', () async {
+      final queue = ThumbLoadQueue(
+        load: load,
+        startDelay: Duration.zero,
+        maxConcurrent: 4,
+      );
+      addTearDown(queue.dispose);
+
+      queue.update(visible: {0}, current: 0, pages: 40);
+      await pumpEventQueue();
+      gates[0]!.complete();
+      await pumpEventQueue();
+      expect(started, [0, 1], reason: 'one page beyond the screen');
+
+      // The strip scrolls while that backfill is still out: the pages now on
+      // screen must not queue behind the rest of the chapter.
+      queue.update(visible: {20, 21, 22}, current: 21, pages: 40);
+      gates[1]!.complete();
+      await pumpEventQueue();
+      expect(started.sublist(2), [21, 20, 22]);
     });
 
     test('a page that fails is not retried, and is shown anyway', () async {
@@ -92,7 +191,7 @@ void main() {
       );
       addTearDown(queue.dispose);
 
-      queue.update(visible: {0, 1}, current: 0);
+      queue.update(visible: {0, 1}, current: 0, pages: 2);
       await pumpEventQueue();
       expect(queue.isReady(0), isTrue);
       expect(queue.isReady(1), isTrue);
@@ -101,7 +200,7 @@ void main() {
     test('a disposed queue starts nothing', () async {
       final queue = ThumbLoadQueue(load: load, startDelay: Duration.zero)
         ..dispose();
-      queue.update(visible: {0, 1}, current: 0);
+      queue.update(visible: {0, 1}, current: 0, pages: 2);
       await pumpEventQueue();
       expect(started, isEmpty);
     });
@@ -109,6 +208,13 @@ void main() {
 
   group('ThumbStrip', () {
     Future<void> pump(WidgetTester tester, int current, {int pages = 40}) async {
+      // No delay: the strip owns none of the queue's timers any more, and a
+      // widget test refuses to end with one still pending.
+      final queue = ThumbLoadQueue(
+        load: (_) async {},
+        startDelay: Duration.zero,
+      );
+      addTearDown(queue.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -118,6 +224,7 @@ void main() {
                 child: ThumbStrip(
                   pages: pages,
                   current: current,
+                  queue: queue,
                   // No image at all: the accordion is pure geometry.
                   providerBuilder: (_) => null,
                   onTap: (_) {},

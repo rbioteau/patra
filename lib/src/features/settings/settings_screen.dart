@@ -38,7 +38,7 @@ class SettingsScreen extends ConsumerWidget {
 
             _Section(label: l10n.readingSectionLabel),
             _SettingRow(
-              icon: DirectionIcon(direction, color: versoAccent),
+              icon: DirectionIcon(direction, color: patraAccent),
               title: l10n.defaultReadingDirection,
               value: direction.label(l10n),
               onTap: () => _pickDirection(context, ref, direction),
@@ -57,21 +57,21 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   Text.rich(
                     TextSpan(
-                      text: 'verso',
-                      style: VersoText.serifTitle(size: 18),
+                      text: 'patra',
+                      style: PatraText.serifTitle(size: 18),
                       children: [
                         TextSpan(
                           text: '.',
-                          style: VersoText.serifTitle(
+                          style: PatraText.serifTitle(
                             size: 18,
-                            color: versoAccent,
+                            color: patraAccent,
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(l10n.appTagline, style: VersoText.metadata()),
+                  Text(l10n.appTagline, style: PatraText.metadata()),
                 ],
               ),
             ),
@@ -82,8 +82,8 @@ class SettingsScreen extends ConsumerWidget {
               child: OutlinedButton(
                 onPressed: () => ref.read(authProvider.notifier).signOut(),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: versoDanger,
-                  side: BorderSide(color: versoDanger.withValues(alpha: .45)),
+                  foregroundColor: patraDanger,
+                  side: BorderSide(color: patraDanger.withValues(alpha: .45)),
                 ),
                 child: Text(l10n.signOut),
               ),
@@ -114,16 +114,16 @@ class SettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: DirectionIcon(
                   option,
-                  color: option == current ? versoAccent : versoText,
+                  color: option == current ? patraAccent : patraText,
                 ),
                 title: Text(
                   option.label(l10n),
-                  style: VersoText.body(
-                    color: option == current ? versoAccent : versoText,
+                  style: PatraText.body(
+                    color: option == current ? patraAccent : patraText,
                   ),
                 ),
                 trailing: option == current
-                    ? const Icon(Icons.check, color: versoAccent, size: 18)
+                    ? const Icon(Icons.check, color: patraAccent, size: 18)
                     : null,
                 onTap: () => Navigator.of(sheetContext).pop(option),
               ),
@@ -157,18 +157,18 @@ class _StorageRows extends ConsumerWidget {
             children: [
               const SizedBox(
                 width: 22,
-                child: Icon(Icons.download_done, size: 18, color: versoOffline),
+                child: Icon(Icons.download_done, size: 18, color: patraOffline),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   l10n.downloadedChapters(downloads?.saved.length ?? 0),
-                  style: VersoText.body(),
+                  style: PatraText.body(),
                 ),
               ),
               Text(
                 formatBytes(l10n, downloads?.totalBytes ?? 0),
-                style: VersoText.metadata(),
+                style: PatraText.metadata(),
               ),
             ],
           ),
@@ -192,17 +192,17 @@ class _StorageRows extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             l10n.imageCacheLabel,
-                            style: VersoText.body(),
+                            style: PatraText.body(),
                           ),
                         ),
                         Text(
                           formatBytes(l10n, cacheSize.value ?? 0),
-                          style: VersoText.metadata(),
+                          style: PatraText.metadata(),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(l10n.imageCacheCaption, style: VersoText.metadata()),
+                    Text(l10n.imageCacheCaption, style: PatraText.metadata()),
                     const SizedBox(height: 6),
                     InkWell(
                       onTap: () => _pickLimit(context, ref, cacheLimit),
@@ -213,12 +213,12 @@ class _StorageRows extends ConsumerWidget {
                             Expanded(
                               child: Text(
                                 l10n.imageCacheLimit,
-                                style: VersoText.body(),
+                                style: PatraText.body(),
                               ),
                             ),
                             Text(
                               formatBytes(l10n, cacheLimit.bytes),
-                              style: VersoText.metadata(color: versoAccent),
+                              style: PatraText.metadata(color: patraAccent),
                             ),
                             const SizedBox(width: 4),
                             const Icon(Icons.chevron_right, size: 18),
@@ -228,7 +228,7 @@ class _StorageRows extends ConsumerWidget {
                     ),
                     Text(
                       l10n.imageCacheLimitCaption,
-                      style: VersoText.metadata(),
+                      style: PatraText.metadata(),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton(
@@ -273,12 +273,12 @@ class _StorageRows extends ConsumerWidget {
               ListTile(
                 title: Text(
                   formatBytes(l10n, option.bytes),
-                  style: VersoText.body(
-                    color: option == current ? versoAccent : versoText,
+                  style: PatraText.body(
+                    color: option == current ? patraAccent : patraText,
                   ),
                 ),
                 trailing: option == current
-                    ? const Icon(Icons.check, color: versoAccent, size: 18)
+                    ? const Icon(Icons.check, color: patraAccent, size: 18)
                     : null,
                 onTap: () => Navigator.of(sheetContext).pop(option),
               ),
@@ -325,7 +325,7 @@ class _ServerCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: gutter),
       child: Material(
-        color: versoSurface,
+        color: patraSurface,
         borderRadius: BorderRadius.circular(radiusCard),
         child: InkWell(
           onTap: onTap,
@@ -334,7 +334,7 @@ class _ServerCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radiusCard),
-              border: Border.all(color: versoBorder),
+              border: Border.all(color: patraBorder),
             ),
             child: Row(
               children: [
@@ -342,7 +342,7 @@ class _ServerCard extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                    color: versoOnline,
+                    color: patraOnline,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -355,16 +355,16 @@ class _ServerCard extends StatelessWidget {
                         host,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: VersoText.rowTitle(),
+                        style: PatraText.rowTitle(),
                       ),
                       const SizedBox(height: 3),
-                      Text(username, style: VersoText.metadata()),
+                      Text(username, style: PatraText.metadata()),
                     ],
                   ),
                 ),
                 Text(
                   actionLabel,
-                  style: VersoText.metadata(color: versoAccent),
+                  style: PatraText.metadata(color: patraAccent),
                 ),
                 const Icon(Icons.chevron_right, size: 18),
               ],
@@ -400,8 +400,8 @@ class _SettingRow extends StatelessWidget {
           children: [
             SizedBox(width: 22, child: Center(child: icon)),
             const SizedBox(width: 14),
-            Expanded(child: Text(title, style: VersoText.body())),
-            Text(value, style: VersoText.metadata()),
+            Expanded(child: Text(title, style: PatraText.body())),
+            Text(value, style: PatraText.metadata()),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right, size: 18),
           ],

@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/api/kavita_client.dart';
-import 'package:verso/src/downloads/downloads_service.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
 
 /// Serves fake page bytes, and can fail on a chosen page.
 class _PageAdapter implements HttpClientAdapter {
@@ -66,7 +66,7 @@ void main() {
   late DownloadsService service;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('verso-downloads-test');
+    root = Directory.systemTemp.createTempSync('patra-downloads-test');
     service = DownloadsService(root: root);
   });
 

@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/api/client_identity.dart';
-import 'package:verso/src/api/kavita_client.dart';
+import 'package:patra/src/api/client_identity.dart';
+import 'package:patra/src/api/kavita_client.dart';
 
 /// Simulates a Kavita server whose current valid token is [validToken]:
 /// 401 on any authenticated call made with another token, and a working

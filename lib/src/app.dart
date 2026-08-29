@@ -51,7 +51,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
       ),
 
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => _VersoShell(shell: shell),
+        builder: (context, state, shell) => _PatraShell(shell: shell),
         branches: [
           StatefulShellBranch(
             routes: [GoRoute(path: '/', builder: (_, _) => const HomeScreen())],
@@ -86,8 +86,8 @@ final _routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _VersoShell extends StatelessWidget {
-  const _VersoShell({required this.shell});
+class _PatraShell extends StatelessWidget {
+  const _PatraShell({required this.shell});
 
   final StatefulNavigationShell shell;
 
@@ -99,7 +99,7 @@ class _VersoShell extends StatelessWidget {
   bool _labelsFit(BuildContext context, List<String> labels) {
     final cell = MediaQuery.sizeOf(context).width / labels.length;
     final scaler = MediaQuery.textScalerOf(context);
-    final style = VersoText.navLabel(selected: true);
+    final style = PatraText.navLabel(selected: true);
     for (final label in labels) {
       final painter = TextPainter(
         text: TextSpan(text: label, style: style),
@@ -128,7 +128,7 @@ class _VersoShell extends StatelessWidget {
       body: shell,
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: versoBorder)),
+          border: Border(top: BorderSide(color: patraBorder)),
         ),
         child: NavigationBar(
           selectedIndex: shell.currentIndex,
@@ -173,17 +173,17 @@ class _VersoShell extends StatelessWidget {
   }
 }
 
-class VersoApp extends ConsumerWidget {
-  const VersoApp({super.key});
+class PatraApp extends ConsumerWidget {
+  const PatraApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      title: 'Verso',
+      title: 'Patra',
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      theme: versoTheme(),
-      darkTheme: versoTheme(),
+      theme: patraTheme(),
+      darkTheme: patraTheme(),
       themeMode: ThemeMode.dark,
       routerConfig: ref.watch(_routerProvider),
     );

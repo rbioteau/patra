@@ -184,7 +184,7 @@ class SeriesDetailScreen extends ConsumerWidget {
         // The hero below carries the serif title; the bar keeps a compact one.
         title: Text(
           seriesName,
-          style: VersoText.rowTitle().copyWith(fontSize: 15),
+          style: PatraText.rowTitle().copyWith(fontSize: 15),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -225,7 +225,7 @@ class SeriesDetailScreen extends ConsumerWidget {
                               ? l10n.offlineBanner
                               : l10n.serverUnreachable,
                           textAlign: TextAlign.center,
-                          style: VersoText.body(color: versoTextMuted),
+                          style: PatraText.body(color: patraTextMuted),
                         ),
                         const SizedBox(height: 16),
                         OutlinedButton(
@@ -313,7 +313,7 @@ class SeriesDetailScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
               child: Text(
                 type.volumeLabel(l10n, volume.name),
-                style: VersoText.rowTitle(color: versoTextMuted),
+                style: PatraText.rowTitle(color: patraTextMuted),
               ),
             ),
             for (final chapter in _volumeChapters(volume)) chapterRow(chapter),
@@ -477,7 +477,7 @@ class _SeriesHero extends ConsumerWidget {
                     seriesName,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: VersoText.serifTitle(size: 21),
+                    style: PatraText.serifTitle(size: 21),
                   ),
                   const SizedBox(height: 6),
                   if (credits.isNotEmpty)
@@ -485,13 +485,13 @@ class _SeriesHero extends ConsumerWidget {
                       credits,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: VersoText.metadata(size: 12),
+                      style: PatraText.metadata(size: 12),
                     )
                   else if (metadata == null)
                     const Skeleton(height: 11, width: 150),
                   const SizedBox(height: 6),
                   if (stats.isNotEmpty)
-                    Text(stats, style: VersoText.metadata(size: 12))
+                    Text(stats, style: PatraText.metadata(size: 12))
                   else
                     const Skeleton(height: 11, width: 110),
                   const SizedBox(height: 14),
@@ -622,7 +622,7 @@ class _ChapterRow extends ConsumerWidget {
                       height: 16,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: versoAccent,
+                        color: patraAccent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -654,8 +654,8 @@ class _ChapterRow extends ConsumerWidget {
                         _label(l10n),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: VersoText.rowTitle(
-                          color: read ? versoTextMuted : versoText,
+                        style: PatraText.rowTitle(
+                          color: read ? patraTextMuted : patraText,
                         ),
                       ),
                     ),
@@ -670,13 +670,13 @@ class _ChapterRow extends ConsumerWidget {
                   inProgress
                       ? l10n.pageProgress(chapter.pagesRead, chapter.pages)
                       : l10n.pageCount(chapter.pages),
-                  style: VersoText.metadata(),
+                  style: PatraText.metadata(),
                 ),
                 if (!readable) ...[
                   const SizedBox(height: 3),
                   Text(
                     l10n.formatNotSupported,
-                    style: VersoText.metadata(color: versoTextMuted),
+                    style: PatraText.metadata(color: patraTextMuted),
                   ),
                 ],
                 // Progress belongs to the chapter being read, and only to it.
@@ -690,7 +690,7 @@ class _ChapterRow extends ConsumerWidget {
                         value: progress,
                         minHeight: 2,
                         backgroundColor: Colors.white.withValues(alpha: .07),
-                        valueColor: const AlwaysStoppedAnimation(versoAccent),
+                        valueColor: const AlwaysStoppedAnimation(patraAccent),
                       ),
                     ),
                   ),
@@ -753,8 +753,8 @@ class _ChapterRow extends ConsumerWidget {
                 SlidableAction(
                   onPressed: (_) => _setRead(ref, read: !read),
                   // Reading progress is the accent's job, here as everywhere.
-                  backgroundColor: versoAccent.withValues(alpha: .16),
-                  foregroundColor: versoAccent,
+                  backgroundColor: patraAccent.withValues(alpha: .16),
+                  foregroundColor: patraAccent,
                   icon: read ? Icons.remove_done : Icons.done_all,
                   label: read ? l10n.markUnread : l10n.markRead,
                 ),
@@ -774,8 +774,8 @@ class _ChapterRow extends ConsumerWidget {
                           .remove(chapter.id);
                     }
                   },
-                  backgroundColor: versoDanger.withValues(alpha: .16),
-                  foregroundColor: versoDanger,
+                  backgroundColor: patraDanger.withValues(alpha: .16),
+                  foregroundColor: patraDanger,
                   icon: Icons.delete_outline,
                   label: l10n.removeDownload,
                 ),
@@ -846,12 +846,12 @@ class _ChapterRow extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: versoSurface,
+        backgroundColor: patraSurface,
         title: Text(
           l10n.removeDownloadConfirm(
             [seriesName, _label(l10n)].where((p) => p.isNotEmpty).join(' — '),
           ),
-          style: VersoText.body(),
+          style: PatraText.body(),
         ),
         actions: [
           TextButton(
@@ -862,7 +862,7 @@ class _ChapterRow extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               l10n.removeDownload,
-              style: VersoText.body(color: versoDanger),
+              style: PatraText.body(color: patraDanger),
             ),
           ),
         ],
@@ -888,8 +888,8 @@ class _ChapterRow extends ConsumerWidget {
 /// The READ mark: tracked text beside a finished chapter's title, in the
 /// accent — the same colour as the badge on its cover, since both say the
 /// same thing about reading progress.
-final _readTagStyle = VersoText.metadata(
-  color: versoAccent,
+final _readTagStyle = PatraText.metadata(
+  color: patraAccent,
   size: 10.5,
 ).copyWith(fontWeight: FontWeight.w600, letterSpacing: .5);
 

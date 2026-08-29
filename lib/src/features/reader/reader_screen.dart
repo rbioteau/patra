@@ -59,6 +59,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _direction = ref.read(defaultReadingDirectionProvider);
   }
 
+  @override
+  void dispose() {
+    // Leaving the chapter ends the backfill with it: nothing is left to scrub.
+    _thumbs.dispose();
+    super.dispose();
+  }
+
   // --- progress -------------------------------------------------------------
 
   void _saveProgress(int page, ChapterInfoDto info) {
@@ -139,41 +146,88 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     int? cacheWidth,
     bool thumbnail = false,
   }) {
-    final saved = _saved;
-    if (saved != null) {
-      final file = File(
-        '${_localDir?.path ?? ''}/${DownloadsService.pageFileName(page)}',
-      );
-      if (_localDir != null && file.existsSync()) {
-        // Decoding a full page into a 34px thumbnail is what makes the strip
-        // expensive offline, where there is no request to blame.
-        return cacheWidth == null
-            ? FileImage(file)
-            : ResizeImage(FileImage(file), width: cacheWidth);
-      }
+    final dir = _localDir;
+    if (_saved != null && dir != null && _localPages.contains(page)) {
+      final file = File('${dir.path}/${DownloadsService.pageFileName(page)}');
+      // Decoding a full page into a 34px thumbnail is what makes the strip
+      // expensive offline, where there is no request to blame.
+      return cacheWidth == null
+          ? FileImage(file)
+          : ResizeImage(FileImage(file), width: cacheWidth);
     }
     try {
       final client = ref.read(kavitaClientProvider);
-      return CachedNetworkImageProvider(
+      final ImageProvider provider = CachedNetworkImageProvider(
         thumbnail
             ? client.readerThumbnailUrl(widget.chapterId, page)
             : client.readerImageUrl(widget.chapterId, page),
         headers: client.imageHeaders,
-        maxWidth: cacheWidth,
       );
+      // [cacheWidth] belongs to the *decoder*, not to the cache manager.
+      // `CachedNetworkImageProvider`'s own `maxWidth` hands the job to
+      // `flutter_cache_manager`, which downloads the image, decodes it, decodes
+      // it a second time at the target width, re-encodes that as **PNG** on the
+      // UI isolate and writes a second file — per thumbnail, for a strip that
+      // asks for a few hundred of them, against an endpoint whose whole point
+      // is that it already serves something small. `ResizeImage` gets the same
+      // decode budget out of one decode, no re-encode and no second copy in the
+      // cache we are also trying to keep under a byte cap.
+      return cacheWidth == null
+          ? provider
+          : ResizeImage(provider, width: cacheWidth);
     } on StateError {
       return null;
     }
   }
 
+  /// Loads the strip's thumbnails, and keeps loading the rest of the chapter's
+  /// once the strip is idle. It belongs here rather than to [ThumbStrip] so
+  /// that hiding the chrome neither throws away what it has fetched nor stops
+  /// it: on a real server a thumbnail costs ~200 ms cold and ~2 ms warm, so a
+  /// chapter walked through once scrubs instantly afterwards. It fetches
+  /// nothing until the scrubber has been opened at least once — that is what
+  /// tells it how long the chapter is.
+  late final ThumbLoadQueue _thumbs = ThumbLoadQueue(load: _loadThumb);
+
+  Future<void> _loadThumb(int page) {
+    if (!mounted) return Future.value();
+    final provider = _imageProvider(page, cacheWidth: 96, thumbnail: true);
+    if (provider == null) return Future.value();
+    return precacheImage(provider, context, onError: (_, _) {});
+  }
+
   Directory? _localDir;
+
+  /// Which pages the stored copy actually holds, read once.
+  ///
+  /// This is asked for every page the reader builds, and the thumbnail strip
+  /// builds a screenful of them on every scroll frame — a `existsSync` per
+  /// thumbnail per frame is a syscall storm on the very thread that has to
+  /// decode them. The directory cannot change under us: a chapter is written
+  /// whole or deleted whole, and removing it leaves the reader.
+  var _localPages = const <int>{};
 
   Future<void> _resolveLocalDir() async {
     if (_localDir != null || _saved == null) return;
     final dir = await ref
         .read(downloadsServiceProvider)
         .chapterDir(widget.chapterId);
-    if (mounted) setState(() => _localDir = dir);
+    final pages = <int>{};
+    try {
+      await for (final entity in dir.list(followLinks: false)) {
+        final page = DownloadsService.pageOfFileName(
+          entity.path.split('/').last,
+        );
+        if (page != null) pages.add(page);
+      }
+    } on FileSystemException {
+      // No stored copy after all; the network path below covers it.
+    }
+    if (!mounted) return;
+    setState(() {
+      _localDir = dir;
+      _localPages = pages;
+    });
   }
 
   // --- navigation -----------------------------------------------------------
@@ -214,7 +268,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       body: switch ((chapter, info)) {
         (null, AsyncError()) => const _ReaderError(),
         (null, _) => const Center(
-          child: CircularProgressIndicator(color: versoAccent),
+          child: CircularProgressIndicator(color: patraAccent),
         ),
         (final ChapterInfoDto chapter, _) => _buildReader(
           context,
@@ -328,6 +382,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 page: _page,
                 span: spread ? 2 : 1,
                 rtl: rtl,
+                thumbQueue: _thumbs,
                 thumbProvider: (page) =>
                     _imageProvider(page, cacheWidth: 96, thumbnail: true),
                 onSeek: (page) => _goTo(page, chapter),
@@ -443,7 +498,7 @@ class _PagedViewState extends State<_PagedView> {
         }
         final second = first + 1;
         final pages = [if (second < widget.pages) second];
-        // verso left, recto right — mirrored when reading right to left, so
+        // patra left, recto right — mirrored when reading right to left, so
         // the first page of the pair always leads.
         final ordered = widget.reverse ? [...pages, first] : [first, ...pages];
         return InteractiveViewer(
@@ -668,7 +723,7 @@ class _TopChrome extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: VersoText.rowTitle(color: Colors.white),
+                    style: PatraText.rowTitle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -704,7 +759,7 @@ class _DirectionPill extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return PopupMenuButton<ReadingDirection>(
       tooltip: tooltip,
-      color: versoSurface,
+      color: patraSurface,
       initialValue: direction,
       onSelected: onChanged,
       itemBuilder: (context) => [
@@ -715,13 +770,13 @@ class _DirectionPill extends StatelessWidget {
               children: [
                 DirectionIcon(
                   option,
-                  color: option == direction ? versoAccent : versoText,
+                  color: option == direction ? patraAccent : patraText,
                 ),
                 const SizedBox(width: 12),
                 Text(
                   option.label(l10n),
-                  style: VersoText.body(
-                    color: option == direction ? versoAccent : versoText,
+                  style: PatraText.body(
+                    color: option == direction ? patraAccent : patraText,
                   ),
                 ),
               ],
@@ -749,6 +804,7 @@ class _BottomChrome extends StatelessWidget {
     required this.page,
     required this.span,
     required this.rtl,
+    required this.thumbQueue,
     required this.thumbProvider,
     required this.onSeek,
   });
@@ -757,6 +813,7 @@ class _BottomChrome extends StatelessWidget {
   final int page;
   final int span;
   final bool rtl;
+  final ThumbLoadQueue thumbQueue;
   final ImageProvider? Function(int page) thumbProvider;
   final ValueChanged<int> onSeek;
 
@@ -800,6 +857,7 @@ class _BottomChrome extends StatelessWidget {
                       ThumbStrip(
                         pages: chapter.pages,
                         current: page,
+                        queue: thumbQueue,
                         providerBuilder: thumbProvider,
                         onTap: onSeek,
                       ),
@@ -823,7 +881,7 @@ class _BottomChrome extends StatelessWidget {
                 ),
                 Directionality(
                   textDirection: TextDirection.ltr,
-                  child: Text(counter, style: VersoText.pageNumeral()),
+                  child: Text(counter, style: PatraText.pageNumeral()),
                 ),
               ],
             ),
@@ -859,13 +917,13 @@ class _UnsupportedFormat extends StatelessWidget {
                 Text(
                   l10n.formatNotSupported,
                   textAlign: TextAlign.center,
-                  style: VersoText.rowTitle(),
+                  style: PatraText.rowTitle(),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   l10n.formatNotSupportedBody,
                   textAlign: TextAlign.center,
-                  style: VersoText.metadata(),
+                  style: PatraText.metadata(),
                 ),
               ],
             ),
@@ -892,7 +950,7 @@ class _ReaderError extends StatelessWidget {
             child: Text(
               l10n.serverUnreachable,
               textAlign: TextAlign.center,
-              style: VersoText.body(color: Colors.white70),
+              style: PatraText.body(color: Colors.white70),
             ),
           ),
         ),

@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/auth/session.dart';
+import 'package:patra/src/auth/session.dart';
 
 const _a = ServerEntry(
   baseUrl: 'https://a.example',

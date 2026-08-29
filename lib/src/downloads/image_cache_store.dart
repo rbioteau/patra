@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/painting.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -36,16 +37,8 @@ class ImageCacheStore {
 
   Future<int> size() async {
     try {
-      final dir = await _dir();
-      if (!dir.existsSync()) return 0;
-      var total = 0;
-      await for (final entity in dir.list(
-        recursive: true,
-        followLinks: false,
-      )) {
-        if (entity is File) total += await entity.length();
-      }
-      return total;
+      final path = (await _dir()).path;
+      return await Isolate.run(() => _measure(path));
     } on Exception {
       return 0;
     }
@@ -63,37 +56,21 @@ class ImageCacheStore {
   /// "Oldest" is by write time, not by last read: `atime` is unreliable on both
   /// platforms (Android mounts `relatime`), so the file that has been in the
   /// cache the longest is the one that goes.
+  ///
+  /// Both halves of the sweep run **off the UI isolate**. A 512 MB cache of
+  /// comic pages is thousands of files, and the walk is one syscall to list
+  /// plus one to stat each of them; on the main isolate that is thousands of
+  /// event-loop hops competing with the image decodes the reader is doing at
+  /// that very moment — the reader is what asks for the sweep. Only
+  /// [getTemporaryDirectory] has to stay here (it is a plugin call, and
+  /// plugins answer on the main isolate), so the path is resolved first and
+  /// the isolate is handed nothing but a String and an int.
   Future<int> trim(int maxBytes) async {
-    var total = 0;
     try {
-      final dir = await _dir();
-      if (!dir.existsSync()) return 0;
-
-      final entries = <(File, FileStat)>[];
-      await for (final entity in dir.list(
-        recursive: true,
-        followLinks: false,
-      )) {
-        if (entity is! File) continue;
-        final stat = await entity.stat();
-        entries.add((entity, stat));
-        total += stat.size;
-      }
-      if (total <= maxBytes) return total;
-
-      entries.sort((a, b) => a.$2.modified.compareTo(b.$2.modified));
-      for (final (file, stat) in entries) {
-        if (total <= maxBytes) break;
-        try {
-          await file.delete();
-          total -= stat.size;
-        } on FileSystemException {
-          // Already gone, or held open: it still counts against the budget.
-        }
-      }
-      return total;
+      final path = (await _dir()).path;
+      return await Isolate.run(() => _sweep(path, maxBytes));
     } on Exception {
-      return total;
+      return 0;
     }
   }
 
@@ -130,6 +107,53 @@ class ImageCacheStore {
     imageCache.clear();
     imageCache.clearLiveImages();
   }
+}
+
+/// Adds up what the cache holds. Runs in its own isolate, so the I/O is
+/// deliberately synchronous: there is no UI thread here to yield to, and the
+/// async form would only buy thousands of scheduler round-trips.
+int _measure(String path) {
+  final dir = Directory(path);
+  if (!dir.existsSync()) return 0;
+  var total = 0;
+  for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+    if (entity is! File) continue;
+    final stat = entity.statSync();
+    if (stat.type == FileSystemEntityType.notFound) continue;
+    total += stat.size;
+  }
+  return total;
+}
+
+/// Deletes the oldest files until [path] fits in [maxBytes], and answers what
+/// it holds afterwards. Runs in its own isolate; see [_measure].
+int _sweep(String path, int maxBytes) {
+  final dir = Directory(path);
+  if (!dir.existsSync()) return 0;
+
+  var total = 0;
+  final entries = <(File, FileStat)>[];
+  for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+    if (entity is! File) continue;
+    final stat = entity.statSync();
+    // Listed a moment ago and already gone: it is nobody's budget now.
+    if (stat.type == FileSystemEntityType.notFound) continue;
+    entries.add((entity, stat));
+    total += stat.size;
+  }
+  if (total <= maxBytes) return total;
+
+  entries.sort((a, b) => a.$2.modified.compareTo(b.$2.modified));
+  for (final (file, stat) in entries) {
+    if (total <= maxBytes) break;
+    try {
+      file.deleteSync();
+      total -= stat.size;
+    } on FileSystemException {
+      // Already gone, or held open: it still counts against the budget.
+    }
+  }
+  return total;
 }
 
 final imageCacheStoreProvider = Provider<ImageCacheStore>(

@@ -1,14 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:verso/src/downloads/image_cache_store.dart';
+import 'package:patra/src/downloads/image_cache_store.dart';
 
 void main() {
   late Directory dir;
   late ImageCacheStore store;
 
   setUp(() {
-    dir = Directory.systemTemp.createTempSync('verso-cache-test');
+    dir = Directory.systemTemp.createTempSync('patra-cache-test');
     store = ImageCacheStore(root: dir);
   });
 
@@ -55,6 +55,17 @@ void main() {
     expect(oldest.existsSync(), isFalse);
     expect(middle.existsSync(), isTrue);
     expect(recent.existsSync(), isTrue);
+  });
+
+  test('the sweep is recursive, and directories are not sized', () async {
+    Directory('${dir.path}/sub').createSync();
+    final nested = write('sub/old', 100, ageInDays: 30);
+    final flat = write('recent', 100, ageInDays: 1);
+
+    expect(await store.size(), 200);
+    expect(await store.trim(100), 100);
+    expect(nested.existsSync(), isFalse);
+    expect(flat.existsSync(), isTrue);
   });
 
   test('a missing cache directory is not an error', () async {

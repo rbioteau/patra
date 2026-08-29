@@ -69,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
                   child: Text(
                     l10n.homeEmpty,
                     textAlign: TextAlign.center,
-                    style: VersoText.body(color: versoTextMuted),
+                    style: PatraText.body(color: patraTextMuted),
                   ),
                 ),
               _Shelf(
@@ -95,12 +95,12 @@ class _Wordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text.rich(
       TextSpan(
-        text: 'verso',
-        style: VersoText.serifTitle(size: 22),
+        text: 'patra',
+        style: PatraText.serifTitle(size: 22),
         children: [
           TextSpan(
             text: '.',
-            style: VersoText.serifTitle(size: 22, color: versoAccent),
+            style: PatraText.serifTitle(size: 22, color: patraAccent),
           ),
         ],
       ),
@@ -269,7 +269,7 @@ class _LibraryCard extends StatelessWidget {
     return SizedBox(
       width: width,
       child: Material(
-        color: versoSurface,
+        color: patraSurface,
         borderRadius: BorderRadius.circular(radiusCard),
         child: InkWell(
           onTap: onTap,
@@ -279,18 +279,18 @@ class _LibraryCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radiusCard),
-              border: Border.all(color: versoBorder),
+              border: Border.all(color: patraBorder),
             ),
             child: Row(
               children: [
-                Icon(_libraryIcon(library.type), size: 18, color: versoAccent),
+                Icon(_libraryIcon(library.type), size: 18, color: patraAccent),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     library.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: VersoText.rowTitle(),
+                    style: PatraText.rowTitle(),
                   ),
                 ),
               ],
