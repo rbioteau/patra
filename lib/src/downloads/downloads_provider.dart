@@ -66,10 +66,16 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     var current = state.value;
     if (current == null) {
       try {
-        current = await future;
+        await future;
       } on Object {
         return;
       }
+      // Re-read rather than keep what the scan returned: a second pill tapped
+      // during that same wait resumes first and writes its own entry, and
+      // building on the stale snapshot would drop it — leaving a download
+      // running that nothing on screen tracks any more.
+      current = state.value;
+      if (current == null) return;
     }
     if (current.saved.containsKey(chapter.chapterId) ||
         current.inFlight.containsKey(chapter.chapterId)) {

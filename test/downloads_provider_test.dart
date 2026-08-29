@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,6 +17,10 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   int served = 0;
   int rejected = 0;
 
+  /// Holds every page request open, so a test can look at the state while
+  /// downloads are still running.
+  Future<void>? gate;
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -27,6 +32,7 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
       rejected++;
       return ResponseBody.fromBytes(const [], 400);
     }
+    if (gate != null) await gate;
     served++;
     return ResponseBody.fromBytes(
       List<int>.filled(4, 9),
@@ -48,6 +54,17 @@ const _chapter = SavedChapter(
   libraryId: 2,
   seriesName: 'Akira',
   title: 'Volume 1',
+  pages: 3,
+  bytes: 0,
+);
+
+const _otherChapter = SavedChapter(
+  chapterId: 13,
+  seriesId: 3,
+  volumeId: 1,
+  libraryId: 2,
+  seriesName: 'Akira',
+  title: 'Volume 2',
   pages: 3,
   bytes: 0,
 );
@@ -109,6 +126,31 @@ void main() {
       container.read(downloadsProvider).value!.saved.containsKey(12),
       isTrue,
     );
+  });
+
+  test('two taps before the first scan do not forget each other', () async {
+    // Both calls wait on the same scan; the second resumes into a state the
+    // first has already written to. Building on what the scan returned would
+    // drop the first chapter, leaving a download nothing tracks any more.
+    final gate = Completer<void>();
+    adapter.gate = gate.future;
+
+    final first = container.read(downloadsProvider.notifier).save(_chapter);
+    final second = container
+        .read(downloadsProvider.notifier)
+        .save(_otherChapter);
+    await pumpEventQueue();
+
+    expect(
+      container.read(downloadsProvider).value!.inFlight.keys,
+      containsAll([12, 13]),
+    );
+
+    gate.complete();
+    await Future.wait([first, second]);
+    final state = container.read(downloadsProvider).value!;
+    expect(state.saved.keys, containsAll([12, 13]));
+    expect(state.inFlight, isEmpty);
   });
 
   test('a failed download is reported, not silently reverted', () async {

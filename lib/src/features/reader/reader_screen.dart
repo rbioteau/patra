@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,9 +11,13 @@ import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
+import '../../downloads/image_cache_store.dart';
+import '../../settings/cache_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
+import 'page_loading.dart';
+import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose
     .family<ChapterInfoDto, int>((ref, chapterId) {
@@ -95,6 +100,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     setState(() => _page = page);
     _saveProgress((page + span - 1).clamp(0, info.pages - 1), info);
     _precache(page + span, info);
+    // Reading is what fills the image cache; this is where it has to be kept
+    // inside its budget. The store throttles the sweeps.
+    ref
+        .read(imageCacheStoreProvider)
+        .trimIfDue(ref.read(imageCacheLimitProvider).bytes);
   }
 
   void _precache(int page, ChapterInfoDto info) {
@@ -105,10 +115,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   /// onPageChanged never fires for the initial page; without this a one-page
   /// chapter would record no progress at all.
+  ///
+  /// Deferred a frame because it is reached from `build`, and saving mirrors
+  /// progress into the stored copy — writing to a provider while the tree is
+  /// building is what Riverpod refuses outright.
   void _saveInitialProgress(ChapterInfoDto info) {
     if (_initialProgressSaved) return;
     _initialProgressSaved = true;
-    _saveProgress(_page, info);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _saveProgress(_page, info);
+    });
   }
 
   // --- images ---------------------------------------------------------------
@@ -128,7 +144,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       final file = File(
         '${_localDir?.path ?? ''}/${DownloadsService.pageFileName(page)}',
       );
-      if (_localDir != null && file.existsSync()) return FileImage(file);
+      if (_localDir != null && file.existsSync()) {
+        // Decoding a full page into a 34px thumbnail is what makes the strip
+        // expensive offline, where there is no request to blame.
+        return cacheWidth == null
+            ? FileImage(file)
+            : ResizeImage(FileImage(file), width: cacheWidth);
+      }
     }
     try {
       final client = ref.read(kavitaClientProvider);
@@ -208,6 +230,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     AppLocalizations l10n,
     ChapterInfoDto chapter,
   ) {
+    // An EPUB or a PDF has no pages to fetch: `/api/Reader/image` serves
+    // nothing for them, so opening one would be a reader full of broken
+    // pages. The series screen already refuses these rows; this catches the
+    // ways in that do not go through it — a deep link, or a resume.
+    if (!chapter.seriesFormat.isImageReadable) {
+      return const _UnsupportedFormat();
+    }
     if (chapter.pages == 0) return const _ReaderError();
     _saveInitialProgress(chapter);
     _resolveLocalDir();
@@ -299,8 +328,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 page: _page,
                 span: spread ? 2 : 1,
                 rtl: rtl,
-                imageBuilder: (page) =>
-                    _pageImage(page, cacheWidth: 96, thumbnail: true),
+                thumbProvider: (page) =>
+                    _imageProvider(page, cacheWidth: 96, thumbnail: true),
                 onSeek: (page) => _goTo(page, chapter),
               ),
             ],
@@ -329,30 +358,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       gaplessPlayback: true,
       errorBuilder: (_, _, _) =>
           const Center(child: Icon(Icons.broken_image, color: Colors.white24)),
-      frameBuilder: (context, child, frame, wasSync) => frame == null
-          ? const Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white24,
-                ),
-              ),
-            )
-          : child,
+      frameBuilder: (context, child, frame, wasSync) =>
+          frame == null ? PageLoading(explain: _serverIsPreparing) : child,
     );
   }
+
+  /// Kavita rasterises a PDF into page images on the first request for it, so
+  /// the first page of one can be slow enough that a bare spinner reads as a
+  /// hang. Every later page comes from its cache.
+  bool get _serverIsPreparing =>
+      ref.read(chapterInfoProvider(widget.chapterId)).value?.seriesFormat ==
+      MangaFormat.pdf;
 }
-
-typedef PageImageBuilder = Widget Function(
-  int page, {
-  int? cacheWidth,
-  BoxFit fit,
-  bool thumbnail,
-});
-
-// --- paged view -------------------------------------------------------------
 
 class _PagedView extends StatefulWidget {
   const _PagedView({
@@ -502,6 +519,9 @@ class _WebtoonViewState extends State<_WebtoonView> {
   late int _reported = widget.page;
   double _width = 0;
 
+  /// Whether the strip has been scrolled to the page it was opened at.
+  var _placed = false;
+
   /// Page heights for the current width, from the server's page dimensions,
   /// so scroll offsets are exact before any image has loaded.
   List<double> _heights = const [];
@@ -534,7 +554,10 @@ class _WebtoonViewState extends State<_WebtoonView> {
   }
 
   void _onScroll() {
-    if (!_controller.hasClients || _offsets.isEmpty) return;
+    // Until the strip has been placed it is sitting at offset 0, which is not
+    // where the reader is: reporting from there would post page 0 back and
+    // wipe the place the chapter was opened at.
+    if (!_placed || !_controller.hasClients || _offsets.isEmpty) return;
     final page = _pageAt(_controller.offset);
     if (page != _reported) {
       _reported = page;
@@ -546,6 +569,22 @@ class _WebtoonViewState extends State<_WebtoonView> {
   void initState() {
     super.initState();
     _controller.addListener(_onScroll);
+    // The strip opens where reading left off — the paged view gets this from
+    // `PageController(initialPage:)`, a scroll view has to be told. Offsets
+    // are only known once the width is, so the jump waits for the first
+    // layout; [_placed] keeps any scroll before that from reporting.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _jumpTo(widget.page);
+      _placed = true;
+    });
+  }
+
+  void _jumpTo(int page) {
+    if (!_controller.hasClients || page >= _offsets.length) return;
+    _controller.jumpTo(
+      _offsets[page].clamp(0, _controller.position.maxScrollExtent),
+    );
   }
 
   @override
@@ -554,11 +593,7 @@ class _WebtoonViewState extends State<_WebtoonView> {
     // A seek from the slider: jump, unless this is our own report echoing.
     if (widget.page != _reported) {
       _reported = widget.page;
-      if (_controller.hasClients && widget.page < _offsets.length) {
-        _controller.jumpTo(
-          _offsets[widget.page].clamp(0, _controller.position.maxScrollExtent),
-        );
-      }
+      _jumpTo(widget.page);
     }
   }
 
@@ -714,7 +749,7 @@ class _BottomChrome extends StatelessWidget {
     required this.page,
     required this.span,
     required this.rtl,
-    required this.imageBuilder,
+    required this.thumbProvider,
     required this.onSeek,
   });
 
@@ -722,7 +757,7 @@ class _BottomChrome extends StatelessWidget {
   final int page;
   final int span;
   final bool rtl;
-  final Widget Function(int page) imageBuilder;
+  final ImageProvider? Function(int page) thumbProvider;
   final ValueChanged<int> onSeek;
 
   @override
@@ -762,10 +797,10 @@ class _BottomChrome extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _ThumbStrip(
+                      ThumbStrip(
                         pages: chapter.pages,
                         current: page,
-                        imageBuilder: imageBuilder,
+                        providerBuilder: thumbProvider,
                         onTap: onSeek,
                       ),
                       if (chapter.pages > 1)
@@ -799,101 +834,45 @@ class _BottomChrome extends StatelessWidget {
   }
 }
 
-class _ThumbStrip extends StatefulWidget {
-  const _ThumbStrip({
-    required this.pages,
-    required this.current,
-    required this.imageBuilder,
-    required this.onTap,
-  });
-
-  final int pages;
-  final int current;
-  final Widget Function(int page) imageBuilder;
-  final ValueChanged<int> onTap;
-
-  @override
-  State<_ThumbStrip> createState() => _ThumbStripState();
-}
-
-class _ThumbStripState extends State<_ThumbStrip> {
-  static const _thumbWidth = 34.0;
-  static const _thumbHeight = 48.0;
-  static const _gap = 6.0;
-
-  final _controller = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    // The chrome usually opens mid-chapter: jump to where the reader is
-    // rather than showing page one.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _revealCurrent(animate: false);
-    });
-  }
-
-  @override
-  void didUpdateWidget(_ThumbStrip old) {
-    super.didUpdateWidget(old);
-    if (widget.current != old.current) _revealCurrent();
-  }
-
-  void _revealCurrent({bool animate = true}) {
-    if (!_controller.hasClients) return;
-    final viewport = _controller.position.viewportDimension;
-    final target =
-        widget.current * (_thumbWidth + _gap) - viewport / 2 + _thumbWidth / 2;
-    final offset = target.clamp(0.0, _controller.position.maxScrollExtent);
-    if (!animate) {
-      _controller.jumpTo(offset);
-      return;
-    }
-    _controller.animateTo(
-      offset,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+/// A format the page reader cannot show. Says so rather than failing page by
+/// page, and names what is coming.
+class _UnsupportedFormat extends StatelessWidget {
+  const _UnsupportedFormat();
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: _thumbHeight + 12,
-      child: ListView.separated(
-        controller: _controller,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        itemCount: widget.pages,
-        separatorBuilder: (_, _) => const SizedBox(width: _gap),
-        itemBuilder: (context, page) {
-          final selected = page == widget.current;
-          return GestureDetector(
-            onTap: () => widget.onTap(page),
-            child: Container(
-              width: _thumbWidth,
-              height: _thumbHeight,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radiusThumb),
-                border: Border.all(
-                  color: selected ? versoAccent : Colors.white24,
-                  width: selected ? 2 : 1,
+    final l10n = AppLocalizations.of(context);
+    return Stack(
+      children: [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(gutter),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.menu_book_outlined,
+                  color: Colors.white24,
+                  size: 34,
                 ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radiusThumb - 1),
-                child: widget.imageBuilder(page),
-              ),
+                const SizedBox(height: 14),
+                Text(
+                  l10n.formatNotSupported,
+                  textAlign: TextAlign.center,
+                  style: VersoText.rowTitle(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.formatNotSupportedBody,
+                  textAlign: TextAlign.center,
+                  style: VersoText.metadata(),
+                ),
+              ],
             ),
-          );
-        },
-      ),
+          ),
+        ),
+        const SafeArea(child: BackButton(color: Colors.white70)),
+      ],
     );
   }
 }

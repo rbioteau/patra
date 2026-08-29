@@ -6,6 +6,7 @@ import '../../auth/session.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../format.dart';
+import '../../settings/cache_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
@@ -145,6 +146,7 @@ class _StorageRows extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final downloads = ref.watch(downloadsProvider).value;
     final cacheSize = ref.watch(imageCacheSizeProvider);
+    final cacheLimit = ref.watch(imageCacheLimitProvider);
 
     return Column(
       children: [
@@ -201,6 +203,33 @@ class _StorageRows extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(l10n.imageCacheCaption, style: VersoText.metadata()),
+                    const SizedBox(height: 6),
+                    InkWell(
+                      onTap: () => _pickLimit(context, ref, cacheLimit),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                l10n.imageCacheLimit,
+                                style: VersoText.body(),
+                              ),
+                            ),
+                            Text(
+                              formatBytes(l10n, cacheLimit.bytes),
+                              style: VersoText.metadata(color: versoAccent),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Text(
+                      l10n.imageCacheLimitCaption,
+                      style: VersoText.metadata(),
+                    ),
                     const SizedBox(height: 10),
                     OutlinedButton(
                       onPressed: () async {
@@ -221,6 +250,46 @@ class _StorageRows extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// Picking a smaller budget has to bite right away, not on the next launch.
+  Future<void> _pickLimit(
+    BuildContext context,
+    WidgetRef ref,
+    ImageCacheLimit current,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<ImageCacheLimit>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
+              child: SectionLabel(l10n.imageCacheLimit),
+            ),
+            for (final option in ImageCacheLimit.values)
+              ListTile(
+                title: Text(
+                  formatBytes(l10n, option.bytes),
+                  style: VersoText.body(
+                    color: option == current ? versoAccent : versoText,
+                  ),
+                ),
+                trailing: option == current
+                    ? const Icon(Icons.check, color: versoAccent, size: 18)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(option),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    await ref.read(imageCacheLimitProvider.notifier).set(picked);
+    await ref.read(imageCacheStoreProvider).trim(picked.bytes);
+    ref.invalidate(imageCacheSizeProvider);
   }
 }
 

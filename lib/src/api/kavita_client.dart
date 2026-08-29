@@ -284,6 +284,29 @@ class KavitaClient {
     return ChapterInfoDto.fromJson(res.data!);
   }
 
+  /// Marks one chapter read or unread.
+  ///
+  /// The pair `mark-multiple-read` / `mark-multiple-unread` rather than
+  /// `mark-chapter-read`: there is no single-chapter *unread* endpoint, and
+  /// these two take the same body, so the toggle is one shape instead of two.
+  /// `volumeIds` is sent empty on purpose — the server merges it with
+  /// `chapterIds` and reads it unconditionally. A volume with no chapter
+  /// breakdown is covered by its placeholder chapter, which is all it has.
+  Future<void> markChapterRead({
+    required int seriesId,
+    required int chapterId,
+    required bool read,
+  }) => _dio.post(
+    read ? '/api/Reader/mark-multiple-read' : '/api/Reader/mark-multiple-unread',
+    data: {
+      'seriesId': seriesId,
+      'volumeIds': const <int>[],
+      'chapterIds': [chapterId],
+      // Marking a row read by hand is not a reading session.
+      'generateReadingSession': false,
+    },
+  );
+
   Future<void> saveProgress({
     required int libraryId,
     required int seriesId,
@@ -361,10 +384,18 @@ class KavitaClient {
 
   /// Single source of truth for the reader-image query, so the URL used by
   /// image widgets and the one used by downloads cannot drift apart.
+  ///
+  /// `extractPdf` is what makes a PDF readable at all: without it Kavita
+  /// caches the file untouched and there is no page image to serve, so every
+  /// page 404s. With it the server rasterises the PDF into one image per page
+  /// and this endpoint answers exactly as it does for an archive. It is
+  /// harmless for every other format — Kavita only reads the flag on its
+  /// PDF/EPUB branch — and its own thumbnail endpoint passes it unconditionally.
   Map<String, dynamic> _readerImageQuery(int chapterId, int page) => {
     'chapterId': chapterId,
     'page': page,
     'apiKey': apiKey,
+    'extractPdf': true,
   };
 
   String readerImageUrl(int chapterId, int page) =>

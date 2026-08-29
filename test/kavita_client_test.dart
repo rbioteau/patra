@@ -230,6 +230,19 @@ void main() {
       expect(lastRequest!.queryParameters['page'], 2);
     });
 
+    test('reader images ask the server to rasterise a PDF', () async {
+      // Without extractPdf, Kavita caches a PDF untouched and there is no
+      // page image to serve: every page 404s. With it, a PDF reads exactly
+      // like an archive. It is ignored for every other format.
+      await recordingClient().readerImageBytes(7, 2);
+      expect(lastRequest!.queryParameters['extractPdf'], true);
+
+      expect(
+        recordingClient().readerImageUrl(7, 2),
+        contains('extractPdf=true'),
+      );
+    });
+
     test('chapter info asks for page dimensions', () async {
       // They are opt-in, and the webtoon view needs them to size pages.
       await recordingClient().chapterInfo(7);

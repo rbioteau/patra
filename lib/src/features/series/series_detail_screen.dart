@@ -9,16 +9,62 @@ import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
+import '../../entity_naming.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_banner.dart';
 import '../../widgets/save_pill.dart';
+import '../library/library_screen.dart';
 
 final volumesProvider = FutureProvider.autoDispose.family<List<VolumeDto>, int>(
   (ref, seriesId) {
     return ref.watch(kavitaClientProvider).volumes(seriesId);
   },
 );
+
+/// Progress the user has just set by hand, before the server has confirmed it.
+///
+/// A swipe has to land at once — waiting for a round trip to redraw a row
+/// makes the gesture feel broken — and re-fetching instead would drop the whole
+/// list to its skeleton for the length of the request. So the change is held
+/// here, on top of the fetch, and the fetch is left alone. The map lives and
+/// dies with the screen: on the next visit the server is the authority again.
+class ReadOverridesNotifier extends Notifier<Map<int, int>> {
+  @override
+  Map<int, int> build() => const {};
+
+  void set(int chapterId, int pagesRead) =>
+      state = {...state, chapterId: pagesRead};
+
+  /// Drops an override, either because the server refused it or because
+  /// something truer is about to arrive.
+  void clear(int chapterId) => state = {...state}..remove(chapterId);
+}
+
+final readOverridesProvider =
+    NotifierProvider.autoDispose<ReadOverridesNotifier, Map<int, int>>(
+      ReadOverridesNotifier.new,
+    );
+
+/// The volumes as the screen shows them: what the server last said, with any
+/// unconfirmed mark-read applied on top.
+final seriesVolumesProvider = Provider.autoDispose
+    .family<AsyncValue<List<VolumeDto>>, int>((ref, seriesId) {
+      final overrides = ref.watch(readOverridesProvider);
+      final volumes = ref.watch(volumesProvider(seriesId));
+      if (overrides.isEmpty) return volumes;
+      return volumes.whenData(
+        (volumes) => [
+          for (final volume in volumes)
+            volume.withChapters([
+              for (final chapter in volume.chapters)
+                overrides.containsKey(chapter.id)
+                    ? chapter.copyWith(pagesRead: overrides[chapter.id])
+                    : chapter,
+            ]),
+        ],
+      );
+    });
 
 final seriesProvider = FutureProvider.autoDispose.family<SeriesDto, int>(
   (ref, seriesId) => ref.watch(kavitaClientProvider).series(seriesId),
@@ -30,6 +76,58 @@ final seriesMetadataProvider = FutureProvider.autoDispose
           ref.watch(kavitaClientProvider).seriesMetadata(seriesId),
     );
 
+/// The three buckets Kavita splits a series into, from the one call we make.
+///
+/// Kavita exposes them ready-made on `GET /api/Series/series-detail`, but that
+/// endpoint is documented as internal ("may change without hesitation") and
+/// returns labels already formatted in the *server account's* locale, which
+/// would fight our own. So we take `/api/Series/volumes` and apply its rules
+/// ourselves: the pseudo-volumes are told apart by the sign of their number,
+/// and every list is ordered by `sortOrder`, never by the order of the array.
+typedef _Buckets = ({
+  List<VolumeDto> volumes,
+  List<ChapterDto> loose,
+  List<ChapterDto> specials,
+});
+
+_Buckets _split(List<VolumeDto> volumes) {
+  final tomes = <VolumeDto>[];
+  final loose = <ChapterDto>[];
+  final specials = <ChapterDto>[];
+  for (final volume in volumes) {
+    final numbered = !volume.isLooseLeaf && !volume.isSpecials;
+    if (numbered) tomes.add(volume);
+    for (final chapter in volume.chapters) {
+      if (chapter.isSpecial) {
+        specials.add(chapter);
+      } else if (!numbered) {
+        // Neither pseudo-volume is a place to hide a chapter: Kavita flags
+        // everything it files under specials, but one that arrives without
+        // the flag must still have a row, or it could be neither read nor
+        // saved. Kavita lists it too.
+        loose.add(chapter);
+      }
+    }
+  }
+  loose.sort(_bySortOrder);
+  specials.sort(_bySortOrder);
+  return (volumes: tomes, loose: loose, specials: specials);
+}
+
+/// The chapters a numbered volume shows: a special inside one is listed under
+/// Specials, and would otherwise appear twice on a screen that has sections
+/// rather than tabs.
+List<ChapterDto> _volumeChapters(VolumeDto volume) => _sorted([
+  for (final c in volume.chapters)
+    if (!c.isSpecial) c,
+]);
+
+int _bySortOrder(ChapterDto a, ChapterDto b) =>
+    a.sortOrder.compareTo(b.sortOrder);
+
+List<ChapterDto> _sorted(List<ChapterDto> chapters) =>
+    [...chapters]..sort(_bySortOrder);
+
 typedef _Entry = ({VolumeDto volume, ChapterDto chapter});
 
 /// Every chapter in reading order — volumes first, then loose chapters, then
@@ -40,16 +138,20 @@ List<_Entry> _orderedChapters(List<VolumeDto> volumes) {
   final loose = <_Entry>[];
   final specials = <_Entry>[];
   for (final volume in volumes) {
-    for (final chapter in volume.chapters) {
+    final numbered = !volume.isLooseLeaf && !volume.isSpecials;
+    for (final chapter in _sorted(volume.chapters)) {
       final entry = (volume: volume, chapter: chapter);
-      if (volume.isSpecials || chapter.isSpecial) {
+      if (chapter.isSpecial) {
         specials.add(entry);
-      } else if (volume.isLooseLeaf) {
-        loose.add(entry);
-      } else {
+      } else if (numbered) {
         tomes.add(entry);
+      } else {
+        loose.add(entry);
       }
     }
+  }
+  for (final list in [loose, specials]) {
+    list.sort((a, b) => _bySortOrder(a.chapter, b.chapter));
   }
   return [...tomes, ...loose, ...specials];
 }
@@ -73,7 +175,9 @@ class SeriesDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final client = ref.watch(kavitaClientProvider);
-    final volumes = ref.watch(volumesProvider(seriesId));
+    final volumes = ref.watch(seriesVolumesProvider(seriesId));
+    // What the parts of this series are called comes from the library type.
+    final type = ref.watch(libraryTypeProvider(libraryId));
 
     return Scaffold(
       appBar: AppBar(
@@ -98,6 +202,7 @@ class SeriesDetailScreen extends ConsumerWidget {
               _SeriesHero(
                 seriesId: seriesId,
                 seriesName: seriesName,
+                type: type,
                 volumes: volumes.value,
                 onRead: (chapter) => _read(context, ref, chapter),
               ),
@@ -107,6 +212,7 @@ class SeriesDetailScreen extends ConsumerWidget {
                   ref,
                   client,
                   l10n,
+                  type,
                   value,
                 ),
                 AsyncError() => [
@@ -159,80 +265,70 @@ class SeriesDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     KavitaClient client,
     AppLocalizations l10n,
+    LibraryType type,
     List<VolumeDto> volumes,
   ) {
-    final tomes = [
-      for (final volume in volumes)
-        if (!volume.isLooseLeaf && !volume.isSpecials) volume,
-    ];
-    final looseChapters = <ChapterDto>[];
-    final specials = <ChapterDto>[];
-    for (final volume in volumes) {
-      if (!volume.isLooseLeaf && !volume.isSpecials) continue;
-      for (final chapter in volume.chapters) {
-        (chapter.isSpecial ? specials : looseChapters).add(chapter);
-      }
-    }
+    final buckets = _split(volumes);
 
     Widget header(String text) => Padding(
       padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
       child: SectionLabel(text),
     );
 
+    Widget chapterRow(ChapterDto chapter, {String? label, String? coverUrl}) =>
+        _ChapterRow(
+          chapter: chapter,
+          label: label,
+          type: type,
+          coverUrl: coverUrl ?? client.chapterCoverUrl(chapter.id),
+          seriesId: seriesId,
+          seriesName: seriesName,
+          libraryId: libraryId,
+        );
+
+    // Volumes and volumeless chapters are one story told in order — Kavita
+    // calls that the storyline, and hides it where it would lie: an issue run
+    // is not a storyline, and a book library has no chapter level. It only
+    // says anything when the series actually has both, so a run of volumes
+    // stays "Volumes".
+    final merged =
+        type.hasStoryline &&
+        buckets.volumes.isNotEmpty &&
+        buckets.loose.isNotEmpty;
+
     return [
-      if (tomes.isNotEmpty) ...[
-        header(l10n.volumesTitle),
-        for (final volume in tomes)
-          if (volume.chapters.length == 1 &&
-              volume.chapters.single.isVolumePlaceholder)
+      if (buckets.volumes.isNotEmpty) ...[
+        header(merged ? type.storylineTitle(l10n) : type.volumesTitle(l10n)),
+        for (final volume in buckets.volumes)
+          if (_volumeChapters(volume).length == 1 &&
+              _volumeChapters(volume).single.isVolumePlaceholder)
             // No chapter breakdown: the volume itself is the reading unit.
-            _ChapterRow(
-              chapter: volume.chapters.single,
-              label: l10n.volumeLabel(volume.name),
+            chapterRow(
+              _volumeChapters(volume).single,
+              label: type.volumeLabel(l10n, volume.name),
               coverUrl: client.volumeCoverUrl(volume.id),
-              seriesId: seriesId,
-              seriesName: seriesName,
-              libraryId: libraryId,
             )
           else ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
               child: Text(
-                l10n.volumeLabel(volume.name),
+                type.volumeLabel(l10n, volume.name),
                 style: VersoText.rowTitle(color: versoTextMuted),
               ),
             ),
-            for (final chapter in volume.chapters)
-              _ChapterRow(
-                chapter: chapter,
-                coverUrl: client.chapterCoverUrl(chapter.id),
-                seriesId: seriesId,
-                seriesName: seriesName,
-                libraryId: libraryId,
-              ),
+            for (final chapter in _volumeChapters(volume)) chapterRow(chapter),
           ],
       ],
-      if (looseChapters.isNotEmpty) ...[
-        header(l10n.chaptersTitle),
-        for (final chapter in looseChapters)
-          _ChapterRow(
-            chapter: chapter,
-            coverUrl: client.chapterCoverUrl(chapter.id),
-            seriesId: seriesId,
-            seriesName: seriesName,
-            libraryId: libraryId,
-          ),
+      if (buckets.loose.isNotEmpty) ...[
+        // Inside the storyline the loose chapters simply follow the volumes,
+        // exactly as Kavita orders them; they only get a header of their own
+        // when they are a list apart.
+        if (!merged) header(type.chaptersTitle(l10n)),
+        for (final chapter in buckets.loose) chapterRow(chapter),
       ],
-      if (specials.isNotEmpty) ...[
-        header(l10n.specialsTitle),
-        for (final chapter in specials)
-          _ChapterRow(
-            chapter: chapter,
-            coverUrl: client.chapterCoverUrl(chapter.id),
-            seriesId: seriesId,
-            seriesName: seriesName,
-            libraryId: libraryId,
-          ),
+      if (buckets.specials.isNotEmpty) ...[
+        header(type.specialsTitle(l10n)),
+        for (final chapter in buckets.specials) chapterRow(chapter),
       ],
     ];
   }
@@ -245,12 +341,16 @@ class _SeriesHero extends ConsumerWidget {
   const _SeriesHero({
     required this.seriesId,
     required this.seriesName,
+    required this.type,
     required this.volumes,
     required this.onRead,
   });
 
   final int seriesId;
   final String seriesName;
+
+  /// Names the resume button in the library's own vocabulary.
+  final LibraryType type;
 
   /// Null while the chapter list is still loading: the button waits for it.
   final List<VolumeDto>? volumes;
@@ -263,33 +363,50 @@ class _SeriesHero extends ConsumerWidget {
   ({_Entry entry, bool started, bool allRead})? _target() {
     final entries = volumes == null ? null : _orderedChapters(volumes!);
     if (entries == null || entries.isEmpty) return null;
+    // "Started" is a fact about the *series*, not about the chapter the button
+    // happens to land on. Finishing a volume leaves the next one untouched, so
+    // reading it against the target alone made the button say "Start reading"
+    // to someone halfway through a series. Kavita asks the same question of
+    // the series (`hasReadingProgress`).
+    final started = entries.any((entry) => entry.chapter.pagesRead > 0);
     for (final entry in entries) {
       final chapter = entry.chapter;
       final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
       if (!read) {
-        return (entry: entry, started: chapter.pagesRead > 0, allRead: false);
+        return (entry: entry, started: started, allRead: false);
       }
     }
-    return (entry: entries.first, started: false, allRead: true);
+    return (entry: entries.first, started: started, allRead: true);
   }
 
-  /// What to call the thing the button opens. A volume with no chapter
-  /// breakdown is named after the volume: its placeholder chapter carries
-  /// Kavita's -100000 sentinel, which must never reach the label.
+  /// What to call the thing the button opens, in the library's own unit.
+  ///
+  /// Only what is *numbered* gets named — a tome, a chapter, an issue, a book
+  /// — because those are two words wide. A title is free text: a book's
+  /// stretches the button across the hero, and a Book library would do it
+  /// every time, since its files often carry a title and no number at all.
+  /// There the button says only what it does; the title is already on the row
+  /// it opens.
   String _resumeLabel(_Entry entry, AppLocalizations l10n) {
     final chapter = entry.chapter;
+
+    // A special is never numbered, whatever the library counts in.
+    if (chapter.isSpecial) return l10n.seriesContinuePlain;
+    // A volume with no chapter breakdown is named after the volume: its
+    // placeholder chapter carries Kavita's -100000 sentinel, which must never
+    // reach the label.
     if (chapter.isVolumePlaceholder &&
         !entry.volume.isLooseLeaf &&
         !entry.volume.isSpecials) {
-      return l10n.seriesContinueVolume(entry.volume.name);
+      return type.continueVolumeLabel(l10n, entry.volume.name);
     }
-    if (chapter.titleName.isNotEmpty) return chapter.titleName;
     // Anything at sentinel scale is Kavita bookkeeping, not a chapter number.
+    // Compared on magnitude: the sentinels differ by sign, this check does not.
     final number = num.tryParse(chapter.range)?.abs() ?? 0;
-    if (chapter.range.isNotEmpty && number < ChapterDto.defaultNumber) {
-      return l10n.seriesContinue(chapter.range);
+    if (chapter.range.isNotEmpty && number < ChapterDto.defaultNumber.abs()) {
+      return type.continueChapterLabel(l10n, chapter.range);
     }
-    return l10n.seriesStartReading;
+    return l10n.seriesContinuePlain;
   }
 
   @override
@@ -410,6 +527,7 @@ class _ChapterRow extends ConsumerWidget {
   const _ChapterRow({
     required this.chapter,
     required this.coverUrl,
+    required this.type,
     required this.seriesId,
     required this.seriesName,
     required this.libraryId,
@@ -418,6 +536,9 @@ class _ChapterRow extends ConsumerWidget {
 
   final ChapterDto chapter;
   final String coverUrl;
+
+  /// Names the row in the library's own vocabulary.
+  final LibraryType type;
   final int seriesId;
   final String seriesName;
   final int libraryId;
@@ -428,12 +549,8 @@ class _ChapterRow extends ConsumerWidget {
   static const _coverWidth = 46.0;
   static const _coverHeight = 66.0;
 
-  String _label(AppLocalizations l10n) {
-    if (label != null) return label!;
-    if (chapter.titleName.isNotEmpty) return chapter.titleName;
-    if (chapter.isSpecial) return chapter.title;
-    return l10n.chapterLabel(chapter.range);
-  }
+  String _label(AppLocalizations l10n) =>
+      label ?? type.chapterTitle(l10n, chapter);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -458,8 +575,11 @@ class _ChapterRow extends ConsumerWidget {
             .recordProgress(chapter.id, chapter.pagesRead);
       });
     }
+    // EPUB and PDF are laid out, not paginated into images: the reader has
+    // nothing to show and the server will not serve pages for them.
+    final readable = chapter.format.isImageReadable;
     // Offline, a chapter that is not stored locally cannot be opened.
-    final openable = saved || !offline;
+    final openable = readable && (saved || !offline);
 
     final row = Container(
       // Rows are separated by a hairline, not by whitespace.
@@ -552,6 +672,13 @@ class _ChapterRow extends ConsumerWidget {
                       : l10n.pageCount(chapter.pages),
                   style: VersoText.metadata(),
                 ),
+                if (!readable) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    l10n.formatNotSupported,
+                    style: VersoText.metadata(color: versoTextMuted),
+                  ),
+                ],
                 // Progress belongs to the chapter being read, and only to it.
                 if (inProgress) ...[
                   const SizedBox(height: 7),
@@ -572,19 +699,20 @@ class _ChapterRow extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          SavePill(
-            request: SavedChapter(
-              chapterId: chapter.id,
-              seriesId: seriesId,
-              volumeId: 0,
-              libraryId: libraryId,
-              seriesName: seriesName,
-              title: _label(l10n),
-              pages: chapter.pages,
-              bytes: 0,
-              pagesRead: chapter.pagesRead,
+          if (readable)
+            SavePill(
+              request: SavedChapter(
+                chapterId: chapter.id,
+                seriesId: seriesId,
+                volumeId: 0,
+                libraryId: libraryId,
+                seriesName: seriesName,
+                title: _label(l10n),
+                pages: chapter.pages,
+                bytes: 0,
+                pagesRead: chapter.pagesRead,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -606,30 +734,99 @@ class _ChapterRow extends ConsumerWidget {
       ),
     );
 
-    // Only a stored chapter has anything to reveal.
-    if (!saved) return tile;
+    // Marking read is a server operation; offline there is nothing to swipe
+    // for. Removing a copy is local, so it stays available either way. A
+    // format we cannot open is still markable — it was read somewhere else,
+    // which is exactly when saying so by hand is worth something.
+    final markable = !offline;
+    if (!saved && !markable) return tile;
     return Slidable(
       key: ValueKey(chapter.id),
       groupTag: 'chapters',
-      endActionPane: ActionPane(
-        motion: const DrawerMotion(),
-        extentRatio: 0.24,
-        children: [
-          SlidableAction(
-            onPressed: (actionContext) async {
-              if (await _confirmRemove(actionContext, l10n)) {
-                await ref.read(downloadsProvider.notifier).remove(chapter.id);
-              }
-            },
-            backgroundColor: versoDanger.withValues(alpha: .16),
-            foregroundColor: versoDanger,
-            icon: Icons.delete_outline,
-            label: l10n.removeDownload,
-          ),
-        ],
-      ),
+      // Progress on the leading edge, destruction on the trailing one: a
+      // swipe that reaches for one can never land on the other.
+      startActionPane: markable
+          ? ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.3,
+              children: [
+                SlidableAction(
+                  onPressed: (_) => _setRead(ref, read: !read),
+                  // Reading progress is the accent's job, here as everywhere.
+                  backgroundColor: versoAccent.withValues(alpha: .16),
+                  foregroundColor: versoAccent,
+                  icon: read ? Icons.remove_done : Icons.done_all,
+                  label: read ? l10n.markUnread : l10n.markRead,
+                ),
+              ],
+            )
+          : null,
+      endActionPane: saved
+          ? ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.24,
+              children: [
+                SlidableAction(
+                  onPressed: (actionContext) async {
+                    if (await _confirmRemove(actionContext, l10n)) {
+                      await ref
+                          .read(downloadsProvider.notifier)
+                          .remove(chapter.id);
+                    }
+                  },
+                  backgroundColor: versoDanger.withValues(alpha: .16),
+                  foregroundColor: versoDanger,
+                  icon: Icons.delete_outline,
+                  label: l10n.removeDownload,
+                ),
+              ],
+            )
+          : null,
       child: tile,
     );
+  }
+
+  /// Marks the row read or unread on the server, which stays the authority on
+  /// progress: the rows and the hero are rebuilt from what it says afterwards.
+  Future<void> _setRead(WidgetRef ref, {required bool read}) async {
+    final KavitaClient client;
+    try {
+      client = ref.read(kavitaClientProvider);
+    } on StateError {
+      return; // signed out from under the row
+    }
+    final pagesRead = read ? chapter.pages : 0;
+    final overrides = ref.read(readOverridesProvider.notifier);
+    // The row redraws on this line, not when the server answers.
+    overrides.set(chapter.id, pagesRead);
+    // Keep the stored copy in step: the Downloads tab has to show progress
+    // with no server at all.
+    if (ref.read(savedChapterProvider(chapter.id)) != null) {
+      await ref
+          .read(downloadsProvider.notifier)
+          .recordProgress(chapter.id, pagesRead);
+    }
+
+    try {
+      await client.markChapterRead(
+        seriesId: seriesId,
+        chapterId: chapter.id,
+        read: read,
+      );
+    } on Exception {
+      // Refused: put the row back where the server still has it. A request
+      // that could not reach the server has already raised the offline
+      // banner, which says more than a toast on one row would.
+      //
+      // Unless the screen is gone — leaving takes the override with it, and
+      // an autoDispose notifier throws if it is written to after that.
+      if (ref.context.mounted) overrides.clear(chapter.id);
+      return;
+    }
+    // The cover's progress ring is series-wide and cannot be guessed from one
+    // chapter. Re-fetching it is flash-free — the hero reads the value, which
+    // survives a refresh — so it catches up on its own.
+    if (ref.context.mounted) ref.invalidate(seriesProvider(seriesId));
   }
 
   /// An open row closes on tap; only a closed one opens the reader.
@@ -675,6 +872,9 @@ class _ChapterRow extends ConsumerWidget {
   }
 
   Future<void> _open(BuildContext context, WidgetRef ref) async {
+    // Reading is about to define progress properly; a mark-read held on top
+    // of the fetch would overwrite whatever comes back.
+    ref.read(readOverridesProvider.notifier).clear(chapter.id);
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(
       '/reader/${chapter.id}?page=${started ? chapter.pagesRead : 0}',

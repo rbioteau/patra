@@ -290,11 +290,65 @@ abstract class AppLocalizations {
   /// **'Specials'**
   String get specialsTitle;
 
-  /// Fallback chapter list label when the chapter has no title; range is Kavita's chapter number or number range, e.g. '12' or '12-14'
+  /// Chapter list label in a manga or image library; range is Kavita's chapter number or number range, e.g. '12' or '12-14'
   ///
   /// In en, this message translates to:
   /// **'Chapter {range}'**
   String chapterLabel(String range);
+
+  /// Section header replacing Chapters in a comic library, where the unit is the issue
+  ///
+  /// In en, this message translates to:
+  /// **'Issues'**
+  String get issuesTitle;
+
+  /// Chapter list label in a comic library; range is Kavita's number or number range
+  ///
+  /// In en, this message translates to:
+  /// **'Issue #{range}'**
+  String issueLabel(String range);
+
+  /// Section header replacing Volumes and Chapters in a book or light novel library, where a volume is a book
+  ///
+  /// In en, this message translates to:
+  /// **'Books'**
+  String get booksTitle;
+
+  /// Volume or chapter label in a book or light novel library; name is Kavita's number or title
+  ///
+  /// In en, this message translates to:
+  /// **'Book {name}'**
+  String bookLabel(String name);
+
+  /// Section header for volumes and volumeless chapters read as one story, in reading order. Kavita's Storyline tab
+  ///
+  /// In en, this message translates to:
+  /// **'Storyline'**
+  String get storylineTitle;
+
+  /// Shown while the server rasterises a PDF into page images on its first open
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the PDF'**
+  String get pdfPreparing;
+
+  /// Explanation under the PDF preparing indicator
+  ///
+  /// In en, this message translates to:
+  /// **'The server is turning this PDF into pages. Only the first open waits.'**
+  String get pdfPreparingBody;
+
+  /// Shown on a chapter the image reader cannot open (EPUB, PDF)
+  ///
+  /// In en, this message translates to:
+  /// **'Format not supported yet'**
+  String get formatNotSupported;
+
+  /// Explanation shown in place of the reader for a format it cannot open
+  ///
+  /// In en, this message translates to:
+  /// **'This series is an EPUB. Verso reads image formats and PDFs for now; EPUB support is on the way.'**
+  String get formatNotSupportedBody;
 
   /// Chapter tally in the series hero
   ///
@@ -319,6 +373,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Continue — Ch. {chapter}'**
   String seriesContinue(String chapter);
+
+  /// Hero button in a comic library, where a chapter is an issue; issue is its number or range
+  ///
+  /// In en, this message translates to:
+  /// **'Continue — #{issue}'**
+  String seriesContinueIssue(String issue);
+
+  /// Hero button in a book or light novel library, where the unit is the book; book is its number or name
+  ///
+  /// In en, this message translates to:
+  /// **'Continue — Book {book}'**
+  String seriesContinueBook(String book);
+
+  /// Hero button when the thing to resume has no number to show — a special, or a lone book. Its title is free text and would stretch the button, so the button says only what it does
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get seriesContinuePlain;
 
   /// No description provided for @seriesStartReading.
   ///
@@ -380,10 +452,10 @@ abstract class AppLocalizations {
   /// **'Right to left'**
   String get readingDirectionRtl;
 
-  /// Continuous vertical scrolling mode
+  /// Continuous vertical scrolling direction, sits next to the two page-turning ones
   ///
   /// In en, this message translates to:
-  /// **'Webtoon (vertical)'**
+  /// **'Vertical'**
   String get readingModeWebtoon;
 
   /// Download action on a chapter; always worded, never icon-only
@@ -421,6 +493,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{size} on this device'**
   String storageUsed(String size);
+
+  /// Swipe action on a chapter or volume row that marks it read on the server
+  ///
+  /// In en, this message translates to:
+  /// **'Mark read'**
+  String get markRead;
+
+  /// Swipe action that undoes markRead, shown on a row already read
+  ///
+  /// In en, this message translates to:
+  /// **'Mark unread'**
+  String get markUnread;
 
   /// No description provided for @removeDownload.
   ///
@@ -469,6 +553,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get clearCache;
+
+  /// No description provided for @imageCacheLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache limit'**
+  String get imageCacheLimit;
+
+  /// No description provided for @imageCacheLimitCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Once full, the oldest images are removed first.'**
+  String get imageCacheLimitCaption;
 
   /// No description provided for @downloadedChapters.
   ///

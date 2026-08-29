@@ -13,6 +13,21 @@ final librariesProvider = FutureProvider.autoDispose<List<LibraryDto>>(
   (ref) => ref.watch(kavitaClientProvider).libraries(),
 );
 
+/// The type of one library, which decides what its series are made of and what
+/// those parts are called. Falls back to manga while the list is in flight —
+/// the wording settles as soon as it lands, and no screen has to wait on it.
+final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
+  ref,
+  libraryId,
+) {
+  final libraries = ref.watch(librariesProvider).value;
+  if (libraries == null) return LibraryType.manga;
+  for (final library in libraries) {
+    if (library.id == libraryId) return library.type;
+  }
+  return LibraryType.manga;
+});
+
 final seriesForLibraryProvider = FutureProvider.autoDispose
     .family<List<SeriesDto>, int>((ref, libraryId) {
       return ref.watch(kavitaClientProvider).allSeriesForLibrary(libraryId);
@@ -159,8 +174,12 @@ class _SeriesGrid extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () =>
-              ref.refresh(seriesForLibraryProvider(libraryId).future),
+          // RefreshIndicator only waits on this future, it never catches it:
+          // a pull with the server down would raise an unhandled zone error.
+          // The screen already shows the failure through the provider.
+          onRefresh: () => ref
+              .refresh(seriesForLibraryProvider(libraryId).future)
+              .catchError((Object _) => const <SeriesDto>[]),
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, gutter),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
