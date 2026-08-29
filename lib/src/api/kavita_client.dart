@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'client_identity.dart';
 import 'models.dart';
 
 /// Thin hand-written client for the handful of Kavita endpoints the app uses.
@@ -12,6 +13,7 @@ class KavitaClient {
     required String token,
     required this._refreshToken,
     required this.apiKey,
+    this.identity = const ClientIdentity.unknown(),
     this.onTokensRefreshed,
     this.onSessionExpired,
     this.onReachabilityChanged,
@@ -32,6 +34,19 @@ class KavitaClient {
            connectTimeout: const Duration(seconds: 10),
          ),
        ) {
+    // Stamped per request rather than frozen into BaseOptions: part of the
+    // identity is the screen, which turns when the device does. The refresh
+    // instance gets it too — it is the one that replays a retried request.
+    for (final dio in [_dio, _refreshDio]) {
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.headers.addAll(identity.headers);
+            handler.next(options);
+          },
+        ),
+      );
+    }
     _dio.interceptors.add(
       // Not queued: reachability must not serialize concurrent responses.
       InterceptorsWrapper(
@@ -61,6 +76,9 @@ class KavitaClient {
 
   final String baseUrl;
   final String apiKey;
+
+  /// What this installation tells the server it is; sent on every request.
+  final ClientIdentity identity;
 
   /// Notified with the new (token, refreshToken) pair so the session can be
   /// persisted.
@@ -149,10 +167,12 @@ class KavitaClient {
     required String baseUrl,
     required String username,
     required String password,
+    ClientIdentity identity = const ClientIdentity.unknown(),
   }) async {
     final dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
+        headers: {...identity.headers},
         connectTimeout: const Duration(seconds: 10),
       ),
     );
@@ -264,6 +284,29 @@ class KavitaClient {
     return ChapterInfoDto.fromJson(res.data!);
   }
 
+  /// Marks one chapter read or unread.
+  ///
+  /// The pair `mark-multiple-read` / `mark-multiple-unread` rather than
+  /// `mark-chapter-read`: there is no single-chapter *unread* endpoint, and
+  /// these two take the same body, so the toggle is one shape instead of two.
+  /// `volumeIds` is sent empty on purpose — the server merges it with
+  /// `chapterIds` and reads it unconditionally. A volume with no chapter
+  /// breakdown is covered by its placeholder chapter, which is all it has.
+  Future<void> markChapterRead({
+    required int seriesId,
+    required int chapterId,
+    required bool read,
+  }) => _dio.post(
+    read ? '/api/Reader/mark-multiple-read' : '/api/Reader/mark-multiple-unread',
+    data: {
+      'seriesId': seriesId,
+      'volumeIds': const <int>[],
+      'chapterIds': [chapterId],
+      // Marking a row read by hand is not a reading session.
+      'generateReadingSession': false,
+    },
+  );
+
   Future<void> saveProgress({
     required int libraryId,
     required int seriesId,
@@ -300,8 +343,35 @@ class KavitaClient {
   }
 
   /// Headers to pass to image widgets — Kavita image endpoints accept the
-  /// JWT like any other endpoint.
-  Map<String, String> get imageHeaders => {'Authorization': 'Bearer $_token'};
+  /// JWT like any other endpoint. They carry the identity too: every
+  /// authenticated request refreshes the device's "last seen", and covers are
+  /// most of them.
+  Map<String, String> get imageHeaders => {
+    'Authorization': 'Bearer $_token',
+    ...identity.headers,
+  };
+
+  /// The devices Kavita has registered for the current user.
+  ///
+  /// Kavita registers (or refreshes) the calling device in middleware, before
+  /// the controller runs, so this call also creates the entry it returns.
+  /// Only exists since Kavita 0.9.1.
+  Future<List<ClientDeviceDto>> clientDevices() async {
+    final res = await _dio.get<List<dynamic>>('/api/Device/client/devices');
+    return res.data!
+        .map((e) => ClientDeviceDto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Sets the name Kavita shows for a registered device. Refused (403) for a
+  /// read-only account.
+  Future<void> renameClientDevice({
+    required int deviceId,
+    required String name,
+  }) => _dio.post(
+    '/api/Device/client/update-name',
+    data: {'deviceId': deviceId, 'name': name},
+  );
 
   String seriesCoverUrl(int seriesId) =>
       '$baseUrl/api/Image/series-cover?seriesId=$seriesId&apiKey=$apiKey';
@@ -314,10 +384,18 @@ class KavitaClient {
 
   /// Single source of truth for the reader-image query, so the URL used by
   /// image widgets and the one used by downloads cannot drift apart.
+  ///
+  /// `extractPdf` is what makes a PDF readable at all: without it Kavita
+  /// caches the file untouched and there is no page image to serve, so every
+  /// page 404s. With it the server rasterises the PDF into one image per page
+  /// and this endpoint answers exactly as it does for an archive. It is
+  /// harmless for every other format — Kavita only reads the flag on its
+  /// PDF/EPUB branch — and its own thumbnail endpoint passes it unconditionally.
   Map<String, dynamic> _readerImageQuery(int chapterId, int page) => {
     'chapterId': chapterId,
     'page': page,
     'apiKey': apiKey,
+    'extractPdf': true,
   };
 
   String readerImageUrl(int chapterId, int page) =>

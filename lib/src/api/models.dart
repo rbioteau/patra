@@ -24,19 +24,75 @@ class UserDto {
   );
 }
 
+/// Kavita's `LibraryType`. The values are the wire format, so they are pinned.
+///
+/// The type decides what a series is made of and what those parts are called:
+/// a comic has issues where a manga has chapters, and a book library has no
+/// chapter level at all. Kavita words its whole series page from this.
+enum LibraryType {
+  manga(0),
+  comic(1),
+  book(2),
+  image(3),
+  lightNovel(4),
+  comicVine(5);
+
+  const LibraryType(this.id);
+
+  final int id;
+
+  static LibraryType fromId(int? id) =>
+      LibraryType.values.firstWhere((t) => t.id == id, orElse: () => manga);
+
+  /// Comics count issues, not chapters.
+  bool get usesIssues => this == comic || this == comicVine;
+
+  /// Book libraries have no chapter level: a volume *is* the book.
+  bool get usesBooks => this == book || this == lightNovel;
+
+  /// Whether volumes and chapters without a volume read as one story.
+  ///
+  /// Kavita hides its Storyline tab for both comic types (an issue run is not
+  /// a storyline) and for book libraries, where volumes are the only unit.
+  bool get hasStoryline => this == manga || this == image;
+}
+
+/// Kavita's `MangaFormat`: what the files behind a series actually are.
+enum MangaFormat {
+  image(0),
+  archive(1),
+  unknown(2),
+  epub(3),
+  pdf(4);
+
+  const MangaFormat(this.id);
+
+  final int id;
+
+  static MangaFormat fromId(int? id) =>
+      MangaFormat.values.firstWhere((f) => f.id == id, orElse: () => unknown);
+
+  /// Whether our page reader can show it.
+  ///
+  /// A PDF can: Kavita rasterises it into one image per page on demand, and
+  /// the reader-image query asks it to. An EPUB cannot — it is reflowable
+  /// text, the server has no image path for it at all (`ReadingItemService
+  /// .Extract` does nothing for Epub), and it needs the `/api/Book` endpoints
+  /// and a reader of its own.
+  bool get isImageReadable => this != epub;
+}
+
 class LibraryDto {
   const LibraryDto({required this.id, required this.name, required this.type});
 
   final int id;
   final String name;
-
-  /// 0=Manga, 1=Comic, 2=Book, 3=Images, 4=LightNovel, 5=ComicVine
-  final int type;
+  final LibraryType type;
 
   factory LibraryDto.fromJson(Map<String, dynamic> json) => LibraryDto(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
-    type: json['type'] as int? ?? 0,
+    type: LibraryType.fromId(json['type'] as int?),
   );
 }
 
@@ -108,12 +164,13 @@ class VolumeDto {
     required this.chapters,
   });
 
-  /// Kavita sentinel volume numbers (Parser.LooseLeafVolumeNumber and
-  /// SpecialVolumeNumber): the pseudo-volumes holding chapters that belong to
-  /// no volume, and specials. Compared on the absolute value because the sign
-  /// has differed between Kavita versions — no real volume comes near 100000.
-  static const looseLeafNumber = 100000;
-  static const specialsNumber = 100001;
+  /// Kavita sentinel volume numbers, from `ParserConstants`: the pseudo-volumes
+  /// holding chapters that belong to no volume, and specials.
+  ///
+  /// The **sign is what tells them apart** — same magnitude, opposite signs —
+  /// so they must be compared exactly. No real volume comes near 100000.
+  static const looseLeafNumber = -100000;
+  static const specialsNumber = 100000;
 
   final int id;
   final String name;
@@ -122,8 +179,17 @@ class VolumeDto {
   final int pagesRead;
   final List<ChapterDto> chapters;
 
-  bool get isLooseLeaf => minNumber.abs() == looseLeafNumber;
-  bool get isSpecials => minNumber.abs() == specialsNumber;
+  VolumeDto withChapters(List<ChapterDto> chapters) => VolumeDto(
+    id: id,
+    name: name,
+    minNumber: minNumber,
+    pages: pages,
+    pagesRead: pagesRead,
+    chapters: chapters,
+  );
+
+  bool get isLooseLeaf => minNumber == looseLeafNumber;
+  bool get isSpecials => minNumber == specialsNumber;
 
   factory VolumeDto.fromJson(Map<String, dynamic> json) => VolumeDto(
     id: json['id'] as int,
@@ -147,12 +213,14 @@ class ChapterDto {
     required this.pages,
     required this.pagesRead,
     required this.isSpecial,
+    this.sortOrder = 0,
+    this.format = MangaFormat.unknown,
   });
 
   /// Kavita sentinel for the placeholder chapter of a volume that has no
-  /// chapter breakdown (Parser.DefaultChapterNumber): such a chapter
-  /// represents the whole volume. Sign-insensitive, as above.
-  static const defaultNumber = 100000;
+  /// chapter breakdown (`ParserConstants.DefaultChapterNumber`): such a chapter
+  /// represents the whole volume.
+  static const defaultNumber = -100000;
 
   final int id;
 
@@ -166,10 +234,29 @@ class ChapterDto {
   final int pagesRead;
   final bool isSpecial;
 
+  /// Kavita's own reading order, which is not the order of the JSON array:
+  /// the server sorts every list it builds on this.
+  final num sortOrder;
+
+  /// What the files are. Our reader only handles the image formats.
+  final MangaFormat format;
+
+  ChapterDto copyWith({int? pagesRead}) => ChapterDto(
+    id: id,
+    title: title,
+    titleName: titleName,
+    range: range,
+    minNumber: minNumber,
+    pages: pages,
+    pagesRead: pagesRead ?? this.pagesRead,
+    isSpecial: isSpecial,
+    sortOrder: sortOrder,
+    format: format,
+  );
+
   /// True for the placeholder chapter Kavita creates inside a volume with no
   /// chapter breakdown.
-  bool get isVolumePlaceholder =>
-      minNumber.abs() == defaultNumber && !isSpecial;
+  bool get isVolumePlaceholder => minNumber == defaultNumber && !isSpecial;
 
   factory ChapterDto.fromJson(Map<String, dynamic> json) => ChapterDto(
     id: json['id'] as int,
@@ -180,6 +267,8 @@ class ChapterDto {
     pages: json['pages'] as int? ?? 0,
     pagesRead: json['pagesRead'] as int? ?? 0,
     isSpecial: json['isSpecial'] as bool? ?? false,
+    sortOrder: json['sortOrder'] as num? ?? 0,
+    format: MangaFormat.fromId(json['format'] as int?),
   );
 }
 
@@ -224,6 +313,8 @@ class ChapterInfoDto {
     required this.pages,
     required this.seriesName,
     required this.title,
+    this.seriesFormat = MangaFormat.unknown,
+    this.libraryType = LibraryType.manga,
     this.pageDimensions = const {},
   });
 
@@ -233,6 +324,11 @@ class ChapterInfoDto {
   final int pages;
   final String seriesName;
   final String title;
+
+  /// The format of the whole series: a series is one format in Kavita, and
+  /// this is the only place the reader can learn it before opening a page.
+  final MangaFormat seriesFormat;
+  final LibraryType libraryType;
 
   /// Keyed by the page number the server reported, which may be 0- or
   /// 1-based depending on the source file — [aspectRatioFor] tries both.
@@ -252,6 +348,8 @@ class ChapterInfoDto {
     pages: json['pages'] as int? ?? 0,
     seriesName: json['seriesName'] as String? ?? '',
     title: json['title'] as String? ?? '',
+    seriesFormat: MangaFormat.fromId(json['seriesFormat'] as int?),
+    libraryType: LibraryType.fromId(json['libraryType'] as int?),
     pageDimensions: {
       for (final dimension
           in (json['pageDimensions'] as List<dynamic>? ?? [])
@@ -260,4 +358,28 @@ class ChapterInfoDto {
         dimension.pageNumber: dimension,
     },
   );
+}
+
+/// A device Kavita has registered for the current user, as returned by
+/// `GET /api/Device/client/devices`. Only the three fields the rename flow
+/// needs are mapped.
+class ClientDeviceDto {
+  const ClientDeviceDto({
+    required this.id,
+    required this.friendlyName,
+    required this.uiFingerprint,
+  });
+
+  final int id;
+  final String friendlyName;
+
+  /// The `X-Device-Id` the device sent, or empty for clients that send none.
+  final String uiFingerprint;
+
+  factory ClientDeviceDto.fromJson(Map<String, dynamic> json) =>
+      ClientDeviceDto(
+        id: json['id'] as int? ?? 0,
+        friendlyName: json['friendlyName'] as String? ?? '',
+        uiFingerprint: json['uiFingerprint'] as String? ?? '',
+      );
 }

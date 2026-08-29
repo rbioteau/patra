@@ -118,6 +118,39 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get issuesTitle => 'Numéros';
+
+  @override
+  String issueLabel(String range) {
+    return 'Numéro #$range';
+  }
+
+  @override
+  String get booksTitle => 'Livres';
+
+  @override
+  String bookLabel(String name) {
+    return 'Livre $name';
+  }
+
+  @override
+  String get storylineTitle => 'Arc narratif';
+
+  @override
+  String get pdfPreparing => 'Préparation du PDF';
+
+  @override
+  String get pdfPreparingBody =>
+      'Le serveur découpe ce PDF en pages. Seule la première ouverture attend.';
+
+  @override
+  String get formatNotSupported => 'Format pas encore pris en charge';
+
+  @override
+  String get formatNotSupportedBody =>
+      'Cette série est un EPUB. Verso lit les formats image et les PDF pour l\'instant ; la prise en charge de l\'EPUB arrive.';
+
+  @override
   String seriesChapterCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -149,6 +182,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String seriesContinue(String chapter) {
     return 'Reprendre — ch. $chapter';
   }
+
+  @override
+  String seriesContinueIssue(String issue) {
+    return 'Reprendre — #$issue';
+  }
+
+  @override
+  String seriesContinueBook(String book) {
+    return 'Reprendre — livre $book';
+  }
+
+  @override
+  String get seriesContinuePlain => 'Reprendre';
 
   @override
   String get seriesStartReading => 'Commencer la lecture';
@@ -189,7 +235,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get readingDirectionRtl => 'De droite à gauche';
 
   @override
-  String get readingModeWebtoon => 'Webtoon (vertical)';
+  String get readingModeWebtoon => 'Vertical';
 
   @override
   String get savePill => 'Enregistrer';
@@ -213,6 +259,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String storageUsed(String size) {
     return '$size sur cet appareil';
   }
+
+  @override
+  String get markRead => 'Marquer lu';
+
+  @override
+  String get markUnread => 'Marquer non lu';
 
   @override
   String get removeDownload => 'Supprimer';
@@ -241,6 +293,13 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get clearCache => 'Vider';
+
+  @override
+  String get imageCacheLimit => 'Taille maximale';
+
+  @override
+  String get imageCacheLimitCaption =>
+      'Une fois plein, les images les plus anciennes sont supprimées en premier.';
 
   @override
   String downloadedChapters(int count) {

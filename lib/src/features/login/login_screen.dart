@@ -66,7 +66,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
       // Redirection handled by the router.
     } catch (e) {
-      setState(() => _error = l10n.loginFailed('$e'));
+      // Guarded like the finally below: login has a 10s connect timeout, and
+      // anything that tears the route down while it is outstanding would
+      // otherwise land a setState on a disposed State.
+      if (mounted) setState(() => _error = l10n.loginFailed('$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

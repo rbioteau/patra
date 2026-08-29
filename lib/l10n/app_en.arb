@@ -72,10 +72,52 @@
   },
   "chapterLabel": "Chapter {range}",
   "@chapterLabel": {
-    "description": "Fallback chapter list label when the chapter has no title; range is Kavita's chapter number or number range, e.g. '12' or '12-14'",
+    "description": "Chapter list label in a manga or image library; range is Kavita's chapter number or number range, e.g. '12' or '12-14'",
     "placeholders": {
       "range": {"type": "String"}
     }
+  },
+  "issuesTitle": "Issues",
+  "@issuesTitle": {
+    "description": "Section header replacing Chapters in a comic library, where the unit is the issue"
+  },
+  "issueLabel": "Issue #{range}",
+  "@issueLabel": {
+    "description": "Chapter list label in a comic library; range is Kavita's number or number range",
+    "placeholders": {
+      "range": {"type": "String"}
+    }
+  },
+  "booksTitle": "Books",
+  "@booksTitle": {
+    "description": "Section header replacing Volumes and Chapters in a book or light novel library, where a volume is a book"
+  },
+  "bookLabel": "Book {name}",
+  "@bookLabel": {
+    "description": "Volume or chapter label in a book or light novel library; name is Kavita's number or title",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "storylineTitle": "Storyline",
+  "@storylineTitle": {
+    "description": "Section header for volumes and volumeless chapters read as one story, in reading order. Kavita's Storyline tab"
+  },
+  "pdfPreparing": "Preparing the PDF",
+  "@pdfPreparing": {
+    "description": "Shown while the server rasterises a PDF into page images on its first open"
+  },
+  "pdfPreparingBody": "The server is turning this PDF into pages. Only the first open waits.",
+  "@pdfPreparingBody": {
+    "description": "Explanation under the PDF preparing indicator"
+  },
+  "formatNotSupported": "Format not supported yet",
+  "@formatNotSupported": {
+    "description": "Shown on a chapter the image reader cannot open (EPUB, PDF)"
+  },
+  "formatNotSupportedBody": "This series is an EPUB. Verso reads image formats and PDFs for now; EPUB support is on the way.",
+  "@formatNotSupportedBody": {
+    "description": "Explanation shown in place of the reader for a format it cannot open"
   },
   "seriesChapterCount": "{count, plural, =0{No chapters} =1{1 chapter} other{{count} chapters}}",
   "@seriesChapterCount": {
@@ -104,6 +146,24 @@
     "placeholders": {
       "chapter": {"type": "String"}
     }
+  },
+  "seriesContinueIssue": "Continue — #{issue}",
+  "@seriesContinueIssue": {
+    "description": "Hero button in a comic library, where a chapter is an issue; issue is its number or range",
+    "placeholders": {
+      "issue": {"type": "String"}
+    }
+  },
+  "seriesContinueBook": "Continue — Book {book}",
+  "@seriesContinueBook": {
+    "description": "Hero button in a book or light novel library, where the unit is the book; book is its number or name",
+    "placeholders": {
+      "book": {"type": "String"}
+    }
+  },
+  "seriesContinuePlain": "Continue",
+  "@seriesContinuePlain": {
+    "description": "Hero button when the thing to resume has no number to show — a special, or a lone book. Its title is free text and would stretch the button, so the button says only what it does"
   },
   "seriesStartReading": "Start reading",
   "seriesReadAgain": "Read again",
@@ -153,9 +213,9 @@
   "@readingDirectionRtl": {
     "description": "Full phrase, never an acronym like RTL; the manga direction"
   },
-  "readingModeWebtoon": "Webtoon (vertical)",
+  "readingModeWebtoon": "Vertical",
   "@readingModeWebtoon": {
-    "description": "Continuous vertical scrolling mode"
+    "description": "Continuous vertical scrolling direction, sits next to the two page-turning ones"
   },
   "savePill": "Save",
   "@savePill": {
@@ -181,6 +241,14 @@
       "size": {"type": "String"}
     }
   },
+  "markRead": "Mark read",
+  "@markRead": {
+    "description": "Swipe action on a chapter or volume row that marks it read on the server"
+  },
+  "markUnread": "Mark unread",
+  "@markUnread": {
+    "description": "Swipe action that undoes markRead, shown on a row already read"
+  },
   "removeDownload": "Remove",
   "removeDownloadConfirm": "Remove the saved copy of {title}?",
   "@removeDownloadConfirm": {
@@ -194,6 +262,8 @@
   "imageCacheLabel": "Image cache",
   "imageCacheCaption": "Covers and pages read online. Clearing it never touches saved chapters.",
   "clearCache": "Clear",
+  "imageCacheLimit": "Cache limit",
+  "imageCacheLimitCaption": "Once full, the oldest images are removed first.",
   "downloadedChapters": "{count, plural, =0{No saved chapter} =1{1 saved chapter} other{{count} saved chapters}}",
   "@downloadedChapters": {
     "placeholders": {

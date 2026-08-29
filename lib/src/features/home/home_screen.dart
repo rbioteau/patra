@@ -19,13 +19,12 @@ final onDeckProvider = FutureProvider.autoDispose<List<SeriesDto>>(
 );
 
 /// Library type → icon, matching Kavita's own taxonomy.
-const _libraryIcons = {
-  0: Icons.menu_book, // Manga
-  1: Icons.bolt, // Comic
-  2: Icons.auto_stories, // Book
-  3: Icons.image_outlined, // Images
-  4: Icons.article_outlined, // Light novel
-  5: Icons.bolt, // ComicVine
+IconData _libraryIcon(LibraryType type) => switch (type) {
+  LibraryType.manga => Icons.menu_book,
+  LibraryType.comic || LibraryType.comicVine => Icons.bolt,
+  LibraryType.book => Icons.auto_stories,
+  LibraryType.image => Icons.image_outlined,
+  LibraryType.lightNovel => Icons.article_outlined,
 };
 
 class HomeScreen extends ConsumerWidget {
@@ -284,11 +283,7 @@ class _LibraryCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  _libraryIcons[library.type] ?? Icons.folder_outlined,
-                  size: 18,
-                  color: versoAccent,
-                ),
+                Icon(_libraryIcon(library.type), size: 18, color: versoAccent),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
