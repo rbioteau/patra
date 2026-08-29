@@ -57,6 +57,17 @@ void main() {
     expect(recent.existsSync(), isTrue);
   });
 
+  test('the sweep is recursive, and directories are not sized', () async {
+    Directory('${dir.path}/sub').createSync();
+    final nested = write('sub/old', 100, ageInDays: 30);
+    final flat = write('recent', 100, ageInDays: 1);
+
+    expect(await store.size(), 200);
+    expect(await store.trim(100), 100);
+    expect(nested.existsSync(), isFalse);
+    expect(flat.existsSync(), isTrue);
+  });
+
   test('a missing cache directory is not an error', () async {
     dir.deleteSync(recursive: true);
     expect(await store.trim(100), 0);
