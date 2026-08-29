@@ -162,45 +162,40 @@ jobs:
           PLIST
           plutil -lint "$RUNNER_TEMP/ExportOptions.plist"
 
-      - name: Archive and export
+      - name: Sign the Runner target and build the IPA
         if: steps.signing.outputs.available == 'true'
         env:
           TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           set -euo pipefail
-          # App Store Connect refuses a build number it has already seen, so
-          # pubspec's frozen "+1" cannot be the one that ships. run_number only
-          # ever grows.
-          # --no-codesign despite this being the signed path, and it is load
-          # bearing: the flutter tool looks for a *development* identity before
-          # it honours --config-only (ios/mac.dart), and this runner only ever
-          # holds a distribution certificate, so the check can never pass. The
-          # flag cannot weaken the archive below — it only adds
-          # CODE_SIGNING_ALLOWED=NO to an xcodebuild invocation that
-          # --config-only returns before ever making.
-          flutter build ios --release --config-only --no-codesign \
-            --build-number="$GITHUB_RUN_NUMBER"
+          # Release.xcconfig is the base configuration of the Runner *target*,
+          # and that is the whole point of writing signing here. On xcodebuild's
+          # command line the same settings reach every target in the build,
+          # including the Swift Package Manager packages Flutter now uses for
+          # plugins, and those fail the archive outright with "does not support
+          # provisioning profiles". Being a target xcconfig it also outranks the
+          # project-level CODE_SIGN_IDENTITY = "iPhone Developer" that the
+          # Flutter template ships, which is a development identity TestFlight
+          # rejects. Both spellings of the identity are set because the one it
+          # has to beat is written with an sdk condition.
+          cat >> ios/Flutter/Release.xcconfig <<XCCONFIG
 
-          # Signing is passed on the command line rather than committed to the
-          # Xcode project: it keeps the team ID in a secret, and command-line
-          # settings are the only ones that outrank the project's inherited
-          # CODE_SIGN_IDENTITY = "iPhone Developer", which would otherwise pick
-          # a development identity that TestFlight rejects.
-          xcodebuild archive \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Patra.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+          CODE_SIGN_STYLE = Manual
+          DEVELOPMENT_TEAM = $TEAM_ID
+          CODE_SIGN_IDENTITY = Apple Distribution
+          CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER = $PROFILE_NAME
+          XCCONFIG
 
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Patra.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/ipa"
+          # With DEVELOPMENT_TEAM now in the build settings the flutter tool
+          # skips its hunt for a *development* certificate (code_signing.dart),
+          # which this runner could never satisfy, so the supported one-shot
+          # command works and there is no bare xcodebuild to keep in step.
+          # App Store Connect refuses a build number it has already seen, and
+          # pubspec's "+1" never moves.
+          flutter build ipa --release \
+            --build-number="$GITHUB_RUN_NUMBER" \
+            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Upload to TestFlight
         if: steps.signing.outputs.available == 'true'
@@ -215,7 +210,7 @@ jobs:
           mkdir -p "$HOME/.appstoreconnect/private_keys"
           echo "$ASC_API_KEY_P8" | base64 --decode \
             > "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
-          ipa=$(ls "$RUNNER_TEMP"/ipa/*.ipa)
+          ipa=$(ls build/ios/ipa/*.ipa)
           xcrun altool --upload-app --type ios --file "$ipa" \
             --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 
