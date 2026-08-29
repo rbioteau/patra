@@ -453,6 +453,29 @@ void main() {
 
       expect(find.text('Marquer lu'), findsOneWidget);
     });
+
+    testWidgets('an open pane is a drawer, not half a tablet row', (
+      tester,
+    ) async {
+      // An iPad in portrait: 820x1180 logical points.
+      tester.view.physicalSize = const Size(1640, 2360);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, series(0));
+
+      final before = tester.getTopLeft(find.text('Chapter 1')).dx;
+      await tester.drag(find.text('Chapter 1'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Mark read'), findsOneWidget);
+
+      // Sized as a share of the row, the pane would carry the row a quarter
+      // of the screen away and take the cover and the title with it — the
+      // swipe would hide the very thing it is about to act on.
+      final shift = tester.getTopLeft(find.text('Chapter 1')).dx - before;
+      expect(shift, greaterThan(0));
+      expect(shift, lessThan(160));
+    });
   });
 
   group('the row does not wait for the server', () {

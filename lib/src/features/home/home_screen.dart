@@ -123,6 +123,10 @@ class _Shelf extends ConsumerWidget {
 
   static const _tileWidth = 112.0;
 
+  /// A shelf runs edge to edge on any screen — that is what a shelf is — so a
+  /// tablet spends its width on bigger covers rather than on margins.
+  static const _tabletTileWidth = 152.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (series.hasValue && series.requireValue.isEmpty) {
@@ -132,6 +136,7 @@ class _Shelf extends ConsumerWidget {
 
     final client = series.hasValue ? ref.watch(kavitaClientProvider) : null;
     final items = series.value ?? const <SeriesDto>[];
+    final tileWidth = isTabletLayout(context) ? _tabletTileWidth : _tileWidth;
 
     return Padding(
       padding: const EdgeInsets.only(top: sectionGap),
@@ -144,7 +149,7 @@ class _Shelf extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: _tileWidth / coverAspectRatio + 44,
+            height: tileWidth / coverAspectRatio + 44,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: gutter),
@@ -152,9 +157,9 @@ class _Shelf extends ConsumerWidget {
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, index) {
                 if (client == null) {
-                  return const SizedBox(
-                    width: _tileWidth,
-                    child: Column(
+                  return SizedBox(
+                    width: tileWidth,
+                    child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         AspectRatio(
@@ -172,7 +177,7 @@ class _Shelf extends ConsumerWidget {
                     ? s.pagesRead / s.pages
                     : 0.0;
                 return SizedBox(
-                  width: _tileWidth,
+                  width: tileWidth,
                   child: CoverTile(
                     url: client.seriesCoverUrl(s.id),
                     headers: client.imageHeaders,
@@ -234,21 +239,30 @@ class _LibrariesSection extends ConsumerWidget {
                       Expanded(child: Skeleton(height: 64, radius: radiusCard)),
                     ],
                   )
-                : Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final library in items)
-                        _LibraryCard(
-                          library: library,
-                          onTap: () {
-                            ref
-                                .read(selectedLibraryProvider.notifier)
-                                .select(library.id);
-                            context.go('/library');
-                          },
-                        ),
-                    ],
+                : LayoutBuilder(
+                    // A card holds a name and an icon: two of them across a
+                    // tablet are two long empty bars. The row gains cards
+                    // instead, and the cards keep the size they are drawn at.
+                    builder: (context, constraints) {
+                      final width = _cardWidth(constraints.maxWidth);
+                      return Wrap(
+                        spacing: _cardSpacing,
+                        runSpacing: _cardSpacing,
+                        children: [
+                          for (final library in items)
+                            _LibraryCard(
+                              library: library,
+                              width: width,
+                              onTap: () {
+                                ref
+                                    .read(selectedLibraryProvider.notifier)
+                                    .select(library.id);
+                                context.go('/library');
+                              },
+                            ),
+                        ],
+                      );
+                    },
                   ),
           ),
         ],
@@ -257,15 +271,33 @@ class _LibrariesSection extends ConsumerWidget {
   }
 }
 
+const _cardSpacing = 12.0;
+
+/// The width a library card is drawn at, past which the row takes another
+/// card rather than stretching the ones it has. Two across on a phone, as the
+/// handoff draws it, whatever the phone's width.
+const _cardMaxWidth = 200.0;
+
+double _cardWidth(double available) {
+  final columns = ((available + _cardSpacing) / (_cardMaxWidth + _cardSpacing))
+      .ceil()
+      .clamp(2, 8);
+  return (available - _cardSpacing * (columns - 1)) / columns;
+}
+
 class _LibraryCard extends StatelessWidget {
-  const _LibraryCard({required this.library, required this.onTap});
+  const _LibraryCard({
+    required this.library,
+    required this.width,
+    required this.onTap,
+  });
 
   final LibraryDto library;
+  final double width;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final width = (MediaQuery.sizeOf(context).width - gutter * 2 - 12) / 2;
     return SizedBox(
       width: width,
       child: Material(

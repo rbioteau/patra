@@ -58,12 +58,22 @@ class DownloadsScreen extends ConsumerWidget {
                 ),
               );
             }
-            return ListView(
-              padding: const EdgeInsets.only(bottom: sectionGap),
-              children: [
-                _StorageMeter(bytes: state.totalBytes, chapters: saved.length),
-                for (final chapter in saved) _SavedRow(chapter: chapter),
-              ],
+            // A list of rows is a column, not a canvas: past
+            // `contentMaxWidth` the width goes to the margins.
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: contentMaxWidth),
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: sectionGap),
+                  children: [
+                    _StorageMeter(
+                      bytes: state.totalBytes,
+                      chapters: saved.length,
+                    ),
+                    for (final chapter in saved) _SavedRow(chapter: chapter),
+                  ],
+                ),
+              ),
             );
           },
         ),
@@ -137,6 +147,8 @@ class _SavedRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final dir = ref.watch(chapterDirProvider(chapter.chapterId)).value;
+    // The same row the series screen shows, and it grows the same way.
+    final tablet = isTabletLayout(context);
 
     return InkWell(
       // Resume where the reader left off: opening at page 0 would post
@@ -146,13 +158,16 @@ class _SavedRow extends ConsumerWidget {
         '${chapter.isRead ? '' : '?page=${chapter.pagesRead}'}',
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: gutter,
+          vertical: tablet ? 9 : 6,
+        ),
         child: Row(
           children: [
             // The first stored page doubles as the thumbnail: no server needed.
             SizedBox(
-              width: 46,
-              height: 66,
+              width: tablet ? 62 : 46,
+              height: tablet ? 89 : 66,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radiusThumb),
                 child: _LocalThumb(dir: dir),
@@ -170,7 +185,7 @@ class _SavedRow extends ConsumerWidget {
                         : chapter.seriesName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: PatraText.rowTitle(),
+                    style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
                   ),
                   if (chapter.seriesName.isNotEmpty &&
                       chapter.title.isNotEmpty) ...[
@@ -179,7 +194,7 @@ class _SavedRow extends ConsumerWidget {
                       chapter.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: PatraText.metadata(),
+                      style: PatraText.metadata(size: tablet ? 12 : 11),
                     ),
                   ],
                   const SizedBox(height: 3),
@@ -189,7 +204,7 @@ class _SavedRow extends ConsumerWidget {
                         child: Text(
                           '${l10n.pageCount(chapter.pages)} · '
                           '${formatBytes(l10n, chapter.bytes)}',
-                          style: PatraText.metadata(),
+                          style: PatraText.metadata(size: tablet ? 12 : 11),
                         ),
                       ),
                       if (chapter.isRead) ...[

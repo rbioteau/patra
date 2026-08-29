@@ -148,6 +148,27 @@ class _LibraryPills extends StatelessWidget {
   }
 }
 
+/// The width a cover is drawn at in the grid, past which the grid takes
+/// another column rather than blowing the covers up. Three across on a phone,
+/// as the handoff draws it, whatever the phone's width.
+const _maxTileWidth = 150.0;
+const _gridSpacing = 12.0;
+
+int _gridColumns(double width) {
+  final available = width - gutter * 2;
+  return ((available + _gridSpacing) / (_maxTileWidth + _gridSpacing))
+      .ceil()
+      .clamp(3, 10);
+}
+
+SliverGridDelegate _gridDelegate(double width) =>
+    SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: _gridColumns(width),
+      childAspectRatio: 0.5,
+      crossAxisSpacing: _gridSpacing,
+      mainAxisSpacing: 18,
+    );
+
 class _SeriesGrid extends ConsumerWidget {
   const _SeriesGrid({required this.libraryId});
 
@@ -182,12 +203,7 @@ class _SeriesGrid extends ConsumerWidget {
               .catchError((Object _) => const <SeriesDto>[]),
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, gutter),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 0.5,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 18,
-            ),
+            gridDelegate: _gridDelegate(MediaQuery.sizeOf(context).width),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final s = items[index];
@@ -228,13 +244,10 @@ class _LibraryGridSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, gutter),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.5,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 18,
-      ),
-      itemCount: 9,
+      gridDelegate: _gridDelegate(MediaQuery.sizeOf(context).width),
+      // Three rows of however many columns the grid has, so the wait is shaped
+      // like the screen that follows it.
+      itemCount: _gridColumns(MediaQuery.sizeOf(context).width) * 3,
       itemBuilder: (context, index) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

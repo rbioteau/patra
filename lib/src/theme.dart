@@ -37,6 +37,21 @@ const minHitTarget = 44.0;
 /// Covers are always 2:3.
 const coverAspectRatio = 2 / 3;
 
+/// The Material tablet breakpoint, asked of the *shortest* side so a phone
+/// held in landscape is still a phone — the same question `ClientMetrics`
+/// answers when it tells Kavita what kind of device this is.
+const tabletBreakpoint = 600.0;
+
+/// Where a column of rows stops growing. Past this the parts of a row drift
+/// apart — cover against one edge, save pill against the other, a gulf in
+/// between — so the extra width is spent on the margins instead.
+const contentMaxWidth = 680.0;
+
+/// True where the screen is a tablet's, and the phone-sized furniture of the
+/// handoff has room to grow.
+bool isTabletLayout(BuildContext context) =>
+    MediaQuery.sizeOf(context).shortestSide >= tabletBreakpoint;
+
 /// Text styles that the Material text theme cannot express on its own.
 abstract final class PatraText {
   /// Titles of works, wordmark, reader page numbers — the only serif uses.
@@ -55,11 +70,12 @@ abstract final class PatraText {
     color: patraTextMuted,
   );
 
-  static TextStyle rowTitle({Color? color}) => GoogleFonts.spaceGrotesk(
-    fontSize: 13.5,
-    fontWeight: FontWeight.w600,
-    color: color ?? patraText,
-  );
+  static TextStyle rowTitle({Color? color, double size = 13.5}) =>
+      GoogleFonts.spaceGrotesk(
+        fontSize: size,
+        fontWeight: FontWeight.w600,
+        color: color ?? patraText,
+      );
 
   static TextStyle body({Color? color}) =>
       GoogleFonts.spaceGrotesk(fontSize: 14, color: color ?? patraText);

@@ -193,53 +193,61 @@ class SeriesDetailScreen extends ConsumerWidget {
       body: SlidableAutoCloseBehavior(
         child: SafeArea(
           top: false,
-          // The hero renders as soon as the cover URL is known, so the chapter
-          // list loading underneath never blocks it.
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: sectionGap),
-            children: [
-              const OfflineBanner(),
-              _SeriesHero(
-                seriesId: seriesId,
-                seriesName: seriesName,
-                type: type,
-                volumes: volumes.value,
-                onRead: (chapter) => _read(context, ref, chapter),
-              ),
-              ...switch (volumes) {
-                AsyncData(:final value) => _buildSections(
-                  context,
-                  ref,
-                  client,
-                  l10n,
-                  type,
-                  value,
-                ),
-                AsyncError() => [
-                  Padding(
-                    padding: const EdgeInsets.all(gutter),
-                    child: Column(
-                      children: [
-                        Text(
-                          ref.watch(offlineProvider)
-                              ? l10n.offlineBanner
-                              : l10n.serverUnreachable,
-                          textAlign: TextAlign.center,
-                          style: PatraText.body(color: patraTextMuted),
-                        ),
-                        const SizedBox(height: 16),
-                        OutlinedButton(
-                          onPressed: () =>
-                              ref.invalidate(volumesProvider(seriesId)),
-                          child: Text(l10n.retry),
-                        ),
-                      ],
-                    ),
+          // The rows are a column, not a canvas: on a tablet the width past
+          // `contentMaxWidth` goes to the margins rather than stretching every
+          // row across the screen.
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: contentMaxWidth),
+              // The hero renders as soon as the cover URL is known, so the
+              // chapter list loading underneath never blocks it.
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: sectionGap),
+                children: [
+                  const OfflineBanner(),
+                  _SeriesHero(
+                    seriesId: seriesId,
+                    seriesName: seriesName,
+                    type: type,
+                    volumes: volumes.value,
+                    onRead: (chapter) => _read(context, ref, chapter),
                   ),
+                  ...switch (volumes) {
+                    AsyncData(:final value) => _buildSections(
+                      context,
+                      ref,
+                      client,
+                      l10n,
+                      type,
+                      value,
+                    ),
+                    AsyncError() => [
+                      Padding(
+                        padding: const EdgeInsets.all(gutter),
+                        child: Column(
+                          children: [
+                            Text(
+                              ref.watch(offlineProvider)
+                                  ? l10n.offlineBanner
+                                  : l10n.serverUnreachable,
+                              textAlign: TextAlign.center,
+                              style: PatraText.body(color: patraTextMuted),
+                            ),
+                            const SizedBox(height: 16),
+                            OutlinedButton(
+                              onPressed: () =>
+                                  ref.invalidate(volumesProvider(seriesId)),
+                              child: Text(l10n.retry),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    _ => [const _RowsSkeleton()],
+                  },
                 ],
-                _ => [const _RowsSkeleton()],
-              },
-            ],
+              ),
+            ),
           ),
         ),
       ),
@@ -359,6 +367,14 @@ class _SeriesHero extends ConsumerWidget {
   static const _coverWidth = 124.0;
   static const _coverHeight = 182.0;
 
+  /// The same hero, given a tablet's room: the cover keeps its proportions.
+  static const _tabletCoverWidth = 160.0;
+  static const _tabletCoverHeight = 235.0;
+
+  /// The action button says two or three words. Let it fill a tablet's hero
+  /// and it stops reading as a button at all — it becomes a banner.
+  static const _actionMaxWidth = 280.0;
+
   /// The chapter the button opens: the first one not finished, else the first.
   ({_Entry entry, bool started, bool allRead})? _target() {
     final entries = volumes == null ? null : _orderedChapters(volumes!);
@@ -412,6 +428,9 @@ class _SeriesHero extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final tablet = isTabletLayout(context);
+    final coverWidth = tablet ? _tabletCoverWidth : _coverWidth;
+    final coverHeight = tablet ? _tabletCoverHeight : _coverHeight;
     final client = ref.watch(kavitaClientProvider);
     final series = ref.watch(seriesProvider(seriesId)).value;
     final metadata = ref.watch(seriesMetadataProvider(seriesId)).value;
@@ -455,8 +474,8 @@ class _SeriesHero extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: _coverWidth,
-            height: _coverHeight,
+            width: coverWidth,
+            height: coverHeight,
             child: CoverImage(
               url: client.seriesCoverUrl(seriesId),
               headers: client.imageHeaders,
@@ -468,7 +487,7 @@ class _SeriesHero extends ConsumerWidget {
           const SizedBox(width: 16),
           Expanded(
             child: SizedBox(
-              height: _coverHeight,
+              height: coverHeight,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -477,7 +496,7 @@ class _SeriesHero extends ConsumerWidget {
                     seriesName,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: PatraText.serifTitle(size: 21),
+                    style: PatraText.serifTitle(size: tablet ? 25 : 21),
                   ),
                   const SizedBox(height: 6),
                   if (credits.isNotEmpty)
@@ -495,21 +514,26 @@ class _SeriesHero extends ConsumerWidget {
                   else
                     const Skeleton(height: 11, width: 110),
                   const SizedBox(height: 14),
-                  SizedBox(
-                    height: 44,
-                    width: double.infinity,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(44),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      onPressed: target == null
-                          ? null
-                          : () => onRead(target.entry.chapter),
-                      child: Text(
-                        label ?? l10n.seriesStartReading,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _actionMaxWidth,
+                    ),
+                    child: SizedBox(
+                      height: 44,
+                      width: double.infinity,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                        onPressed: target == null
+                            ? null
+                            : () => onRead(target.entry.chapter),
+                        child: Text(
+                          label ?? l10n.seriesStartReading,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
@@ -549,12 +573,33 @@ class _ChapterRow extends ConsumerWidget {
   static const _coverWidth = 46.0;
   static const _coverHeight = 66.0;
 
+  /// The same row, given a tablet's room: a 46pt cover reads as a stamp on a
+  /// screen this size, and the row it anchors as a hairline.
+  static const _tabletCoverWidth = 62.0;
+  static const _tabletCoverHeight = 89.0;
+
+  /// The swipe panes are sized in points, not in a share of the row.
+  ///
+  /// A ratio that gives a phone a sensible drawer slides a tablet's row a
+  /// third of 820pt off screen, taking the cover and the title with it — so
+  /// the swipe hides the very thing it is about to act on. These are the
+  /// widths the ratios used to come to on a phone; `_paneRatio` turns them
+  /// back into a ratio against whatever width the row actually got.
+  static const _markPaneWidth = 116.0;
+  static const _removePaneWidth = 94.0;
+
+  /// Never wider than a third of the row (a narrow phone), never so narrow
+  /// that the action's own label has nowhere to sit.
+  static double _paneRatio(double target, double available) =>
+      available <= 0 ? .3 : (target / available).clamp(.15, .34);
+
   String _label(AppLocalizations l10n) =>
       label ?? type.chapterTitle(l10n, chapter);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final tablet = isTabletLayout(context);
     final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
     final inProgress = chapter.pagesRead > 0 && !read;
     final progress = inProgress && chapter.pages > 0
@@ -583,7 +628,7 @@ class _ChapterRow extends ConsumerWidget {
 
     final row = Container(
       // Rows are separated by a hairline, not by whitespace.
-      padding: const EdgeInsets.symmetric(vertical: 11),
+      padding: EdgeInsets.symmetric(vertical: tablet ? 14 : 11),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Colors.white.withValues(alpha: .06)),
@@ -592,8 +637,8 @@ class _ChapterRow extends ConsumerWidget {
       child: Row(
         children: [
           SizedBox(
-            width: _coverWidth,
-            height: _coverHeight,
+            width: tablet ? _tabletCoverWidth : _coverWidth,
+            height: tablet ? _tabletCoverHeight : _coverHeight,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -656,6 +701,7 @@ class _ChapterRow extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: PatraText.rowTitle(
                           color: read ? patraTextMuted : patraText,
+                          size: tablet ? 15 : 13.5,
                         ),
                       ),
                     ),
@@ -670,7 +716,7 @@ class _ChapterRow extends ConsumerWidget {
                   inProgress
                       ? l10n.pageProgress(chapter.pagesRead, chapter.pages)
                       : l10n.pageCount(chapter.pages),
-                  style: PatraText.metadata(),
+                  style: PatraText.metadata(size: tablet ? 12 : 11),
                 ),
                 if (!readable) ...[
                   const SizedBox(height: 3),
@@ -740,49 +786,54 @@ class _ChapterRow extends ConsumerWidget {
     // which is exactly when saying so by hand is worth something.
     final markable = !offline;
     if (!saved && !markable) return tile;
-    return Slidable(
-      key: ValueKey(chapter.id),
-      groupTag: 'chapters',
-      // Progress on the leading edge, destruction on the trailing one: a
-      // swipe that reaches for one can never land on the other.
-      startActionPane: markable
-          ? ActionPane(
-              motion: const DrawerMotion(),
-              extentRatio: 0.3,
-              children: [
-                SlidableAction(
-                  onPressed: (_) => _setRead(ref, read: !read),
-                  // Reading progress is the accent's job, here as everywhere.
-                  backgroundColor: patraAccent.withValues(alpha: .16),
-                  foregroundColor: patraAccent,
-                  icon: read ? Icons.remove_done : Icons.done_all,
-                  label: read ? l10n.markUnread : l10n.markRead,
-                ),
-              ],
-            )
-          : null,
-      endActionPane: saved
-          ? ActionPane(
-              motion: const DrawerMotion(),
-              extentRatio: 0.24,
-              children: [
-                SlidableAction(
-                  onPressed: (actionContext) async {
-                    if (await _confirmRemove(actionContext, l10n)) {
-                      await ref
-                          .read(downloadsProvider.notifier)
-                          .remove(chapter.id);
-                    }
-                  },
-                  backgroundColor: patraDanger.withValues(alpha: .16),
-                  foregroundColor: patraDanger,
-                  icon: Icons.delete_outline,
-                  label: l10n.removeDownload,
-                ),
-              ],
-            )
-          : null,
-      child: tile,
+    return LayoutBuilder(
+      // The panes are asked for as a ratio, so the row has to be measured
+      // before they can be given a width that means the same thing on every
+      // screen.
+      builder: (context, constraints) => Slidable(
+        key: ValueKey(chapter.id),
+        groupTag: 'chapters',
+        // Progress on the leading edge, destruction on the trailing one: a
+        // swipe that reaches for one can never land on the other.
+        startActionPane: markable
+            ? ActionPane(
+                motion: const DrawerMotion(),
+                extentRatio: _paneRatio(_markPaneWidth, constraints.maxWidth),
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _setRead(ref, read: !read),
+                    // Reading progress is the accent's job, here as everywhere.
+                    backgroundColor: patraAccent.withValues(alpha: .16),
+                    foregroundColor: patraAccent,
+                    icon: read ? Icons.remove_done : Icons.done_all,
+                    label: read ? l10n.markUnread : l10n.markRead,
+                  ),
+                ],
+              )
+            : null,
+        endActionPane: saved
+            ? ActionPane(
+                motion: const DrawerMotion(),
+                extentRatio: _paneRatio(_removePaneWidth, constraints.maxWidth),
+                children: [
+                  SlidableAction(
+                    onPressed: (actionContext) async {
+                      if (await _confirmRemove(actionContext, l10n)) {
+                        await ref
+                            .read(downloadsProvider.notifier)
+                            .remove(chapter.id);
+                      }
+                    },
+                    backgroundColor: patraDanger.withValues(alpha: .16),
+                    foregroundColor: patraDanger,
+                    icon: Icons.delete_outline,
+                    label: l10n.removeDownload,
+                  ),
+                ],
+              )
+            : null,
+        child: tile,
+      ),
     );
   }
 
@@ -898,6 +949,8 @@ class _RowsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The skeleton stands in for the rows, so it grows with them.
+    final tablet = isTabletLayout(context);
     return Column(
       children: List.generate(
         6,
@@ -905,7 +958,7 @@ class _RowsSkeleton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 6),
           child: Row(
             children: [
-              const Skeleton(width: 46, height: 66),
+              Skeleton(width: tablet ? 62 : 46, height: tablet ? 89 : 66),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

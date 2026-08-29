@@ -11,6 +11,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/cover.dart';
 
 import 'test_support.dart';
 
@@ -200,5 +201,39 @@ void main() {
       findsNothing,
       reason: "Kavita's sentinel must never reach the UI",
     );
+  });
+
+  testWidgets('on a tablet the hero grows but the button stays a button', (
+    tester,
+  ) async {
+    // An iPad in portrait: 820x1180 logical points.
+    tester.view.physicalSize = const Size(1640, 2360);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    await _pumpSeries(tester, _volumesWithChapters);
+
+    // The screen is a column, not a canvas: it stops growing well short of
+    // the iPad's width.
+    final hero = tester.getSize(find.byType(ListView));
+    expect(hero.width, lessThanOrEqualTo(contentMaxWidth));
+
+    // Left to itself the button fills the hero, which at this size reads as a
+    // banner rather than as something to press.
+    expect(
+      tester.getSize(find.byType(FilledButton)).width,
+      lessThanOrEqualTo(280),
+    );
+
+    // The cover takes the room a tablet has.
+    final cover = tester.getSize(
+      find
+          .ancestor(
+            of: find.byType(CoverImage).first,
+            matching: find.byType(SizedBox),
+          )
+          .first,
+    );
+    expect(cover.width, 160);
   });
 }
