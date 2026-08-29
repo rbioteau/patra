@@ -21,13 +21,12 @@ Usable, still young. What works:
 - [ ] EPUB reading (Kavita renders book chapters to HTML server-side, so a styled WebView is enough)
 - [ ] Search across libraries
 - [ ] Reading lists and collections
-- [ ] TestFlight distribution (needs an Apple Developer account)
 
 ## Install
 
 **Android** — grab the `patra-debug-apk` artifact from the latest [Actions run](../../actions) on `main` and install it.
 
-**iOS / iPadOS** — the CI also builds an unsigned `patra-unsigned-ipa`. Without an Apple Developer account it has to be re-signed with your own Apple ID (AltStore or Sideloadly, from a Windows or Mac machine); a free account's signature lasts 7 days.
+**iOS / iPadOS** — every push to `main` is signed and sent to **TestFlight**, so an invitation and the TestFlight app are all it takes; builds expire 90 days after upload. A fork, having no signing secrets, falls back to an unsigned `patra-unsigned-ipa` artifact, which has to be re-signed with your own Apple ID (AltStore or Sideloadly, from a Windows or Mac machine) — a free account's signature lasts 7 days.
 
 ## Development
 
