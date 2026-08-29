@@ -832,7 +832,9 @@ class _ChapterRow extends ConsumerWidget {
                 ],
               )
             : null,
-        child: tile,
+        // The pane takes its width out of the row rather than out from under
+        // it: the row keeps its origin and every part of itself.
+        child: _SqueezedByPane(child: tile),
       ),
     );
   }
@@ -933,6 +935,66 @@ class _ChapterRow extends ConsumerWidget {
     // Progress changed while reading: the rows and the hero both show it.
     ref.invalidate(volumesProvider(seriesId));
     ref.invalidate(seriesProvider(seriesId));
+  }
+}
+
+/// Opens a swipe pane by *squeezing* the row instead of sliding it aside.
+///
+/// `Slidable` uncovers a pane by translating its whole child, which on a row
+/// this wide carries the cover and the title off with it — the swipe hides the
+/// very thing it is about to act on, and on a screen where the list is a
+/// centred column the row slides out of that column and over the margin.
+///
+/// Here the pane takes its width *from* the row: the leading edge stays put
+/// for a trailing pane (and the trailing edge for a leading one), nothing
+/// leaves the screen, and the row is merely narrower while the pane is open.
+///
+/// It works from inside the translation the library already applies — undo
+/// that, then hand the pane's edge the same width as padding. `ratio` is
+/// signed (positive while the leading pane opens) and is a fraction of the
+/// row, which is exactly what `SlideTransition` moves the child by.
+class _SqueezedByPane extends StatelessWidget {
+  const _SqueezedByPane({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Slidable.of(context);
+    if (controller == null) return child;
+    return LayoutBuilder(
+      builder: (context, constraints) => AnimatedBuilder(
+        animation: controller.animation,
+        // The row itself is built once and reused on every frame of the
+        // gesture; only the offset and the padding around it change.
+        child: child,
+        builder: (context, row) {
+          final shift = controller.ratio * constraints.maxWidth;
+          // A drag can pull the row well past the pane it is uncovering. Only
+          // the pane's own width is squeezed out of the row; the rest of the
+          // finger's travel stays the slide the library was going to make
+          // anyway, which is what gives the over-drag its rubber band.
+          final extent =
+              (shift > 0
+                  ? controller.startActionPaneExtentRatio
+                  : controller.endActionPaneExtentRatio) *
+              constraints.maxWidth;
+          final open = shift.clamp(-extent, extent);
+          return Transform.translate(
+            offset: Offset(-open, 0),
+            child: Padding(
+              // Visual left/right rather than start/end: the library places
+              // its panes visually too.
+              padding: EdgeInsets.only(
+                left: open > 0 ? open : 0,
+                right: open < 0 ? -open : 0,
+              ),
+              child: row,
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

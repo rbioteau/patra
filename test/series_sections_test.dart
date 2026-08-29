@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/save_pill.dart';
 
 import 'test_support.dart';
 
@@ -140,12 +142,34 @@ Future<void> _pump(
   Future<void>? postGate,
   int postStatus = 200,
   bool underNavigator = false,
+  int? savedChapter,
 }) async {
   tester.view.physicalSize = const Size(1100, 2600);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
 
   final cacheDir = mockPathProvider();
+  if (savedChapter != null) {
+    // A stored copy, which is what puts the remove action on the row's
+    // trailing edge. `meta.json` last, as the service requires.
+    final dir = Directory('${cacheDir.path}/downloads/$savedChapter')
+      ..createSync(recursive: true);
+    File('${dir.path}/${DownloadsService.pageFileName(0)}')
+        .writeAsBytesSync(const [0]);
+    File('${dir.path}/meta.json').writeAsStringSync(
+      jsonEncode({
+        'chapterId': savedChapter,
+        'seriesId': 7,
+        'volumeId': 10,
+        'libraryId': 1,
+        'seriesName': 'Berserk',
+        'title': 'Chapter 1',
+        'pages': 100,
+        'bytes': 1,
+        'pagesRead': 0,
+      }),
+    );
+  }
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
@@ -167,7 +191,7 @@ Future<void> _pump(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: cacheDir),
+          DownloadsService(root: Directory('${cacheDir.path}/downloads')),
         ),
       ],
       child: MaterialApp(
@@ -452,6 +476,32 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Marquer lu'), findsOneWidget);
+    });
+
+    testWidgets('the remove pane takes its width out of the row', (
+      tester,
+    ) async {
+      // Sliding the row aside to uncover the pane hides the cover and the
+      // title — the swipe covers up the very thing it is about to act on. The
+      // pane takes its width from the row instead, so the row keeps its
+      // origin and every part of itself.
+      await _pump(tester, series(0), savedChapter: 101);
+
+      final before = tester.getRect(find.text('Chapter 1'));
+      await tester.drag(find.text('Chapter 1'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove'), findsOneWidget);
+
+      expect(
+        tester.getRect(find.text('Chapter 1')).left,
+        moreOrLessEquals(before.left, epsilon: 0.5),
+      );
+      // And the row stops where the pane starts rather than running under it:
+      // the save pill is still whole, and still on the row's side of it.
+      expect(
+        tester.getRect(find.byType(SavePill)).right,
+        lessThanOrEqualTo(tester.getRect(find.text('Remove')).left),
+      );
     });
 
     testWidgets('an open pane is a drawer, not half a tablet row', (
