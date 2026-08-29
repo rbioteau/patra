@@ -338,8 +338,16 @@ class ChapterInfoDto {
       (pageDimensions[page] ?? pageDimensions[page + 1])?.aspectRatio ??
       PageDimension.defaultAspectRatio;
 
-  bool isWide(int page) =>
-      (pageDimensions[page] ?? pageDimensions[page + 1])?.isWide ?? false;
+  /// Whether the scan on this page is itself a double page.
+  ///
+  /// Kavita answers that with `isWide`, but only says so for the files it has
+  /// measured that way; a page that is plainly landscape is a spread whatever
+  /// the flag says, and the dimensions are right there. Either is enough.
+  bool isWide(int page) {
+    final dimension = pageDimensions[page] ?? pageDimensions[page + 1];
+    if (dimension == null) return false;
+    return dimension.isWide || dimension.width > dimension.height;
+  }
 
   factory ChapterInfoDto.fromJson(Map<String, dynamic> json) => ChapterInfoDto(
     seriesId: json['seriesId'] as int,

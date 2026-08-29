@@ -18,6 +18,7 @@ import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
 import 'page_loading.dart';
+import 'spread_layout.dart';
 import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose
@@ -286,8 +287,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _saveProgress(clamped, info);
   }
 
-  void _step(bool forward, ChapterInfoDto info, int span) {
-    _goTo(_page + (forward ? span : -span), info);
+  /// A step is a screen, not a fixed number of pages: a double-page scan sits
+  /// on one of its own, so stepping back from it lands on the *first* page of
+  /// the pair before it rather than on the second.
+  void _step(bool forward, ChapterInfoDto info, SpreadLayout? spread) {
+    if (spread == null) {
+      _goTo(_page + (forward ? 1 : -1), info);
+      return;
+    }
+    final index = spread.indexOf(_page) + (forward ? 1 : -1);
+    if (index < 0 || index >= spread.length) return;
+    _goTo(spread.firstOf(index), info);
   }
 
   @override
@@ -347,10 +357,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     return OrientationBuilder(
       builder: (context, orientation) {
-        // Landscape shows a two-page spread, but only when paging.
+        // Landscape shows a two-page spread, but only when paging — and
+        // which pages actually share a screen is the layout's call, since a
+        // scan that is already a double page takes one on its own.
         final spread =
-            orientation == Orientation.landscape && !direction.isWebtoon;
-        final span = spread ? 2 : 1;
+            orientation == Orientation.landscape && !direction.isWebtoon
+            ? SpreadLayout.of(chapter)
+            : null;
+        final span = spread?.spanOf(_page) ?? 1;
 
         return Stack(
           fit: StackFit.expand,
@@ -365,14 +379,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               )
             else
               _PagedView(
-                key: ValueKey('paged-$spread-$rtl'),
+                key: ValueKey('paged-${spread != null}-$rtl'),
                 pages: chapter.pages,
                 page: _page,
                 reverse: rtl,
                 spread: spread,
                 imageBuilder: _pageImage,
-                onPageChanged: (page) =>
-                    _onPageChanged(page, chapter, span: span),
+                // The span of the page being *arrived at*, which is not the
+                // one the screen has been showing.
+                onPageChanged: (page) => _onPageChanged(
+                  page,
+                  chapter,
+                  span: spread?.spanOf(page) ?? 1,
+                ),
               ),
 
             // Tap zones: 30 / 40 / 30. The sides page, the middle toggles
@@ -385,7 +404,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       flex: 30,
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
-                        onTap: () => _step(rtl, chapter, span),
+                        onTap: () => _step(rtl, chapter, spread),
                       ),
                     ),
                     Expanded(
@@ -399,7 +418,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       flex: 30,
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
-                        onTap: () => _step(!rtl, chapter, span),
+                        onTap: () => _step(!rtl, chapter, spread),
                       ),
                     ),
                   ],
@@ -427,7 +446,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               _BottomChrome(
                 chapter: chapter,
                 page: _page,
-                span: spread ? 2 : 1,
+                span: span,
                 rtl: rtl,
                 thumbQueue: _thumbs,
                 thumbProvider: (page) => _imageProvider(
@@ -450,6 +469,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     int? cacheWidth,
     BoxFit fit = BoxFit.contain,
     bool thumbnail = false,
+    AlignmentGeometry alignment = Alignment.center,
   }) {
     final provider = _imageProvider(
       page,
@@ -460,6 +480,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     return Image(
       image: provider,
       fit: fit,
+      alignment: alignment,
       gaplessPlayback: true,
       errorBuilder: (_, _, _) =>
           const Center(child: Icon(Icons.broken_image, color: Colors.white24)),
@@ -490,7 +511,9 @@ class _PagedView extends StatefulWidget {
   final int pages;
   final int page;
   final bool reverse;
-  final bool spread;
+
+  /// Which pages share a screen, or null when they are shown one at a time.
+  final SpreadLayout? spread;
   final PageImageBuilder imageBuilder;
   final ValueChanged<int> onPageChanged;
 
@@ -504,10 +527,11 @@ class _PagedViewState extends State<_PagedView> {
   );
   late int _reported = widget.page;
 
-  int get _itemCount => widget.spread ? (widget.pages + 1) ~/ 2 : widget.pages;
+  int get _itemCount => widget.spread?.length ?? widget.pages;
 
-  int _viewIndex(int page) => widget.spread ? page ~/ 2 : page;
-  int _firstPageOf(int viewIndex) => widget.spread ? viewIndex * 2 : viewIndex;
+  int _viewIndex(int page) => widget.spread?.indexOf(page) ?? page;
+  int _firstPageOf(int viewIndex) =>
+      widget.spread?.firstOf(viewIndex) ?? viewIndex;
 
   @override
   void didUpdateWidget(_PagedView old) {
@@ -539,18 +563,18 @@ class _PagedViewState extends State<_PagedView> {
         widget.onPageChanged(_reported);
       },
       itemBuilder: (context, index) {
-        final first = _firstPageOf(index);
-        if (!widget.spread) {
+        final spread = widget.spread;
+        if (spread == null) {
           return InteractiveViewer(
             maxScale: 5,
-            child: widget.imageBuilder(first),
+            child: widget.imageBuilder(_firstPageOf(index)),
           );
         }
-        final second = first + 1;
-        final pages = [if (second < widget.pages) second];
-        // patra left, recto right — mirrored when reading right to left, so
-        // the first page of the pair always leads.
-        final ordered = widget.reverse ? [...pages, first] : [first, ...pages];
+        final pages = spread.slots[index];
+        // Verso left, recto right — mirrored when reading right to left, so
+        // the first page of the pair always leads. A double-page scan is
+        // alone on its screen and takes the whole width.
+        final ordered = widget.reverse ? pages.reversed.toList() : pages;
         return InteractiveViewer(
           maxScale: 5,
           child: Stack(
@@ -558,9 +582,24 @@ class _PagedViewState extends State<_PagedView> {
             children: [
               Row(
                 children: [
-                  for (final page in ordered)
+                  for (final (position, page) in ordered.indexed)
                     Expanded(
-                      child: widget.imageBuilder(page, fit: BoxFit.contain),
+                      child: widget.imageBuilder(
+                        page,
+                        fit: BoxFit.contain,
+                        // Each page is contained in its own half of the
+                        // screen, and centred there it would sit away from
+                        // the spine: the pair would be joined by a gutter
+                        // that widens with the screen and with how narrow
+                        // the scans are. They are pushed together instead —
+                        // the pair meets on the centre line, and the room
+                        // left over goes to the outer edges.
+                        alignment: ordered.length == 1
+                            ? Alignment.center
+                            : position == 0
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                      ),
                     ),
                 ],
               ),

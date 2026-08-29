@@ -98,6 +98,7 @@ typedef PageImageBuilder = Widget Function(
   int? cacheWidth,
   BoxFit fit,
   bool thumbnail,
+  AlignmentGeometry alignment,
 });
 
 // --- paged view -------------------------------------------------------------

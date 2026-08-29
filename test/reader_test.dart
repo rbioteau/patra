@@ -20,10 +20,13 @@ import 'test_support.dart';
 const _pages = 50;
 
 class _ReaderAdapter implements HttpClientAdapter {
-  _ReaderAdapter(this.posted);
+  _ReaderAdapter(this.posted, {this.wide = const {}});
 
   /// Every progress post, in the order the reader made them.
   final List<int> posted;
+
+  /// Pages the server reports as double-page scans.
+  final Set<int> wide;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
@@ -46,6 +49,15 @@ class _ReaderAdapter implements HttpClientAdapter {
           'pages': _pages,
           'seriesName': 'Berserk',
           'title': 'Chapter 1',
+          'pageDimensions': [
+            for (var page = 0; page < _pages; page++)
+              {
+                'pageNumber': page,
+                'width': wide.contains(page) ? 1600 : 800,
+                'height': 1200,
+                'isWide': wide.contains(page),
+              },
+          ],
         }),
         200,
         headers: {
@@ -90,6 +102,7 @@ Future<List<int>> _pumpReader(
   ReadingDirection direction = ReadingDirection.webtoon,
   int? savedPagesRead,
   SliderComponentShape? sliderThumb,
+  Set<int> wide = const {},
 }) async {
   final dir = mockPathProvider();
   final downloads = Directory('${dir.path}/downloads')..createSync();
@@ -104,7 +117,7 @@ Future<List<int>> _pumpReader(
     refreshToken: 'refresh',
     apiKey: 'key',
   );
-  final adapter = _ReaderAdapter(posted);
+  final adapter = _ReaderAdapter(posted, wide: wide);
   client.httpClient.httpClientAdapter = adapter;
   client.refreshHttpClient.httpClientAdapter = adapter;
 
@@ -208,6 +221,66 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(posted, [20]);
+  });
+
+  testWidgets('a double-page scan is read alone, not paired', (tester) async {
+    // Landscape: an iPad on its side.
+    tester.view.physicalSize = const Size(2360, 1640);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      direction: ReadingDirection.leftToRight,
+      wide: {2},
+    );
+
+    // The counter in the chrome says what shares the screen.
+    Future<void> showChrome() async {
+      await tester.tapAt(tester.getCenter(find.byType(PageView)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    final size = tester.getSize(find.byType(PageView));
+    Future<void> stepForward() async {
+      await tester.tapAt(Offset(size.width * .85, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    // The two pages of a pair meet on the centre line rather than each
+    // sitting in the middle of its own half, which would join them with a
+    // gutter that widens with the screen.
+    expect(
+      tester
+          .widgetList<Image>(find.byType(Image))
+          .map((i) => i.alignment)
+          .toSet(),
+      {Alignment.centerRight, Alignment.centerLeft},
+    );
+
+    await showChrome();
+    expect(find.text('1–2 / $_pages'), findsOneWidget);
+
+    await stepForward();
+    expect(
+      find.text('3 / $_pages'),
+      findsOneWidget,
+      reason: 'the wide page has the screen to itself',
+    );
+
+    // And the pairing picks up after it, on the other parity: a fixed
+    // `page ~/ 2` would have put 2 with 3 and split the spread in half.
+    await stepForward();
+    expect(find.text('4–5 / $_pages'), findsOneWidget);
+
+    // Back over the wide page, onto the *first* page of the pair before it.
+    await tester.tapAt(Offset(size.width * .15, size.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('3 / $_pages'), findsOneWidget);
   });
 
   testWidgets('the slider handle sits under the swollen thumbnail', (
