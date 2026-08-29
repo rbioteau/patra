@@ -11,11 +11,22 @@ import '../../theme.dart';
 /// flick of the strip. This queue holds them back for [startDelay], then feeds
 /// them at most [maxConcurrent] at a time, nearest the page being read first:
 /// current, previous, next, and outwards from there.
+///
+/// [maxConcurrent] is the whole throttle, so it sets how fast the strip fills:
+/// four is a self-hosted server's worth of parallelism and still leaves plenty
+/// of room under `flutter_cache_manager`'s own ten-fetch ceiling, which the
+/// full-size pages share.
+///
+/// Once nothing on screen is left to fetch it keeps going through the rest of
+/// the chapter, one page at a time — see [_backfillConcurrent]. Measured
+/// against a real server, a thumbnail costs ~200 ms to fetch and ~2 ms to read
+/// back from the cache, so a chapter that has been walked through once scrubs
+/// instantly the next time.
 class ThumbLoadQueue {
   ThumbLoadQueue({
     required this.load,
     this.startDelay = const Duration(milliseconds: 180),
-    this.maxConcurrent = 2,
+    this.maxConcurrent = 4,
   });
 
   /// Fetches one thumbnail; completes however it ends, success or failure.
@@ -28,7 +39,38 @@ class ThumbLoadQueue {
 
   final _done = <int>{};
   final _inFlight = <int>{};
+
+  /// Whether a fetch for this chapter has already come back.
+  ///
+  /// The first one goes through the door **alone**. Kavita's
+  /// `/api/Reader/thumbnail` does not render one thumbnail: on the first
+  /// request for a chapter it renders *every* page's, inside that request,
+  /// before answering (`ReaderService.GetThumbnail`). It decides it is the
+  /// first by testing whether the chapter's output directory exists — and
+  /// nothing creates that directory until the first thumbnail is written to
+  /// it. So there is no lock: every request that leaves before that write
+  /// lands takes the same branch, and a server handed four at once generates
+  /// the whole chapter four times over, the four fighting for the same CPU,
+  /// while later arrivals list a half-filled directory. One request pays for
+  /// the chapter; every one after it is a directory listing.
+  var _warm = false;
+
+  /// [maxConcurrent] once the chapter is warm, one until then.
+  int get _concurrency => _warm ? maxConcurrent : 1;
+
+  /// How many fetches may be in flight for pages nobody is looking at yet.
+  ///
+  /// One, and only while nothing on screen is outstanding: the strip is
+  /// already usable by then, and every one of these costs the server real CPU.
+  /// It is a way to spend an idle scrubber, never a reason to make a visible
+  /// thumbnail wait.
+  static const _backfillConcurrent = 1;
+
   Set<int> _wanted = const {};
+
+  /// Pages in the chapter — the range the backfill walks. Zero until the strip
+  /// has reported one, so a queue nobody has opened fetches nothing.
+  int _pages = 0;
   int _current = 0;
   Timer? _timer;
   var _disposed = false;
@@ -39,14 +81,27 @@ class ThumbLoadQueue {
 
   /// The pages on screen, and the page being read. Safe to call on every
   /// scroll frame.
-  void update({required Set<int> visible, required int current}) {
+  void update({
+    required Set<int> visible,
+    required int current,
+    required int pages,
+  }) {
     _wanted = Set.of(visible);
     _current = current;
+    _pages = pages;
     // While something is in flight the queue is already draining, and it
     // re-reads this state on every completion — restarting the delay there
     // would stall the strip for as long as a finger keeps moving.
     if (_inFlight.isNotEmpty || _disposed) return;
-    _timer?.cancel();
+    // The delay must run from the *first* sign of interest, never be pushed
+    // back by the next one: this is called on every scroll frame, and a
+    // cancel-and-reschedule here means a fling — or the 200 ms glide the strip
+    // makes on every page turn — leaves the queue with nothing started until
+    // the strip has come to a complete stop. What keeps a flick from flooding
+    // the server is [maxConcurrent], not this delay; the delay only spares the
+    // pages that whip past before anything can be fetched, and _pump reads the
+    // window as it is when it fires, not as it was when it was scheduled.
+    if (_timer?.isActive ?? false) return;
     _timer = Timer(startDelay, _pump);
   }
 
@@ -57,28 +112,47 @@ class ThumbLoadQueue {
 
   void _pump() {
     if (_disposed) return;
-    while (_inFlight.length < maxConcurrent) {
-      final page = _nextPage();
-      if (page == null) return;
-      _inFlight.add(page);
-      // A thumbnail that fails must not take the queue down with it.
-      load(page).catchError((Object _) {}).whenComplete(() {
-        _inFlight.remove(page);
-        // Marked done even when it failed: a page whose thumbnail 404s must
-        // not be retried forever, and the image widget shows its own fallback.
-        _done.add(page);
-        if (_disposed) return;
-        onChanged?.call();
-        _pump();
-      });
+    while (true) {
+      // What is on screen comes first, at full concurrency. Only once none of
+      // it is outstanding does the rest of the chapter get a turn, and then
+      // one at a time — which also means a single backfill in flight is the
+      // most a scroll can ever have to wait behind.
+      var limit = _concurrency;
+      var page = _nextPage(_wanted);
+      if (page == null) {
+        limit = _backfillConcurrent;
+        page = _nextPage(Iterable<int>.generate(_pages));
+      }
+      if (page == null || _inFlight.length >= limit) return;
+      _start(page);
     }
   }
 
+  void _start(int page) {
+    _inFlight.add(page);
+    // A thumbnail that fails must not take the queue down with it.
+    load(page).catchError((Object _) {}).whenComplete(() {
+      _inFlight.remove(page);
+      // However it ended, the chapter has been rendered or there is no
+      // server to render it: nothing is gained by holding the rest back.
+      _warm = true;
+      // Marked done even when it failed: a page whose thumbnail 404s must
+      // not be retried forever, and the image widget shows its own fallback.
+      _done.add(page);
+      if (_disposed) return;
+      // A backfilled page needs no repaint: it is off screen, and scrolling to
+      // it rebuilds that row anyway. Repainting on each would redraw the strip
+      // a couple of times a second for the length of a chapter.
+      if (_wanted.contains(page)) onChanged?.call();
+      _pump();
+    });
+  }
+
   /// Current page first, then the one before, then the one after, and outwards.
-  int? _nextPage() {
+  int? _nextPage(Iterable<int> candidates) {
     int? best;
     var bestRank = 0;
-    for (final page in _wanted) {
+    for (final page in candidates) {
       if (_done.contains(page) || _inFlight.contains(page)) continue;
       final delta = page - _current;
       final rank = delta.abs() * 2 + (delta > 0 ? 1 : 0);
@@ -102,12 +176,18 @@ class ThumbStrip extends StatefulWidget {
     super.key,
     required this.pages,
     required this.current,
+    required this.queue,
     required this.providerBuilder,
     required this.onTap,
   });
 
   final int pages;
   final int current;
+
+  /// Owned by the reader, not by the strip: it outlives the chrome being
+  /// hidden, so what it has already fetched is still fetched when the scrubber
+  /// comes back, and its backfill keeps going while the chapter is being read.
+  final ThumbLoadQueue queue;
 
   /// The thumbnail image for a page, or null when there is no way to load it
   /// (signed out mid-read).
@@ -135,15 +215,13 @@ class _ThumbStripState extends State<ThumbStrip> {
   static const _minStep = (_currentWidth + _nearWidth) / 2 + _gap;
 
   final _controller = ScrollController();
-  late final ThumbLoadQueue _queue;
 
   @override
   void initState() {
     super.initState();
-    _queue = ThumbLoadQueue(load: _load)
-      ..onChanged = () {
-        if (mounted) setState(() {});
-      };
+    widget.queue.onChanged = () {
+      if (mounted) setState(() {});
+    };
     _controller.addListener(_syncQueue);
     // The chrome usually opens mid-chapter: jump to where the reader is
     // rather than showing page one.
@@ -169,15 +247,11 @@ class _ThumbStripState extends State<ThumbStrip> {
 
   @override
   void dispose() {
-    _queue.dispose();
+    // The queue outlives us; only the repaint hook was ours. It goes on
+    // fetching, which is the point.
+    widget.queue.onChanged = null;
     _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _load(int page) {
-    final provider = widget.providerBuilder(page);
-    if (provider == null || !mounted) return Future.value();
-    return precacheImage(provider, context, onError: (_, _) {});
   }
 
   /// The pages on screen, give or take one at each end — close enough to
@@ -191,9 +265,10 @@ class _ThumbStripState extends State<ThumbStrip> {
     final end =
         (((offset + _controller.position.viewportDimension) / step).ceil())
             .clamp(0, last);
-    _queue.update(
+    widget.queue.update(
       visible: {for (var page = first; page <= end; page++) page},
       current: widget.current,
+      pages: widget.pages,
     );
   }
 
@@ -315,7 +390,7 @@ class _ThumbStripState extends State<ThumbStrip> {
             ),
             itemBuilder: (context, page) {
               final selected = page == widget.current;
-              final provider = _queue.isReady(page)
+              final provider = widget.queue.isReady(page)
                   ? widget.providerBuilder(page)
                   : null;
               return Align(
