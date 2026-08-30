@@ -65,7 +65,11 @@ jobs:
           path: build/app/outputs/flutter-apk/app-debug.apk
 
       # --- Signed App Bundle, which is the only thing Play accepts ----------
-      - name: Write the keystore
+      # Gradle only discovers a bad password at the *end* of a four-minute
+      # build, and says "keystore password was incorrect" without telling you
+      # which of the three secrets is at fault. keytool answers all three
+      # questions in a second, before anything is compiled.
+      - name: Write the keystore, and check it opens
         if: steps.signing.outputs.available == 'true'
         env:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -75,6 +79,29 @@ jobs:
         run: |
           set -euo pipefail
           echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+          if ! keytool -list -keystore "$RUNNER_TEMP/upload.jks" \
+                 -storepass "$STORE_PASSWORD" > /dev/null 2>&1; then
+            echo '::error::ANDROID_KEYSTORE_PASSWORD does not open the keystore. A trailing newline counts as part of the password: set the secret with `printf %s`, not from a file.'
+            exit 1
+          fi
+
+          if ! keytool -list -keystore "$RUNNER_TEMP/upload.jks" \
+                 -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo '::error::The keystore opens, but holds no key under the alias in ANDROID_KEY_ALIAS.'
+            keytool -list -keystore "$RUNNER_TEMP/upload.jks" \
+              -storepass "$STORE_PASSWORD" | grep -i 'alias' || true
+            exit 1
+          fi
+
+          # A PKCS12 keystore has exactly one password — keytool says so when
+          # you try to give it two — but Gradle is handed both and fails on
+          # the mismatch far downstream.
+          if [ "$STORE_PASSWORD" != "$KEY_PASSWORD" ]; then
+            echo '::error::ANDROID_KEY_PASSWORD differs from ANDROID_KEYSTORE_PASSWORD. A PKCS12 keystore keeps one password for both; set the two secrets to the same value.'
+            exit 1
+          fi
+
           # build.gradle.kts reads this file if it is there and falls back to
           # the debug keys if it is not; writing it is the whole switch.
           cat > android/key.properties <<PROPERTIES
