@@ -58,22 +58,12 @@ class DownloadsScreen extends ConsumerWidget {
                 ),
               );
             }
-            // A list of rows is a column, not a canvas: past
-            // `contentMaxWidth` the width goes to the margins.
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: contentMaxWidth),
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: sectionGap),
-                  children: [
-                    _StorageMeter(
-                      bytes: state.totalBytes,
-                      chapters: saved.length,
-                    ),
-                    for (final chapter in saved) _SavedRow(chapter: chapter),
-                  ],
-                ),
-              ),
+            return ListView(
+              padding: const EdgeInsets.only(bottom: sectionGap),
+              children: [
+                _StorageMeter(bytes: state.totalBytes, chapters: saved.length),
+                for (final chapter in saved) _SavedRow(chapter: chapter),
+              ],
             );
           },
         ),

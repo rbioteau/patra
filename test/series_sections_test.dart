@@ -707,7 +707,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  group('a tablet row is a shelf, not a settings list', () {
+  group('a tablet row runs the width it is given', () {
     List<Map<String, dynamic>> oneChapter() => [
       {
         'id': 10,
@@ -722,39 +722,29 @@ void main() {
     Rect rowCover(WidgetTester tester) =>
         tester.getRect(find.byType(CoverImage).at(1));
 
-    testWidgets('the cover keeps the share of the row a phone gives it', (
-      tester,
-    ) async {
+    testWidgets('the cover is the size it is drawn at', (tester) async {
       await _pump(tester, oneChapter(), tablet: true);
 
-      final cover = rowCover(tester);
-      final pill = tester.getRect(find.byType(SavePill));
-      // The cover's leading edge to the pill's trailing one *is* the row.
-      final rowWidth = pill.right - cover.left;
-
-      // Against the shared token, not a copy of its number: the Downloads
-      // tab draws the same row and drifted to 62x89 by holding its own.
-      expect(cover.size, const Size(rowCoverWidthTablet, rowCoverHeightTablet));
-      // A phone draws 46pt in a 350pt row — about 13% of it. At 62pt in a
-      // tablet's row the cover came to ~10%, so crossing to the bigger
-      // screen had made the cover smaller than it is on a phone.
-      expect(cover.width / rowWidth, greaterThanOrEqualTo(46 / 350));
+      // These numbers were once justified as ~13% of a *capped* column — the
+      // share a phone gives the cover. The cap is gone, so the cover is about
+      // 10% of its row again and the sizes now stand on how they read at
+      // arm's length rather than on a proportion. The answer to a tablet's
+      // width is a grid, not a narrower column.
+      expect(
+        rowCover(tester).size,
+        const Size(rowCoverWidthTablet, rowCoverHeightTablet),
+      );
     });
 
-    testWidgets('the save pill stays with the row, not against the screen', (
-      tester,
-    ) async {
+    testWidgets('the column is not capped and centred', (tester) async {
       await _pump(tester, oneChapter(), tablet: true);
 
-      final gap =
-          tester.getRect(find.byType(SavePill)).left -
-          tester.getRect(find.text('Chapter 1')).right;
-
-      // `contentMaxWidth` is set by the *shortest* row we draw, and this is
-      // it: a number and a page count against a pill. At 680 this gap
-      // measured 318pt — a third of the screen of nothing in the middle of
-      // every row, which is the drift the cap exists to prevent.
-      expect(gap, lessThan(220));
+      // A cap put a narrow column between two wide empty bands — about 150pt
+      // of nothing down each side of an 820pt screen — which read as more
+      // wrong than the gap it closed inside the row. The row starts and ends
+      // one gutter from the screen edge, like every other screen.
+      expect(rowCover(tester).left, gutter);
+      expect(tester.getRect(find.byType(SavePill)).right, 820 - gutter);
     });
   });
 }

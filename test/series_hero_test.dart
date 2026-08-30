@@ -213,10 +213,10 @@ void main() {
 
     await _pumpSeries(tester, _volumesWithChapters);
 
-    // The screen is a column, not a canvas: it stops growing well short of
-    // the iPad's width.
-    final hero = tester.getSize(find.byType(ListView));
-    expect(hero.width, lessThanOrEqualTo(contentMaxWidth));
+    // The column runs at the app's own margin rather than being capped and
+    // centred: a cap put a narrow column between two wide empty bands, which
+    // read as more wrong than the gap it closed inside a row.
+    expect(tester.getSize(find.byType(ListView)).width, 820);
 
     // Left to itself the button fills the hero, which at this size reads as a
     // banner rather than as something to press.

@@ -24,99 +24,89 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: SafeArea(
         top: false,
-        // A settings list is a column, not a canvas: past `contentMaxWidth`
-        // the row's label and its value would sit an arm's length apart.
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: contentMaxWidth),
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: sectionGap),
-              children: [
-                _Section(label: l10n.serverSectionLabel),
-                if (session != null)
-                  _ServerCard(
-                    host: session.host,
-                    username: session.username,
-                    actionLabel: l10n.switchServer,
-                    onTap: () => ref.read(authProvider.notifier).switchServer(),
-                  ),
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: sectionGap),
+          children: [
+            _Section(label: l10n.serverSectionLabel),
+            if (session != null)
+              _ServerCard(
+                host: session.host,
+                username: session.username,
+                actionLabel: l10n.switchServer,
+                onTap: () => ref.read(authProvider.notifier).switchServer(),
+              ),
 
-                _Section(label: l10n.readingSectionLabel),
-                _SettingRow(
-                  icon: DirectionIcon(direction, color: patraAccent),
-                  title: l10n.defaultReadingDirection,
-                  value: direction.label(l10n),
-                  onTap: () => _pickDirection(context, ref, direction),
-                ),
+            _Section(label: l10n.readingSectionLabel),
+            _SettingRow(
+              icon: DirectionIcon(direction, color: patraAccent),
+              title: l10n.defaultReadingDirection,
+              value: direction.label(l10n),
+              onTap: () => _pickDirection(context, ref, direction),
+            ),
 
-                _Section(label: l10n.storageSectionLabel),
-                const _StorageRows(),
+            _Section(label: l10n.storageSectionLabel),
+            const _StorageRows(),
 
-                _Section(label: l10n.aboutSectionLabel),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: gutter,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Text.rich(
+            _Section(label: l10n.aboutSectionLabel),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: gutter,
+                vertical: 6,
+              ),
+              child: Row(
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      text: 'patra',
+                      style: PatraText.serifTitle(size: 18),
+                      children: [
                         TextSpan(
-                          text: 'patra',
-                          style: PatraText.serifTitle(size: 18),
-                          children: [
-                            TextSpan(
-                              text: '.',
-                              style: PatraText.serifTitle(
-                                size: 18,
-                                color: patraAccent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // The tagline is a sentence: it wraps here rather than
-                      // running off the row.
-                      Expanded(
-                        child: Text(
-                          l10n.appTagline,
-                          style: PatraText.metadata(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: sectionGap),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: gutter),
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: ConstrainedBox(
-                      // Signing out is one short phrase; a button as wide as the
-                      // screen reads as a banner rather than as something to press.
-                      constraints: const BoxConstraints(maxWidth: 280),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              ref.read(authProvider.notifier).signOut(),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: patraDanger,
-                            side: BorderSide(
-                              color: patraDanger.withValues(alpha: .45),
-                            ),
+                          text: '.',
+                          style: PatraText.serifTitle(
+                            size: 18,
+                            color: patraAccent,
                           ),
-                          child: Text(l10n.signOut),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // The tagline is a sentence: it wraps here rather than
+                  // running off the row.
+                  Expanded(
+                    child: Text(l10n.appTagline, style: PatraText.metadata()),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: sectionGap),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: ConstrainedBox(
+                  // Signing out is one short phrase; a button as wide as the
+                  // screen reads as a banner rather than as something to press.
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          ref.read(authProvider.notifier).signOut(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: patraDanger,
+                        side: BorderSide(
+                          color: patraDanger.withValues(alpha: .45),
                         ),
                       ),
+                      child: Text(l10n.signOut),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -330,12 +320,8 @@ class _SheetColumn extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: contentMaxWidth),
-      child: Column(mainAxisSize: mainAxisSize, children: children),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      Column(mainAxisSize: mainAxisSize, children: children);
 }
 
 class _Section extends StatelessWidget {

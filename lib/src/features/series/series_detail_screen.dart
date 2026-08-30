@@ -197,60 +197,56 @@ class SeriesDetailScreen extends ConsumerWidget {
       body: SlidableAutoCloseBehavior(
         child: SafeArea(
           top: false,
-          // The rows are a column, not a canvas: on a tablet the width past
-          // `contentMaxWidth` goes to the margins rather than stretching every
-          // row across the screen.
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: contentMaxWidth),
-              // The hero renders as soon as the cover URL is known, so the
-              // chapter list loading underneath never blocks it.
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: sectionGap),
-                children: [
-                  _SeriesHero(
-                    seriesId: seriesId,
-                    seriesName: seriesName,
-                    type: type,
-                    volumes: volumes.value,
-                    onRead: (chapter) => _read(context, ref, chapter),
-                  ),
-                  ...switch (volumes) {
-                    AsyncData(:final value) => _buildSections(
-                      context,
-                      ref,
-                      client,
-                      l10n,
-                      type,
-                      value,
-                    ),
-                    AsyncError() => [
-                      Padding(
-                        padding: const EdgeInsets.all(gutter),
-                        child: Column(
-                          children: [
-                            Text(
-                              ref.watch(offlineProvider)
-                                  ? l10n.offlineBanner
-                                  : l10n.serverUnreachable,
-                              textAlign: TextAlign.center,
-                              style: PatraText.body(color: patraTextMuted),
-                            ),
-                            const SizedBox(height: 16),
-                            OutlinedButton(
-                              onPressed: () =>
-                                  ref.invalidate(volumesProvider(seriesId)),
-                              child: Text(l10n.retry),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    _ => [const _RowsSkeleton()],
-                  },
-                ],
+          // The rows run at the app's own margin, like every other screen.
+          // A cap here centred a narrow column between two wide empty bands,
+          // which read as more wrong than the gap it closed inside the row.
+          // The answer to a tablet's width is a grid, not a narrower column.
+          // The hero renders as soon as the cover URL is known, so the
+          // chapter list loading underneath never blocks it.
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: sectionGap),
+            children: [
+              _SeriesHero(
+                seriesId: seriesId,
+                seriesName: seriesName,
+                type: type,
+                volumes: volumes.value,
+                onRead: (chapter) => _read(context, ref, chapter),
               ),
-            ),
+              ...switch (volumes) {
+                AsyncData(:final value) => _buildSections(
+                  context,
+                  ref,
+                  client,
+                  l10n,
+                  type,
+                  value,
+                ),
+                AsyncError() => [
+                  Padding(
+                    padding: const EdgeInsets.all(gutter),
+                    child: Column(
+                      children: [
+                        Text(
+                          ref.watch(offlineProvider)
+                              ? l10n.offlineBanner
+                              : l10n.serverUnreachable,
+                          textAlign: TextAlign.center,
+                          style: PatraText.body(color: patraTextMuted),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton(
+                          onPressed: () =>
+                              ref.invalidate(volumesProvider(seriesId)),
+                          child: Text(l10n.retry),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                _ => [const _RowsSkeleton()],
+              },
+            ],
           ),
         ),
       ),

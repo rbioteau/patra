@@ -39,11 +39,15 @@ const coverAspectRatio = 2 / 3;
 
 /// The cover on a row of a column of rows — a chapter, a saved chapter.
 ///
-/// The tablet pair is a **share of its row** (~13% of `contentMaxWidth`, the
-/// proportion a phone gives it), not a step up a scale. Both the series
-/// screen and the Downloads tab draw the same conceptual row, so the numbers
-/// live here: kept separately they drifted, and the same row was drawn at
-/// two sizes on two tabs.
+/// The tablet pair was sized as a share of a *capped* column — ~13% of it,
+/// the proportion a phone gives the cover. That cap is gone: a row now takes
+/// the full width at the app's margin, so the cover is a smaller share of it
+/// again. These sizes stay because they read well at arm's length; the right
+/// answer for a tablet's width is a grid, not a wider row.
+///
+/// Both the series screen and the Downloads tab draw the same conceptual row,
+/// so the numbers live here: kept separately they drifted, and the same row
+/// was drawn at two sizes on two tabs.
 const rowCoverWidth = 46.0;
 const rowCoverHeight = 66.0;
 const rowCoverWidthTablet = 80.0;
@@ -53,17 +57,6 @@ const rowCoverHeightTablet = 115.0;
 /// held in landscape is still a phone — the same question `ClientMetrics`
 /// answers when it tells Kavita what kind of device this is.
 const tabletBreakpoint = 600.0;
-
-/// Where a column of rows stops growing. Past this the parts of a row drift
-/// apart — cover against one edge, save pill against the other, a gulf in
-/// between — so the extra width is spent on the margins instead.
-///
-/// The cap is set by the *shortest* row we draw, not by the longest. A
-/// chapter row carries "Tome 1 · 218 pages" and a pill: at 680 that left it
-/// with 318pt of nothing in the middle (measured, 820pt portrait), which is
-/// the very drift this number exists to prevent. What a settings row could
-/// have filled, a chapter row cannot.
-const contentMaxWidth = 560.0;
 
 /// True where the screen is a tablet's, and the phone-sized furniture of the
 /// handoff has room to grow.
