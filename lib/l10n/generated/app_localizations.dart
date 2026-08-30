@@ -311,8 +311,32 @@ abstract class AppLocalizations {
   /// No description provided for @libraryEmpty.
   ///
   /// In en, this message translates to:
-  /// **'This library is empty.'**
+  /// **'This library is empty'**
   String get libraryEmpty;
+
+  /// No description provided for @libraryEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Patra shows what your server has scanned. Add files to {library} on the server, then scan it from Kavita.'**
+  String libraryEmptyBody(String library);
+
+  /// Only shown to a Kavita admin: every scan endpoint is behind AdminPolicy
+  ///
+  /// In en, this message translates to:
+  /// **'Ask server to scan'**
+  String get askServerToScan;
+
+  /// No description provided for @scanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning…'**
+  String get scanning;
+
+  /// Confirmation after POST /api/Library/scan; the scan itself is asynchronous
+  ///
+  /// In en, this message translates to:
+  /// **'Scan requested. Kavita may take a while — pull down to refresh.'**
+  String get scanRequested;
 
   /// No description provided for @signOut.
   ///

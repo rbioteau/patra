@@ -28,6 +28,7 @@ class ServerEntry {
     this.token = '',
     this.refreshToken = '',
     this.apiKey = '',
+    this.isAdmin = false,
   });
 
   final String baseUrl;
@@ -35,6 +36,16 @@ class ServerEntry {
   final String token;
   final String refreshToken;
   final String apiKey;
+
+  /// Whether this account holds Kavita's `Admin` role, as the login response
+  /// reported it.
+  ///
+  /// Persisted rather than asked for again, because a resumed session never
+  /// logs in a second time. It is therefore as old as the last sign-in: an
+  /// entry saved before this existed, or an account promoted since, reads
+  /// false until the next one — which costs an admin a button, and never
+  /// offers a non-admin one that could only fail.
+  final bool isAdmin;
 
   bool get hasSession => token.isNotEmpty;
 
@@ -47,12 +58,14 @@ class ServerEntry {
     String? token,
     String? refreshToken,
     String? apiKey,
+    bool? isAdmin,
   }) => ServerEntry(
     baseUrl: baseUrl,
     username: username ?? this.username,
     token: token ?? this.token,
     refreshToken: refreshToken ?? this.refreshToken,
     apiKey: apiKey ?? this.apiKey,
+    isAdmin: isAdmin ?? this.isAdmin,
   );
 
   Map<String, dynamic> toJson() => {
@@ -61,6 +74,7 @@ class ServerEntry {
     'token': token,
     'refreshToken': refreshToken,
     'apiKey': apiKey,
+    'isAdmin': isAdmin,
   };
 
   static ServerEntry? fromJson(Object? json) {
@@ -73,6 +87,7 @@ class ServerEntry {
       token: json['token'] as String? ?? '',
       refreshToken: json['refreshToken'] as String? ?? '',
       apiKey: json['apiKey'] as String? ?? '',
+      isAdmin: json['isAdmin'] as bool? ?? false,
     );
   }
 }
@@ -200,6 +215,7 @@ class AuthNotifier extends Notifier<AuthState> {
       token: user.token,
       refreshToken: user.refreshToken,
       apiKey: user.apiKey,
+      isAdmin: user.isAdmin,
     );
     await _commit(AuthState(servers: _upsert(entry), activeUrl: url));
   }

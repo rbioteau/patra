@@ -161,4 +161,29 @@ void main() {
       expect(info.aspectRatioFor(0), PageDimension.defaultAspectRatio);
     });
   });
+
+  group('the login response says what the account may do', () {
+    UserDto user(Object? roles) => UserDto.fromJson({
+      'username': 'romain',
+      'token': 't',
+      'refreshToken': 'r',
+      'apiKey': 'k',
+      'roles': ?roles,
+    });
+
+    test('Kavita\'s Admin role is what gates a scan', () {
+      // PolicyConstants.AdminRole is the literal "Admin", and AdminPolicy is
+      // RequireRole(AdminRole) — which every scan endpoint sits behind.
+      expect(user(['Login', 'Admin']).isAdmin, isTrue);
+      expect(user(['Login', 'Download', 'Change Password']).isAdmin, isFalse);
+    });
+
+    test('a server that omits roles is not an admin by accident', () {
+      // Kavita omits null fields, and "unknown" has to fail closed: guessing
+      // yes would draw a button whose only possible answer is a 403.
+      expect(user(null).isAdmin, isFalse);
+      expect(user(const <Object>[]).isAdmin, isFalse);
+      expect(user(const [1, 2]).isAdmin, isFalse);
+    });
+  });
 }

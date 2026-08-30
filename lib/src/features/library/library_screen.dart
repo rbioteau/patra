@@ -7,6 +7,8 @@ import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
+import '../../api/connection_failure.dart';
+import '../../widgets/dashed_border.dart';
 import '../../widgets/offline_indicator.dart';
 
 final librariesProvider = FutureProvider.autoDispose<List<LibraryDto>>(
@@ -91,7 +93,14 @@ class LibraryScreen extends ConsumerWidget {
                   onSelected: (id) =>
                       ref.read(selectedLibraryProvider.notifier).select(id),
                 ),
-                Expanded(child: _SeriesGrid(libraryId: current)),
+                Expanded(
+                  child: _SeriesGrid(
+                    libraryId: current,
+                    libraryName: items
+                        .firstWhere((library) => library.id == current)
+                        .name,
+                  ),
+                ),
               ],
             );
           },
@@ -173,13 +182,13 @@ SliverGridDelegate _gridDelegate(double width) =>
     );
 
 class _SeriesGrid extends ConsumerWidget {
-  const _SeriesGrid({required this.libraryId});
+  const _SeriesGrid({required this.libraryId, required this.libraryName});
 
   final int libraryId;
+  final String libraryName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final client = ref.watch(kavitaClientProvider);
     final series = ref.watch(seriesForLibraryProvider(libraryId));
 
@@ -190,10 +199,19 @@ class _SeriesGrid extends ConsumerWidget {
       ),
       data: (items) {
         if (items.isEmpty) {
-          return Center(
-            child: Text(
-              l10n.libraryEmpty,
-              style: PatraText.body(color: patraTextMuted),
+          // Pullable like the grid it stands in for: after asking for a scan
+          // there has to be a way to look again, and a bare Center has none.
+          return RefreshIndicator(
+            onRefresh: () => ref
+                .refresh(seriesForLibraryProvider(libraryId).future)
+                .catchError((Object _) => const <SeriesDto>[]),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: gutter * 1.6),
+              children: [
+                const SizedBox(height: 36),
+                _EmptyLibrary(libraryId: libraryId, libraryName: libraryName),
+              ],
             ),
           );
         }
@@ -296,6 +314,160 @@ class _ErrorState extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// An empty library, and the one thing that can be done about it from here.
+///
+/// A library is empty because the server has not scanned its files, not
+/// because anything is wrong with the app — so the copy points at the server
+/// rather than apologising, and names the library so there is no doubt which
+/// one is meant.
+///
+/// The button is offered **only to an admin**. Every way into a scan is
+/// behind Kavita's `AdminPolicy` (`RequireRole("Admin")`) — `scan`,
+/// `scan-multiple`, `scan-all`, and `scan-folder`, which is
+/// `[AllowAnonymous]` but checks the account itself and refuses. A non-admin
+/// could earn nothing but a 403 from it, and this app does not draw controls
+/// that cannot work: it is the same rule that leaves an EPUB row untappable.
+class _EmptyLibrary extends ConsumerStatefulWidget {
+  const _EmptyLibrary({required this.libraryId, required this.libraryName});
+
+  final int libraryId;
+  final String libraryName;
+
+  @override
+  ConsumerState<_EmptyLibrary> createState() => _EmptyLibraryState();
+}
+
+class _EmptyLibraryState extends ConsumerState<_EmptyLibrary> {
+  bool _scanning = false;
+
+  Future<void> _scan() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final host = ref.read(sessionProvider)?.host ?? '';
+    setState(() => _scanning = true);
+    try {
+      await ref.read(kavitaClientProvider).scanLibrary(widget.libraryId);
+      if (!mounted) return;
+      // The scan is a background job on the server: it is *requested* here,
+      // never finished here, and saying otherwise would be a lie the moment
+      // the library is large.
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.scanRequested)));
+      setState(() => _scanning = false);
+      // Last, because it can take this widget out of the tree.
+      ref.invalidate(seriesForLibraryProvider(widget.libraryId));
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(ConnectionFailure.from(error).message(l10n, host)),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final canScan = ref.watch(sessionProvider)?.isAdmin ?? false;
+
+    return Column(
+      children: [
+        // Dashed: the handoff's mark for a place to fill, the same one the
+        // "add a server" slot wears.
+        SizedBox(
+          width: 56,
+          height: 56,
+          child: CustomPaint(
+            painter: DashedBorderPainter(
+              color: patraText.withValues(alpha: .28),
+            ),
+            child: Icon(
+              Icons.dashboard_customize_outlined,
+              size: 24,
+              color: patraText.withValues(alpha: .45),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(l10n.libraryEmpty, style: PatraText.rowTitle(size: 14)),
+        const SizedBox(height: 6),
+        _EmptyBody(libraryName: widget.libraryName),
+        if (canScan) ...[
+          const SizedBox(height: 18),
+          ConstrainedBox(
+            // A button given the width of the screen stops reading as a
+            // button — the same 280-cap reasoning as the resume button, at
+            // the size the handoff draws this one.
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: OutlinedButton.icon(
+              onPressed: _scanning ? null : _scan,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: patraAccent,
+                side: BorderSide(color: patraAccent.withValues(alpha: .5)),
+                minimumSize: const Size.fromHeight(44),
+              ),
+              icon: _scanning
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: patraAccent,
+                      ),
+                    )
+                  : const Icon(Icons.refresh, size: 18),
+              label: Text(_scanning ? l10n.scanning : l10n.askServerToScan),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The explanation, with the library's own name picked out of it.
+///
+/// The sentence is one localized string with a placeholder — splitting it in
+/// two would put a French sentence together in English word order — so the
+/// name is found in the result rather than concatenated onto it. A name that
+/// cannot be found (empty, or swallowed by the translation) simply loses its
+/// emphasis instead of the sentence losing its shape.
+class _EmptyBody extends StatelessWidget {
+  const _EmptyBody({required this.libraryName});
+
+  final String libraryName;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final body = l10n.libraryEmptyBody(libraryName);
+    final style = PatraText.metadata(size: 12).copyWith(height: 1.55);
+    final at = libraryName.isEmpty ? -1 : body.indexOf(libraryName);
+
+    return Text.rich(
+      at < 0
+          ? TextSpan(text: body, style: style)
+          : TextSpan(
+              style: style,
+              children: [
+                TextSpan(text: body.substring(0, at)),
+                TextSpan(
+                  text: libraryName,
+                  style: style.copyWith(color: patraText.withValues(alpha: .7)),
+                ),
+                TextSpan(text: body.substring(at + libraryName.length)),
+              ],
+            ),
+      textAlign: TextAlign.center,
     );
   }
 }

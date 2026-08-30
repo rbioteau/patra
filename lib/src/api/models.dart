@@ -9,6 +9,7 @@ class UserDto {
     required this.token,
     required this.refreshToken,
     required this.apiKey,
+    this.roles = const [],
   });
 
   final String username;
@@ -16,11 +17,27 @@ class UserDto {
   final String refreshToken;
   final String apiKey;
 
+  /// Kavita's roles for this account, as `/api/Account/login` returns them.
+  final List<String> roles;
+
+  /// Kavita's `PolicyConstants.AdminRole`.
+  ///
+  /// Its `AdminPolicy` is `RequireRole("Admin")`, and that is what guards
+  /// every scan endpoint — so this is what decides whether a scan can be
+  /// asked for at all.
+  static const adminRole = 'Admin';
+
+  bool get isAdmin => roles.contains(adminRole);
+
   factory UserDto.fromJson(Map<String, dynamic> json) => UserDto(
     username: json['username'] as String? ?? '',
     token: json['token'] as String? ?? '',
     refreshToken: json['refreshToken'] as String? ?? '',
     apiKey: json['apiKey'] as String? ?? '',
+    roles: [
+      for (final role in json['roles'] as List<dynamic>? ?? const [])
+        if (role is String) role,
+    ],
   );
 }
 

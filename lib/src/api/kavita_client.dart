@@ -198,6 +198,22 @@ class KavitaClient {
   /// result into [offlineProvider] for the rest of the app.
   Future<void> health() => _dio.get<dynamic>('/api/Health');
 
+  /// Asks the server to scan a library for new files.
+  ///
+  /// **Admin only.** `POST /api/Library/scan` sits behind Kavita's
+  /// `AdminPolicy`, which is `RequireRole("Admin")` — and so does every other
+  /// way in: `scan-multiple`, `scan-all`, and even `scan-folder`, which is
+  /// `[AllowAnonymous]` but looks up the key's account and refuses a
+  /// non-admin itself. There is no non-admin path, which is why the button
+  /// this sits behind is not offered to one; a `403` is all it could earn.
+  ///
+  /// `libraryId` goes in the query string, not a body: the action takes a
+  /// bare `int`, which is where ASP.NET binds a primitive from.
+  Future<void> scanLibrary(int libraryId) => _dio.post<dynamic>(
+    '/api/Library/scan',
+    queryParameters: {'libraryId': libraryId},
+  );
+
   Future<List<LibraryDto>> libraries() async {
     final res = await _dio.get<List<dynamic>>('/api/Library/libraries');
     return res.data!

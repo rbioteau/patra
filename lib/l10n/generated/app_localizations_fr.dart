@@ -135,7 +135,22 @@ class AppLocalizationsFr extends AppLocalizations {
       'Rien à lire pour l\'instant. Vos bibliothèques apparaîtront ici dès que le serveur les aura analysées.';
 
   @override
-  String get libraryEmpty => 'Cette bibliothèque est vide.';
+  String get libraryEmpty => 'Cette bibliothèque est vide';
+
+  @override
+  String libraryEmptyBody(String library) {
+    return 'Patra affiche ce que votre serveur a analysé. Ajoutez des fichiers à $library sur le serveur, puis lancez une analyse depuis Kavita.';
+  }
+
+  @override
+  String get askServerToScan => 'Demander une analyse';
+
+  @override
+  String get scanning => 'Analyse en cours…';
+
+  @override
+  String get scanRequested =>
+      'Analyse demandée. Kavita peut prendre un moment — tirez pour rafraîchir.';
 
   @override
   String get signOut => 'Se déconnecter';

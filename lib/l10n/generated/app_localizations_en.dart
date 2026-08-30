@@ -134,7 +134,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Nothing to read yet. Your libraries will show up here once the server has scanned them.';
 
   @override
-  String get libraryEmpty => 'This library is empty.';
+  String get libraryEmpty => 'This library is empty';
+
+  @override
+  String libraryEmptyBody(String library) {
+    return 'Patra shows what your server has scanned. Add files to $library on the server, then scan it from Kavita.';
+  }
+
+  @override
+  String get askServerToScan => 'Ask server to scan';
+
+  @override
+  String get scanning => 'Scanning…';
+
+  @override
+  String get scanRequested =>
+      'Scan requested. Kavita may take a while — pull down to refresh.';
 
   @override
   String get signOut => 'Sign out';

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/connection_failure.dart';
 import '../../auth/session.dart';
+import '../../widgets/dashed_border.dart';
 import '../../theme.dart';
 
 /// Horizontal breathing room from the handoff's login screen — wider than the
@@ -512,7 +513,9 @@ class _AddServerButton extends StatelessWidget {
     return SizedBox(
       height: minHitTarget + 6,
       child: CustomPaint(
-        painter: _DashedBorderPainter(color: patraText.withValues(alpha: .25)),
+        painter: DashedBorderPainter(
+            color: patraText.withValues(alpha: .25),
+          ),
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
@@ -538,39 +541,4 @@ class _AddServerButton extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final outline = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          const Radius.circular(radiusCard),
-        ),
-      );
-    const dash = 6.0;
-    const gap = 4.0;
-    for (final metric in outline.computeMetrics()) {
-      for (var start = 0.0; start < metric.length; start += dash + gap) {
-        canvas.drawPath(
-          metric.extractPath(start, math.min(start + dash, metric.length)),
-          paint,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
-      oldDelegate.color != color;
 }

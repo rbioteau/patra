@@ -99,7 +99,22 @@
   },
   "librariesTitle": "Libraries",
   "homeEmpty": "Nothing to read yet. Your libraries will show up here once the server has scanned them.",
-  "libraryEmpty": "This library is empty.",
+  "libraryEmpty": "This library is empty",
+  "libraryEmptyBody": "Patra shows what your server has scanned. Add files to {library} on the server, then scan it from Kavita.",
+  "@libraryEmptyBody": {
+    "placeholders": {
+      "library": {"type": "String"}
+    }
+  },
+  "askServerToScan": "Ask server to scan",
+  "@askServerToScan": {
+    "description": "Only shown to a Kavita admin: every scan endpoint is behind AdminPolicy"
+  },
+  "scanning": "Scanning…",
+  "scanRequested": "Scan requested. Kavita may take a while — pull down to refresh.",
+  "@scanRequested": {
+    "description": "Confirmation after POST /api/Library/scan; the scan itself is asynchronous"
+  },
   "signOut": "Sign out",
   "retry": "Retry",
   "volumesTitle": "Volumes",
