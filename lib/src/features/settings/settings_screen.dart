@@ -7,9 +7,11 @@ import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../format.dart';
 import '../../settings/cache_settings.dart';
+import '../../settings/locale_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
+import '../../widgets/patra_wordmark.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -19,6 +21,7 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final session = ref.watch(sessionProvider);
     final direction = ref.watch(defaultReadingDirectionProvider);
+    final locale = ref.watch(localeProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
@@ -35,6 +38,16 @@ class SettingsScreen extends ConsumerWidget {
                 actionLabel: l10n.switchServer,
                 onTap: () => ref.read(authProvider.notifier).switchServer(),
               ),
+
+            _Section(label: l10n.generalSectionLabel),
+            _SettingRow(
+              icon: const Icon(Icons.language, size: 18, color: patraAccent),
+              title: l10n.appLanguage,
+              value: locale == null
+                  ? l10n.appLanguageSystem
+                  : languageEndonym(locale),
+              onTap: () => _pickLanguage(context, ref, locale),
+            ),
 
             _Section(label: l10n.readingSectionLabel),
             _SettingRow(
@@ -53,29 +66,25 @@ class SettingsScreen extends ConsumerWidget {
                 horizontal: gutter,
                 vertical: 6,
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text.rich(
-                    TextSpan(
-                      text: 'patra',
-                      style: PatraText.serifTitle(size: 18),
-                      children: [
-                        TextSpan(
-                          text: '.',
-                          style: PatraText.serifTitle(
-                            size: 18,
-                            color: patraAccent,
-                          ),
+                  Row(
+                    children: [
+                      const PatraWordmark(size: 18),
+                      const SizedBox(width: 10),
+                      // The tagline is a sentence: it wraps here rather than
+                      // running off the row.
+                      Expanded(
+                        child: Text(
+                          l10n.appTagline,
+                          style: PatraText.metadata(),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  // The tagline is a sentence: it wraps here rather than
-                  // running off the row.
-                  Expanded(
-                    child: Text(l10n.appTagline, style: PatraText.metadata()),
-                  ),
+                  const SizedBox(height: 6),
+                  const _AppVersion(),
                 ],
               ),
             ),
@@ -84,7 +93,6 @@ class SettingsScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: gutter),
               child: Align(
-                alignment: AlignmentDirectional.centerStart,
                 child: ConstrainedBox(
                   // Signing out is one short phrase; a button as wide as the
                   // screen reads as a banner rather than as something to press.
@@ -110,6 +118,51 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// The languages this build ships, under their own names, with the device's
+  /// own choice at the top.
+  ///
+  /// The list is derived from `supportedLocales` rather than written out, so a
+  /// new translation appears here by existing. Each is named in its own
+  /// language and never translated: someone who has landed in a language they
+  /// cannot read has to be able to find their way out of it.
+  Future<void> _pickLanguage(
+    BuildContext context,
+    WidgetRef ref,
+    Locale? current,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    // Null is a value here, not the absence of one, so the sheet answers with
+    // whether a choice was made rather than with the choice itself.
+    final picked = await showModalBottomSheet<({Locale? locale})>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: _SheetColumn(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
+              child: SectionLabel(l10n.appLanguage),
+            ),
+            for (final option in <Locale?>[
+              null,
+              ...AppLocalizations.supportedLocales,
+            ])
+              _LanguageTile(
+                label: option == null
+                    ? l10n.appLanguageSystem
+                    : languageEndonym(option),
+                selected: option == current,
+                onTap: () => Navigator.of(sheetContext).pop((locale: option)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) {
+      await ref.read(localeProvider.notifier).set(picked.locale);
+    }
   }
 
   Future<void> _pickDirection(
@@ -324,6 +377,24 @@ class _SheetColumn extends StatelessWidget {
       Column(mainAxisSize: mainAxisSize, children: children);
 }
 
+/// Which Patra this is.
+///
+/// Read off the binary rather than compiled in: CI passes the release tag to
+/// `--build-name`, so what is shown here is the version that shipped, with
+/// nothing in the repository to keep in step with it.
+class _AppVersion extends ConsumerWidget {
+  const _AppVersion();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Text(
+      l10n.aboutVersion(ref.watch(clientIdentityProvider).appVersion),
+      style: PatraText.metadata(),
+    );
+  }
+}
+
 class _Section extends StatelessWidget {
   const _Section({required this.label});
 
@@ -474,6 +545,35 @@ class _ServerCardState extends ConsumerState<_ServerCard>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One row of the language sheet. The device's own choice carries no flag or
+/// globe of its own: a language is not a country, and picking an icon for one
+/// is picking a country for it.
+class _LanguageTile extends StatelessWidget {
+  const _LanguageTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(
+        label,
+        style: PatraText.body(color: selected ? patraAccent : patraText),
+      ),
+      trailing: selected
+          ? const Icon(Icons.check, color: patraAccent, size: 18)
+          : null,
+      onTap: onTap,
     );
   }
 }

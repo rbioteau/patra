@@ -8,6 +8,7 @@ import 'src/app.dart';
 import 'src/auth/session.dart';
 import 'src/downloads/image_cache_store.dart';
 import 'src/settings/cache_settings.dart';
+import 'src/settings/locale_settings.dart';
 import 'src/settings/reading_settings.dart';
 
 Future<void> main() async {
@@ -16,6 +17,7 @@ Future<void> main() async {
   // Resolved before runApp so the very first request — a resumed session's —
   // already identifies itself to the server.
   final identity = await ClientIdentity.resolve();
+  final locale = await LocaleSettingsStore.load();
   final readingDirection = await ReadingSettingsStore.load();
   final cacheLimit = await ImageCacheSettingsStore.load();
   // One sweep on the way in, so a cache left over the budget by the previous
@@ -27,6 +29,7 @@ Future<void> main() async {
       overrides: [
         initialAuthStateProvider.overrideWithValue(auth),
         clientIdentityProvider.overrideWithValue(identity),
+        initialLocaleProvider.overrideWithValue(locale),
         initialReadingDirectionProvider.overrideWithValue(readingDirection),
         initialImageCacheLimitProvider.overrideWithValue(cacheLimit),
         imageCacheStoreProvider.overrideWithValue(imageCache),

@@ -357,7 +357,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Couvertures et pages lues en ligne. Le vider ne touche jamais aux chapitres enregistrés.';
 
   @override
-  String get clearCache => 'Vider';
+  String get clearCache => 'Vider le cache';
 
   @override
   String get imageCacheLimit => 'Taille maximale';
@@ -397,6 +397,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get serverChecking => 'Vérification…';
 
   @override
+  String get generalSectionLabel => 'Général';
+
+  @override
+  String get appLanguage => 'Langue';
+
+  @override
+  String get appLanguageSystem => 'Système';
+
+  @override
   String get readingSectionLabel => 'Lecture';
 
   @override
@@ -404,6 +413,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get aboutSectionLabel => 'À propos';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
 
   @override
   String sizeBytes(int count) {

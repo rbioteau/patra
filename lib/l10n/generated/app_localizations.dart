@@ -641,7 +641,7 @@ abstract class AppLocalizations {
   /// No description provided for @clearCache.
   ///
   /// In en, this message translates to:
-  /// **'Clear'**
+  /// **'Clear cache'**
   String get clearCache;
 
   /// No description provided for @imageCacheLimit.
@@ -698,6 +698,24 @@ abstract class AppLocalizations {
   /// **'Checking…'**
   String get serverChecking;
 
+  /// No description provided for @generalSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get generalSectionLabel;
+
+  /// No description provided for @appLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get appLanguage;
+
+  /// The default option in Settings > Language: follow whatever language the device is set to. The other options are each named in their own language and are never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get appLanguageSystem;
+
   /// No description provided for @readingSectionLabel.
   ///
   /// In en, this message translates to:
@@ -715,6 +733,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'About'**
   String get aboutSectionLabel;
+
+  /// Under the wordmark in Settings > About. Read off the binary rather than compiled in: CI passes the release tag to --build-name, so this is the version that shipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
 
   /// No description provided for @sizeBytes.
   ///

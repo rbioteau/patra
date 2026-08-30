@@ -356,7 +356,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Covers and pages read online. Clearing it never touches saved chapters.';
 
   @override
-  String get clearCache => 'Clear';
+  String get clearCache => 'Clear cache';
 
   @override
   String get imageCacheLimit => 'Cache limit';
@@ -396,6 +396,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverChecking => 'Checking…';
 
   @override
+  String get generalSectionLabel => 'General';
+
+  @override
+  String get appLanguage => 'Language';
+
+  @override
+  String get appLanguageSystem => 'System';
+
+  @override
   String get readingSectionLabel => 'Reading';
 
   @override
@@ -403,6 +412,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutSectionLabel => 'About';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
 
   @override
   String sizeBytes(int count) {

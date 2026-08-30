@@ -334,7 +334,7 @@
   "storageSectionLabel": "Storage",
   "imageCacheLabel": "Image cache",
   "imageCacheCaption": "Covers and pages read online. Clearing it never touches saved chapters.",
-  "clearCache": "Clear",
+  "clearCache": "Clear cache",
   "imageCacheLimit": "Cache limit",
   "imageCacheLimitCaption": "Once full, the oldest images are removed first.",
   "downloadedChapters": "{count, plural, =0{No saved chapter} =1{1 saved chapter} other{{count} saved chapters}}",
@@ -358,9 +358,22 @@
   "@serverChecking": {
     "description": "The dot's label while the reachability probe is still in flight"
   },
+  "generalSectionLabel": "General",
+  "appLanguage": "Language",
+  "appLanguageSystem": "System",
+  "@appLanguageSystem": {
+    "description": "The default option in Settings > Language: follow whatever language the device is set to. The other options are each named in their own language and are never translated."
+  },
   "readingSectionLabel": "Reading",
   "defaultReadingDirection": "Default reading direction",
   "aboutSectionLabel": "About",
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "Under the wordmark in Settings > About. Read off the binary rather than compiled in: CI passes the release tag to --build-name, so this is the version that shipped.",
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
   "sizeBytes": "{count} B",
   "@sizeBytes": {
     "placeholders": {

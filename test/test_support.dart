@@ -21,3 +21,33 @@ Directory mockPathProvider() {
   });
   return dir;
 }
+
+/// Backs flutter_secure_storage with a plain map for the duration of a test.
+///
+/// On a test binding the plugin has no platform behind it: on Linux it reaches
+/// for libsecret through the desktop implementation and simply never answers,
+/// so a `write` or a `delete` hangs the test rather than failing it. Any test
+/// that *sets* a stored preference — rather than only reading one back through
+/// a provider override — needs this.
+Map<String, String> mockSecureStorage([Map<String, String>? initial]) {
+  final values = {...?initial};
+  const channel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(channel, (call) async {
+        final key = call.arguments['key'] as String?;
+        return switch (call.method) {
+          'read' => values[key],
+          'readAll' => values,
+          'write' => values[key!] = call.arguments['value'] as String,
+          'delete' => values.remove(key),
+          'deleteAll' => values.clear(),
+          'containsKey' => values.containsKey(key),
+          _ => null,
+        };
+      });
+  addTearDown(
+    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null),
+  );
+  return values;
+}

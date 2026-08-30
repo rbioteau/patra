@@ -12,6 +12,7 @@ import 'features/login/login_screen.dart';
 import 'features/reader/reader_screen.dart';
 import 'features/series/series_detail_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'settings/locale_settings.dart';
 import 'theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
@@ -183,6 +184,9 @@ class PatraApp extends ConsumerWidget {
       title: 'Patra',
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // Null is not "unset": it is what MaterialApp takes to mean "resolve
+      // against the device", which is the setting's own default option.
+      locale: ref.watch(localeProvider),
       theme: patraTheme(),
       darkTheme: patraTheme(),
       themeMode: ThemeMode.dark,

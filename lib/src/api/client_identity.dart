@@ -163,7 +163,9 @@ class ClientIdentity {
     if (platform.isDesktop) return 'Desktop';
     if (platform == ClientPlatform.ipad) return 'Tablet';
     final metrics = screen();
-    if (!metrics.isKnown) return platform == ClientPlatform.other ? '' : 'Mobile';
+    if (!metrics.isKnown) {
+      return platform == ClientPlatform.other ? '' : 'Mobile';
+    }
     return metrics.isTablet ? 'Tablet' : 'Mobile';
   }
 
