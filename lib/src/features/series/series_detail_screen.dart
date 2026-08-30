@@ -12,11 +12,12 @@ import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
-import '../../widgets/offline_banner.dart';
+import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
 import '../library/library_screen.dart';
 
 final volumesProvider = FutureProvider.autoDispose.family<List<VolumeDto>, int>(
+  retry: serverRetry,
   (ref, seriesId) {
     return ref.watch(kavitaClientProvider).volumes(seriesId);
   },
@@ -67,11 +68,13 @@ final seriesVolumesProvider = Provider.autoDispose
     });
 
 final seriesProvider = FutureProvider.autoDispose.family<SeriesDto, int>(
+  retry: serverRetry,
   (ref, seriesId) => ref.watch(kavitaClientProvider).series(seriesId),
 );
 
 final seriesMetadataProvider = FutureProvider.autoDispose
     .family<SeriesMetadataDto, int>(
+      retry: serverRetry,
       (ref, seriesId) =>
           ref.watch(kavitaClientProvider).seriesMetadata(seriesId),
     );
@@ -188,6 +191,7 @@ class SeriesDetailScreen extends ConsumerWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: const [OfflineIndicator()],
       ),
       // One row open at a time, and scrolling closes it.
       body: SlidableAutoCloseBehavior(
@@ -204,7 +208,6 @@ class SeriesDetailScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: sectionGap),
                 children: [
-                  const OfflineBanner(),
                   _SeriesHero(
                     seriesId: seriesId,
                     seriesName: seriesName,

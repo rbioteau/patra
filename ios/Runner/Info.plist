@@ -24,11 +24,33 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<!-- Patra only talks HTTPS, which is exempt. Without this key App Store
+	<!-- Patra uses only the OS's own HTTPS, which is exempt, and cleartext
+	     HTTP, which is no encryption at all. Without this key App Store
 	     Connect holds every single build for a manual export-compliance
 	     answer before it can reach a tester. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- A self-hosted Kavita is usually a bare IP on the LAN with no
+	     certificate, so ATS has to let cleartext through or the address
+	     cannot be reached at all.
+
+	     NSAllowsLocalNetworking is the narrower key, but what it covers is
+	     stated inconsistently across Apple's own sources — whether a raw
+	     192.168.x.x counts is exactly the ambiguity — and it would leave out
+	     a Tailscale host (100.64/10, not RFC 1918) or a VPS on http. Nothing
+	     about iOS can be checked on this machine, so a key that might work
+	     is worse than one that plainly does. Android has no per-address
+	     granularity either, so this keeps the two platforms honest about
+	     being in the same position.
+
+	     The cost is real: ATS is off for public addresses too. Note that if
+	     Patra ever ships through the App Store rather than TestFlight, this
+	     key needs a justification at review. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

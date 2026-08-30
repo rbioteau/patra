@@ -7,9 +7,10 @@ import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
-import '../../widgets/offline_banner.dart';
+import '../../widgets/offline_indicator.dart';
 
 final librariesProvider = FutureProvider.autoDispose<List<LibraryDto>>(
+  retry: serverRetry,
   (ref) => ref.watch(kavitaClientProvider).libraries(),
 );
 
@@ -29,7 +30,7 @@ final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
 });
 
 final seriesForLibraryProvider = FutureProvider.autoDispose
-    .family<List<SeriesDto>, int>((ref, libraryId) {
+    .family<List<SeriesDto>, int>(retry: serverRetry, (ref, libraryId) {
       return ref.watch(kavitaClientProvider).allSeriesForLibrary(libraryId);
     });
 
@@ -55,7 +56,10 @@ class LibraryScreen extends ConsumerWidget {
     final libraries = ref.watch(librariesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.navLibrary)),
+      appBar: AppBar(
+        title: Text(l10n.navLibrary),
+        actions: const [OfflineIndicator()],
+      ),
       body: SafeArea(
         top: false,
         child: libraries.when(
@@ -81,7 +85,6 @@ class LibraryScreen extends ConsumerWidget {
                 : items.first.id;
             return Column(
               children: [
-                const OfflineBanner(),
                 _LibraryPills(
                   libraries: items,
                   selectedId: current,

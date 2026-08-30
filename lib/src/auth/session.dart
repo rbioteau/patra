@@ -1,12 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../api/client_device.dart';
 import '../api/client_identity.dart';
 import '../api/kavita_client.dart';
+
+/// Host part of a server address, for display, falling back to the raw value
+/// so a malformed one still names itself in a row or an error message.
+String serverHost(String baseUrl) {
+  final parsed = Uri.tryParse(baseUrl)?.host ?? '';
+  return parsed.isEmpty ? baseUrl : parsed;
+}
 
 /// A Kavita server the user has connected to at least once.
 ///
@@ -32,10 +40,7 @@ class ServerEntry {
 
   /// Host part of [baseUrl], for display; falls back to the raw value so a
   /// malformed address still labels its row.
-  String get host {
-    final parsed = Uri.tryParse(baseUrl)?.host ?? '';
-    return parsed.isEmpty ? baseUrl : parsed;
-  }
+  String get host => serverHost(baseUrl);
 
   ServerEntry copyWith({
     String? username,
@@ -284,6 +289,46 @@ class OfflineNotifier extends Notifier<bool> {
     if (state != offline) state = offline;
   }
 }
+
+/// How a provider that talks to the server retries a failure.
+///
+/// Riverpod 3 retries a failed provider on its own, with exponential backoff
+/// and **no ceiling**. That is right for a blip and wrong for being offline:
+/// a device with no network will not have one 200ms later, and every attempt
+/// drops the provider back to `AsyncLoading`, so the screen returns to its
+/// skeleton instead of settling on the offline state the app already knows
+/// how to show. Measured before this existed: opening the home screen with
+/// no network made 3 requests, then 33 within the minute, for ever — which
+/// is what an offline start looked like, and why the device redrew forever.
+///
+/// Bounded instead: three attempts inside ~600ms catch a momentary blip, and
+/// then it stops. Coming back online is the user's move — pull to refresh,
+/// or the retry button — rather than a timer nobody can see.
+///
+/// Pass it as `retry:` to every provider that reaches the network.
+Duration? serverRetry(int retryCount, Object error) => retryCount >= 2
+    ? null
+    : Duration(milliseconds: 200 * (1 << retryCount));
+
+/// A live check that the server is actually there, behind the indicator on
+/// the settings screen.
+///
+/// [offlineProvider] cannot answer this on its own: it only moves when a
+/// request *fails*, so a device that loses its connection while sitting on a
+/// screen keeps whatever the last request said. That is how a dot came to
+/// mean "nobody has told us otherwise" while showing "connected".
+///
+/// The call runs through the client, so its own success or failure feeds
+/// [offlineProvider] in passing and the banner agrees with the dot.
+final serverReachableProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final client = ref.watch(kavitaClientProvider);
+  try {
+    await client.health();
+    return true;
+  } on DioException {
+    return false;
+  }
+});
 
 /// Kept across rebuilds so screens still unmounting after a logout get a
 /// usable (if doomed) client instead of a build-time crash, and so a

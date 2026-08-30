@@ -7,14 +7,16 @@ import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
-import '../../widgets/offline_banner.dart';
+import '../../widgets/offline_indicator.dart';
 import '../library/library_screen.dart';
 
 final continueReadingProvider = FutureProvider.autoDispose<List<SeriesDto>>(
+  retry: serverRetry,
   (ref) => ref.watch(kavitaClientProvider).currentlyReading(),
 );
 
 final onDeckProvider = FutureProvider.autoDispose<List<SeriesDto>>(
+  retry: serverRetry,
   (ref) => ref.watch(kavitaClientProvider).onDeck(),
 );
 
@@ -54,7 +56,10 @@ class HomeScreen extends ConsumerWidget {
         (libraries.value?.isEmpty ?? false);
 
     return Scaffold(
-      appBar: AppBar(title: const _Wordmark()),
+      appBar: AppBar(
+        title: const _Wordmark(),
+        actions: const [OfflineIndicator()],
+      ),
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
@@ -62,7 +67,6 @@ class HomeScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.only(bottom: sectionGap),
             children: [
-              const OfflineBanner(),
               if (everythingEmpty)
                 Padding(
                   padding: const EdgeInsets.all(gutter * 1.5),

@@ -11,7 +11,11 @@
   "serverAddress": "Server address",
   "serverAddressHint": "https://kavita.example.com",
   "serverAddressRequired": "Server address is required",
-  "serverAddressInvalid": "Invalid address (http(s)://…)",
+  "serverAddressInvalid": "Enter a full address, starting with http:// or https://",
+  "serverAddressLocalHint": "A server on your own network can use http:// — for example http://192.168.1.10:5000",
+  "@serverAddressLocalHint": {
+    "description": "Helper under the server address field, saying cleartext is allowed"
+  },
   "username": "Username",
   "usernameRequired": "Username is required",
   "password": "Password",
@@ -21,6 +25,41 @@
   "@loginFailed": {
     "placeholders": {
       "error": {"type": "String"}
+    }
+  },
+  "connectionUnreachable": "Could not reach {host}. Check the address, and that this device is on the same network as the server.",
+  "@connectionUnreachable": {
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
+  "connectionTimedOut": "{host} did not answer in time.",
+  "@connectionTimedOut": {
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
+  "connectionBadCertificate": "{host} presented a certificate this device does not trust. A self-signed certificate has to be installed on the device first.",
+  "@connectionBadCertificate": {
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
+  "connectionBadCredentials": "The server rejected this username or password.",
+  "@connectionBadCredentials": {
+    "description": "Kavita answers every credential failure with a bare 401, so this one message covers a wrong password and a locked-out account alike"
+  },
+  "connectionNotKavita": "{host} answered, but there is no Kavita server behind that address.",
+  "@connectionNotKavita": {
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
+  "connectionServerError": "{host} answered with an error ({status}).",
+  "@connectionServerError": {
+    "placeholders": {
+      "host": {"type": "String"},
+      "status": {"type": "int"}
     }
   },
   "savedServers": "Your servers",
@@ -285,6 +324,18 @@
   "settingsTitle": "Settings",
   "serverSectionLabel": "Server",
   "switchServer": "Switch server",
+  "serverOnline": "Connected",
+  "@serverOnline": {
+    "description": "Accessible label for the reachability dot on the settings server card"
+  },
+  "serverOffline": "Offline",
+  "@serverOffline": {
+    "description": "Shown beside the username, and as the dot's label, when the server cannot be reached"
+  },
+  "serverChecking": "Checking…",
+  "@serverChecking": {
+    "description": "The dot's label while the reachability probe is still in flight"
+  },
   "readingSectionLabel": "Reading",
   "defaultReadingDirection": "Default reading direction",
   "aboutSectionLabel": "About",

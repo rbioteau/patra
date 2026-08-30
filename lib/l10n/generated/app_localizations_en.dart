@@ -26,7 +26,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverAddressRequired => 'Server address is required';
 
   @override
-  String get serverAddressInvalid => 'Invalid address (http(s)://…)';
+  String get serverAddressInvalid =>
+      'Enter a full address, starting with http:// or https://';
+
+  @override
+  String get serverAddressLocalHint =>
+      'A server on your own network can use http:// — for example http://192.168.1.10:5000';
 
   @override
   String get username => 'Username';
@@ -46,6 +51,35 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String loginFailed(String error) {
     return 'Could not sign in: $error';
+  }
+
+  @override
+  String connectionUnreachable(String host) {
+    return 'Could not reach $host. Check the address, and that this device is on the same network as the server.';
+  }
+
+  @override
+  String connectionTimedOut(String host) {
+    return '$host did not answer in time.';
+  }
+
+  @override
+  String connectionBadCertificate(String host) {
+    return '$host presented a certificate this device does not trust. A self-signed certificate has to be installed on the device first.';
+  }
+
+  @override
+  String get connectionBadCredentials =>
+      'The server rejected this username or password.';
+
+  @override
+  String connectionNotKavita(String host) {
+    return '$host answered, but there is no Kavita server behind that address.';
+  }
+
+  @override
+  String connectionServerError(String host, int status) {
+    return '$host answered with an error ($status).';
   }
 
   @override
@@ -331,6 +365,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get switchServer => 'Switch server';
+
+  @override
+  String get serverOnline => 'Connected';
+
+  @override
+  String get serverOffline => 'Offline';
+
+  @override
+  String get serverChecking => 'Checking…';
 
   @override
   String get readingSectionLabel => 'Reading';

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../api/connection_failure.dart';
 import '../../auth/session.dart';
 import '../../theme.dart';
 
@@ -75,7 +76,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Guarded like the finally below: login has a 10s connect timeout, and
       // anything that tears the route down while it is outstanding would
       // otherwise land a setState on a disposed State.
-      if (mounted) setState(() => _error = l10n.loginFailed('$e'));
+      //
+      // The raw error is a DioException naming a type, a URI and a socket
+      // error under it — true, and useless to the person who just mistyped
+      // a host. `ConnectionFailure` sorts it into the few cases that change
+      // what they would do next, and only `unknown` still shows the text.
+      final failure = ConnectionFailure.from(e);
+      final host = serverHost(_serverController.text.trim());
+      if (mounted) setState(() => _error = failure.message(l10n, host));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -221,16 +229,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               decoration: InputDecoration(hintText: l10n.serverAddressHint),
               keyboardType: TextInputType.url,
               autocorrect: false,
+              autofillHints: const [AutofillHints.url],
               validator: (v) {
                 final value = v?.trim() ?? '';
                 if (value.isEmpty) return l10n.serverAddressRequired;
                 final uri = Uri.tryParse(value);
-                if (uri == null || !uri.hasScheme) {
+                // `hasScheme` alone let three bad addresses through, each of
+                // which failed later as an unreadable dio error: a host with
+                // a port and no scheme parses with a *scheme* of
+                // "kavita.local", `ftp://x.y` has a scheme we cannot speak,
+                // and `http://` has none of the host we need.
+                if (uri == null ||
+                    (uri.scheme != 'http' && uri.scheme != 'https') ||
+                    uri.host.isEmpty) {
                   return l10n.serverAddressInvalid;
                 }
                 return null;
               },
             ),
+          ),
+          const SizedBox(height: 6),
+          // A self-hosted server is usually a bare IP with no certificate,
+          // and nothing on this screen used to say that was allowed.
+          Text(
+            l10n.serverAddressLocalHint,
+            style: PatraText.metadata(size: 11),
           ),
           const SizedBox(height: 14),
           _Field(

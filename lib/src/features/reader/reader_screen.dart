@@ -22,7 +22,7 @@ import 'spread_layout.dart';
 import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose
-    .family<ChapterInfoDto, int>((ref, chapterId) {
+    .family<ChapterInfoDto, int>(retry: serverRetry, (ref, chapterId) {
       return ref.watch(kavitaClientProvider).chapterInfo(chapterId);
     });
 

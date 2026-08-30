@@ -352,7 +352,15 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _ServerCard extends StatelessWidget {
+/// The active server, with an indicator saying whether it is actually there.
+///
+/// The dot used to be a `const` [patraOnline]: it said "connected" from the
+/// moment the screen was drawn, with nothing behind it. It now reads a real
+/// probe, and re-runs it when the app comes back to the foreground — which
+/// is where connectivity usually changes, and the four tabs live in an
+/// `IndexedStack`, so this card is never rebuilt from scratch and nothing
+/// else would think to ask again.
+class _ServerCard extends ConsumerStatefulWidget {
   const _ServerCard({
     required this.host,
     required this.username,
@@ -366,14 +374,51 @@ class _ServerCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  ConsumerState<_ServerCard> createState() => _ServerCardState();
+}
+
+class _ServerCardState extends ConsumerState<_ServerCard>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(serverReachableProvider);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // A request that has just failed is fresher news than a probe that
+    // succeeded a while ago, so being offline outranks a stale success.
+    // Null is "not known yet", which is neither colour.
+    final probe = ref.watch(serverReachableProvider);
+    final reachable = ref.watch(offlineProvider) ? false : probe.value;
+    final (dotColor, status) = switch (reachable) {
+      true => (patraOnline, l10n.serverOnline),
+      false => (patraDanger, l10n.serverOffline),
+      null => (patraTextMuted, l10n.serverChecking),
+    };
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: gutter),
       child: Material(
         color: patraSurface,
         borderRadius: BorderRadius.circular(radiusCard),
         child: InkWell(
-          onTap: onTap,
+          onTap: widget.onTap,
           borderRadius: BorderRadius.circular(radiusCard),
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -383,12 +428,18 @@ class _ServerCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: patraOnline,
-                    shape: BoxShape.circle,
+                // The state reaches a screen reader as a word; an 8pt dot
+                // that only changes colour reaches no one who cannot tell
+                // these two colours apart.
+                Semantics(
+                  label: status,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -397,18 +448,38 @@ class _ServerCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        host,
+                        widget.host,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: PatraText.rowTitle(),
                       ),
                       const SizedBox(height: 3),
-                      Text(username, style: PatraText.metadata()),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.username,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: PatraText.metadata(),
+                            ),
+                          ),
+                          // Said in words only when it is bad news: a green
+                          // dot needs no caption, an unreachable server does.
+                          if (reachable == false) ...[
+                            Text(' · ', style: PatraText.metadata()),
+                            Text(
+                              status,
+                              style: PatraText.metadata(color: patraDanger),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
                 Text(
-                  actionLabel,
+                  widget.actionLabel,
                   style: PatraText.metadata(color: patraAccent),
                 ),
                 const Icon(Icons.chevron_right, size: 18),

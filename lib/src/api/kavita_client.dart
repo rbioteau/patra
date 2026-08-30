@@ -168,6 +168,7 @@ class KavitaClient {
     required String username,
     required String password,
     ClientIdentity identity = const ClientIdentity.unknown(),
+    @visibleForTesting HttpClientAdapter? adapter,
   }) async {
     final dio = Dio(
       BaseOptions(
@@ -176,12 +177,26 @@ class KavitaClient {
         connectTimeout: const Duration(seconds: 10),
       ),
     );
+    if (adapter != null) dio.httpClientAdapter = adapter;
     final res = await dio.post<Map<String, dynamic>>(
       '/api/Account/login',
       data: {'username': username, 'password': password, 'apiKey': ''},
     );
     return UserDto.fromJson(res.data!);
   }
+
+  /// Cheapest proof that the server is there.
+  ///
+  /// `/api/Health` is the right probe rather than a convenient GET we already
+  /// make: it is `[AllowAnonymous]`, so it answers reachability even when our
+  /// token has gone stale — which is the question a connectivity dot asks —
+  /// and it is `[SkipDeviceTracking]`, so asking it repeatedly does not churn
+  /// the `ClientDevice` entry that every other endpoint registers.
+  ///
+  /// Untyped on purpose: the body is the plain string "Ok", not JSON. Going
+  /// through [_dio] is the point — the reachability interceptor turns the
+  /// result into [offlineProvider] for the rest of the app.
+  Future<void> health() => _dio.get<dynamic>('/api/Health');
 
   Future<List<LibraryDto>> libraries() async {
     final res = await _dio.get<List<dynamic>>('/api/Library/libraries');

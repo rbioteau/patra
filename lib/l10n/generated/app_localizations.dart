@@ -131,8 +131,14 @@ abstract class AppLocalizations {
   /// No description provided for @serverAddressInvalid.
   ///
   /// In en, this message translates to:
-  /// **'Invalid address (http(s)://…)'**
+  /// **'Enter a full address, starting with http:// or https://'**
   String get serverAddressInvalid;
+
+  /// Helper under the server address field, saying cleartext is allowed
+  ///
+  /// In en, this message translates to:
+  /// **'A server on your own network can use http:// — for example http://192.168.1.10:5000'**
+  String get serverAddressLocalHint;
 
   /// No description provided for @username.
   ///
@@ -169,6 +175,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not sign in: {error}'**
   String loginFailed(String error);
+
+  /// No description provided for @connectionUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach {host}. Check the address, and that this device is on the same network as the server.'**
+  String connectionUnreachable(String host);
+
+  /// No description provided for @connectionTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} did not answer in time.'**
+  String connectionTimedOut(String host);
+
+  /// No description provided for @connectionBadCertificate.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} presented a certificate this device does not trust. A self-signed certificate has to be installed on the device first.'**
+  String connectionBadCertificate(String host);
+
+  /// Kavita answers every credential failure with a bare 401, so this one message covers a wrong password and a locked-out account alike
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected this username or password.'**
+  String get connectionBadCredentials;
+
+  /// No description provided for @connectionNotKavita.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} answered, but there is no Kavita server behind that address.'**
+  String connectionNotKavita(String host);
+
+  /// No description provided for @connectionServerError.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} answered with an error ({status}).'**
+  String connectionServerError(String host, int status);
 
   /// Section label above the list of previously used servers
   ///
@@ -607,6 +649,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Switch server'**
   String get switchServer;
+
+  /// Accessible label for the reachability dot on the settings server card
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get serverOnline;
+
+  /// Shown beside the username, and as the dot's label, when the server cannot be reached
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get serverOffline;
+
+  /// The dot's label while the reachability probe is still in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get serverChecking;
 
   /// No description provided for @readingSectionLabel.
   ///

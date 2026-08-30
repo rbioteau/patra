@@ -189,4 +189,66 @@ void main() {
     final wide = await pumpAt(const Size(3000, 2000));
     expect(wide.labelBehavior, NavigationDestinationLabelBehavior.alwaysShow);
   });
+
+  group('the server address field refuses what dio could not use', () {
+    /// Types an address and submits; returns with the form settled.
+    Future<void> submit(WidgetTester tester, String address) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), address);
+      await tester.enterText(fields.at(1), 'romain');
+      await tester.enterText(fields.at(2), 'hunter2');
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+    }
+
+    const invalid = 'Enter a full address, starting with http:// or https://';
+
+    testWidgets('a host with a port parses as a scheme, and is caught', (
+      tester,
+    ) async {
+      // `Uri.tryParse('kavita.local:5000')` reports hasScheme = true with a
+      // *scheme* of "kavita.local", so the old check passed it to dio, which
+      // failed later with something nobody could act on.
+      await submit(tester, 'kavita.local:5000');
+      expect(find.text(invalid), findsOneWidget);
+    });
+
+    testWidgets('a scheme we cannot speak, and a scheme with no host', (
+      tester,
+    ) async {
+      for (final address in ['ftp://kavita.lan', 'http://', 'notaurl']) {
+        await submit(tester, address);
+        expect(find.text(invalid), findsOneWidget, reason: address);
+      }
+    });
+
+    testWidgets('a local server on plain http is a valid address', (
+      tester,
+    ) async {
+      await submit(tester, 'http://192.168.1.10:5000');
+
+      expect(find.text(invalid), findsNothing);
+      // It got as far as the network, which in a test answers 400 — so the
+      // screen shows the classified message rather than a dio dump.
+      expect(find.textContaining('DioException'), findsNothing);
+      expect(
+        find.textContaining('192.168.1.10'),
+        findsWidgets,
+        reason: 'the failure should name the server that was tried',
+      );
+    });
+
+    testWidgets('the form says cleartext is allowed', (tester) async {
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('can use http://'),
+        findsOneWidget,
+        reason: 'nothing else on this screen says a local server may be http',
+      );
+    });
+  });
 }

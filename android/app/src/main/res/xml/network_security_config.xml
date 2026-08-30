@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Patra talks to whatever server the user names, and a self-hosted Kavita
+     is very often a bare IP on the LAN with no certificate at all. Android
+     has blocked cleartext by default since API 28, so without this the
+     address simply fails to connect.
+
+     It has to be the *base* config: the per-domain form of this file can
+     only permit cleartext for hosts written down at build time, and the
+     whole point is that we cannot know the address in advance.
+
+     Trust anchors stay system-only on purpose — permitting cleartext is not
+     the same decision as trusting a user-installed CA, and nothing here asks
+     for the second one. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -36,7 +36,8 @@ flutter run -d linux   # or a connected device
 flutter analyze && flutter test
 ```
 
-Requires a running [Kavita](https://github.com/Kareadita/Kavita) server (v0.9+).
+Requires a running [Kavita](https://github.com/Kareadita/Kavita) server (v0.9+),
+reachable over `https://` or, for a server on your own network, `http://`.
 
 ## Architecture
 

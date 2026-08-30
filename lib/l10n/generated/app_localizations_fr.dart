@@ -27,7 +27,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get serverAddressRequired => 'Adresse requise';
 
   @override
-  String get serverAddressInvalid => 'Adresse invalide (http(s)://…)';
+  String get serverAddressInvalid =>
+      'Saisissez une adresse complète, commençant par http:// ou https://';
+
+  @override
+  String get serverAddressLocalHint =>
+      'Un serveur sur votre réseau peut utiliser http:// — par exemple http://192.168.1.10:5000';
 
   @override
   String get username => 'Utilisateur';
@@ -47,6 +52,35 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String loginFailed(String error) {
     return 'Connexion impossible : $error';
+  }
+
+  @override
+  String connectionUnreachable(String host) {
+    return 'Impossible de joindre $host. Vérifiez l\'adresse, et que cet appareil est bien sur le même réseau que le serveur.';
+  }
+
+  @override
+  String connectionTimedOut(String host) {
+    return '$host n\'a pas répondu à temps.';
+  }
+
+  @override
+  String connectionBadCertificate(String host) {
+    return '$host présente un certificat que cet appareil ne reconnaît pas. Un certificat auto-signé doit d\'abord être installé sur l\'appareil.';
+  }
+
+  @override
+  String get connectionBadCredentials =>
+      'Le serveur a refusé ce nom d\'utilisateur ou ce mot de passe.';
+
+  @override
+  String connectionNotKavita(String host) {
+    return '$host a répondu, mais aucun serveur Kavita ne se trouve à cette adresse.';
+  }
+
+  @override
+  String connectionServerError(String host, int status) {
+    return '$host a répondu par une erreur ($status).';
   }
 
   @override
@@ -332,6 +366,15 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get switchServer => 'Changer de serveur';
+
+  @override
+  String get serverOnline => 'Connecté';
+
+  @override
+  String get serverOffline => 'Hors ligne';
+
+  @override
+  String get serverChecking => 'Vérification…';
 
   @override
   String get readingSectionLabel => 'Lecture';
