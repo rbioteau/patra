@@ -1,35 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon variant of the mark (Android 13+). The system ignores the
+<!-- Themed-icon variant of the frond (Android 13+). The system ignores the
      colour and tints the shape from the wallpaper, but it honours alpha, so
-     the parchment lines keep fading out. Geometry is identical to
-     patra_mark.xml: regenerate both together. -->
+     the fan still reads: the centre blade stays solid and the others fall
+     away outward. The parchment steps are lifted off their brand values
+     (0.58/0.46/0.34/0.26 to 0.80/0.68/0.52/0.42) because a tinted line that
+     faint disappears on some wallpapers - the ordering is what carries the
+     fan, not the absolute values. Geometry is identical to patra_mark.xml:
+     regenerate both together. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="1024"
-    android:viewportHeight="1024">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="1.0"
-        android:pathData="M300.3,328.8 H479.1 A32.4,32.4 0 0 1 511.6,361.2 V662.8 A32.4,32.4 0 0 1 479.1,695.2 H300.3 A32.4,32.4 0 0 1 267.9,662.8 V361.2 A32.4,32.4 0 0 1 300.3,328.8 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.95"
-        android:pathData="M561.5,327.9 H707.9 A8.8,8.8 0 0 1 716.7,336.7 V360.4 A8.8,8.8 0 0 1 707.9,369.1 H561.5 A8.8,8.8 0 0 1 552.8,360.4 V336.7 A8.8,8.8 0 0 1 561.5,327.9 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.7"
-        android:pathData="M561.5,409.4 H748.2 A8.8,8.8 0 0 1 757.0,418.2 V442.8 A8.8,8.8 0 0 1 748.2,451.5 H561.5 A8.8,8.8 0 0 1 552.8,442.8 V418.2 A8.8,8.8 0 0 1 561.5,409.4 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.5"
-        android:pathData="M561.5,491.0 H687.8 A8.8,8.8 0 0 1 696.5,499.7 V524.3 A8.8,8.8 0 0 1 687.8,533.0 H561.5 A8.8,8.8 0 0 1 552.8,524.3 V499.7 A8.8,8.8 0 0 1 561.5,491.0 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.33"
-        android:pathData="M561.5,572.5 H728.1 A8.8,8.8 0 0 1 736.8,581.2 V605.8 A8.8,8.8 0 0 1 728.1,614.6 H561.5 A8.8,8.8 0 0 1 552.8,605.8 V581.2 A8.8,8.8 0 0 1 561.5,572.5 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.2"
-        android:pathData="M561.5,654.9 H646.6 A8.8,8.8 0 0 1 655.3,663.6 V687.3 A8.8,8.8 0 0 1 646.6,696.1 H561.5 A8.8,8.8 0 0 1 552.8,687.3 V663.6 A8.8,8.8 0 0 1 561.5,654.9 Z" />
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="54"
+        android:translateY="71.5"
+        android:scaleX="0.76"
+        android:scaleY="0.76">
+        <group android:rotation="-50">
+            <path
+                android:fillColor="#FFFFFF"
+                android:fillAlpha="0.52"
+                android:pathData="M-2.6,-35.4 A2.6,2.6 0 0 1 2.6,-35.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
+        </group>
+        <group android:rotation="-26">
+            <path
+                android:fillColor="#FFFFFF"
+                android:fillAlpha="0.80"
+                android:pathData="M-2.6,-43.4 A2.6,2.6 0 0 1 2.6,-43.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
+        </group>
+        <group android:rotation="0">
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M-2.6,-49.4 A2.6,2.6 0 0 1 2.6,-49.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
+        </group>
+        <group android:rotation="26">
+            <path
+                android:fillColor="#FFFFFF"
+                android:fillAlpha="0.68"
+                android:pathData="M-2.6,-43.4 A2.6,2.6 0 0 1 2.6,-43.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
+        </group>
+        <group android:rotation="50">
+            <path
+                android:fillColor="#FFFFFF"
+                android:fillAlpha="0.42"
+                android:pathData="M-2.6,-35.4 A2.6,2.6 0 0 1 2.6,-35.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
+        </group>
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M-1.6,-0.4 A1.6,1.6 0 0 1 1.6,-0.4 L1.6,4.4 A1.6,1.6 0 0 1 -1.6,4.4 Z" />
+    </group>
 </vector>

@@ -31,22 +31,15 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   generate: true
 
-# App icons are generated from the master mark by flutter_launcher_icons:
-#   dart run flutter_launcher_icons
-# The ink tile colour matches the brand mark, so the Android adaptive
-# foreground can sit on it seamlessly.
-flutter_launcher_icons:
-  image_path: "assets/icon/patra-1024.png"
-  android: true
-  ios: true
-  remove_alpha_ios: true
-  # The Android adaptive icon is not generated: its foreground is the vector
-  # drawable/patra_mark.xml, shared with the splash screen, and this tool can
-  # only rasterise a PNG foreground (and would rewrite the XML with an inset
-  # that double-pads it). Do not add adaptive_icon_* keys here.
+# App icons are generated from the two masters in assets/icon/ by
+#   ./tool/gen_app_icons.sh
+# and not by flutter_launcher_icons, which rasterises a single master to every
+# size: the handoff renders anything at or under 72px from the *compact*
+# three-blade frond, because five blades close into a blob there. The script
+# also leaves the Android adaptive icon alone — its foreground is the vector
+# res/drawable/patra_mark.xml, shared with nothing and hand-kept. See CLAUDE.md.
