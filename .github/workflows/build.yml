@@ -172,7 +172,12 @@ jobs:
           # days clock a personal account must run before it may ask for
           # production access; only a closed test ("alpha") does. Switch this
           # one word when that clock needs to start.
-          track: internal
+          #
+          # `tracks`, plural, comma-separated: the singular `track` is
+          # deprecated, and setting both is a hard error rather than a
+          # warning. Never leave it out — the action's default is
+          # *production*.
+          tracks: internal
           status: completed
 
       - name: Forget the signing material
