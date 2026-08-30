@@ -513,9 +513,7 @@ class _AddServerButton extends StatelessWidget {
     return SizedBox(
       height: minHitTarget + 6,
       child: CustomPaint(
-        painter: DashedBorderPainter(
-            color: patraText.withValues(alpha: .25),
-          ),
+        painter: DashedBorderPainter(color: patraText.withValues(alpha: .25)),
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(

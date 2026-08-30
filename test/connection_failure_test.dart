@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,19 +13,33 @@ class _Adapter implements HttpClientAdapter {
   /// `Unauthorized("message")` as **text/plain**, and what dio does with a
   /// body depends on it — a wrong one here would test a server that does
   /// not exist.
-  _Adapter.responds(this.status, this.body, this.contentType) : throws = null;
+  _Adapter.responds(this.status, this.body, this.contentType)
+    : throws = null,
+      raw = null;
   _Adapter.fails(this.throws)
     : status = 0,
       body = '',
-      contentType = 'text/plain';
+      contentType = 'text/plain',
+      raw = null;
+
+  /// Throws a real exception from the socket, rather than a DioException of
+  /// a chosen type — which is the only way to find out what dio makes of it.
+  _Adapter.raises(this.raw)
+    : status = 0,
+      body = '',
+      contentType = 'text/plain',
+      throws = null;
 
   final int status;
   final String body;
   final String contentType;
   final DioExceptionType? throws;
+  final Object? raw;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    final thrown = raw;
+    if (thrown != null) throw thrown;
     final type = throws;
     if (type != null) {
       throw DioException(requestOptions: options, type: type);
@@ -65,13 +81,19 @@ void main() {
       // e-mail and password-auth-disabled all return Unauthorized, carrying
       // plain text in the *server account's* locale. One case covers them.
       final failure = await _failureOf(
-        _Adapter.responds(401, 'Your credentials are not correct', 'text/plain'),
+        _Adapter.responds(
+          401,
+          'Your credentials are not correct',
+          'text/plain',
+        ),
       );
       expect(failure.kind, ConnectionFailureKind.badCredentials);
     });
 
     test('a web server that is not Kavita 404s the login endpoint', () async {
-      final failure = await _failureOf(_Adapter.responds(404, '<html>404</html>', 'text/html'));
+      final failure = await _failureOf(
+        _Adapter.responds(404, '<html>404</html>', 'text/html'),
+      );
       expect(failure.kind, ConnectionFailureKind.notKavita);
     });
 
@@ -86,7 +108,9 @@ void main() {
     });
 
     test('Kavita having a problem of its own is not the user\'s', () async {
-      final failure = await _failureOf(_Adapter.responds(500, 'boom', 'text/plain'));
+      final failure = await _failureOf(
+        _Adapter.responds(500, 'boom', 'text/plain'),
+      );
       expect(failure.kind, ConnectionFailureKind.serverError);
       expect(failure.status, 500);
     });
@@ -114,6 +138,31 @@ void main() {
         _Adapter.fails(DioExceptionType.badCertificate),
       );
       expect(failure.kind, ConnectionFailureKind.badCertificate);
+    });
+
+    test('a self-signed certificate is named, not dumped', () async {
+      // dio only ever raises DioExceptionType.badCertificate from an adapter
+      // given a `validateCertificate` callback, which this app does not set.
+      // What a self-signed server really produces is a HandshakeException —
+      // a TlsException, so neither the SocketException nor the HttpException
+      // dio's IO adapter catches — which arrives wrapped as `unknown`. Left
+      // unmatched, the one screen where a self-hoster meets this showed the
+      // raw dio dump.
+      final failure = await _failureOf(
+        _Adapter.raises(const HandshakeException('CERTIFICATE_VERIFY_FAILED')),
+      );
+      expect(failure.kind, ConnectionFailureKind.badCertificate);
+    });
+
+    test('a refusal is not a wrong address', () async {
+      // Kavita's AdminPolicy answers 403, which every non-login caller can
+      // meet — asking for a scan with an account that is not, or is no
+      // longer, an admin. Lumped in with the catch-all it read "there is no
+      // Kavita server behind that address", which describes nothing.
+      final failure = await _failureOf(
+        _Adapter.responds(403, 'Forbidden', 'text/plain'),
+      );
+      expect(failure.kind, ConnectionFailureKind.forbidden);
     });
 
     test('anything else keeps the raw error rather than inventing one', () {
@@ -144,6 +193,9 @@ void main() {
         // The dio type, the URI and the socket error under it are what this
         // whole file exists to keep off the login screen.
         expect(message, isNot(contains('DioException')));
+        // The classifier reports a failed scan from the Library tab too, so
+        // no message may be worded for the login screen.
+        expect(message, isNot(contains('sign in')));
         if (kind != ConnectionFailureKind.badCredentials &&
             kind != ConnectionFailureKind.unknown) {
           expect(message, contains('kavita.lan'), reason: '$kind');

@@ -732,7 +732,9 @@ void main() {
       // The cover's leading edge to the pill's trailing one *is* the row.
       final rowWidth = pill.right - cover.left;
 
-      expect(cover.size, const Size(80, 115));
+      // Against the shared token, not a copy of its number: the Downloads
+      // tab draws the same row and drifted to 62x89 by holding its own.
+      expect(cover.size, const Size(rowCoverWidthTablet, rowCoverHeightTablet));
       // A phone draws 46pt in a 350pt row — about 13% of it. At 62pt in a
       // tablet's row the cover came to ~10%, so crossing to the bigger
       // screen had made the cover smaller than it is on a phone.

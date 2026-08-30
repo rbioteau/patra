@@ -37,6 +37,18 @@ const minHitTarget = 44.0;
 /// Covers are always 2:3.
 const coverAspectRatio = 2 / 3;
 
+/// The cover on a row of a column of rows — a chapter, a saved chapter.
+///
+/// The tablet pair is a **share of its row** (~13% of `contentMaxWidth`, the
+/// proportion a phone gives it), not a step up a scale. Both the series
+/// screen and the Downloads tab draw the same conceptual row, so the numbers
+/// live here: kept separately they drifted, and the same row was drawn at
+/// two sizes on two tabs.
+const rowCoverWidth = 46.0;
+const rowCoverHeight = 66.0;
+const rowCoverWidthTablet = 80.0;
+const rowCoverHeightTablet = 115.0;
+
 /// The Material tablet breakpoint, asked of the *shortest* side so a phone
 /// held in landscape is still a phone — the same question `ClientMetrics`
 /// answers when it tells Kavita what kind of device this is.

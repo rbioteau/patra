@@ -21,11 +21,12 @@
   "password": "Password",
   "passwordRequired": "Password is required",
   "signIn": "Sign in",
-  "loginFailed": "Could not sign in: {error}",
-  "@loginFailed": {
+  "unexpectedError": "Something went wrong: {error}",
+  "@unexpectedError": {
     "placeholders": {
       "error": {"type": "String"}
-    }
+    },
+    "description": "Fallback for an unclassified failure, on any screen — never worded for one"
   },
   "connectionUnreachable": "Could not reach {host}. Check the address, and that this device is on the same network as the server.",
   "@connectionUnreachable": {
@@ -46,6 +47,12 @@
     }
   },
   "connectionBadCredentials": "The server rejected this username or password.",
+  "connectionForbidden": "{host} refused: this account is not allowed to do that.",
+  "@connectionForbidden": {
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
   "@connectionBadCredentials": {
     "description": "Kavita answers every credential failure with a bare 401, so this one message covers a wrong password and a locked-out account alike"
   },

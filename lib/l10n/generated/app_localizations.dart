@@ -170,11 +170,11 @@ abstract class AppLocalizations {
   /// **'Sign in'**
   String get signIn;
 
-  /// No description provided for @loginFailed.
+  /// Fallback for an unclassified failure, on any screen — never worded for one
   ///
   /// In en, this message translates to:
-  /// **'Could not sign in: {error}'**
-  String loginFailed(String error);
+  /// **'Something went wrong: {error}'**
+  String unexpectedError(String error);
 
   /// No description provided for @connectionUnreachable.
   ///
@@ -199,6 +199,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server rejected this username or password.'**
   String get connectionBadCredentials;
+
+  /// No description provided for @connectionForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} refused: this account is not allowed to do that.'**
+  String connectionForbidden(String host);
 
   /// No description provided for @connectionNotKavita.
   ///

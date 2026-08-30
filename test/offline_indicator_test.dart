@@ -119,9 +119,11 @@ void main() {
       // to someone meeting it for the first time — so the old banner text is
       // the tooltip, which is also the semantics label.
       expect(
-        tester.widget<IconButton>(
-          find.ancestor(of: _cloud, matching: find.byType(IconButton)),
-        ).tooltip,
+        tester
+            .widget<IconButton>(
+              find.ancestor(of: _cloud, matching: find.byType(IconButton)),
+            )
+            .tooltip,
         _explanation,
       );
 

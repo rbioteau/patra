@@ -322,9 +322,8 @@ class OfflineNotifier extends Notifier<bool> {
 /// or the retry button — rather than a timer nobody can see.
 ///
 /// Pass it as `retry:` to every provider that reaches the network.
-Duration? serverRetry(int retryCount, Object error) => retryCount >= 2
-    ? null
-    : Duration(milliseconds: 200 * (1 << retryCount));
+Duration? serverRetry(int retryCount, Object error) =>
+    retryCount >= 2 ? null : Duration(milliseconds: 200 * (1 << retryCount));
 
 /// A live check that the server is actually there, behind the indicator on
 /// the settings screen.
@@ -336,15 +335,27 @@ Duration? serverRetry(int retryCount, Object error) => retryCount >= 2
 ///
 /// The call runs through the client, so its own success or failure feeds
 /// [offlineProvider] in passing and the banner agrees with the dot.
-final serverReachableProvider = FutureProvider.autoDispose<bool>((ref) async {
-  final client = ref.watch(kavitaClientProvider);
-  try {
-    await client.health();
-    return true;
-  } on DioException {
-    return false;
-  }
-});
+final serverReachableProvider = FutureProvider.autoDispose<bool>(
+  // Like every other provider that reaches the network. Without it, anything
+  // that escapes the catch below — the `StateError` from a client with no
+  // session, say — hands the provider to Riverpod's unbounded retry, which
+  // is the loop `serverRetry` exists to stop.
+  retry: serverRetry,
+  (ref) async {
+    final client = ref.watch(kavitaClientProvider);
+    try {
+      await client.health();
+      return true;
+    } on DioException catch (error) {
+      // A server that answers at all is reachable, whatever it answers: a
+      // 500 from Kavita or a 404 from a proxy in front of it is not the same
+      // fact as a device with no network, and only the second is what a
+      // connectivity dot is about. `KavitaClient.isUnreachable` is the line
+      // the reachability interceptor draws, so the dot and the banner agree.
+      return !KavitaClient.isUnreachable(error);
+    }
+  },
+);
 
 /// Kept across rebuilds so screens still unmounting after a logout get a
 /// usable (if doomed) client instead of a build-time crash, and so a

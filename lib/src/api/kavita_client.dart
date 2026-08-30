@@ -55,7 +55,7 @@ class KavitaClient {
           handler.next(response);
         },
         onError: (error, handler) {
-          if (_isUnreachable(error)) onReachabilityChanged?.call(false);
+          if (isUnreachable(error)) onReachabilityChanged?.call(false);
           handler.next(error);
         },
       ),
@@ -66,7 +66,10 @@ class KavitaClient {
     );
   }
 
-  static bool _isUnreachable(DioException error) => switch (error.type) {
+  /// Whether the request never got an answer at all, as against getting one
+  /// we did not like. The reachability interceptor and the settings probe
+  /// have to draw this line the same way or the dot and the banner disagree.
+  static bool isUnreachable(DioException error) => switch (error.type) {
     DioExceptionType.connectionError ||
     DioExceptionType.connectionTimeout ||
     DioExceptionType.sendTimeout ||
@@ -328,7 +331,9 @@ class KavitaClient {
     required int chapterId,
     required bool read,
   }) => _dio.post(
-    read ? '/api/Reader/mark-multiple-read' : '/api/Reader/mark-multiple-unread',
+    read
+        ? '/api/Reader/mark-multiple-read'
+        : '/api/Reader/mark-multiple-unread',
     data: {
       'seriesId': seriesId,
       'volumeIds': const <int>[],

@@ -14,9 +14,12 @@ import 'test_support.dart';
 
 /// A server that either answers the health probe or cannot be reached.
 class _Adapter implements HttpClientAdapter {
-  _Adapter({this.reachable = true});
+  _Adapter({this.reachable = true, this.healthStatus = 200});
 
   final bool reachable;
+
+  /// What `/api/Health` answers when the server *is* there.
+  final int healthStatus;
   final paths = <String>[];
 
   @override
@@ -31,8 +34,8 @@ class _Adapter implements HttpClientAdapter {
     if (options.path == '/api/Health') {
       // Kavita returns the plain string "Ok", not JSON.
       return ResponseBody.fromString(
-        'Ok',
-        200,
+        healthStatus == 200 ? 'Ok' : 'error',
+        healthStatus,
         headers: {
           Headers.contentTypeHeader: ['text/plain'],
         },
@@ -59,9 +62,13 @@ const _server = ServerEntry(
   apiKey: 'key',
 );
 
-Future<_Adapter> _pump(WidgetTester tester, {bool reachable = true}) async {
+Future<_Adapter> _pump(
+  WidgetTester tester, {
+  bool reachable = true,
+  int healthStatus = 200,
+}) async {
   mockPathProvider();
-  final adapter = _Adapter(reachable: reachable);
+  final adapter = _Adapter(reachable: reachable, healthStatus: healthStatus);
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
     token: 'token',
@@ -163,6 +170,19 @@ void main() {
       expect(await _announcement(tester), contains('Offline'));
     });
 
+    testWidgets('answering badly is not the same as not being there', (
+      tester,
+    ) async {
+      // A Kavita having a bad day, or a reverse proxy that 404s the health
+      // endpoint, still *answered*. A connectivity dot asks whether the
+      // server can be reached, not whether it is happy — and painting it red
+      // here would contradict the rest of the app, which is working.
+      await _pump(tester, healthStatus: 500);
+
+      expect(_dotColor(tester), patraOnline);
+      expect(find.text('Offline'), findsNothing);
+    });
+
     testWidgets('a failed request outranks a probe that once succeeded', (
       tester,
     ) async {
@@ -174,9 +194,9 @@ void main() {
       // `offlineProvider` — which has to win over the stale success, or the
       // dot goes back to meaning "nobody has told us otherwise".
       final element = tester.element(find.byType(SettingsScreen));
-      ProviderScope.containerOf(
-        element,
-      ).read(offlineProvider.notifier).set(true);
+      ProviderScope.containerOf(element)
+          .read(offlineProvider.notifier)
+          .set(true);
       await tester.pumpAndSettle();
 
       expect(_dotColor(tester), patraDanger);

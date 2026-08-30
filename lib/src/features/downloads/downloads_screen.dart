@@ -166,8 +166,8 @@ class _SavedRow extends ConsumerWidget {
           children: [
             // The first stored page doubles as the thumbnail: no server needed.
             SizedBox(
-              width: tablet ? 62 : 46,
-              height: tablet ? 89 : 66,
+              width: tablet ? rowCoverWidthTablet : rowCoverWidth,
+              height: tablet ? rowCoverHeightTablet : rowCoverHeight,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radiusThumb),
                 child: _LocalThumb(dir: dir),

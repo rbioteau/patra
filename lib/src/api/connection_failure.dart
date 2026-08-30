@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 import '../../l10n/generated/app_localizations.dart';
@@ -20,6 +22,9 @@ enum ConnectionFailureKind {
   /// TLS was refused — a self-signed certificate the device does not trust
   /// is the usual reason on a self-hosted server.
   badCertificate,
+
+  /// The server understood, and this account is not allowed to.
+  forbidden,
 
   /// The server understood the login and rejected it.
   badCredentials,
@@ -66,6 +71,9 @@ class ConnectionFailure {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout => ConnectionFailureKind.timedOut,
+      // Never actually emitted here: dio only raises `badCertificate` from
+      // an adapter given a `validateCertificate` callback, which this app
+      // does not set. Kept because the type exists and costs nothing.
       DioExceptionType.badCertificate => ConnectionFailureKind.badCertificate,
       DioExceptionType.badResponse => _fromStatus(error.response?.statusCode),
       // A 200 carrying a login page, an XML index or anything else that is
@@ -76,6 +84,12 @@ class ConnectionFailure {
       // reverse proxy, a router's admin page, another app on the port.
       DioExceptionType.unknown => switch (error.error) {
         FormatException() || TypeError() => ConnectionFailureKind.notKavita,
+        // What a self-signed certificate really produces. `HandshakeException`
+        // is a `TlsException`, which is neither the `SocketException` nor the
+        // `HttpException` dio's IO adapter catches, so it arrives here
+        // wrapped as `unknown` — and without this it was shown as a raw dio
+        // dump on the one screen where a self-hoster meets it.
+        TlsException() => ConnectionFailureKind.badCertificate,
         _ => ConnectionFailureKind.unknown,
       },
       _ => ConnectionFailureKind.unknown,
@@ -90,6 +104,9 @@ class ConnectionFailure {
   static ConnectionFailureKind _fromStatus(int? status) => switch (status) {
     null => ConnectionFailureKind.unknown,
     401 => ConnectionFailureKind.badCredentials,
+    // Not every call in the app is a login: asking for a scan with an
+    // account that is not (or is no longer) an admin lands here.
+    403 => ConnectionFailureKind.forbidden,
     >= 500 => ConnectionFailureKind.serverError,
     // Every other status on the login endpoint means a web server answered
     // and Kavita was not behind it: a proxy's 404, a portal's redirect.
@@ -101,15 +118,17 @@ class ConnectionFailure {
   String message(AppLocalizations l10n, String host) => switch (kind) {
     ConnectionFailureKind.unreachable => l10n.connectionUnreachable(host),
     ConnectionFailureKind.timedOut => l10n.connectionTimedOut(host),
-    ConnectionFailureKind.badCertificate => l10n.connectionBadCertificate(
-      host,
-    ),
+    ConnectionFailureKind.badCertificate => l10n.connectionBadCertificate(host),
     ConnectionFailureKind.badCredentials => l10n.connectionBadCredentials,
+    ConnectionFailureKind.forbidden => l10n.connectionForbidden(host),
     ConnectionFailureKind.notKavita => l10n.connectionNotKavita(host),
     ConnectionFailureKind.serverError => l10n.connectionServerError(
       host,
       status ?? 0,
     ),
-    ConnectionFailureKind.unknown => l10n.loginFailed(detail ?? ''),
+    // Deliberately not worded for the login screen: the same classifier
+    // reports a failed scan from the Library tab, where "Could not sign in"
+    // described nothing that had happened.
+    ConnectionFailureKind.unknown => l10n.unexpectedError(detail ?? ''),
   };
 }

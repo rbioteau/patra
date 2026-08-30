@@ -49,8 +49,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signIn => 'Sign in';
 
   @override
-  String loginFailed(String error) {
-    return 'Could not sign in: $error';
+  String unexpectedError(String error) {
+    return 'Something went wrong: $error';
   }
 
   @override
@@ -71,6 +71,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get connectionBadCredentials =>
       'The server rejected this username or password.';
+
+  @override
+  String connectionForbidden(String host) {
+    return '$host refused: this account is not allowed to do that.';
+  }
 
   @override
   String connectionNotKavita(String host) {

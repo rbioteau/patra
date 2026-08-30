@@ -573,20 +573,6 @@ class _ChapterRow extends ConsumerWidget {
   /// Overrides the derived label, for a volume shown as a single row.
   final String? label;
 
-  static const _coverWidth = 46.0;
-  static const _coverHeight = 66.0;
-
-  /// The same row, given a tablet's room: a 46pt cover reads as a stamp on a
-  /// screen this size, and the row it anchors as a hairline.
-  ///
-  /// Sized as a *share of its row*, not by a step up a scale. A phone gives
-  /// the cover ~13% of the 350pt row it draws; 62pt in a tablet row was ~10%,
-  /// so crossing to the tablet made the cover smaller than it is on a phone.
-  /// These restore the phone's proportion against `contentMaxWidth`, and the
-  /// row grows to suit — which is what turns the column back into a shelf.
-  static const _tabletCoverWidth = 80.0;
-  static const _tabletCoverHeight = 115.0;
-
   /// The swipe panes are sized in points, not in a share of the row.
   ///
   /// A ratio that gives a phone a sensible drawer slides a tablet's row a
@@ -609,8 +595,8 @@ class _ChapterRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final tablet = isTabletLayout(context);
-    final coverWidth = tablet ? _tabletCoverWidth : _coverWidth;
-    final coverHeight = tablet ? _tabletCoverHeight : _coverHeight;
+    final coverWidth = tablet ? rowCoverWidthTablet : rowCoverWidth;
+    final coverHeight = tablet ? rowCoverHeightTablet : rowCoverHeight;
     final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
     final inProgress = chapter.pagesRead > 0 && !read;
     final progress = inProgress && chapter.pages > 0
@@ -1041,8 +1027,8 @@ class _RowsSkeleton extends StatelessWidget {
           child: Row(
             children: [
               Skeleton(
-                width: tablet ? _ChapterRow._tabletCoverWidth : 46,
-                height: tablet ? _ChapterRow._tabletCoverHeight : 66,
+                width: tablet ? rowCoverWidthTablet : rowCoverWidth,
+                height: tablet ? rowCoverHeightTablet : rowCoverHeight,
               ),
               const SizedBox(width: 12),
               Expanded(

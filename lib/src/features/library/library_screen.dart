@@ -438,33 +438,39 @@ class _EmptyLibraryState extends ConsumerState<_EmptyLibrary> {
 ///
 /// The sentence is one localized string with a placeholder — splitting it in
 /// two would put a French sentence together in English word order — so the
-/// name is found in the result rather than concatenated onto it. A name that
-/// cannot be found (empty, or swallowed by the translation) simply loses its
-/// emphasis instead of the sentence losing its shape.
+/// name has to be located in the result rather than concatenated onto it.
+///
+/// Located by asking for the sentence with a **sentinel** in the placeholder,
+/// not by searching for the name: `indexOf(name)` finds the first look-alike
+/// anywhere, so a library called "Patra" emphasised the word the English
+/// sentence opens with, and one called "serveur" the wrong noun in French.
 class _EmptyBody extends StatelessWidget {
   const _EmptyBody({required this.libraryName});
 
   final String libraryName;
 
+  /// A character no translation will contain and no library can be named.
+  static const _marker = '\u0000';
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final body = l10n.libraryEmptyBody(libraryName);
     final style = PatraText.metadata(size: 12).copyWith(height: 1.55);
-    final at = libraryName.isEmpty ? -1 : body.indexOf(libraryName);
+    final template = l10n.libraryEmptyBody(_marker);
+    final at = template.indexOf(_marker);
 
     return Text.rich(
       at < 0
-          ? TextSpan(text: body, style: style)
+          ? TextSpan(text: l10n.libraryEmptyBody(libraryName), style: style)
           : TextSpan(
               style: style,
               children: [
-                TextSpan(text: body.substring(0, at)),
+                TextSpan(text: template.substring(0, at)),
                 TextSpan(
                   text: libraryName,
                   style: style.copyWith(color: patraText.withValues(alpha: .7)),
                 ),
-                TextSpan(text: body.substring(at + libraryName.length)),
+                TextSpan(text: template.substring(at + _marker.length)),
               ],
             ),
       textAlign: TextAlign.center,
