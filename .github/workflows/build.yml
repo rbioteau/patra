@@ -120,6 +120,19 @@ jobs:
           # same source, as the iOS build number.
           flutter build appbundle --release --build-number="$GITHUB_RUN_NUMBER"
 
+          # A release bundle once shipped with no INTERNET permission, because
+          # Flutter declares it only in the debug and profile manifests and
+          # nothing else notices: the app installed, opened, and failed every
+          # request at the connection. No Dart test can see this, so the built
+          # artefact is asked directly.
+          # -a because a bundle's manifest is protobuf: some greps call that
+          # binary and report no match even when the string is there.
+          unzip -p "$AAB" base/manifest/AndroidManifest.xml \
+            | grep -qa 'android.permission.INTERNET' || {
+              echo '::error::The bundle declares no INTERNET permission - the app would install and reach nothing.'
+              exit 1
+            }
+
       - if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@v7
         with:

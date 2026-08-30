@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Patra is a client for a server: without this it cannot open a socket
+         at all. Flutter's template declares it only in the debug and profile
+         manifests, where it exists for the tool's own hot-reload channel, so
+         a release build silently shipped with no network — every request
+         failing at the connection, on any address, local or not. Nothing in
+         the Dart tests or `flutter analyze` can see this; the CI build
+         asserts it is in the bundle instead. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="Patra"
         android:name="${applicationName}"
