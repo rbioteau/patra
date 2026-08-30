@@ -7,6 +7,9 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/connection_failure.dart';
 import '../../auth/session.dart';
 import '../../widgets/dashed_border.dart';
+import '../../widgets/patra_frond.dart';
+import '../../widgets/patra_wordmark.dart';
+import '../launch/launch_animation.dart';
 import '../../theme.dart';
 
 /// Horizontal breathing room from the handoff's login screen — wider than the
@@ -318,9 +321,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-/// Wordmark and tagline, aligned to the left edge of the column.
+/// The lockup and the tagline, aligned to the left edge of the column.
+///
+/// This is where the launch animation lands when the app opens on this screen,
+/// which is what it does with no server configured. Both halves are slots, and
+/// the wordmark being one is the point: it is drawn at the splash's own size,
+/// so the word does not shrink into place, it travels — the splash's lockup
+/// simply becomes this screen's. The frond is the same five-blade mark as the
+/// header's, in the same proportion to the word beside it.
 class _Masthead extends StatelessWidget {
   const _Masthead();
+
+  static const _size = 40.0;
+
+  /// The header's lockup at this screen's scale: the mark stands a little
+  /// taller than the word so the five blades stay open.
+  static const _markHeight = _size * 24 / 22;
+
+  /// The gap is **tighter** here than the header's 0.81em, and deliberately so
+  /// rather than by drift: spacing that reads as one lockup at 22pt opens into
+  /// a gulf when the same ratio is scaled to 40pt. The mark and the word have
+  /// to stay one thing at both sizes, which is the point being kept, not the
+  /// number.
+  static const _gap = _size * 0.65;
 
   @override
   Widget build(BuildContext context) {
@@ -328,17 +351,13 @@ class _Masthead extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text.rich(
-          TextSpan(
-            text: 'patra',
-            style: PatraText.serifTitle(size: 40),
-            children: [
-              TextSpan(
-                text: '.',
-                style: PatraText.serifTitle(size: 40, color: patraAccent),
-              ),
-            ],
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            LaunchLogoSlot(child: PatraFrond(height: _markHeight)),
+            SizedBox(width: _gap),
+            LaunchWordmarkSlot(child: PatraWordmark(size: _size)),
+          ],
         ),
         const SizedBox(height: 8),
         Text(

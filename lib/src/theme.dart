@@ -10,6 +10,12 @@ const patraSurface = Color(0xFF1A1A1E);
 const patraSurfaceHi = Color(0xFF222226);
 const patraChrome = Color(0xFF141416); // bars
 
+/// The brand ink tile: the ground of every app icon, of the window the OS
+/// paints while the process starts, and of the launch animation the app opens
+/// with. One shade warmer than [patraBg], which is what makes the handoff at
+/// the end of the launch read as a lift rather than a cut.
+const patraInk = Color(0xFF16141C);
+
 /// Reading progress + identity ONLY. Never for downloads.
 const patraAccent = Color(0xFF7C5CFF);
 

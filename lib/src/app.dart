@@ -6,6 +6,7 @@ import '../l10n/generated/app_localizations.dart';
 import 'auth/session.dart';
 import 'features/downloads/downloads_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/launch/launch_animation.dart';
 import 'features/library/library_screen.dart';
 import 'features/login/login_screen.dart';
 import 'features/reader/reader_screen.dart';
@@ -186,6 +187,11 @@ class PatraApp extends ConsumerWidget {
       darkTheme: patraTheme(),
       themeMode: ThemeMode.dark,
       routerConfig: ref.watch(_routerProvider),
+      // The launch animation wraps the whole app rather than being a route of
+      // its own: its last beat flies the frond into the home header, which has
+      // to be laid out underneath while the splash is still playing.
+      builder: (_, child) =>
+          LaunchAnimation(child: child ?? const SizedBox.shrink()),
     );
   }
 }

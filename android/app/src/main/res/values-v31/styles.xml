@@ -3,7 +3,10 @@
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
         <item name="android:windowSplashScreenBackground">@color/patra_ink</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/patra_mark</item>
+        <!-- Transparent on purpose: the frond is grown by the app's own
+             launch animation out of an empty ink screen, so the system must
+             not stamp the launcher icon over it first. -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_none</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@color/patra_ink</item>

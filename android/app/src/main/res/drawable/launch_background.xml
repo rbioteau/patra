@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launch screen for Android 11 and below: the ink field with the mark
-     centred, so it matches the app's own background exactly. -->
+<!-- Launch screen for Android 11 and below: the ink field and nothing else.
+     The mark used to be centred here, but the app's own launch animation
+     grows the frond out of an empty ink screen (see LaunchAnimation): a mark
+     painted by the window would appear, vanish at Flutter's first frame and
+     then rebuild itself. The ink is what has to be continuous, not the logo. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/patra_ink" />
-    <item
-        android:drawable="@drawable/patra_mark"
-        android:gravity="center"
-        android:width="192dp"
-        android:height="192dp" />
 </layer-list>

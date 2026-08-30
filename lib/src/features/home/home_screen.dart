@@ -8,6 +8,9 @@ import '../../auth/session.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
+import '../../widgets/patra_frond.dart';
+import '../../widgets/patra_wordmark.dart';
+import '../launch/launch_animation.dart';
 import '../library/library_screen.dart';
 
 final continueReadingProvider = FutureProvider.autoDispose<List<SeriesDto>>(
@@ -91,23 +94,35 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// Lowercase serif wordmark with the accent period.
+/// The app's own logo: the frond, then the lowercase serif wordmark with its
+/// accent period.
+///
+/// The frond is the full five-blade fan — the same mark as the app icon and as
+/// the one the launch animation unfurls — and it is measured by the mark itself
+/// rather than by the tile it is drawn on. It is also the place that animation
+/// hands off to, so it is held back until the flying frond is on top of it —
+/// see [LaunchLogoSlot].
 class _Wordmark extends StatelessWidget {
   const _Wordmark();
 
+  static const _size = 22.0;
+
+  /// The mark stands taller than the wordmark's own letters, which is what it
+  /// takes for the five-blade fan to stay open: below about 20pt the blades and
+  /// the gaps between them close into a blob and the mark stops being the one
+  /// on the app icon. The gap is the lockup's, in ems of the wordmark.
+  static const _markHeight = 24.0;
+  static const _gap = _size * 0.81;
+
   @override
   Widget build(BuildContext context) {
-    return Text.rich(
-      TextSpan(
-        text: 'patra',
-        style: PatraText.serifTitle(size: 22),
-        children: [
-          TextSpan(
-            text: '.',
-            style: PatraText.serifTitle(size: 22, color: patraAccent),
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: const [
+        LaunchLogoSlot(child: PatraFrond(height: _markHeight)),
+        SizedBox(width: _gap),
+        PatraWordmark(size: _size),
+      ],
     );
   }
 }

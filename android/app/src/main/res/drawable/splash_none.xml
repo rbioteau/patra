@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Android 12+ splash screen always composites *something* over its
+     background — left unset it reaches for the launcher icon. The app's own
+     launch animation starts from an empty ink screen, so this transparent
+     drawable is how that "something" is made to be nothing. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+</shape>
