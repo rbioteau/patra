@@ -24,7 +24,7 @@ Usable, still young. What works:
 
 ## Install
 
-Releases are cut by a `v*` tag — `git tag v0.2.0 && git push --tags`, no commit needed: the tag is what names the version, and the app reads that name back off its own binary. A push to `main` between releases only compiles and tests, and leaves a sideloadable artifact.
+Releases are cut by a `v*` tag — `git tag v0.2.0 && git push origin v0.2.0`, or publishing a GitHub release that creates that tag; no commit needed: the tag is what names the version, and the app reads that name back off its own binary. A push to `main` between releases only compiles and tests, and leaves a sideloadable artifact.
 
 **Android** — a tag builds a signed **App Bundle** and, once a Play service account is configured, sends it to the internal test track on Google Play. Without the signing secrets — a fork, or this repository before the Play account existed — the job falls back to the `patra-debug-apk` artifact on the latest [Actions run](../../actions), which installs by sideloading.
 
