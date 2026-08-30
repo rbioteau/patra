@@ -153,10 +153,13 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: ${{ env.PACKAGE_NAME }}
           releaseFiles: ${{ env.AAB }}
-          # "alpha" is Play's closed track. Internal testing is a different
-          # track and does not count towards the twelve testers a personal
-          # account needs before it may ask for production access.
-          track: alpha
+          # Internal testing: no review delay, up to 100 testers, and the
+          # right place to iterate. Deliberately *not* the closed track —
+          # which means this does not advance the twelve-testers-for-fourteen-
+          # days clock a personal account must run before it may ask for
+          # production access; only a closed test ("alpha") does. Switch this
+          # one word when that clock needs to start.
+          track: internal
           status: completed
 
       - name: Forget the signing material
