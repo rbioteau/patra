@@ -14,6 +14,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/save_pill.dart';
 
 import 'test_support.dart';
@@ -143,8 +144,14 @@ Future<void> _pump(
   int postStatus = 200,
   bool underNavigator = false,
   int? savedChapter,
+  bool tablet = false,
 }) async {
-  tester.view.physicalSize = const Size(1100, 2600);
+  // The size belongs to `_pump`: setting it in a caller before this ran was
+  // silently overwritten, which left every "tablet" test on a 550pt phone.
+  // An iPad in portrait is 820x1180 logical points; the default is a phone.
+  tester.view.physicalSize = tablet
+      ? const Size(1640, 2360)
+      : const Size(1100, 2600);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
 
@@ -507,12 +514,7 @@ void main() {
     testWidgets('an open pane is a drawer, not half a tablet row', (
       tester,
     ) async {
-      // An iPad in portrait: 820x1180 logical points.
-      tester.view.physicalSize = const Size(1640, 2360);
-      tester.view.devicePixelRatio = 2;
-      addTearDown(tester.view.reset);
-
-      await _pump(tester, series(0));
+      await _pump(tester, series(0), tablet: true);
 
       final before = tester.getTopLeft(find.text('Chapter 1')).dx;
       await tester.drag(find.text('Chapter 1'), const Offset(400, 0));
@@ -703,5 +705,54 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+  });
+
+  group('a tablet row is a shelf, not a settings list', () {
+    List<Map<String, dynamic>> oneChapter() => [
+      {
+        'id': 10,
+        'name': '1',
+        'minNumber': 1,
+        'pages': 100,
+        'chapters': [_chapter(101, '1')],
+      },
+    ];
+
+    // The hero's cover is the first; the row's is the one under it.
+    Rect rowCover(WidgetTester tester) =>
+        tester.getRect(find.byType(CoverImage).at(1));
+
+    testWidgets('the cover keeps the share of the row a phone gives it', (
+      tester,
+    ) async {
+      await _pump(tester, oneChapter(), tablet: true);
+
+      final cover = rowCover(tester);
+      final pill = tester.getRect(find.byType(SavePill));
+      // The cover's leading edge to the pill's trailing one *is* the row.
+      final rowWidth = pill.right - cover.left;
+
+      expect(cover.size, const Size(80, 115));
+      // A phone draws 46pt in a 350pt row — about 13% of it. At 62pt in a
+      // tablet's row the cover came to ~10%, so crossing to the bigger
+      // screen had made the cover smaller than it is on a phone.
+      expect(cover.width / rowWidth, greaterThanOrEqualTo(46 / 350));
+    });
+
+    testWidgets('the save pill stays with the row, not against the screen', (
+      tester,
+    ) async {
+      await _pump(tester, oneChapter(), tablet: true);
+
+      final gap =
+          tester.getRect(find.byType(SavePill)).left -
+          tester.getRect(find.text('Chapter 1')).right;
+
+      // `contentMaxWidth` is set by the *shortest* row we draw, and this is
+      // it: a number and a page count against a pill. At 680 this gap
+      // measured 318pt — a third of the screen of nothing in the middle of
+      // every row, which is the drift the cap exists to prevent.
+      expect(gap, lessThan(220));
+    });
   });
 }

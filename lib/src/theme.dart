@@ -45,7 +45,13 @@ const tabletBreakpoint = 600.0;
 /// Where a column of rows stops growing. Past this the parts of a row drift
 /// apart — cover against one edge, save pill against the other, a gulf in
 /// between — so the extra width is spent on the margins instead.
-const contentMaxWidth = 680.0;
+///
+/// The cap is set by the *shortest* row we draw, not by the longest. A
+/// chapter row carries "Tome 1 · 218 pages" and a pill: at 680 that left it
+/// with 318pt of nothing in the middle (measured, 820pt portrait), which is
+/// the very drift this number exists to prevent. What a settings row could
+/// have filled, a chapter row cannot.
+const contentMaxWidth = 560.0;
 
 /// True where the screen is a tablet's, and the phone-sized furniture of the
 /// handoff has room to grow.

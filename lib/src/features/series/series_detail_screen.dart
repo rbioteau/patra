@@ -575,8 +575,14 @@ class _ChapterRow extends ConsumerWidget {
 
   /// The same row, given a tablet's room: a 46pt cover reads as a stamp on a
   /// screen this size, and the row it anchors as a hairline.
-  static const _tabletCoverWidth = 62.0;
-  static const _tabletCoverHeight = 89.0;
+  ///
+  /// Sized as a *share of its row*, not by a step up a scale. A phone gives
+  /// the cover ~13% of the 350pt row it draws; 62pt in a tablet row was ~10%,
+  /// so crossing to the tablet made the cover smaller than it is on a phone.
+  /// These restore the phone's proportion against `contentMaxWidth`, and the
+  /// row grows to suit — which is what turns the column back into a shelf.
+  static const _tabletCoverWidth = 80.0;
+  static const _tabletCoverHeight = 115.0;
 
   /// The swipe panes are sized in points, not in a share of the row.
   ///
@@ -600,6 +606,8 @@ class _ChapterRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final tablet = isTabletLayout(context);
+    final coverWidth = tablet ? _tabletCoverWidth : _coverWidth;
+    final coverHeight = tablet ? _tabletCoverHeight : _coverHeight;
     final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
     final inProgress = chapter.pagesRead > 0 && !read;
     final progress = inProgress && chapter.pages > 0
@@ -637,8 +645,8 @@ class _ChapterRow extends ConsumerWidget {
       child: Row(
         children: [
           SizedBox(
-            width: tablet ? _tabletCoverWidth : _coverWidth,
-            height: tablet ? _tabletCoverHeight : _coverHeight,
+            width: coverWidth,
+            height: coverHeight,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -646,7 +654,14 @@ class _ChapterRow extends ConsumerWidget {
                   url: coverUrl,
                   headers: ref.watch(kavitaClientProvider).imageHeaders,
                   radius: radiusThumb,
-                  memCacheWidth: 138,
+                  // Derived from the width actually drawn, never a constant:
+                  // 138 was the phone's number (46pt at 3x) and left a tablet
+                  // decoding an 80pt cover at half its size — the blur the
+                  // bigger cover was meant to remove. Kavita's cover endpoint
+                  // serves a fixed size, so asking past it costs nothing.
+                  memCacheWidth:
+                      (coverWidth * MediaQuery.devicePixelRatioOf(context))
+                          .round(),
                 ),
                 // The spine: a hint of a closed book along the binding edge.
                 Positioned(
@@ -660,11 +675,13 @@ class _ChapterRow extends ConsumerWidget {
                 ),
                 if (read)
                   Positioned(
-                    top: 3,
-                    right: 3,
+                    top: tablet ? 4 : 3,
+                    right: tablet ? 4 : 3,
                     child: Container(
-                      width: 16,
-                      height: 16,
+                      // The badge sits *on* the cover: left at 16 it goes
+                      // back to being a pea on the bigger one.
+                      width: tablet ? 20 : 16,
+                      height: tablet ? 20 : 16,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: patraAccent,
@@ -677,9 +694,9 @@ class _ChapterRow extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check,
-                        size: 10,
+                        size: tablet ? 13 : 10,
                         color: Colors.white,
                       ),
                     ),
@@ -1020,7 +1037,10 @@ class _RowsSkeleton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 6),
           child: Row(
             children: [
-              Skeleton(width: tablet ? 62 : 46, height: tablet ? 89 : 66),
+              Skeleton(
+                width: tablet ? _ChapterRow._tabletCoverWidth : 46,
+                height: tablet ? _ChapterRow._tabletCoverHeight : 66,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
