@@ -24,7 +24,7 @@ Usable, still young. What works:
 
 ## Install
 
-**Android** — grab the `patra-debug-apk` artifact from the latest [Actions run](../../actions) on `main` and install it.
+**Android** — every push to `main` builds a signed **App Bundle** and, once a Play service account is configured, sends it to the closed test track on Google Play. Without the signing secrets — a fork, or this repository before the Play account existed — the job falls back to the `patra-debug-apk` artifact on the latest [Actions run](../../actions), which installs by sideloading.
 
 **iOS / iPadOS** — every push to `main` is signed and sent to **TestFlight**, so an invitation and the TestFlight app are all it takes; builds expire 90 days after upload. A fork, having no signing secrets, falls back to an unsigned `patra-unsigned-ipa` artifact, which has to be re-signed with your own Apple ID (AltStore or Sideloadly, from a Windows or Mac machine) — a free account's signature lasts 7 days.
 

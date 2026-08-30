@@ -21,6 +21,9 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     needs: analyze
+    env:
+      PACKAGE_NAME: io.github.rbioteau.patra
+      AAB: build/app/outputs/bundle/release/app-release.aab
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -31,14 +34,107 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter build apk --debug
+
+      # The same rule the iOS job follows. Signing material reaches this job
+      # only on a push to main — a fork PR is handed no secrets, and must not
+      # be able to ship anything anyway — and its absence is a supported state
+      # rather than a failure: this repository before the Play account existed
+      # still built green and still produced something installable.
+      - name: Look for signing material
+        id: signing
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ -n "$KEYSTORE" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::No Android signing material - building a debug APK to sideload, no App Bundle.'
+          fi
+
+      # --- Unsigned fallback: what a tester sideloaded before Play ----------
+      - name: Build the debug APK
+        if: steps.signing.outputs.available != 'true'
+        run: flutter build apk --debug
       # Installable artifacts only from code that reached main: a fork PR
       # must not be able to publish an APK/IPA someone might sideload.
-      - if: github.event_name == 'push'
+      - if: steps.signing.outputs.available != 'true' && github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
           name: patra-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
+
+      # --- Signed App Bundle, which is the only thing Play accepts ----------
+      - name: Write the keystore
+        if: steps.signing.outputs.available == 'true'
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          # build.gradle.kts reads this file if it is there and falls back to
+          # the debug keys if it is not; writing it is the whole switch.
+          cat > android/key.properties <<PROPERTIES
+          storeFile=$RUNNER_TEMP/upload.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          PROPERTIES
+
+      - name: Build the App Bundle
+        if: steps.signing.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          # Play refuses a versionCode it has already accepted and wants each
+          # one higher than the last; pubspec's "+1" never moves. Same reason,
+          # same source, as the iOS build number.
+          flutter build appbundle --release --build-number="$GITHUB_RUN_NUMBER"
+
+      - if: steps.signing.outputs.available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: patra-release-aab
+          path: ${{ env.AAB }}
+
+      # --- Straight to the closed test, once Play knows the package ---------
+      # The Play Developer API cannot create an application: the first bundle
+      # has to go through the Console by hand. Until that is done there is no
+      # service account to make one from, so this stays skipped rather than
+      # red — and the AAB above is what gets uploaded manually.
+      - name: Look for a Play service account
+        id: play
+        if: steps.signing.outputs.available == 'true'
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$SERVICE_ACCOUNT" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::No Play service account - the App Bundle is an artifact to upload by hand.'
+          fi
+
+      # Pinned to a commit, not a tag: this step is handed the service account
+      # key, and a tag can be moved under it.
+      - name: Upload to the closed test track
+        if: steps.play.outputs.available == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: ${{ env.AAB }}
+          # "alpha" is Play's closed track. Internal testing is a different
+          # track and does not count towards the twelve testers a personal
+          # account needs before it may ask for production access.
+          track: alpha
+          status: completed
+
+      - name: Forget the signing material
+        if: always()
+        run: rm -f android/key.properties "$RUNNER_TEMP/upload.jks"
 
   build-ios:
     runs-on: macos-latest

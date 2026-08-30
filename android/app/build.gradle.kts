@@ -1,3 +1,17 @@
+import java.util.Properties
+
+// The upload keystore is untracked (see android/.gitignore) and is simply
+// absent on a fork, on a fresh clone, and on this machine until someone puts
+// one there. That absence is a supported state, not a broken build: the
+// release type falls back to the debug keys so `flutter run --release` still
+// works, exactly as the iOS job falls back to an unsigned IPA. CI writes this
+// file from secrets and deletes it afterwards.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasUploadKey = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (hasUploadKey) keystorePropertiesFile.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -30,11 +44,29 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasUploadKey) {
+            create("release") {
+                // `rootProject.file` resolves a relative path against
+                // android/ and leaves an absolute one alone, so the same
+                // property works for a local keystore and for the one CI
+                // writes into the runner's temp directory.
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Play refuses a bundle signed with the debug keys; without a
+            // keystore there is nothing to publish anyway, so falling back to
+            // them keeps a local release build and a fork's CI working.
+            signingConfig = signingConfigs.getByName(
+                if (hasUploadKey) "release" else "debug",
+            )
         }
     }
 }
