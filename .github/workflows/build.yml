@@ -28,24 +28,26 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
-      # Nothing overrides the version at build time — `--build-name` is never
-      # passed — so pubspec's `version:` is at once what the stores display
-      # and what the app puts in its own User-Agent (ClientIdentity.appVersion,
-      # which a test pins to pubspec). The tag is only a trigger; it names no
-      # version of its own. Tagging v0.2.0 on a commit whose pubspec still
-      # says 0.1.0 would ship a release called 0.1.0 to both stores, and that
-      # is not something either of them lets you take back.
-      - name: The tag must be the version in pubspec
+      # The tag *is* the version: it is passed to `--build-name`, which writes
+      # Android's versionName and iOS's CFBundleShortVersionString, and the app
+      # reads its own version back out of that at startup (ClientIdentity, via
+      # package_info_plus) instead of compiling one in. So a release needs no
+      # commit — nothing in the repository has to be bumped to match — but the
+      # tag has to be a version, since nothing else will be checking.
+      - name: The tag is the version, so it has to be one
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME#v}"
-          pubspec=$(sed -n 's/^version: *\([0-9][^+ ]*\).*/\1/p' pubspec.yaml)
-          if [ "$tag" != "$pubspec" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME says $tag, pubspec.yaml says $pubspec. Bump pubspec and move the tag onto that commit."
+          version="${GITHUB_REF_NAME#v}"
+          # App Store Connect takes CFBundleShortVersionString as one to three
+          # dot-separated integers and nothing else; Android's versionName
+          # takes any string. Hold both to the stricter shape, or the two
+          # stores end up showing different versions of the same release.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag $GITHUB_REF_NAME is not a version. Release tags are v<major>.<minor>.<patch> — v0.2.0, not v0.2 and not v0.2.0-rc1."
             exit 1
           fi
-          echo "Releasing $pubspec (build $GITHUB_RUN_NUMBER)."
+          echo "Releasing $version (build $GITHUB_RUN_NUMBER)."
 
   build-android:
     runs-on: ubuntu-latest
@@ -168,7 +170,14 @@ jobs:
           # platform jobs are in the same run, so a tag ships one number to
           # the two stores. Renaming this file, or its `name:`, restarts the
           # count at 1 and every upload after that is rejected: don't.
-          flutter build appbundle --release --build-number="$GITHUB_RUN_NUMBER"
+          # --build-name is the tag, and pubspec's version is only ever the
+          # default a local build falls back to. The app reads the name back
+          # from the platform at runtime, so this is also the version Kavita
+          # is told in the User-Agent.
+          version="${GITHUB_REF_NAME#v}"
+          flutter build appbundle --release \
+            --build-name="$version" \
+            --build-number="$GITHUB_RUN_NUMBER"
 
           # A release bundle once shipped with no INTERNET permission, because
           # Flutter declares it only in the debug and profile manifests and
@@ -180,6 +189,14 @@ jobs:
           unzip -p "$AAB" base/manifest/AndroidManifest.xml \
             | grep -qa 'android.permission.INTERNET' || {
               echo '::error::The bundle declares no INTERNET permission - the app would install and reach nothing.'
+              exit 1
+            }
+
+          # The tag is the only place the version now lives, so check it
+          # actually reached the artefact rather than trusting the flag.
+          unzip -p "$AAB" base/manifest/AndroidManifest.xml \
+            | grep -qa "$version" || {
+              echo "::error::The bundle does not carry versionName $version."
               exit 1
             }
 
@@ -395,9 +412,10 @@ jobs:
           # skips its hunt for a *development* certificate (code_signing.dart),
           # which this runner could never satisfy, so the supported one-shot
           # command works and there is no bare xcodebuild to keep in step.
-          # Same number as the App Bundle, same reason and same source: see
-          # "Build the App Bundle" in the Android job.
+          # Same name and same number as the App Bundle, same sources: the
+          # tag and the run. See "Build the App Bundle" in the Android job.
           flutter build ipa --release \
+            --build-name="${GITHUB_REF_NAME#v}" \
             --build-number="$GITHUB_RUN_NUMBER" \
             --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
 

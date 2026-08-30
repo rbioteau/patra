@@ -4,6 +4,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// The platforms Kavita can tell apart, and the token its user-agent parser
 /// looks for to do it.
@@ -90,6 +91,7 @@ class ClientIdentity {
     this.osVersion = '',
     this.deviceModel = '',
     this.deviceName = '',
+    this.appVersion = fallbackAppVersion,
     this.screen = liveScreenMetrics,
   });
 
@@ -98,9 +100,12 @@ class ClientIdentity {
 
   static const appName = 'Patra';
 
-  /// Kept in sync with `version:` in pubspec.yaml by
-  /// `test/client_identity_test.dart`.
-  static const appVersion = '0.1.0';
+  /// What to say when the platform will not name the build — which happens in
+  /// a unit test, where there is no plugin to answer, and essentially nowhere
+  /// else. Deliberately not a copy of the current version: a hardcoded one
+  /// drifts silently, and a stale number is a worse answer than an obviously
+  /// absent one.
+  static const fallbackAppVersion = '0.0.0';
 
   static const _deviceIdKey = 'clientDeviceId';
 
@@ -121,6 +126,14 @@ class ClientIdentity {
   /// will not say (iOS 16+ without the entitlement answers "iPhone", which is
   /// still better than a sales code).
   final String deviceName;
+
+  /// The version of the binary, read from the platform's own record of it at
+  /// startup (`versionName` on Android, `CFBundleShortVersionString` on iOS)
+  /// rather than compiled in. That record is what `flutter build
+  /// --build-name` writes, and CI takes that from the release tag — so the
+  /// version the server is told is the version that was shipped, with nothing
+  /// in the repository to keep in step with it.
+  final String appVersion;
 
   /// Read per request, not once at startup: the device rotates, and at the
   /// time main() resolves the identity there is no view to measure yet.
@@ -208,23 +221,42 @@ class ClientIdentity {
   /// shows up in Kavita as one more anonymous device.
   static Future<ClientIdentity> resolve() async {
     final deviceId = await _loadOrCreateDeviceId();
+    final appVersion = await _loadAppVersion();
     try {
-      return await _describeDevice(deviceId);
+      return await _describeDevice(deviceId, appVersion);
     } on Exception {
-      return ClientIdentity(deviceId: deviceId);
+      return ClientIdentity(deviceId: deviceId, appVersion: appVersion);
     } on Error {
       // MissingPluginException aside, device_info_plus can throw on odd
       // platforms; a device description is never worth a crash at startup.
-      return ClientIdentity(deviceId: deviceId);
+      return ClientIdentity(deviceId: deviceId, appVersion: appVersion);
     }
   }
 
-  static Future<ClientIdentity> _describeDevice(String deviceId) async {
+  /// Never throws, for the same reason [resolve] does not: an unnamed version
+  /// is a cosmetic loss in a device card, not a reason to fail at startup.
+  static Future<String> _loadAppVersion() async {
+    try {
+      final version = sanitize((await PackageInfo.fromPlatform()).version);
+      if (version.isNotEmpty) return version;
+    } on Exception {
+      // No plugin (a unit test), or a platform that will not answer.
+    } on Error {
+      // ignore
+    }
+    return fallbackAppVersion;
+  }
+
+  static Future<ClientIdentity> _describeDevice(
+    String deviceId,
+    String appVersion,
+  ) async {
     final info = DeviceInfoPlugin();
     if (Platform.isAndroid) {
       final android = await info.androidInfo;
       return ClientIdentity(
         deviceId: deviceId,
+        appVersion: appVersion,
         platform: ClientPlatform.android,
         osVersion: sanitize(android.version.release),
         deviceModel: sanitize(android.model),
@@ -237,6 +269,7 @@ class ClientIdentity {
       final ios = await info.iosInfo;
       return ClientIdentity(
         deviceId: deviceId,
+        appVersion: appVersion,
         platform: ios.model.toLowerCase().contains('ipad')
             ? ClientPlatform.ipad
             : ClientPlatform.iphone,
@@ -251,6 +284,7 @@ class ClientIdentity {
       final mac = await info.macOsInfo;
       return ClientIdentity(
         deviceId: deviceId,
+        appVersion: appVersion,
         platform: ClientPlatform.macos,
         osVersion: sanitize(mac.osRelease),
         deviceModel: sanitize(mac.modelName),
@@ -261,6 +295,7 @@ class ClientIdentity {
       final linux = await info.linuxInfo;
       return ClientIdentity(
         deviceId: deviceId,
+        appVersion: appVersion,
         platform: ClientPlatform.linux,
         osVersion: sanitize(linux.versionId ?? ''),
         deviceModel: sanitize(linux.name),
@@ -271,13 +306,14 @@ class ClientIdentity {
       final windows = await info.windowsInfo;
       return ClientIdentity(
         deviceId: deviceId,
+        appVersion: appVersion,
         platform: ClientPlatform.windows,
         osVersion: sanitize(windows.displayVersion),
         deviceModel: sanitize(windows.productName),
         deviceName: sanitize(windows.computerName),
       );
     }
-    return ClientIdentity(deviceId: deviceId);
+    return ClientIdentity(deviceId: deviceId, appVersion: appVersion);
   }
 
   /// Header values travel as latin-1 and cannot carry the parentheses and

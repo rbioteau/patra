@@ -13,8 +13,12 @@ ScreenMetrics _landscape() => const ScreenMetrics(915, 412);
 ScreenMetrics _tablet() => const ScreenMetrics(834, 1194);
 ScreenMetrics _noScreen() => const ScreenMetrics(0, 0);
 
+// A version no release will ever carry, because it is a fixture: what the app
+// reports is read off the binary at startup, so nothing in this repository —
+// these expectations included — should look like the real one.
 const _android = ClientIdentity(
   deviceId: 'device-uuid',
+  appVersion: '1.2.3',
   platform: ClientPlatform.android,
   osVersion: '15',
   deviceModel: 'CPH2663',
@@ -31,19 +35,20 @@ ClientDeviceDto _device({
 void main() {
   group('user agent', () {
     test('names the app, then the platform token Kavita greps for', () {
-      expect(_android.userAgent, 'Patra/0.1.0 (Android 15; CPH2663; Flutter)');
+      expect(_android.userAgent, 'Patra/1.2.3 (Android 15; CPH2663; Flutter)');
     });
 
     test('says iPhone on iOS, because Kavita does not look for "iOS"', () {
       const identity = ClientIdentity(
         deviceId: 'device-uuid',
+        appVersion: '1.2.3',
         platform: ClientPlatform.iphone,
         osVersion: '18.6',
         deviceModel: 'iPhone 15 Pro',
       );
       expect(
         identity.userAgent,
-        'Patra/0.1.0 (iPhone; iOS 18.6; iPhone 15 Pro; Flutter)',
+        'Patra/1.2.3 (iPhone; iOS 18.6; iPhone 15 Pro; Flutter)',
       );
       expect(identity.userAgent.toLowerCase(), contains('iphone'));
     });
@@ -51,13 +56,22 @@ void main() {
     test('drops the parts it could not resolve', () {
       const identity = ClientIdentity(
         deviceId: 'device-uuid',
+        appVersion: '1.2.3',
         platform: ClientPlatform.android,
         screen: _phone,
       );
-      expect(identity.userAgent, 'Patra/0.1.0 (Android; Flutter)');
+      expect(identity.userAgent, 'Patra/1.2.3 (Android; Flutter)');
+    });
+
+    test('says 0.0.0 rather than a stale number when the build is unnamed', () {
+      // PackageInfo answers on a device and not in a test, so the fallback is
+      // what an unconfigured identity carries. It must not be a copy of the
+      // current version: a hardcoded number is the thing that drifts, and
+      // moving it off the const is the whole point of reading the binary.
+      expect(ClientIdentity.fallbackAppVersion, '0.0.0');
       expect(
         const ClientIdentity.unknown().userAgent,
-        'Patra/0.1.0 (Flutter)',
+        'Patra/0.0.0 (Flutter)',
       );
     });
 
@@ -87,7 +101,7 @@ void main() {
       // web-app/<v> (<browser>/<v>; <platform>; <deviceType>; <w>x<h>; <o>)
       expect(
         _android.kavitaClientHeader,
-        'web-app/0.1.0 (Patra/0.1.0; Android; Mobile; 412x915; portrait)',
+        'web-app/1.2.3 (Patra/1.2.3; Android; Mobile; 412x915; portrait)',
       );
     });
 
@@ -246,21 +260,6 @@ void main() {
 
       expect(adapter.listed, isFalse);
     });
-  });
-
-  test('the advertised version matches pubspec', () {
-    final pubspec = File('pubspec.yaml').readAsStringSync();
-    final version = RegExp(
-      r'^version:\s*([0-9]+\.[0-9]+\.[0-9]+)',
-      multiLine: true,
-    ).firstMatch(pubspec)?.group(1);
-    expect(version, isNotNull);
-    expect(
-      ClientIdentity.appVersion,
-      version,
-      reason: 'ClientIdentity.appVersion is what the server is told; bump it '
-          'with pubspec.yaml',
-    );
   });
 }
 

@@ -1,6 +1,9 @@
 name: patra
 description: "A Flutter client for Kavita — manga, comics and books from your own server."
 publish_to: 'none'
+# Only the default a local build falls back to. A release takes its version
+# from the git tag (--build-name) and its build number from the CI run, and
+# the app reads both back off the binary; see CLAUDE.md.
 version: 0.1.0+1
 
 environment:
@@ -21,6 +24,7 @@ dependencies:
   go_router: ^18.0.0
   google_fonts: ^8.2.1
   intl: ^0.20.3
+  package_info_plus: ^10.2.1
   path_provider: ^2.1.6
 
 dev_dependencies:
