@@ -291,6 +291,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get dragToMagnify => 'Glisser pour agrandir';
+
+  @override
+  String get dragToMagnifyExplained =>
+      'Un doigt agrandit la page autour du point touché, et la longueur du geste décide de combien. Les pages se tournent en touchant les bords.';
+
+  @override
   String get readingDirection => 'Sens de lecture';
 
   @override

@@ -524,6 +524,18 @@ abstract class AppLocalizations {
   /// **'{first}–{last} / {total}'**
   String pageSpreadCounter(int first, int last, int total);
 
+  /// Reader setting: a one-finger drag magnifies the page instead of turning it.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to magnify'**
+  String get dragToMagnify;
+
+  /// Explains what turning the drag-to-magnify setting on changes, including what it costs: the swipe that turns a page.
+  ///
+  /// In en, this message translates to:
+  /// **'One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.'**
+  String get dragToMagnifyExplained;
+
   /// Title of the reader menu that picks how pages advance
   ///
   /// In en, this message translates to:

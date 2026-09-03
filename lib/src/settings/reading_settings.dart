@@ -28,6 +28,7 @@ enum ReadingDirection {
 class ReadingSettingsStore {
   static const _storage = FlutterSecureStorage();
   static const _key = 'readingDirection';
+  static const _loupeKey = 'loupeGesture';
 
   /// Values the enum no longer names. `webtoon` is what vertical scrolling was
   /// called before the glossary settled on its own word, and the preference
@@ -55,6 +56,25 @@ class ReadingSettingsStore {
       // A preference is not worth surfacing a storage failure for.
     }
   }
+
+  /// Off unless it was deliberately turned on: the gesture replaces the swipe
+  /// that turns a page, and finding that out by accident is a bad first
+  /// minute with the reader.
+  static Future<bool> loadLoupe() async {
+    try {
+      return await _storage.read(key: _loupeKey) == 'true';
+    } on Exception {
+      return false;
+    }
+  }
+
+  static Future<void> saveLoupe(bool enabled) async {
+    try {
+      await _storage.write(key: _loupeKey, value: enabled.toString());
+    } on Exception {
+      // As above.
+    }
+  }
 }
 
 /// Preference restored before the app started; injected in main().
@@ -78,3 +98,24 @@ final defaultReadingDirectionProvider =
     NotifierProvider<DefaultReadingDirectionNotifier, ReadingDirection>(
       DefaultReadingDirectionNotifier.new,
     );
+
+/// Preference restored before the app started; injected in main().
+final initialLoupeProvider = Provider<bool>((ref) => false);
+
+/// Whether a one-finger drag magnifies the page instead of turning it.
+///
+/// Unlike the reading direction there is no per-chapter override: the
+/// direction is a property of the book, this is a property of the hand.
+class LoupeNotifier extends Notifier<bool> {
+  @override
+  bool build() => ref.read(initialLoupeProvider);
+
+  Future<void> set(bool enabled) async {
+    state = enabled;
+    await ReadingSettingsStore.saveLoupe(enabled);
+  }
+}
+
+final loupeProvider = NotifierProvider<LoupeNotifier, bool>(
+  LoupeNotifier.new,
+);

@@ -17,6 +17,7 @@ import '../../settings/cache_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
+import 'loupe_gesture.dart';
 import 'page_loading.dart';
 import 'spread_layout.dart';
 import 'thumb_strip.dart';
@@ -355,6 +356,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     final direction = _direction;
     final rtl = direction.isRightToLeft;
+    // Vertical scrolling is excluded rather than forgotten: there the drag
+    // *is* the scroll, and a mode that took it away would leave the direction
+    // with no way to advance at all.
+    final loupe = ref.watch(loupeProvider) && !direction.isVerticalScroll;
 
     return OrientationBuilder(
       builder: (context, orientation) {
@@ -385,6 +390,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 page: _page,
                 reverse: rtl,
                 spread: spread,
+                loupe: loupe,
+                aspectRatioFor: chapter.aspectRatioFor,
                 imageBuilder: _pageImage,
                 // The span of the page being *arrived at*, which is not the
                 // one the screen has been showing.
@@ -505,6 +512,8 @@ class _PagedView extends StatefulWidget {
     required this.page,
     required this.reverse,
     required this.spread,
+    required this.loupe,
+    required this.aspectRatioFor,
     required this.imageBuilder,
     required this.onPageChanged,
   });
@@ -515,6 +524,11 @@ class _PagedView extends StatefulWidget {
 
   /// Which pages share a screen, or null when they are shown one at a time.
   final SpreadLayout? spread;
+
+  /// Whether a one-finger drag magnifies the page instead of turning it.
+  final bool loupe;
+
+  final double Function(int page) aspectRatioFor;
   final PageImageBuilder imageBuilder;
   final ValueChanged<int> onPageChanged;
 
@@ -526,7 +540,25 @@ class _PagedViewState extends State<_PagedView> {
   late final PageController _controller = PageController(
     initialPage: _viewIndex(widget.page),
   );
-  late int _reported = widget.page;
+
+  /// The page this view last told the reader about, and so the page it
+  /// believes it is showing.
+  ///
+  /// Set in [initState] rather than by a `late` initialiser. A `late` field
+  /// runs its initialiser at the first *read*, and the first read is the
+  /// comparison in [didUpdateWidget] — by which time `widget.page` is already
+  /// the new page, so it initialised to the value it was about to be tested
+  /// against and the guard skipped the jump. The first tap on a side zone
+  /// therefore moved the reader's page number and left the pager where it
+  /// was, and the second jumped two. Nothing caught it because a swipe takes
+  /// the other path entirely, through `onPageChanged`.
+  late int _reported;
+
+  @override
+  void initState() {
+    super.initState();
+    _reported = widget.page;
+  }
 
   int get _itemCount => widget.spread?.length ?? widget.pages;
 
@@ -553,11 +585,23 @@ class _PagedViewState extends State<_PagedView> {
     super.dispose();
   }
 
+  /// The page, magnifiable — by the loupe gesture when it is on, and by the
+  /// usual pinch when it is not. Never both: they would be two recognisers
+  /// competing for the same one-finger drag.
+  Widget _zoomable(List<double> aspectRatios, Widget child) => widget.loupe
+      ? _LoupePage(aspectRatios: aspectRatios, child: child)
+      : InteractiveViewer(maxScale: 5, child: child);
+
   @override
   Widget build(BuildContext context) {
     return PageView.builder(
       controller: _controller,
       reverse: widget.reverse,
+      // The loupe owns the one-finger drag, so the swipe that turns a page
+      // has to give it up — the tap zones are what turn pages in that mode.
+      // Two recognisers cannot share one drag, and letting them fight would
+      // make both unreliable rather than making either work.
+      physics: widget.loupe ? const NeverScrollableScrollPhysics() : null,
       itemCount: _itemCount,
       onPageChanged: (index) {
         _reported = _firstPageOf(index);
@@ -566,9 +610,10 @@ class _PagedViewState extends State<_PagedView> {
       itemBuilder: (context, index) {
         final spread = widget.spread;
         if (spread == null) {
-          return InteractiveViewer(
-            maxScale: 5,
-            child: widget.imageBuilder(_firstPageOf(index)),
+          final page = _firstPageOf(index);
+          return _zoomable(
+            [widget.aspectRatioFor(page)],
+            widget.imageBuilder(page),
           );
         }
         final pages = spread.slots[index];
@@ -576,9 +621,9 @@ class _PagedViewState extends State<_PagedView> {
         // the first page of the pair always leads. A double-page scan is
         // alone on its screen and takes the whole width.
         final ordered = widget.reverse ? pages.reversed.toList() : pages;
-        return InteractiveViewer(
-          maxScale: 5,
-          child: Stack(
+        return _zoomable(
+          [for (final page in ordered) widget.aspectRatioFor(page)],
+          Stack(
             fit: StackFit.expand,
             children: [
               Row(
@@ -607,6 +652,131 @@ class _PagedViewState extends State<_PagedView> {
               if (ordered.length == 2) const _SpineShadow(),
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+/// One page under the loupe: a one-finger drag magnifies it around the point
+/// pressed, and letting go returns it to the page.
+///
+/// The gesture's rules are all in [LoupeGesture], which is a pure function of
+/// the viewport, where the artwork sits and where the finger is. This widget
+/// only measures the first two, feeds it the third, and animates the way back.
+class _LoupePage extends StatefulWidget {
+  const _LoupePage({required this.aspectRatios, required this.child});
+
+  /// The aspect ratio of each page sharing this screen, in drawing order.
+  final List<double> aspectRatios;
+  final Widget child;
+
+  @override
+  State<_LoupePage> createState() => _LoupePageState();
+}
+
+class _LoupePageState extends State<_LoupePage>
+    with SingleTickerProviderStateMixin {
+  /// Letting go returns the page rather than snapping it back: a cut from
+  /// 2.5x to the whole page loses the reader their place on it.
+  static const _releaseDuration = Duration(milliseconds: 180);
+
+  late final AnimationController _release = AnimationController(
+    vsync: this,
+    duration: _releaseDuration,
+  )..addListener(_onReleaseTick);
+
+  LoupeGesture? _gesture;
+  LoupeTransform? _shown;
+
+  /// Where the finger actually touched down.
+  ///
+  /// Not the same as where the pan is *recognised*, which is already a slop
+  /// distance into the drag — about 18pt on a touch screen. The design says
+  /// the point of contact is the reference point, and taking it from
+  /// `onPanStart` would put it 18pt along the direction of travel instead:
+  /// the page would be magnified around a spot slightly below where the
+  /// reader put their thumb, every time, in the direction they were already
+  /// pulling.
+  Offset? _downAt;
+
+  /// Where the page was when the finger left it, and where it is going back
+  /// to. Held across the animation so a rebuild mid-flight cannot lose them.
+  LoupeTransform? _from;
+  LoupeTransform? _to;
+
+  @override
+  void dispose() {
+    _release.dispose();
+    super.dispose();
+  }
+
+  void _onReleaseTick() {
+    final from = _from;
+    final to = _to;
+    if (from == null || to == null) return;
+    final t = Curves.easeOutCubic.transform(_release.value);
+    setState(() {
+      if (_release.isCompleted) {
+        _shown = _from = _to = null;
+      } else {
+        _shown = LoupeTransform.lerp(from, to, t);
+      }
+    });
+  }
+
+  void _onStart(DragStartDetails details, Size viewport) {
+    _release.stop();
+    final gesture = LoupeGesture(
+      viewport: viewport,
+      content: drawnContent(viewport, widget.aspectRatios),
+      anchor: _downAt ?? details.localPosition,
+    );
+    _gesture = gesture;
+    _from = _to = null;
+    setState(() => _shown = gesture.to(details.localPosition));
+  }
+
+  void _onUpdate(DragUpdateDetails details) {
+    final gesture = _gesture;
+    if (gesture == null) return;
+    setState(() => _shown = gesture.to(details.localPosition));
+  }
+
+  void _onEnd() {
+    final from = _shown;
+    _gesture = null;
+    _downAt = null;
+    if (from == null) return;
+    if (from.isRest) {
+      setState(() => _shown = null);
+      return;
+    }
+    _from = from;
+    _to = LoupeTransform.rest(from.content);
+    _release.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.biggest;
+        final shown = _shown;
+        return GestureDetector(
+          // Opaque, so the drag is caught anywhere on the canvas — including
+          // the letterbox bars, which are as much a part of the page as the
+          // artwork to the thumb resting on them. The tap zones sit above
+          // this in the stack and still win a tap: only a drag reaches here.
+          behavior: HitTestBehavior.opaque,
+          onPanDown: (details) => _downAt = details.localPosition,
+          onPanStart: (details) => _onStart(details, viewport),
+          onPanUpdate: _onUpdate,
+          onPanEnd: (_) => _onEnd(),
+          onPanCancel: _onEnd,
+          child: shown == null
+              ? widget.child
+              : Transform(transform: shown.matrix, child: widget.child),
         );
       },
     );

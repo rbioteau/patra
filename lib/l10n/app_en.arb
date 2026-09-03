@@ -274,6 +274,14 @@
       "total": {"type": "int"}
     }
   },
+  "dragToMagnify": "Drag to magnify",
+  "@dragToMagnify": {
+    "description": "Reader setting: a one-finger drag magnifies the page instead of turning it."
+  },
+  "dragToMagnifyExplained": "One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.",
+  "@dragToMagnifyExplained": {
+    "description": "Explains what turning the drag-to-magnify setting on changes, including what it costs: the swipe that turns a page."
+  },
   "readingDirection": "Reading direction",
   "@readingDirection": {
     "description": "Title of the reader menu that picks how pages advance"

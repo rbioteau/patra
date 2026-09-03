@@ -100,6 +100,7 @@ Future<List<int>> _pumpReader(
   WidgetTester tester, {
   required int initialPage,
   ReadingDirection direction = ReadingDirection.verticalScroll,
+  bool loupe = false,
   int? savedPagesRead,
   SliderComponentShape? sliderThumb,
   Set<int> wide = const {},
@@ -129,6 +130,7 @@ Future<List<int>> _pumpReader(
           DownloadsService(root: downloads),
         ),
         initialReadingDirectionProvider.overrideWithValue(direction),
+        initialLoupeProvider.overrideWithValue(loupe),
       ],
       child: MaterialApp(
         theme: patraTheme(),
@@ -358,4 +360,144 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     expect(modes.last, 'SystemUiMode.edgeToEdge');
   });
+
+  group('the loupe gesture', () {
+    // The gesture's own rules are covered against the pure module in
+    // `loupe_gesture_test.dart`. What can only be seen in the real tree is
+    // what the mode costs and what it leaves alone: it takes the one-finger
+    // drag away from the page turn, and it must give it back on the way out.
+
+    /// A phone held upright, which is what this mode is for — and, less
+    /// obviously, what keeps the pager's index equal to the page number: a
+    /// test's default surface is landscape, where a spread puts two pages on
+    /// every index and page 10 is index 5.
+    void portrait(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+    }
+
+    /// Which page the pager is on. Read from the controller rather than from
+    /// a progress post, which is queued and would need the whole network
+    /// round trip pumped through before it said anything.
+    double? pagerAt(WidgetTester tester) =>
+        tester.widget<PageView>(find.byType(PageView)).controller?.page;
+
+    /// The loupe is the only thing in this tree that scales a child up.
+    Matrix4? magnified(WidgetTester tester) => tester
+        .widgetList<Transform>(find.byType(Transform))
+        .map((t) => t.transform)
+        .where((m) => m.storage[0] > 1.0)
+        .firstOrNull;
+
+    testWidgets('a drag magnifies the page instead of turning it', (
+      tester,
+    ) async {
+      portrait(tester);
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        loupe: true,
+      );
+      expect(magnified(tester), isNull, reason: 'nothing pressed yet');
+      expect(pagerAt(tester), 10);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(PageView)),
+      );
+      await tester.pump();
+      await gesture.moveBy(const Offset(-40, 160));
+      await tester.pump();
+
+      final matrix = magnified(tester);
+      expect(matrix, isNotNull, reason: 'the drag should magnify');
+      expect(matrix!.storage[0], greaterThan(1.0));
+      expect(pagerAt(tester), 10, reason: 'and must not turn the page');
+
+      await gesture.up();
+      // The release animation, pumped out: this screen never settles, since
+      // its page placeholders spin forever behind a server serving no images.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        magnified(tester),
+        isNull,
+        reason: 'letting go returns the whole page',
+      );
+      expect(pagerAt(tester), 10);
+    });
+
+    testWidgets('the side taps still turn pages while it is on', (
+      tester,
+    ) async {
+      portrait(tester);
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        loupe: true,
+      );
+      // Tapping is the only thing left that advances a page in this mode, so
+      // it has to keep working or the mode strands the reader where they are.
+      final size = tester.getSize(find.byType(PageView));
+      await tester.tapAt(Offset(size.width * 0.9, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pagerAt(tester), 11);
+    });
+
+    testWidgets('the first side tap turns the page, with or without it', (
+      tester,
+    ) async {
+      portrait(tester);
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+      );
+      final size = tester.getSize(find.byType(PageView));
+      await tester.tapAt(Offset(size.width * 0.9, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      // The *first* tap is the one that used to do nothing: the pager's idea
+      // of where it was initialised itself out of the page it was being asked
+      // to move to, so the guard saw no change. The second tap then skipped a
+      // page. This mode makes tapping the only way through a chapter, so it
+      // is pinned here rather than left to the swipe path that hid it.
+      expect(pagerAt(tester), 11);
+    });
+
+    testWidgets('with it off, a drag turns the page as it always did', (
+      tester,
+    ) async {
+      portrait(tester);
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+      );
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pagerAt(tester), closeTo(11, 0.01));
+      expect(magnified(tester), isNull);
+    });
+
+    testWidgets('vertical scrolling keeps its scroll', (tester) async {
+      // The one direction the mode is refused: there the drag *is* how the
+      // chapter advances, so taking it would leave no way through at all.
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.verticalScroll,
+        loupe: true,
+      );
+      expect(
+        tester.widget<Scrollable>(find.byType(Scrollable).first).physics,
+        isNot(isA<NeverScrollableScrollPhysics>()),
+      );
+    });
+  });
+
 }

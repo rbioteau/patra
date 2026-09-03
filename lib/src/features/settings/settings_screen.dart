@@ -21,6 +21,7 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final session = ref.watch(sessionProvider);
     final direction = ref.watch(defaultReadingDirectionProvider);
+    final loupe = ref.watch(loupeProvider);
     final locale = ref.watch(localeProvider);
 
     return Scaffold(
@@ -55,6 +56,13 @@ class SettingsScreen extends ConsumerWidget {
               title: l10n.defaultReadingDirection,
               value: direction.label(l10n),
               onTap: () => _pickDirection(context, ref, direction),
+            ),
+            _SwitchRow(
+              icon: const Icon(Icons.zoom_in, size: 18, color: patraAccent),
+              title: l10n.dragToMagnify,
+              subtitle: l10n.dragToMagnifyExplained,
+              value: loupe,
+              onChanged: (on) => ref.read(loupeProvider.notifier).set(on),
             ),
 
             _Section(label: l10n.storageSectionLabel),
@@ -205,6 +213,65 @@ class SettingsScreen extends ConsumerWidget {
     if (picked != null) {
       await ref.read(defaultReadingDirectionProvider.notifier).set(picked);
     }
+  }
+}
+
+/// A setting that is simply on or off, with a line saying what turning it on
+/// changes. The subtitle is not decoration here: this one takes the swipe that
+/// turns a page away, and a switch alone would not say so.
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Widget icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: minHitTarget),
+        padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
+        // The switch is the control, and the row is one thing to a screen
+        // reader rather than a label and a toggle announced apart.
+        child: MergeSemantics(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 22,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Center(child: icon),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: PatraText.body()),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: PatraText.metadata()),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Switch(value: value, onChanged: onChanged),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

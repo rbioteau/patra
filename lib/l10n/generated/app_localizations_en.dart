@@ -290,6 +290,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dragToMagnify => 'Drag to magnify';
+
+  @override
+  String get dragToMagnifyExplained =>
+      'One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.';
+
+  @override
   String get readingDirection => 'Reading direction';
 
   @override
