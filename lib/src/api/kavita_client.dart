@@ -234,12 +234,21 @@ class KavitaClient {
       queryParameters: {'PageNumber': pageNumber, 'PageSize': pageSize},
       data: {
         'statements': [
-          // field 19 = Libraries, comparison 5 = Contains
-          {'comparison': 5, 'field': 19, 'value': '$libraryId'},
+          {
+            'comparison': FilterComparison.contains,
+            'field': SeriesFilterField.libraries,
+            'value': '$libraryId',
+          },
         ],
-        'combination': 1, // And
+        'combination': FilterCombination.and,
+        // The one number here the spec cannot vouch for: a bare int32 with no
+        // enum and no default, whose "0 means no limit" is server behaviour
+        // the description never states.
         'limitTo': 0,
-        'sortOptions': {'sortField': 1, 'isAscending': true},
+        'sortOptions': {
+          'sortField': SeriesSortField.sortName,
+          'isAscending': true,
+        },
       },
     );
     return res.data!

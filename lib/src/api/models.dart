@@ -408,3 +408,36 @@ class ClientDeviceDto {
         uiFingerprint: json['uiFingerprint'] as String? ?? '',
       );
 }
+
+/// The members of Kavita's filter enums that `POST /api/Series/all-v2` is
+/// actually sent. Only those: the four enums run to 34, 18, 2 and 11 members
+/// and the rest would be dead code, by the same argument that keeps this
+/// client hand-written.
+///
+/// What makes these more than a comment is that
+/// `test/openapi_contract_test.dart` checks each value against the spec's
+/// `x-enum-varnames`, **by value rather than by position** —
+/// [SeriesSortField]'s enum is one-based where the other three are zero-based,
+/// so they cannot be counted off by eye.
+abstract final class SeriesFilterField {
+  /// Filter on the libraries a series belongs to.
+  static const libraries = 19;
+}
+
+/// See [SeriesFilterField].
+abstract final class FilterComparison {
+  /// The field contains the value — for `libraries`, the id is in the list.
+  static const contains = 5;
+}
+
+/// See [SeriesFilterField].
+abstract final class FilterCombination {
+  /// Every statement must match. The enum has only `Or` and `And`.
+  static const and = 1;
+}
+
+/// See [SeriesFilterField].
+abstract final class SeriesSortField {
+  /// Kavita's own sort name for a series, which is what its grids order on.
+  static const sortName = 1;
+}
