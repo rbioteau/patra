@@ -244,7 +244,7 @@ void main() {
     });
 
     test('chapter info asks for page dimensions', () async {
-      // They are opt-in, and the webtoon view needs them to size pages.
+      // They are opt-in, and the vertical-scrolling view needs them to size pages.
       await recordingClient().chapterInfo(7);
 
       expect(lastRequest!.queryParameters['includeDimensions'], true);

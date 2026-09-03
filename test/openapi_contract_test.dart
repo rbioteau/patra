@@ -131,21 +131,22 @@ void main() {
 
   group('every field the DTOs read', () {
     /// Which schema each class in `models.dart` parses. Explicit because the
-    /// names do not all correspond: `PageDimension` reads Kavita's
-    /// `FileDimensionDto`, and `SeriesMetadata` flattens two nested lists.
+    /// names deliberately no longer correspond: our classes are the domain's
+    /// nouns, and only `ClientDeviceDto` keeps the suffix, being the one type
+    /// that mirrors Kavita's wire and nothing else.
     const schemaFor = {
-      'UserDto': 'UserDto',
-      'LibraryDto': 'LibraryDto',
-      'SeriesDto': 'SeriesDto',
-      'SeriesMetadataDto': 'SeriesMetadataDto',
-      'VolumeDto': 'VolumeDto',
-      'ChapterDto': 'ChapterDto',
-      'ChapterInfoDto': 'ChapterInfoDto',
+      'LoginResult': 'UserDto',
+      'Library': 'LibraryDto',
+      'Series': 'SeriesDto',
+      'SeriesMetadata': 'SeriesMetadataDto',
+      'Volume': 'VolumeDto',
+      'Chapter': 'ChapterDto',
+      'ChapterInfo': 'ChapterInfoDto',
       'PageDimension': 'FileDimensionDto',
       'ClientDeviceDto': 'ClientDeviceDto',
     };
 
-    /// The nested reads the regex below cannot see: `SeriesMetadataDto._names`
+    /// The nested reads the regex below cannot see: `SeriesMetadata._names`
     /// takes the key as a parameter, so `writers[].name` and `genres[].title`
     /// are invisible in the source and listed by hand.
     const nested = {

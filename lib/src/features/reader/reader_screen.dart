@@ -22,12 +22,13 @@ import 'spread_layout.dart';
 import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose
-    .family<ChapterInfoDto, int>(retry: serverRetry, (ref, chapterId) {
+    .family<ChapterInfo, int>(retry: serverRetry, (ref, chapterId) {
       return ref.watch(kavitaClientProvider).chapterInfo(chapterId);
     });
 
 /// The reading surface: pure black canvas, chrome as gradient overlays, and a
-/// single reading-direction setting (webtoon is a direction, not a mode).
+/// single reading-direction setting (vertical scrolling is a direction,
+/// not a mode).
 class ReaderScreen extends ConsumerStatefulWidget {
   const ReaderScreen({
     super.key,
@@ -99,7 +100,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // --- progress -------------------------------------------------------------
 
-  void _saveProgress(int page, ChapterInfoDto info) {
+  void _saveProgress(int page, ChapterInfo info) {
     if (info.pages == 0) return;
     // Kavita counts pagesRead from the saved pageNum, so reaching the last
     // page must report the total for the chapter to be marked read — the
@@ -133,7 +134,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   /// The view reports the first page it shows; a landscape spread has read
   /// both pages of the pair.
-  void _onPageChanged(int page, ChapterInfoDto info, {int span = 1}) {
+  void _onPageChanged(int page, ChapterInfo info, {int span = 1}) {
     if (page == _page) return;
     setState(() => _page = page);
     _saveProgress((page + span - 1).clamp(0, info.pages - 1), info);
@@ -145,7 +146,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         .trimIfDue(ref.read(imageCacheLimitProvider).bytes);
   }
 
-  void _precache(int page, ChapterInfoDto info) {
+  void _precache(int page, ChapterInfo info) {
     if (page < 0 || page >= info.pages) return;
     final provider = _imageProvider(page);
     if (provider != null) precacheImage(provider, context);
@@ -157,7 +158,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// Deferred a frame because it is reached from `build`, and saving mirrors
   /// progress into the stored copy — writing to a provider while the tree is
   /// building is what Riverpod refuses outright.
-  void _saveInitialProgress(ChapterInfoDto info) {
+  void _saveInitialProgress(ChapterInfo info) {
     if (_initialProgressSaved) return;
     _initialProgressSaved = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -280,7 +281,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // --- navigation -----------------------------------------------------------
 
-  void _goTo(int page, ChapterInfoDto info) {
+  void _goTo(int page, ChapterInfo info) {
     final clamped = page.clamp(0, info.pages - 1);
     if (clamped == _page) return;
     setState(() => _page = clamped);
@@ -290,7 +291,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// A step is a screen, not a fixed number of pages: a double-page scan sits
   /// on one of its own, so stepping back from it lands on the *first* page of
   /// the pair before it rather than on the second.
-  void _step(bool forward, ChapterInfoDto info, SpreadLayout? spread) {
+  void _step(bool forward, ChapterInfo info, SpreadLayout? spread) {
     if (spread == null) {
       _goTo(_page + (forward ? 1 : -1), info);
       return;
@@ -311,7 +312,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         info.value ??
         (saved == null
             ? null
-            : ChapterInfoDto(
+            : ChapterInfo(
                 seriesId: saved.seriesId,
                 volumeId: saved.volumeId,
                 libraryId: saved.libraryId,
@@ -327,7 +328,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         (null, _) => const Center(
           child: CircularProgressIndicator(color: patraAccent),
         ),
-        (final ChapterInfoDto chapter, _) => _buildReader(
+        (final ChapterInfo chapter, _) => _buildReader(
           context,
           l10n,
           chapter,
@@ -339,7 +340,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Widget _buildReader(
     BuildContext context,
     AppLocalizations l10n,
-    ChapterInfoDto chapter,
+    ChapterInfo chapter,
   ) {
     // An EPUB or a PDF has no pages to fetch: `/api/Reader/image` serves
     // nothing for them, so opening one would be a reader full of broken
@@ -361,7 +362,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         // which pages actually share a screen is the layout's call, since a
         // scan that is already a double page takes one on its own.
         final spread =
-            orientation == Orientation.landscape && !direction.isWebtoon
+            orientation == Orientation.landscape && !direction.isVerticalScroll
             ? SpreadLayout.of(chapter)
             : null;
         final span = spread?.spanOf(_page) ?? 1;
@@ -369,9 +370,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         return Stack(
           fit: StackFit.expand,
           children: [
-            if (direction.isWebtoon)
-              _WebtoonView(
-                key: const ValueKey('webtoon'),
+            if (direction.isVerticalScroll)
+              _VerticalScrollView(
+                key: const ValueKey('verticalScroll'),
                 chapter: chapter,
                 page: _page,
                 imageBuilder: _pageImage,
@@ -396,7 +397,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
             // Tap zones: 30 / 40 / 30. The sides page, the middle toggles
             // chrome; in right-to-left the side meanings swap with the layout.
-            if (!direction.isWebtoon)
+            if (!direction.isVerticalScroll)
               Positioned.fill(
                 child: Row(
                   children: [
@@ -638,10 +639,10 @@ class _SpineShadow extends StatelessWidget {
   }
 }
 
-// --- webtoon view -----------------------------------------------------------
+// --- vertical-scrolling view -----------------------------------------------------------
 
-class _WebtoonView extends StatefulWidget {
-  const _WebtoonView({
+class _VerticalScrollView extends StatefulWidget {
+  const _VerticalScrollView({
     super.key,
     required this.chapter,
     required this.page,
@@ -649,16 +650,16 @@ class _WebtoonView extends StatefulWidget {
     required this.onPageChanged,
   });
 
-  final ChapterInfoDto chapter;
+  final ChapterInfo chapter;
   final int page;
   final PageImageBuilder imageBuilder;
   final ValueChanged<int> onPageChanged;
 
   @override
-  State<_WebtoonView> createState() => _WebtoonViewState();
+  State<_VerticalScrollView> createState() => _VerticalScrollViewState();
 }
 
-class _WebtoonViewState extends State<_WebtoonView> {
+class _VerticalScrollViewState extends State<_VerticalScrollView> {
   final _controller = ScrollController();
   late int _reported = widget.page;
   double _width = 0;
@@ -732,7 +733,7 @@ class _WebtoonViewState extends State<_WebtoonView> {
   }
 
   @override
-  void didUpdateWidget(_WebtoonView old) {
+  void didUpdateWidget(_VerticalScrollView old) {
     super.didUpdateWidget(old);
     // A seek from the slider: jump, unless this is our own report echoing.
     if (widget.page != _reported) {
@@ -898,7 +899,7 @@ class _BottomChrome extends StatelessWidget {
     required this.onSeek,
   });
 
-  final ChapterInfoDto chapter;
+  final ChapterInfo chapter;
   final int page;
   final int span;
   final bool rtl;

@@ -4,8 +4,8 @@ import 'package:patra/src/features/reader/spread_layout.dart';
 
 /// A chapter of [pages] pages, with the ones listed in [wide] scanned as
 /// double pages. Kavita numbers `pageDimensions` from the file, which may be
-/// 0- or 1-based; these are 0-based, as `ChapterInfoDto` reads them first.
-ChapterInfoDto _chapter(int pages, {Set<int> wide = const {}}) => ChapterInfoDto(
+/// 0- or 1-based; these are 0-based, as `ChapterInfo` reads them first.
+ChapterInfo _chapter(int pages, {Set<int> wide = const {}}) => ChapterInfo(
   seriesId: 1,
   volumeId: 1,
   libraryId: 1,
@@ -66,7 +66,7 @@ void main() {
   test('landscape dimensions are a spread even without the flag', () {
     // Kavita only sets `isWide` for the files it has measured that way, but a
     // page plainly wider than it is tall is a double page whatever it says.
-    final chapter = ChapterInfoDto(
+    final chapter = ChapterInfo(
       seriesId: 1,
       volumeId: 1,
       libraryId: 1,
@@ -112,9 +112,9 @@ void main() {
   });
 }
 
-extension on ChapterInfoDto {
+extension on ChapterInfo {
   /// The same chapter as an older server would describe it: no dimensions.
-  ChapterInfoDto copyWithoutDimensions() => ChapterInfoDto(
+  ChapterInfo copyWithoutDimensions() => ChapterInfo(
     seriesId: seriesId,
     volumeId: volumeId,
     libraryId: libraryId,

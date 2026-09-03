@@ -74,7 +74,7 @@
   "readingDirection": "Sens de lecture",
   "readingDirectionLtr": "De gauche à droite",
   "readingDirectionRtl": "De droite à gauche",
-  "readingModeWebtoon": "Vertical",
+  "readingDirectionVerticalScroll": "Vertical",
   "savePill": "Enregistrer",
   "downloadingPct": "{percent} %",
   "savedPill": "Enregistré",

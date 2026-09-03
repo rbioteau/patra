@@ -17,7 +17,7 @@ import '../../api/models.dart';
 class SpreadLayout {
   SpreadLayout._(this.slots, this._slotOfPage);
 
-  factory SpreadLayout.of(ChapterInfoDto chapter) {
+  factory SpreadLayout.of(ChapterInfo chapter) {
     final slots = <List<int>>[];
     final slotOfPage = List.filled(chapter.pages, 0);
     var page = 0;

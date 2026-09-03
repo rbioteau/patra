@@ -8,12 +8,12 @@ void main() {
   final en = AppLocalizationsEn();
   final fr = AppLocalizationsFr();
 
-  ChapterDto chapter({
+  Chapter chapter({
     String range = '12',
     String title = '',
     String titleName = '',
     bool isSpecial = false,
-  }) => ChapterDto.fromJson({
+  }) => Chapter.fromJson({
     'id': 1,
     'range': range,
     'title': title,

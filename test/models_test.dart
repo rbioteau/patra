@@ -3,7 +3,7 @@ import 'package:patra/src/api/models.dart';
 
 void main() {
   group('Kavita sentinel numbers', () {
-    VolumeDto volume(num minNumber) => VolumeDto.fromJson({
+    Volume volume(num minNumber) => Volume.fromJson({
       'id': 1,
       'name': '$minNumber',
       'minNumber': minNumber,
@@ -29,7 +29,7 @@ void main() {
     });
 
     test('a chapterless volume exposes a placeholder chapter', () {
-      final chapter = ChapterDto.fromJson({
+      final chapter = Chapter.fromJson({
         'id': 10,
         'minNumber': -100000,
         'pages': 180,
@@ -38,7 +38,7 @@ void main() {
     });
 
     test('the specials volume number is not a chapter placeholder', () {
-      final chapter = ChapterDto.fromJson({
+      final chapter = Chapter.fromJson({
         'id': 10,
         'minNumber': 100000,
         'pages': 180,
@@ -47,7 +47,7 @@ void main() {
     });
 
     test('a special is never treated as a volume placeholder', () {
-      final chapter = ChapterDto.fromJson({
+      final chapter = Chapter.fromJson({
         'id': 11,
         'minNumber': -100000,
         'isSpecial': true,
@@ -105,7 +105,7 @@ void main() {
     });
 
     test('a chapter carries its sort order and format', () {
-      final chapter = ChapterDto.fromJson({
+      final chapter = Chapter.fromJson({
         'id': 1,
         'minNumber': 3,
         'sortOrder': 3.5,
@@ -117,8 +117,8 @@ void main() {
   });
 
   group('page dimensions', () {
-    test('drive the webtoon layout when the server reports them', () {
-      final info = ChapterInfoDto.fromJson({
+    test('drive the vertical-scrolling layout when the server reports them', () {
+      final info = ChapterInfo.fromJson({
         'seriesId': 1,
         'pages': 2,
         'pageDimensions': [
@@ -132,7 +132,7 @@ void main() {
     });
 
     test('tolerate one-based page numbering', () {
-      final info = ChapterInfoDto.fromJson({
+      final info = ChapterInfo.fromJson({
         'seriesId': 1,
         'pages': 1,
         'pageDimensions': [
@@ -143,13 +143,13 @@ void main() {
     });
 
     test('fall back to a portrait page when absent', () {
-      final info = ChapterInfoDto.fromJson({'seriesId': 1, 'pages': 3});
+      final info = ChapterInfo.fromJson({'seriesId': 1, 'pages': 3});
       expect(info.aspectRatioFor(0), PageDimension.defaultAspectRatio);
       expect(info.isWide(0), isFalse);
     });
 
     test('survive a malformed entry', () {
-      final info = ChapterInfoDto.fromJson({
+      final info = ChapterInfo.fromJson({
         'seriesId': 1,
         'pages': 1,
         'pageDimensions': [
@@ -163,7 +163,7 @@ void main() {
   });
 
   group('the login response says what the account may do', () {
-    UserDto user(Object? roles) => UserDto.fromJson({
+    LoginResult user(Object? roles) => LoginResult.fromJson({
       'username': 'romain',
       'token': 't',
       'refreshToken': 'r',

@@ -166,7 +166,7 @@ class KavitaClient {
 
   /// Authenticates against a Kavita server. Static because it happens before
   /// a client exists.
-  static Future<UserDto> login({
+  static Future<LoginResult> login({
     required String baseUrl,
     required String username,
     required String password,
@@ -185,7 +185,7 @@ class KavitaClient {
       '/api/Account/login',
       data: {'username': username, 'password': password, 'apiKey': ''},
     );
-    return UserDto.fromJson(res.data!);
+    return LoginResult.fromJson(res.data!);
   }
 
   /// Cheapest proof that the server is there.
@@ -217,14 +217,14 @@ class KavitaClient {
     queryParameters: {'libraryId': libraryId},
   );
 
-  Future<List<LibraryDto>> libraries() async {
+  Future<List<Library>> libraries() async {
     final res = await _dio.get<List<dynamic>>('/api/Library/libraries');
     return res.data!
-        .map((e) => LibraryDto.fromJson(e as Map<String, dynamic>))
+        .map((e) => Library.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  Future<List<SeriesDto>> seriesForLibrary(
+  Future<List<Series>> seriesForLibrary(
     int libraryId, {
     int pageNumber = 1,
     int pageSize = 100,
@@ -252,15 +252,15 @@ class KavitaClient {
       },
     );
     return res.data!
-        .map((e) => SeriesDto.fromJson(e as Map<String, dynamic>))
+        .map((e) => Series.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   /// Fetches every page of a library: the endpoint silently caps results at
   /// the page size.
-  Future<List<SeriesDto>> allSeriesForLibrary(int libraryId) async {
+  Future<List<Series>> allSeriesForLibrary(int libraryId) async {
     const pageSize = 100;
-    final all = <SeriesDto>[];
+    final all = <Series>[];
     for (var pageNumber = 1; ; pageNumber++) {
       final page = await seriesForLibrary(
         libraryId,
@@ -273,58 +273,58 @@ class KavitaClient {
   }
 
   /// Series the user has started but not finished — the "Continue" shelf.
-  Future<List<SeriesDto>> currentlyReading({int pageSize = 20}) async {
+  Future<List<Series>> currentlyReading({int pageSize = 20}) async {
     final res = await _dio.get<List<dynamic>>(
       '/api/Series/currently-reading',
       queryParameters: {'PageNumber': 1, 'PageSize': pageSize},
     );
     return res.data!
-        .map((e) => SeriesDto.fromJson(e as Map<String, dynamic>))
+        .map((e) => Series.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   /// Next thing to read in each series — the "On deck" shelf.
-  Future<List<SeriesDto>> onDeck({int pageSize = 20}) async {
+  Future<List<Series>> onDeck({int pageSize = 20}) async {
     final res = await _dio.post<List<dynamic>>(
       '/api/Series/on-deck',
       queryParameters: {'PageNumber': 1, 'PageSize': pageSize},
     );
     return res.data!
-        .map((e) => SeriesDto.fromJson(e as Map<String, dynamic>))
+        .map((e) => Series.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  Future<SeriesDto> series(int seriesId) async {
+  Future<Series> series(int seriesId) async {
     final res = await _dio.get<Map<String, dynamic>>('/api/Series/$seriesId');
-    return SeriesDto.fromJson(res.data!);
+    return Series.fromJson(res.data!);
   }
 
-  Future<SeriesMetadataDto> seriesMetadata(int seriesId) async {
+  Future<SeriesMetadata> seriesMetadata(int seriesId) async {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/Series/metadata',
       queryParameters: {'seriesId': seriesId},
     );
-    return SeriesMetadataDto.fromJson(res.data!);
+    return SeriesMetadata.fromJson(res.data!);
   }
 
-  Future<List<VolumeDto>> volumes(int seriesId) async {
+  Future<List<Volume>> volumes(int seriesId) async {
     final res = await _dio.get<List<dynamic>>(
       '/api/Series/volumes',
       queryParameters: {'seriesId': seriesId},
     );
     return res.data!
-        .map((e) => VolumeDto.fromJson(e as Map<String, dynamic>))
+        .map((e) => Volume.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  Future<ChapterInfoDto> chapterInfo(int chapterId) async {
+  Future<ChapterInfo> chapterInfo(int chapterId) async {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/Reader/chapter-info',
-      // Page dimensions are opt-in; without them the webtoon view cannot
+      // Page dimensions are opt-in; without them the vertical-scrolling view cannot
       // size pages before their images load.
       queryParameters: {'chapterId': chapterId, 'includeDimensions': true},
     );
-    return ChapterInfoDto.fromJson(res.data!);
+    return ChapterInfo.fromJson(res.data!);
   }
 
   /// Marks one chapter read or unread.

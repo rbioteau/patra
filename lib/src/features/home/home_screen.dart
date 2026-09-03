@@ -13,12 +13,12 @@ import '../../widgets/patra_wordmark.dart';
 import '../launch/launch_animation.dart';
 import '../library/library_screen.dart';
 
-final continueReadingProvider = FutureProvider.autoDispose<List<SeriesDto>>(
+final continueReadingProvider = FutureProvider.autoDispose<List<Series>>(
   retry: serverRetry,
   (ref) => ref.watch(kavitaClientProvider).currentlyReading(),
 );
 
-final onDeckProvider = FutureProvider.autoDispose<List<SeriesDto>>(
+final onDeckProvider = FutureProvider.autoDispose<List<Series>>(
   retry: serverRetry,
   (ref) => ref.watch(kavitaClientProvider).onDeck(),
 );
@@ -137,7 +137,7 @@ class _Shelf extends ConsumerWidget {
   });
 
   final String label;
-  final AsyncValue<List<SeriesDto>> series;
+  final AsyncValue<List<Series>> series;
   final bool showProgress;
 
   static const _tileWidth = 112.0;
@@ -154,7 +154,7 @@ class _Shelf extends ConsumerWidget {
     if (series.hasError && !series.hasValue) return const SizedBox.shrink();
 
     final client = series.hasValue ? ref.watch(kavitaClientProvider) : null;
-    final items = series.value ?? const <SeriesDto>[];
+    final items = series.value ?? const <Series>[];
     final tileWidth = isTabletLayout(context) ? _tabletTileWidth : _tileWidth;
 
     return Padding(
@@ -230,7 +230,7 @@ class _Shelf extends ConsumerWidget {
 class _LibrariesSection extends ConsumerWidget {
   const _LibrariesSection({required this.libraries});
 
-  final AsyncValue<List<LibraryDto>> libraries;
+  final AsyncValue<List<Library>> libraries;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -311,7 +311,7 @@ class _LibraryCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final LibraryDto library;
+  final Library library;
   final double width;
   final VoidCallback onTap;
 

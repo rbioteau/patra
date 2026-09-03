@@ -542,11 +542,11 @@ abstract class AppLocalizations {
   /// **'Right to left'**
   String get readingDirectionRtl;
 
-  /// Continuous vertical scrolling direction, sits next to the two page-turning ones
+  /// Continuous vertical scrolling direction, sits next to the two page-turning ones; the one word is enough on screen, it is the only vertical direction in the picker
   ///
   /// In en, this message translates to:
   /// **'Vertical'**
-  String get readingModeWebtoon;
+  String get readingDirectionVerticalScroll;
 
   /// Download action on a chapter; always worded, never icon-only
   ///

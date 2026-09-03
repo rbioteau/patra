@@ -1,10 +1,31 @@
-/// Minimal DTOs for the Kavita API (v0.9).
-/// Only the fields the app actually uses are mapped; parsing is defensive
-/// because Kavita omits null fields in some responses.
+/// What the app makes of Kavita's responses.
+///
+/// These are **not** Kavita's DTOs, which is why they no longer carry the
+/// suffix. Only the fields the app actually uses are mapped — 6 of `SeriesDto`'s
+/// 38, 10 of `ChapterDto`'s 81 — and what they carry besides is knowledge the
+/// wire does not: [Volume.isLooseLeaf], [Chapter.isVolumePlaceholder],
+/// [LibraryType.hasStoryline], [MangaFormat.isImageReadable],
+/// [ChapterInfo.isWide], and a [SeriesMetadata] that flattens two nested lists
+/// into names. Those are Kavita's *behaviour*, learned from its source rather
+/// than read off its description, and they are what makes each of these the
+/// domain's noun rather than a transcription of a payload.
+///
+/// The two exceptions say so in their own names: [LoginResult] is a response
+/// and nothing else, and [ClientDeviceDto] keeps the suffix because it is the
+/// one type here that really does mirror the wire and carry nothing of ours.
+///
+/// Parsing is defensive because Kavita omits null fields — and because its own
+/// description cannot be trusted about which: `required` appears on 60 of 319
+/// schemas and on none of the six read here. That defensiveness swallows a
+/// mistyped key into a plausible default, so `test/openapi_contract_test.dart`
+/// checks every key below against the spec.
 library;
 
-class UserDto {
-  const UserDto({
+/// What `POST /api/Account/login` answers with: an identity and the tokens to
+/// use it. Not a session — a session is a `ServerEntry` that holds tokens, and
+/// this is only what one is built from.
+class LoginResult {
+  const LoginResult({
     required this.username,
     required this.token,
     required this.refreshToken,
@@ -29,7 +50,7 @@ class UserDto {
 
   bool get isAdmin => roles.contains(adminRole);
 
-  factory UserDto.fromJson(Map<String, dynamic> json) => UserDto(
+  factory LoginResult.fromJson(Map<String, dynamic> json) => LoginResult(
     username: json['username'] as String? ?? '',
     token: json['token'] as String? ?? '',
     refreshToken: json['refreshToken'] as String? ?? '',
@@ -99,22 +120,22 @@ enum MangaFormat {
   bool get isImageReadable => this != epub;
 }
 
-class LibraryDto {
-  const LibraryDto({required this.id, required this.name, required this.type});
+class Library {
+  const Library({required this.id, required this.name, required this.type});
 
   final int id;
   final String name;
   final LibraryType type;
 
-  factory LibraryDto.fromJson(Map<String, dynamic> json) => LibraryDto(
+  factory Library.fromJson(Map<String, dynamic> json) => Library(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
     type: LibraryType.fromId(json['type'] as int?),
   );
 }
 
-class SeriesDto {
-  const SeriesDto({
+class Series {
+  const Series({
     required this.id,
     required this.name,
     required this.libraryId,
@@ -130,7 +151,7 @@ class SeriesDto {
   final int pages;
   final int pagesRead;
 
-  factory SeriesDto.fromJson(Map<String, dynamic> json) => SeriesDto(
+  factory Series.fromJson(Map<String, dynamic> json) => Series(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
     libraryId: json['libraryId'] as int? ?? 0,
@@ -141,8 +162,8 @@ class SeriesDto {
 }
 
 /// The handful of metadata fields the series hero shows.
-class SeriesMetadataDto {
-  const SeriesMetadataDto({
+class SeriesMetadata {
+  const SeriesMetadata({
     this.summary = '',
     this.writers = const [],
     this.genres = const [],
@@ -162,8 +183,8 @@ class SeriesMetadataDto {
         entry[key] as String,
   ];
 
-  factory SeriesMetadataDto.fromJson(Map<String, dynamic> json) =>
-      SeriesMetadataDto(
+  factory SeriesMetadata.fromJson(Map<String, dynamic> json) =>
+      SeriesMetadata(
         summary: json['summary'] as String? ?? '',
         writers: _names(json['writers'], 'name'),
         genres: _names(json['genres'], 'title'),
@@ -171,8 +192,8 @@ class SeriesMetadataDto {
       );
 }
 
-class VolumeDto {
-  const VolumeDto({
+class Volume {
+  const Volume({
     required this.id,
     required this.name,
     required this.minNumber,
@@ -194,9 +215,9 @@ class VolumeDto {
   final num minNumber;
   final int pages;
   final int pagesRead;
-  final List<ChapterDto> chapters;
+  final List<Chapter> chapters;
 
-  VolumeDto withChapters(List<ChapterDto> chapters) => VolumeDto(
+  Volume withChapters(List<Chapter> chapters) => Volume(
     id: id,
     name: name,
     minNumber: minNumber,
@@ -208,20 +229,20 @@ class VolumeDto {
   bool get isLooseLeaf => minNumber == looseLeafNumber;
   bool get isSpecials => minNumber == specialsNumber;
 
-  factory VolumeDto.fromJson(Map<String, dynamic> json) => VolumeDto(
+  factory Volume.fromJson(Map<String, dynamic> json) => Volume(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
     minNumber: json['minNumber'] as num? ?? 0,
     pages: json['pages'] as int? ?? 0,
     pagesRead: json['pagesRead'] as int? ?? 0,
     chapters: (json['chapters'] as List<dynamic>? ?? [])
-        .map((c) => ChapterDto.fromJson(c as Map<String, dynamic>))
+        .map((c) => Chapter.fromJson(c as Map<String, dynamic>))
         .toList(),
   );
 }
 
-class ChapterDto {
-  const ChapterDto({
+class Chapter {
+  const Chapter({
     required this.id,
     required this.title,
     required this.titleName,
@@ -258,7 +279,7 @@ class ChapterDto {
   /// What the files are. Our reader only handles the image formats.
   final MangaFormat format;
 
-  ChapterDto copyWith({int? pagesRead}) => ChapterDto(
+  Chapter copyWith({int? pagesRead}) => Chapter(
     id: id,
     title: title,
     titleName: titleName,
@@ -275,7 +296,7 @@ class ChapterDto {
   /// chapter breakdown.
   bool get isVolumePlaceholder => minNumber == defaultNumber && !isSpecial;
 
-  factory ChapterDto.fromJson(Map<String, dynamic> json) => ChapterDto(
+  factory Chapter.fromJson(Map<String, dynamic> json) => Chapter(
     id: json['id'] as int,
     title: json['title'] as String? ?? '',
     titleName: json['titleName'] as String? ?? '',
@@ -289,7 +310,7 @@ class ChapterDto {
   );
 }
 
-/// Pixel size of one page, as measured by the server. Lets the webtoon view
+/// Pixel size of one page, as measured by the server. Lets the vertical-scrolling view
 /// lay pages out before their images have loaded.
 class PageDimension {
   const PageDimension({
@@ -322,8 +343,8 @@ class PageDimension {
   }
 }
 
-class ChapterInfoDto {
-  const ChapterInfoDto({
+class ChapterInfo {
+  const ChapterInfo({
     required this.seriesId,
     required this.volumeId,
     required this.libraryId,
@@ -366,7 +387,7 @@ class ChapterInfoDto {
     return dimension.isWide || dimension.width > dimension.height;
   }
 
-  factory ChapterInfoDto.fromJson(Map<String, dynamic> json) => ChapterInfoDto(
+  factory ChapterInfo.fromJson(Map<String, dynamic> json) => ChapterInfo(
     seriesId: json['seriesId'] as int,
     volumeId: json['volumeId'] as int? ?? 0,
     libraryId: json['libraryId'] as int? ?? 0,
@@ -388,6 +409,11 @@ class ChapterInfoDto {
 /// A device Kavita has registered for the current user, as returned by
 /// `GET /api/Device/client/devices`. Only the three fields the rename flow
 /// needs are mapped.
+///
+/// The one type here that keeps its suffix: it is Kavita's own record of a
+/// client, read only to find our own entry and rename it, and it means nothing
+/// to the rest of the app. Keeping the suffix on this one is what lets the
+/// suffix mean something.
 class ClientDeviceDto {
   const ClientDeviceDto({
     required this.id,

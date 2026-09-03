@@ -299,7 +299,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readingDirectionRtl => 'Right to left';
 
   @override
-  String get readingModeWebtoon => 'Vertical';
+  String get readingDirectionVerticalScroll => 'Vertical';
 
   @override
   String get savePill => 'Save';

@@ -16,7 +16,7 @@ import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
 import '../library/library_screen.dart';
 
-final volumesProvider = FutureProvider.autoDispose.family<List<VolumeDto>, int>(
+final volumesProvider = FutureProvider.autoDispose.family<List<Volume>, int>(
   retry: serverRetry,
   (ref, seriesId) {
     return ref.watch(kavitaClientProvider).volumes(seriesId);
@@ -50,7 +50,7 @@ final readOverridesProvider =
 /// The volumes as the screen shows them: what the server last said, with any
 /// unconfirmed mark-read applied on top.
 final seriesVolumesProvider = Provider.autoDispose
-    .family<AsyncValue<List<VolumeDto>>, int>((ref, seriesId) {
+    .family<AsyncValue<List<Volume>>, int>((ref, seriesId) {
       final overrides = ref.watch(readOverridesProvider);
       final volumes = ref.watch(volumesProvider(seriesId));
       if (overrides.isEmpty) return volumes;
@@ -67,13 +67,13 @@ final seriesVolumesProvider = Provider.autoDispose
       );
     });
 
-final seriesProvider = FutureProvider.autoDispose.family<SeriesDto, int>(
+final seriesProvider = FutureProvider.autoDispose.family<Series, int>(
   retry: serverRetry,
   (ref, seriesId) => ref.watch(kavitaClientProvider).series(seriesId),
 );
 
 final seriesMetadataProvider = FutureProvider.autoDispose
-    .family<SeriesMetadataDto, int>(
+    .family<SeriesMetadata, int>(
       retry: serverRetry,
       (ref, seriesId) =>
           ref.watch(kavitaClientProvider).seriesMetadata(seriesId),
@@ -88,18 +88,18 @@ final seriesMetadataProvider = FutureProvider.autoDispose
 /// ourselves: the pseudo-volumes are told apart by the sign of their number,
 /// and every list is ordered by `sortOrder`, never by the order of the array.
 typedef _Buckets = ({
-  List<VolumeDto> volumes,
-  List<ChapterDto> loose,
-  List<ChapterDto> specials,
+  List<Volume> numberedVolumes,
+  List<Chapter> loose,
+  List<Chapter> specials,
 });
 
-_Buckets _split(List<VolumeDto> volumes) {
-  final tomes = <VolumeDto>[];
-  final loose = <ChapterDto>[];
-  final specials = <ChapterDto>[];
+_Buckets _split(List<Volume> volumes) {
+  final numberedVolumes = <Volume>[];
+  final loose = <Chapter>[];
+  final specials = <Chapter>[];
   for (final volume in volumes) {
     final numbered = !volume.isLooseLeaf && !volume.isSpecials;
-    if (numbered) tomes.add(volume);
+    if (numbered) numberedVolumes.add(volume);
     for (final chapter in volume.chapters) {
       if (chapter.isSpecial) {
         specials.add(chapter);
@@ -114,30 +114,30 @@ _Buckets _split(List<VolumeDto> volumes) {
   }
   loose.sort(_bySortOrder);
   specials.sort(_bySortOrder);
-  return (volumes: tomes, loose: loose, specials: specials);
+  return (numberedVolumes: numberedVolumes, loose: loose, specials: specials);
 }
 
 /// The chapters a numbered volume shows: a special inside one is listed under
 /// Specials, and would otherwise appear twice on a screen that has sections
 /// rather than tabs.
-List<ChapterDto> _volumeChapters(VolumeDto volume) => _sorted([
+List<Chapter> _volumeChapters(Volume volume) => _sorted([
   for (final c in volume.chapters)
     if (!c.isSpecial) c,
 ]);
 
-int _bySortOrder(ChapterDto a, ChapterDto b) =>
+int _bySortOrder(Chapter a, Chapter b) =>
     a.sortOrder.compareTo(b.sortOrder);
 
-List<ChapterDto> _sorted(List<ChapterDto> chapters) =>
+List<Chapter> _sorted(List<Chapter> chapters) =>
     [...chapters]..sort(_bySortOrder);
 
-typedef _Entry = ({VolumeDto volume, ChapterDto chapter});
+typedef _Entry = ({Volume volume, Chapter chapter});
 
 /// Every chapter in reading order — volumes first, then loose chapters, then
 /// specials, the order the sections below are rendered in — each paired with
 /// the volume it belongs to, which is what names a chapterless volume.
-List<_Entry> _orderedChapters(List<VolumeDto> volumes) {
-  final tomes = <_Entry>[];
+List<_Entry> _orderedChapters(List<Volume> volumes) {
+  final inVolumes = <_Entry>[];
   final loose = <_Entry>[];
   final specials = <_Entry>[];
   for (final volume in volumes) {
@@ -147,7 +147,7 @@ List<_Entry> _orderedChapters(List<VolumeDto> volumes) {
       if (chapter.isSpecial) {
         specials.add(entry);
       } else if (numbered) {
-        tomes.add(entry);
+        inVolumes.add(entry);
       } else {
         loose.add(entry);
       }
@@ -156,7 +156,7 @@ List<_Entry> _orderedChapters(List<VolumeDto> volumes) {
   for (final list in [loose, specials]) {
     list.sort((a, b) => _bySortOrder(a.chapter, b.chapter));
   }
-  return [...tomes, ...loose, ...specials];
+  return [...inVolumes, ...loose, ...specials];
 }
 
 class SeriesDetailScreen extends ConsumerWidget {
@@ -257,7 +257,7 @@ class SeriesDetailScreen extends ConsumerWidget {
   Future<void> _read(
     BuildContext context,
     WidgetRef ref,
-    ChapterDto chapter,
+    Chapter chapter,
   ) async {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(
@@ -273,7 +273,7 @@ class SeriesDetailScreen extends ConsumerWidget {
     KavitaClient client,
     AppLocalizations l10n,
     LibraryType type,
-    List<VolumeDto> volumes,
+    List<Volume> volumes,
   ) {
     final buckets = _split(volumes);
 
@@ -282,7 +282,7 @@ class SeriesDetailScreen extends ConsumerWidget {
       child: SectionLabel(text),
     );
 
-    Widget chapterRow(ChapterDto chapter, {String? label, String? coverUrl}) =>
+    Widget chapterRow(Chapter chapter, {String? label, String? coverUrl}) =>
         _ChapterRow(
           chapter: chapter,
           label: label,
@@ -300,13 +300,13 @@ class SeriesDetailScreen extends ConsumerWidget {
     // stays "Volumes".
     final merged =
         type.hasStoryline &&
-        buckets.volumes.isNotEmpty &&
+        buckets.numberedVolumes.isNotEmpty &&
         buckets.loose.isNotEmpty;
 
     return [
-      if (buckets.volumes.isNotEmpty) ...[
+      if (buckets.numberedVolumes.isNotEmpty) ...[
         header(merged ? type.storylineTitle(l10n) : type.volumesTitle(l10n)),
-        for (final volume in buckets.volumes)
+        for (final volume in buckets.numberedVolumes)
           if (_volumeChapters(volume).length == 1 &&
               _volumeChapters(volume).single.isVolumePlaceholder)
             // No chapter breakdown: the volume itself is the reading unit.
@@ -360,8 +360,8 @@ class _SeriesHero extends ConsumerWidget {
   final LibraryType type;
 
   /// Null while the chapter list is still loading: the button waits for it.
-  final List<VolumeDto>? volumes;
-  final void Function(ChapterDto chapter) onRead;
+  final List<Volume>? volumes;
+  final void Function(Chapter chapter) onRead;
 
   static const _coverWidth = 124.0;
   static const _coverHeight = 182.0;
@@ -396,8 +396,8 @@ class _SeriesHero extends ConsumerWidget {
 
   /// What to call the thing the button opens, in the library's own unit.
   ///
-  /// Only what is *numbered* gets named — a tome, a chapter, an issue, a book
-  /// — because those are two words wide. A title is free text: a book's
+  /// Only what is *numbered* gets named — a volume, a chapter, an issue, a
+  /// book — because those are two words wide. A title is free text: a book's
   /// stretches the button across the hero, and a Book library would do it
   /// every time, since its files often carry a title and no number at all.
   /// There the button says only what it does; the title is already on the row
@@ -418,7 +418,7 @@ class _SeriesHero extends ConsumerWidget {
     // Anything at sentinel scale is Kavita bookkeeping, not a chapter number.
     // Compared on magnitude: the sentinels differ by sign, this check does not.
     final number = num.tryParse(chapter.range)?.abs() ?? 0;
-    if (chapter.range.isNotEmpty && number < ChapterDto.defaultNumber.abs()) {
+    if (chapter.range.isNotEmpty && number < Chapter.defaultNumber.abs()) {
       return type.continueChapterLabel(l10n, chapter.range);
     }
     return l10n.seriesContinuePlain;
@@ -557,7 +557,7 @@ class _ChapterRow extends ConsumerWidget {
     this.label,
   });
 
-  final ChapterDto chapter;
+  final Chapter chapter;
   final String coverUrl;
 
   /// Names the row in the library's own vocabulary.

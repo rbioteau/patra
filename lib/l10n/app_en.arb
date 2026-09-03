@@ -286,9 +286,9 @@
   "@readingDirectionRtl": {
     "description": "Full phrase, never an acronym like RTL; the manga direction"
   },
-  "readingModeWebtoon": "Vertical",
-  "@readingModeWebtoon": {
-    "description": "Continuous vertical scrolling direction, sits next to the two page-turning ones"
+  "readingDirectionVerticalScroll": "Vertical",
+  "@readingDirectionVerticalScroll": {
+    "description": "Continuous vertical scrolling direction, sits next to the two page-turning ones; the one word is enough on screen, it is the only vertical direction in the picker"
   },
   "savePill": "Save",
   "@savePill": {

@@ -99,7 +99,7 @@ void _writeSavedChapter(Directory root, {required int pagesRead}) {
 Future<List<int>> _pumpReader(
   WidgetTester tester, {
   required int initialPage,
-  ReadingDirection direction = ReadingDirection.webtoon,
+  ReadingDirection direction = ReadingDirection.verticalScroll,
   int? savedPagesRead,
   SliderComponentShape? sliderThumb,
   Set<int> wide = const {},
@@ -184,7 +184,7 @@ class _ProbeThumb extends SliderComponentShape {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('the webtoon opens where the chapter was left, not at page 0', (
+  testWidgets('vertical scrolling opens where the chapter was left, not at page 0', (
     tester,
   ) async {
     final posted = await _pumpReader(tester, initialPage: 20);

@@ -300,7 +300,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get readingDirectionRtl => 'De droite à gauche';
 
   @override
-  String get readingModeWebtoon => 'Vertical';
+  String get readingDirectionVerticalScroll => 'Vertical';
 
   @override
   String get savePill => 'Enregistrer';

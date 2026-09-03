@@ -11,7 +11,7 @@ import '../../api/connection_failure.dart';
 import '../../widgets/dashed_border.dart';
 import '../../widgets/offline_indicator.dart';
 
-final librariesProvider = FutureProvider.autoDispose<List<LibraryDto>>(
+final librariesProvider = FutureProvider.autoDispose<List<Library>>(
   retry: serverRetry,
   (ref) => ref.watch(kavitaClientProvider).libraries(),
 );
@@ -32,7 +32,7 @@ final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
 });
 
 final seriesForLibraryProvider = FutureProvider.autoDispose
-    .family<List<SeriesDto>, int>(retry: serverRetry, (ref, libraryId) {
+    .family<List<Series>, int>(retry: serverRetry, (ref, libraryId) {
       return ref.watch(kavitaClientProvider).allSeriesForLibrary(libraryId);
     });
 
@@ -117,7 +117,7 @@ class _LibraryPills extends StatelessWidget {
     required this.onSelected,
   });
 
-  final List<LibraryDto> libraries;
+  final List<Library> libraries;
   final int selectedId;
   final ValueChanged<int> onSelected;
 
@@ -204,7 +204,7 @@ class _SeriesGrid extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () => ref
                 .refresh(seriesForLibraryProvider(libraryId).future)
-                .catchError((Object _) => const <SeriesDto>[]),
+                .catchError((Object _) => const <Series>[]),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: gutter * 1.6),
@@ -221,7 +221,7 @@ class _SeriesGrid extends ConsumerWidget {
           // The screen already shows the failure through the provider.
           onRefresh: () => ref
               .refresh(seriesForLibraryProvider(libraryId).future)
-              .catchError((Object _) => const <SeriesDto>[]),
+              .catchError((Object _) => const <Series>[]),
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, gutter),
             gridDelegate: _gridDelegate(MediaQuery.sizeOf(context).width),

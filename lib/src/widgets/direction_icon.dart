@@ -72,7 +72,7 @@ class _DirectionPainter extends CustomPainter {
         canvas.drawLine(Offset(center.dx - sign * half, center.dy), tip, arrow);
         canvas.drawLine(tip, tip.translate(-sign * head, -head), arrow);
         canvas.drawLine(tip, tip.translate(-sign * head, head), arrow);
-      case ReadingDirection.webtoon:
+      case ReadingDirection.verticalScroll:
         final half = rect.height * 0.22;
         final tip = Offset(center.dx, center.dy + half);
         canvas.drawLine(Offset(center.dx, center.dy - half), tip, arrow);

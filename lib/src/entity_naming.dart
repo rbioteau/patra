@@ -58,7 +58,7 @@ extension LibraryTypeNaming on LibraryType {
   /// known only by its title, and a title is *appended* to the number rather
   /// than replacing it — but only when it adds something the number does not
   /// already say.
-  String chapterTitle(AppLocalizations l10n, ChapterDto chapter) {
+  String chapterTitle(AppLocalizations l10n, Chapter chapter) {
     final title = chapter.titleName.isNotEmpty
         ? chapter.titleName
         : chapter.title;
