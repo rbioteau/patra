@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patra — one-finger zoom gesture (PROTOTYPE)</title>
+<style>
+  :root{
+    --bg:#0E0E10; --surface:#1A1A1E; --surfaceHi:#222226; --chrome:#141416;
+    --ink:#16141C; --accent:#7C5CFF; --teal:#2DD4BF; --danger:#FF7B92;
+    --text:#E8E8EA; --dim:#9A9AA4; --faint:#61616B; --line:#2A2A31;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.55 ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+  .wrap{max-width:1160px;margin:0 auto;padding:32px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:28px}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--danger);border:1px solid var(--danger);border-radius:999px;padding:3px 10px;margin-bottom:14px}
+  h1{font-size:26px;margin:0 0 10px;font-weight:650;letter-spacing:-.01em}
+  h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+    margin:0 0 12px;font-weight:600}
+  .lede{color:var(--dim);max-width:74ch;margin:0}
+  .lede strong{color:var(--text);font-weight:600}
+  .cols{display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:28px;align-items:start}
+  @media (max-width:880px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card + .card{margin-top:18px}
+
+  /* stage */
+  .stage{background:var(--ink);border-radius:14px;padding:14px;border:1px solid var(--line)}
+  .viewport{position:relative;width:100%;aspect-ratio:38/62;background:#000;border-radius:8px;
+    overflow:hidden;touch-action:none;cursor:crosshair;user-select:none}
+  .page{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+  .page svg{display:block;width:100%;height:100%}
+  .overlay{position:absolute;inset:0;pointer-events:none}
+  .hint{margin:10px 2px 0;color:var(--faint);font-size:12px;text-align:center}
+
+  /* state panel */
+  .row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px dashed #26262e}
+  .row:last-child{border-bottom:0}
+  .k{color:var(--dim)}
+  .v{font-variant-numeric:tabular-nums;text-align:right}
+  .ok{color:var(--teal)} .bad{color:var(--danger)} .acc{color:var(--accent)}
+  .verdict{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;
+    background:var(--surfaceHi);border-left:3px solid var(--faint);color:var(--dim)}
+  .verdict.is-ok{border-left-color:var(--teal)}
+  .verdict.is-bad{border-left-color:var(--danger);color:var(--text)}
+
+  /* controls */
+  .seg{display:flex;flex-direction:column;gap:8px}
+  .opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);
+    border-radius:10px;cursor:pointer;background:transparent}
+  .opt:hover{background:var(--surfaceHi)}
+  .opt.sel{border-color:var(--accent);background:rgba(124,92,255,.10)}
+  .opt input{margin-top:3px;accent-color:var(--accent)}
+  .opt b{font-weight:600;display:block}
+  .opt small{color:var(--dim);display:block;margin-top:2px}
+  label.sl{display:block;margin:14px 0 0;color:var(--dim);font-size:13px}
+  label.sl span{float:right;color:var(--text);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent);margin-top:6px}
+  .chks{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;color:var(--dim);font-size:13px}
+  .chks label{display:flex;gap:7px;align-items:center;cursor:pointer}
+  .chks input{accent-color:var(--accent)}
+
+  button{font:inherit;color:var(--text);background:var(--surfaceHi);border:1px solid var(--line);
+    border-radius:9px;padding:7px 12px;cursor:pointer}
+  button:hover{border-color:#3a3a44}
+  button:disabled{opacity:.35;cursor:default}
+  button.done{border-color:var(--teal);color:var(--teal)}
+  button.next{border-color:var(--accent);background:rgba(124,92,255,.14)}
+  .btns{display:flex;flex-wrap:wrap;gap:8px}
+  .btns .pad{width:100%;height:0}
+
+  /* tabs */
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .tab{padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:13px}
+  .tab.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+  .steps{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .step{display:flex;gap:10px;align-items:center}
+  .step .n{width:22px;height:22px;flex:0 0 22px;border-radius:50%;display:grid;place-items:center;
+    font-size:11px;background:var(--surfaceHi);color:var(--dim)}
+  .step.done .n{background:var(--teal);color:#04322C}
+  .step button{flex:1;text-align:left}
+  .scen{color:var(--dim);font-size:13px;margin:0}
+  .scen b{color:var(--text)}
+  .watch{color:var(--accent);font-size:13px;margin:8px 0 0}
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--faint);font-size:12px}
+  code{background:var(--surfaceHi);padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="tag">Prototype — throwaway</div>
+  <h1>One-finger zoom: does this gesture keep the page whole?</h1>
+  <p class="lede">
+    Pinch is fiddly one-handed, so the reader would zoom with a <strong>single finger drag</strong>: the
+    point you press becomes a reference point, the page follows your finger — pull <strong>down</strong> and
+    the part <strong>above</strong> your finger comes into view, pull <strong>right</strong> and the part to
+    the <strong>left</strong> does — and <strong>how far you drag decides how much it magnifies</strong>.
+    The question this demo answers is the one that only shows up at the edges:
+    <strong>when the drag asks for something the page cannot give — you press near the top and pull down, but
+    there is nothing above to reveal — what should give way?</strong>
+    Four answers are wired up below — three that drag the page and one that does not drag it at all.
+    Drag the page around and watch the state; the edge of the page is drawn as a bright purple frame, so
+    it is obvious the moment the page stops covering the screen.
+  </p>
+</header>
+
+<div class="cols">
+
+  <!-- ======================= LEFT: the stage ======================= -->
+  <div>
+    <div class="stage">
+      <div class="viewport" id="vp">
+        <div class="page" id="page"></div>
+        <svg class="overlay" id="ov"></svg>
+      </div>
+      <p class="hint">Press and drag anywhere. Release to let go.</p>
+    </div>
+
+    <div class="card">
+      <h2>Free play</h2>
+      <div class="btns">
+        <button data-press="0.5,0.5">Press the middle</button>
+        <button data-press="0.5,0.08">Press near the top</button>
+        <button data-press="0.9,0.9">Press the bottom-right</button>
+        <div class="pad"></div>
+        <button data-nudge="0,60">Pull down</button>
+        <button data-nudge="0,-60">Pull up</button>
+        <button data-nudge="60,0">Pull right</button>
+        <button data-nudge="-60,0">Pull left</button>
+        <div class="pad"></div>
+        <button id="release">Release</button>
+        <button id="reset">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= RIGHT: state + settings ======================= -->
+  <div>
+    <div class="card">
+      <h2>What is happening right now</h2>
+      <div id="state"></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+
+    <div class="card">
+      <h2>Four answers to try</h2>
+      <div class="seg" id="policy">
+        <label class="opt" data-p="slip">
+          <input type="radio" name="p" value="slip">
+          <span><b>1 · The finger gives way</b><small>The page follows the finger and magnification keeps
+          growing with the drag. At the edge the page stops, so the content slides out from under the
+          finger. This is what a plain pan-and-zoom does.</small></span>
+        </label>
+        <label class="opt" data-p="block">
+          <input type="radio" name="p" value="block" checked>
+          <span><b>2 · The gesture gives way — it blocks</b><small>The drag is honoured only as far as the
+          page can follow it, and refused past that: nothing moves and nothing grows, however much further
+          you pull. <em>This is the behaviour as described.</em></small></span>
+        </label>
+        <label class="opt" data-p="lift">
+          <input type="radio" name="p" value="lift">
+          <span><b>3 · The magnification gives way — it lifts</b><small>Where the page would run out, it
+          magnifies <em>harder</em> than the drag asked for, by exactly enough that there is something up
+          there to reveal. The finger never slips — until the maximum is reached.</small></span>
+        </label>
+        <label class="opt" data-p="loupe">
+          <input type="radio" name="p" value="loupe">
+          <span><b>4 · Aim a loupe, do not drag the page</b><small>The finger does not carry the page. The
+          drag <em>aims</em> at a point away from the finger, against the drag, and that point is brought to
+          the middle of the screen — so your thumb is never on top of what you are reading. It can never ask
+          for something off the page, so nothing ever has to give.</small></span>
+        </label>
+      </div>
+
+      <label class="sl">Drag needed for full magnification <span id="tv"></span>
+        <input type="range" id="travel" min="80" max="500" step="10" value="220"></label>
+      <label class="sl">Strongest magnification <span id="mv"></span>
+        <input type="range" id="maxs" min="150" max="800" step="10" value="400"></label>
+      <label class="sl" id="aimRow">How far the loupe travels <span id="av"></span>
+        <input type="range" id="aim" min="20" max="250" step="5" value="100"></label>
+
+      <div class="chks">
+        <label><input type="checkbox" id="hold"> Keep the zoom after releasing</label>
+        <label><input type="checkbox" id="spread"> Read a double-page spread</label>
+        <label><input type="checkbox" id="marks" checked> Show the reference point</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= WALKTHROUGHS ======================= -->
+<div class="card" style="margin-top:28px">
+  <h2>Guided walkthroughs</h2>
+  <div class="tabs" id="tabs"></div>
+  <p class="scen" id="scen"></p>
+  <p class="watch" id="watch"></p>
+  <div class="steps" id="steps"></div>
+</div>
+
+<footer>
+  Throwaway prototype for the Patra reader. The pure module in this file
+  (<code>ZoomGesture</code>) is the part meant to survive: it is a pure function of viewport, page,
+  reference point, finger position and settings, with no DOM in it, and lifts straight into Dart.
+  Everything around it is scaffolding.
+</footer>
+</div>
+
+<script>
+/* ==========================================================================
+   PURE MODULE — the bit worth keeping. No DOM, no events, no globals reached
+   into. Everything below is a pure function of its arguments. Lifts to Dart.
+   ========================================================================== */
+const ZoomGesture = (function () {
+  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const TOL = 0.5; // px we call zero, so float noise never becomes a verdict
+
+  /** The page at rest: contained in the viewport, centred. */
+  function restRect(page, viewport) {
+    const f = Math.min(viewport.w / page.w, viewport.h / page.h);
+    const w = page.w * f, h = page.h * f;
+    return { w, h, x: (viewport.w - w) / 2, y: (viewport.h - h) / 2, fit: f };
+  }
+
+  /** Where on the page (0..1 each way) the finger went down. */
+  function referencePoint(anchor, rest) {
+    return {
+      u: clamp((anchor.x - rest.x) / rest.w, 0, 1),
+      v: clamp((anchor.y - rest.y) / rest.h, 0, 1),
+      onPage:
+        anchor.x >= rest.x && anchor.x <= rest.x + rest.w &&
+        anchor.y >= rest.y && anchor.y <= rest.y + rest.h,
+    };
+  }
+
+  /**
+   * One axis, given where the page's leading edge *wants* to be.
+   *
+   * A page bigger than the viewport on this axis may slide, but only so far
+   * that it still covers it: asking for more is an `overrun`, and it is the
+   * one thing that must never be granted, because granting it is what opens a
+   * band of black beside the page. A page *smaller* than the viewport on this
+   * axis cannot slide at all — it sits centred, in its letterbox bars. That is
+   * the resting shape of the page, not a failure, so it is not an overrun.
+   */
+  function axis(want, restLen, scale, V) {
+    const len = restLen * scale;
+    const pannable = len >= V;
+    let lo, hi;
+    if (pannable) { lo = V - len; hi = 0; } else { lo = hi = (V - len) / 2; }
+    const at = clamp(want, lo, hi);
+    const slip = want - at;
+    return { len, want, at, slip, pannable, overrun: pannable ? slip : 0 };
+  }
+
+  /**
+   * The gentlest magnification at which this axis can put content point `u`
+   * under viewport position `p` without overrunning. Infinity when the very
+   * edge of the page is being pulled inward: there is no content out there at
+   * any magnification.
+   */
+  function requiredOn(u, p, restLen, V) {
+    let s = V / restLen; // it has to cover the viewport before it can slide
+    if (u > 0) s = Math.max(s, p / (u * restLen));
+    else if (p > TOL) return Infinity;
+    if (u < 1) s = Math.max(s, (V - p) / (restLen * (1 - u)));
+    else if (p < V - TOL) return Infinity;
+    return s;
+  }
+
+  /** How much the drag asks for. Its length, and nothing else. */
+  function askedFor(length, o) {
+    return clamp(1 + (length / o.travel) * (o.maxScale - 1), 1, o.maxScale);
+  }
+
+  /** Where the page must sit for the reference point to stay under the finger. */
+  function glueWant(ref, finger, rest, scale) {
+    return { x: finger.x - ref.u * rest.w * scale, y: finger.y - ref.v * rest.h * scale };
+  }
+
+  /** The point on the page the loupe is aimed at: offset from the reference
+   *  point *against* the drag, so pulling down aims above the finger. */
+  function aimedAt(ref, drag, rest, o) {
+    return {
+      u: clamp(ref.u - (drag.dx / rest.w) * o.aim, 0, 1),
+      v: clamp(ref.v - (drag.dy / rest.h) * o.aim, 0, 1),
+    };
+  }
+
+  /** Where the page must sit for the aimed point to land mid-screen. */
+  function loupeWant(focal, rest, viewport, scale) {
+    return {
+      x: viewport.w / 2 - focal.u * rest.w * scale,
+      y: viewport.h / 2 - focal.v * rest.h * scale,
+    };
+  }
+
+  function place(want, rest, viewport, scale) {
+    const x = axis(want.x, rest.w, scale, viewport.w);
+    const y = axis(want.y, rest.h, scale, viewport.h);
+    return {
+      x, y,
+      clean: Math.abs(x.overrun) <= TOL && Math.abs(y.overrun) <= TOL,
+      held: Math.abs(x.slip) <= TOL && Math.abs(y.slip) <= TOL,
+    };
+  }
+
+  const idle = (rest) => ({
+    active: false, rest, scale: 1, origin: { x: rest.x, y: rest.y },
+    size: { w: rest.w, h: rest.h }, asked: 1, required: null, applied: 1,
+    honoured: 1, held: true, clean: true, overrun: { x: 0, y: 0 },
+    letterbox: { x: rest.w < 0, y: false },
+    drag: { dx: 0, dy: 0, length: 0, asked: 0, reveals: null }, blocked: null,
+  });
+
+  /**
+   * Resolve a one-finger gesture into a transform.
+   *
+   *   viewport {w,h}   the black canvas
+   *   page     {w,h}   the scan's own pixel size
+   *   anchor   {x,y}   where the finger went down, in viewport coordinates
+   *   finger   {x,y}   where the finger is now
+   *   settings {travel, maxScale, aim, model}
+   *
+   *   model: 'slip'  — the page follows the finger; at the edge it stops and
+   *                    the content slides out from under the finger.
+   *          'block' — the page follows the finger; the drag is honoured only
+   *                    as far as the page can go, and refused past that.
+   *          'lift'  — the page follows the finger; where it would run out of
+   *                    page, it magnifies harder instead so that it does not.
+   *          'loupe' — the page does not follow the finger. The drag aims a
+   *                    loupe at a point away from the finger, against the
+   *                    drag, and that point is brought to the middle.
+   */
+  function resolve({ viewport, page, anchor, finger, settings }) {
+    const rest = restRect(page, viewport);
+    if (!anchor) return idle(rest);
+
+    const ref = referencePoint(anchor, rest);
+    const full = { dx: finger.x - anchor.x, dy: finger.y - anchor.y };
+    full.length = Math.hypot(full.dx, full.dy);
+
+    const wantAt = (f, s) => settings.model === 'loupe'
+      ? loupeWant(aimedAt(ref, { dx: f.x - anchor.x, dy: f.y - anchor.y }, rest, settings),
+                  rest, viewport, s)
+      : glueWant(ref, f, rest, s);
+
+    // Only 'block' shortens the drag, and only to the point it stops being
+    // grantable. Feasibility starts true (a still finger is the resting page)
+    // and is treated as a prefix, which a bisection is enough to find.
+    let honoured = 1;
+    if (settings.model === 'block' && full.length > 0) {
+      const ok = (t) => {
+        const f = { x: anchor.x + full.dx * t, y: anchor.y + full.dy * t };
+        const s = askedFor(full.length * t, settings);
+        return place(wantAt(f, s), rest, viewport, s).clean;
+      };
+      if (!ok(1)) {
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; }
+        honoured = lo;
+      }
+    }
+
+    const at = { x: anchor.x + full.dx * honoured, y: anchor.y + full.dy * honoured };
+    const drag = {
+      dx: at.x - anchor.x, dy: at.y - anchor.y,
+      length: full.length * honoured, asked: full.length,
+      reveals: reveals(full.dx, full.dy),
+    };
+
+    const asked = askedFor(drag.length, settings);
+    let applied = asked;
+    let required = null;
+
+    const first = place(wantAt(at, asked), rest, viewport, asked);
+    // A loupe clamps its aimed point to the page and its origin to the
+    // viewport, so a clamp there is the normal way it works, not a failure —
+    // it only means the point being aimed at is too near an edge to sit dead
+    // centre. Nothing to demand and nothing to refuse.
+    if (!first.clean && settings.model !== 'loupe') {
+      // Only an axis that actually overran has anything to demand.
+      required = Math.max(
+        Math.abs(first.x.overrun) > TOL
+          ? requiredOn(ref.u, at.x, rest.w, viewport.w) : 1,
+        Math.abs(first.y.overrun) > TOL
+          ? requiredOn(ref.v, at.y, rest.h, viewport.h) : 1,
+      );
+      if (settings.model === 'lift') applied = Math.min(Math.max(asked, required), settings.maxScale);
+    }
+
+    const p = applied === asked ? first : place(wantAt(at, applied), rest, viewport, applied);
+    const focal = settings.model === 'loupe' ? aimedAt(ref, drag, rest, settings) : null;
+
+    return {
+      active: true, rest, ref, focal, drag, asked, required, applied, honoured,
+      scale: applied, origin: { x: p.x.at, y: p.y.at },
+      size: { w: rest.w * applied, h: rest.h * applied },
+      held: p.held, clean: p.clean,
+      overrun: { x: p.x.overrun, y: p.y.overrun },
+      slip: { x: p.x.slip, y: p.y.slip },
+      letterbox: { x: !p.x.pannable, y: !p.y.pannable },
+      blocked: because(settings.model, p, honoured),
+    };
+  }
+
+  /** What the drag is asking to see. The page follows the finger, so pulling
+   *  down brings what was above into view. */
+  function reveals(dx, dy) {
+    const parts = [];
+    if (Math.abs(dy) > 4) parts.push(dy > 0 ? 'above' : 'below');
+    if (Math.abs(dx) > 4) parts.push(dx > 0 ? 'to the left of' : 'to the right of');
+    return parts.length ? parts.join(' and ') : null;
+  }
+
+  function because(model, p, honoured) {
+    if (model === 'loupe') return null;
+    if (model === 'block' && honoured < 0.999) return 'gesture';
+    if (!p.clean) return model === 'lift' ? 'ceiling' : 'slip';
+    if (model !== 'loupe' && !p.held) return 'letterbox';
+    return null;
+  }
+
+  return { resolve, restRect, referencePoint, requiredOn, askedFor, aimedAt };
+})();
+
+/* ==========================================================================
+   THROWAWAY SHELL — everything below is scaffolding for clicking through.
+   ========================================================================== */
+
+const PAGES = { single: { w: 800, h: 1200 }, spread: { w: 1600, h: 1200 } };
+
+const ui = {
+  vp: document.getElementById('vp'),
+  page: document.getElementById('page'),
+  ov: document.getElementById('ov'),
+  state: document.getElementById('state'),
+  verdict: document.getElementById('verdict'),
+};
+
+const demo = {
+  anchor: null,
+  finger: { x: 0, y: 0 },
+  frozen: null,                 // last transform, kept on release when "hold" is on
+  settings: { travel: 220, maxScale: 4, aim: 1, model: 'block' },
+  spread: false, hold: false, marks: true,
+};
+
+const viewport = () => {
+  const r = ui.vp.getBoundingClientRect();
+  return { w: r.width, h: r.height };
+};
+const pageSize = () => (demo.spread ? PAGES.spread : PAGES.single);
+const isLoupe = () => demo.settings.model === 'loupe';
+
+const current = () => ZoomGesture.resolve({
+  viewport: viewport(), page: pageSize(),
+  anchor: demo.anchor, finger: demo.finger, settings: demo.settings,
+});
+
+/* ---------- the page picture: a bright frame right on the border ---------- */
+function drawPage() {
+  const p = pageSize();
+  const cols = demo.spread ? 2 : 1;
+  let panels = '';
+  for (let c = 0; c < cols; c++) {
+    const ox = c * 800;
+    [[40, 300], [360, 300], [680, 480]].forEach(([y, h], i) => {
+      panels += `<rect x="${ox + 40}" y="${y}" width="720" height="${h}" fill="#fff"
+        stroke="#16141C" stroke-width="6"/>
+        <text x="${ox + 62}" y="${y + 36}" font-size="28" fill="#B9B4A8"
+        font-family="monospace">${String.fromCharCode(65 + c * 3 + i)}${i + 1}</text>`;
+      for (let k = 0; k < Math.floor(h / 46) - 1; k++) {
+        const w = 120 + ((k * 137 + i * 61 + c * 29) % 470);
+        panels += `<rect x="${ox + 72}" y="${y + 62 + k * 46}" width="${w}" height="10"
+          rx="5" fill="#DCD6C8"/>`;
+      }
+    });
+  }
+  const tags = [
+    [34, 58, 'start', 'TOP-LEFT'], [p.w - 34, 58, 'end', 'TOP-RIGHT'],
+    [34, p.h - 28, 'start', 'BOTTOM-LEFT'], [p.w - 34, p.h - 28, 'end', 'BOTTOM-RIGHT'],
+  ].map(([x, y, a, t]) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="22"
+      font-family="monospace" fill="#7C5CFF" letter-spacing="2">${t}</text>`).join('');
+
+  ui.page.innerHTML = `<svg viewBox="0 0 ${p.w} ${p.h}" preserveAspectRatio="none">
+    <rect width="${p.w}" height="${p.h}" fill="#F4F0E6"/>${panels}
+    <line x1="${p.w / 2}" y1="${p.h / 2 - 28}" x2="${p.w / 2}" y2="${p.h / 2 + 28}"
+      stroke="#7C5CFF" stroke-width="4"/>
+    <line x1="${p.w / 2 - 28}" y1="${p.h / 2}" x2="${p.w / 2 + 28}" y2="${p.h / 2}"
+      stroke="#7C5CFF" stroke-width="4"/>${tags}
+    <rect x="5" y="5" width="${p.w - 10}" height="${p.h - 10}" fill="none"
+      stroke="#7C5CFF" stroke-width="10"/></svg>`;
+}
+
+/* ------------------------------- render ------------------------------- */
+function render() {
+  const s = demo.anchor ? current() : (demo.frozen || current());
+  ui.page.style.width = s.rest.w + 'px';
+  ui.page.style.height = s.rest.h + 'px';
+  ui.page.style.transform = `translate(${s.origin.x}px, ${s.origin.y}px) scale(${s.scale})`;
+  drawMarkers(s);
+  drawState(s);
+}
+
+function drawMarkers(s) {
+  if (!demo.marks || !s.active) { ui.ov.innerHTML = ''; return; }
+  const a = demo.anchor;
+  const f = { x: a.x + s.drag.dx, y: a.y + s.drag.dy };
+  const raw = demo.finger;
+  const refused = s.honoured < 0.999;
+  const vp = viewport();
+  // Where the aimed point actually landed, for the loupe.
+  const aimed = isLoupe() && s.focal ? {
+    x: s.origin.x + s.focal.u * s.rest.w * s.scale,
+    y: s.origin.y + s.focal.v * s.rest.h * s.scale,
+  } : null;
+  ui.ov.innerHTML = `
+    ${isLoupe() ? `<line x1="0" y1="${vp.h / 2}" x2="${vp.w}" y2="${vp.h / 2}"
+      stroke="#2DD4BF" stroke-width="1" stroke-dasharray="3 5" opacity=".5"/>
+      <line x1="${vp.w / 2}" y1="0" x2="${vp.w / 2}" y2="${vp.h}"
+      stroke="#2DD4BF" stroke-width="1" stroke-dasharray="3 5" opacity=".5"/>` : ''}
+    <line x1="${a.x}" y1="${a.y}" x2="${f.x}" y2="${f.y}"
+      stroke="#7C5CFF" stroke-width="2" stroke-linecap="round"/>
+    ${refused ? `<line x1="${f.x}" y1="${f.y}" x2="${raw.x}" y2="${raw.y}"
+      stroke="#FF7B92" stroke-width="2" stroke-dasharray="4 4"/>
+      <circle cx="${raw.x}" cy="${raw.y}" r="8" fill="none" stroke="#FF7B92" stroke-width="2"/>` : ''}
+    ${aimed ? `<circle cx="${aimed.x}" cy="${aimed.y}" r="15" fill="none"
+      stroke="#2DD4BF" stroke-width="2"/>
+      <circle cx="${aimed.x}" cy="${aimed.y}" r="3" fill="#2DD4BF"/>` : ''}
+    <circle cx="${a.x}" cy="${a.y}" r="11" fill="none" stroke="#7C5CFF" stroke-width="2"/>
+    <circle cx="${a.x}" cy="${a.y}" r="2.5" fill="#7C5CFF"/>
+    <circle cx="${f.x}" cy="${f.y}" r="9" fill="#7C5CFF" fill-opacity=".85"/>`;
+}
+
+const px = (n) => Math.round(n) + ' px';
+const x2 = (n) => n.toFixed(2) + '×';
+
+function drawState(s) {
+  const set = demo.settings;
+  const rows = [];
+  const add = (k, v, cls) => rows.push(
+    `<div class="row"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span></div>`);
+  const gap = () => rows.push('<div class="row" style="border:0;height:6px"></div>');
+
+  if (!s.active && !demo.frozen) {
+    add('Gesture', 'nothing pressed');
+    add('Magnification', x2(1));
+    ui.state.innerHTML = rows.join('');
+    ui.verdict.className = 'verdict';
+    ui.verdict.textContent =
+      'Press the page and drag. Wherever the finger goes down becomes the reference point.';
+    return;
+  }
+
+  if (!s.active) {
+    add('Gesture', 'released, the zoom was kept');
+    add('Magnification', x2(s.scale), 'acc');
+    ui.state.innerHTML = rows.join('');
+    ui.verdict.className = 'verdict';
+    ui.verdict.textContent =
+      'Released. The next press starts again from the whole page.';
+    return;
+  }
+
+  add('Reference point on the page',
+    `${Math.round(s.ref.u * 100)}% across, ${Math.round(s.ref.v * 100)}% down`
+    + (s.ref.onPage ? '' : ' <span class="bad">(off the page)</span>'));
+  add('Drag', `${px(s.drag.dx)} across, ${px(s.drag.dy)} down`);
+  add('Drag length', px(s.drag.asked) + (s.honoured < 0.999
+    ? ` <span class="bad">(only ${px(s.drag.length)} acted on)</span>` : ''));
+  add('Asking to see', s.drag.reveals ? `the part <b>${s.drag.reveals}</b> the finger` : '—');
+  gap();
+  add('Magnification the drag asked for', x2(s.asked));
+  if (!isLoupe()) {
+    add('Magnification needed to keep the finger on its spot',
+      s.required === null ? 'none — it is already on it'
+        : s.required > set.maxScale ? 'more than the maximum allows' : x2(s.required),
+      s.required !== null && s.required > set.maxScale ? 'bad' : '');
+  }
+  add('Magnification applied', x2(s.applied), 'acc');
+  gap();
+
+  if (isLoupe()) {
+    const off = Math.hypot(s.overrun.x, s.overrun.y);
+    add('Loupe aimed at',
+      `${Math.round(s.focal.u * 100)}% across, ${Math.round(s.focal.v * 100)}% down`);
+    add('Is it in the middle of the screen?',
+      off <= 0.5 ? 'yes' : `no — ${px(off)} off, it is at the page's edge`,
+      off <= 0.5 ? 'ok' : '');
+  } else {
+    add('Is the finger still on the spot it pressed?',
+      s.held ? 'yes' : `no — it slipped ${px(Math.hypot(s.slip.x, s.slip.y))}`,
+      s.held ? 'ok' : 'bad');
+  }
+
+  const bars = [];
+  if (s.letterbox.x) bars.push('at the sides');
+  if (s.letterbox.y) bars.push('above and below');
+  add('Page edges',
+    Math.abs(s.overrun.x) + Math.abs(s.overrun.y) > 0.5 && !isLoupe()
+      ? `the drag asked to go ${px(Math.abs(s.overrun.x) + Math.abs(s.overrun.y))} past the edge`
+      : bars.length
+        ? `on screen, with the page's own black bars ${bars.join(' and ')}`
+        : 'on screen, the page fills the canvas',
+    Math.abs(s.overrun.x) + Math.abs(s.overrun.y) > 0.5 && !isLoupe() ? 'bad' : 'ok');
+
+  ui.state.innerHTML = rows.join('');
+  ui.verdict.className = 'verdict ' + verdictClass(s);
+  ui.verdict.innerHTML = verdict(s);
+}
+
+function verdictClass(s) {
+  if (s.blocked) return 'is-bad';
+  return 'is-ok';
+}
+
+function verdict(s) {
+  const what = s.drag.reveals || 'there';
+  if (isLoupe()) {
+    const off = Math.hypot(s.overrun.x, s.overrun.y);
+    if (s.drag.asked < 4) return 'The finger is down but has not moved, so the loupe is aimed at the '
+      + 'reference point itself and the page is untouched.';
+    return `The loupe is aimed ${what === 'there' ? '' : what + ' '}the finger and brought to the middle `
+      + `of the screen — the teal ring. `
+      + (off > 0.5
+        ? 'It is near an edge of the page, so it cannot sit dead centre without black showing beside it; '
+          + 'it has settled as close as the page allows.'
+        : 'The page never had to be forced anywhere: aiming at a point on the page and covering the '
+          + 'screen with it cannot ask for something that is not there.')
+      + ' The finger does not hold a spot, so it is aiming rather than dragging.';
+  }
+  if (s.blocked === 'gesture') {
+    return `The gesture was refused past <b>${Math.round(s.honoured * 100)}%</b> of its length: there is no `
+      + `more page ${what} the finger to bring into view. The pink ring is where the finger really is — `
+      + `pulling any further changes nothing at all.`;
+  }
+  if (s.blocked === 'ceiling') {
+    return `Keeping the finger on its spot would need ${s.required === Infinity ? 'an impossible amount of'
+      : x2(s.required) + ' of'} magnification — the reference point is too close to the edge for there to be `
+      + `much ${what} it. The maximum is ${x2(demo.settings.maxScale)}, so the page has stopped at its edge `
+      + `and the content has slipped instead.`;
+  }
+  if (s.blocked === 'slip') {
+    return 'The page ran out of room and stopped at its edge, but the magnification kept growing with the '
+      + 'drag — so the content has slid out from under the finger. The border is safe; the direct feel is not.';
+  }
+  if (s.blocked === 'letterbox') {
+    return 'The page is still narrower than the screen on one axis, so it is pinned to the centre there and '
+      + 'cannot follow the finger yet. It has to grow past the screen before it can slide at all.';
+  }
+  if (s.applied > s.asked + 0.01) {
+    return `The drag only asked for ${x2(s.asked)}, but the page was magnified to ${x2(s.applied)} so that `
+      + `there would be something ${what} the finger to reveal. The finger is still on its spot and every `
+      + `edge of the page is on screen.`;
+  }
+  return 'The page is following the finger exactly and every edge of it is on screen.';
+}
+
+/* ------------------------------- input ------------------------------- */
+const local = (e) => {
+  const r = ui.vp.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+};
+ui.vp.addEventListener('pointerdown', (e) => {
+  ui.vp.setPointerCapture(e.pointerId);
+  demo.frozen = null;
+  demo.anchor = local(e);
+  demo.finger = { ...demo.anchor };
+  clearWalkthroughProgress();
+  render();
+});
+ui.vp.addEventListener('pointermove', (e) => {
+  if (!demo.anchor) return;
+  demo.finger = local(e);
+  render();
+});
+['pointerup', 'pointercancel'].forEach((t) => ui.vp.addEventListener(t, letGo));
+
+function letGo() {
+  if (!demo.anchor) return;
+  demo.frozen = demo.hold ? { ...current(), active: false } : null;
+  demo.anchor = null;
+  render();
+}
+
+document.querySelectorAll('[data-press]').forEach((b) => b.addEventListener('click', () => {
+  const [u, v] = b.dataset.press.split(',').map(Number);
+  const vp = viewport();
+  demo.frozen = null;
+  demo.anchor = { x: vp.w * u, y: vp.h * v };
+  demo.finger = { ...demo.anchor };
+  clearWalkthroughProgress();
+  render();
+}));
+document.querySelectorAll('[data-nudge]').forEach((b) => b.addEventListener('click', () => {
+  if (!demo.anchor) return;
+  const [dx, dy] = b.dataset.nudge.split(',').map(Number);
+  glideTo({ x: demo.finger.x + dx, y: demo.finger.y + dy });
+}));
+document.getElementById('release').addEventListener('click', letGo);
+document.getElementById('reset').addEventListener('click', () => {
+  demo.anchor = null; demo.frozen = null; clearWalkthroughProgress(); render();
+});
+
+/* A synthetic drag, so a walkthrough step is reproducible and watchable. */
+let gliding = 0;
+function glideTo(target, ms = 340) {
+  const from = { ...demo.finger };
+  const id = ++gliding;
+  const t0 = performance.now();
+  return new Promise((done) => {
+    (function frame(now) {
+      if (id !== gliding) return done();
+      const k = Math.min(1, (now - t0) / ms);
+      const e = 1 - Math.pow(1 - k, 3);
+      demo.finger = { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e };
+      render();
+      if (k < 1) requestAnimationFrame(frame); else done();
+    })(t0);
+  });
+}
+
+/* ------------------------------ settings ------------------------------ */
+function selectModel(m) {
+  demo.settings.model = m;
+  document.querySelectorAll('#policy .opt').forEach((o) => o.classList.toggle('sel', o.dataset.p === m));
+  const r = document.querySelector(`#policy input[value="${m}"]`);
+  if (r) r.checked = true;
+  document.getElementById('aimRow').style.opacity = m === 'loupe' ? 1 : .35;
+  demo.frozen = null;
+  render();
+}
+document.querySelectorAll('#policy .opt').forEach((o) =>
+  o.addEventListener('click', () => selectModel(o.dataset.p)));
+
+const travel = document.getElementById('travel');
+const maxs = document.getElementById('maxs');
+const aim = document.getElementById('aim');
+function syncSliders() {
+  demo.settings.travel = +travel.value;
+  demo.settings.maxScale = +maxs.value / 100;
+  demo.settings.aim = +aim.value / 100;
+  document.getElementById('tv').textContent = travel.value + ' px';
+  document.getElementById('mv').textContent = (+maxs.value / 100).toFixed(1) + '×';
+  document.getElementById('av').textContent = (+aim.value / 100).toFixed(2) + '× the drag';
+  render();
+}
+[travel, maxs, aim].forEach((e) => e.addEventListener('input', syncSliders));
+
+document.getElementById('hold').addEventListener('change', (e) => {
+  demo.hold = e.target.checked; if (!demo.hold) demo.frozen = null; render();
+});
+document.getElementById('spread').addEventListener('change', (e) => {
+  demo.spread = e.target.checked; demo.frozen = null; drawPage(); render();
+});
+document.getElementById('marks').addEventListener('change', (e) => {
+  demo.marks = e.target.checked; render();
+});
+
+/* ---------------------------- walkthroughs ---------------------------- */
+const SCENARIOS = [
+  {
+    name: 'The happy path',
+    story: 'The reader wants a closer look at the panel just above the middle of the page. They press the '
+      + 'middle and pull down, which asks for what was above the finger.',
+    watch: 'All four answers agree here, and this is most of the reading a person will ever do. If one of '
+      + 'them feels wrong already, it is out.',
+    steps: [
+      { label: 'Press the middle of the page', press: [0.5, 0.5] },
+      { label: 'Pull down a little', to: [0.5, 0.62] },
+      { label: 'Pull down further', to: [0.5, 0.85] },
+      { label: 'Let go', release: true },
+    ],
+  },
+  {
+    name: 'Nothing above to show',
+    story: 'The reader presses near the very top of the page and pulls down — asking to see what is above '
+      + 'their finger, when the top of the page is already at the top of the screen.',
+    watch: 'This is the whole question. Run the steps once, then switch answer and run them again without '
+      + 'leaving this tab. Expect: the finger gives way (content slides out from under it); the gesture gives '
+      + 'way (it refuses almost immediately — the drag does nothing at all); the magnification gives way '
+      + '(a hard jump to a big zoom off a small drag); the loupe (unremarkable, it just works).',
+    steps: [
+      { label: 'Press near the top edge', press: [0.5, 0.06] },
+      { label: 'Pull down a little', to: [0.5, 0.22] },
+      { label: 'Pull down hard', to: [0.5, 0.75] },
+      { label: 'Let go', release: true },
+    ],
+  },
+  {
+    name: 'Both edges at once',
+    story: 'The reader wants the bottom-right corner. They press it and pull up and to the left, asking for '
+      + 'the part below and to the right of the finger — where the two page edges already are.',
+    watch: 'Two directions run out of page together. Whether the two axes give way independently, or one '
+      + 'drags the other down with it.',
+    steps: [
+      { label: 'Press the bottom-right corner', press: [0.94, 0.94] },
+      { label: 'Pull up and left', to: [0.6, 0.6] },
+      { label: 'Pull all the way to the middle', to: [0.3, 0.3] },
+      { label: 'Let go', release: true },
+    ],
+  },
+  {
+    name: 'The letterbox bars',
+    story: 'A scan rarely matches the shape of the screen, so at rest there is black beside it on one axis. '
+      + 'The page cannot move on that axis at all without opening a gap — it has to grow past the screen first.',
+    watch: 'The bars are the page’s own shape, not a bug. But they mean the very start of every drag is '
+      + 'dead on one axis, and for the three dragging answers that dead zone is where the trouble starts. The '
+      + 'last two steps switch to a double-page spread, which puts the bars on the other axis.',
+    steps: [
+      { label: 'Press inside the black bar, off the page', press: [0.5, 0.015] },
+      { label: 'Pull down slowly', to: [0.5, 0.35] },
+      { label: 'Switch to a double-page spread', spread: true },
+      { label: 'Press the middle and pull sideways', press: [0.5, 0.5], to: [0.9, 0.5] },
+      { label: 'Let go', release: true },
+    ],
+  },
+  {
+    name: 'How far is a full zoom?',
+    story: 'One long drag from the middle, to feel the relationship between how far a thumb travels and how '
+      + 'much the page grows. A thumb on a phone comfortably covers about 150 px without regripping.',
+    watch: 'Whether the strongest magnification arrives before the thumb runs out of reach, or long after. '
+      + 'Drag the "drag needed for full magnification" slider while a gesture is held and the page answers live.',
+    steps: [
+      { label: 'Press the middle', press: [0.5, 0.5] },
+      { label: 'Pull down a thumb’s length', dy: 150 },
+      { label: 'Pull down twice that', dy: 300 },
+      { label: 'Let go', release: true },
+    ],
+  },
+];
+
+let tab = 0, step = 0;
+const tabsEl = document.getElementById('tabs');
+const stepsEl = document.getElementById('steps');
+const clearWalkthroughProgress = () => { step = 0; paintSteps(); };
+
+function paintTabs() {
+  tabsEl.innerHTML = SCENARIOS.map((s, i) =>
+    `<button class="tab ${i === tab ? 'sel' : ''}" data-i="${i}">${s.name}</button>`).join('');
+  tabsEl.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+    tab = +b.dataset.i; step = 0;
+    demo.anchor = null; demo.frozen = null;
+    document.getElementById('spread').checked = demo.spread = false;
+    drawPage(); render(); paintTabs(); paintScenario();
+  }));
+}
+function paintScenario() {
+  document.getElementById('scen').innerHTML = `<b>${SCENARIOS[tab].name}.</b> ${SCENARIOS[tab].story}`;
+  document.getElementById('watch').textContent = 'Watch for: ' + SCENARIOS[tab].watch;
+  paintSteps();
+}
+function paintSteps() {
+  stepsEl.innerHTML = SCENARIOS[tab].steps.map((s, i) =>
+    `<div class="step ${i < step ? 'done' : ''}">
+       <span class="n">${i < step ? '✓' : i + 1}</span>
+       <button data-s="${i}" class="${i === step ? 'next' : ''} ${i < step ? 'done' : ''}"
+         ${i > step ? 'disabled' : ''}>${s.label}</button></div>`).join('');
+  stepsEl.querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => runStep(+b.dataset.s)));
+}
+async function runStep(i) {
+  const s = SCENARIOS[tab].steps[i];
+  const vp = viewport();
+  if (i === 0) { demo.anchor = null; demo.frozen = null; }
+  if (s.press) {
+    demo.anchor = { x: vp.w * s.press[0], y: vp.h * s.press[1] };
+    demo.finger = { ...demo.anchor };
+    render();
+  }
+  if (s.spread) {
+    document.getElementById('spread').checked = demo.spread = true;
+    drawPage(); render();
+  }
+  if (s.to || s.dy !== undefined) {
+    const t = s.dy !== undefined
+      ? { x: demo.anchor.x, y: demo.anchor.y + s.dy }
+      : { x: vp.w * s.to[0], y: vp.h * s.to[1] };
+    await glideTo(t, 440);
+  }
+  if (s.release) letGo();
+  step = i + 1;
+  paintSteps();
+}
+
+/* -------------------------------- boot -------------------------------- */
+drawPage();
+syncSliders();
+selectModel('block');
+paintTabs();
+paintScenario();
+new ResizeObserver(render).observe(ui.vp);
+render();
+</script>
+</body>
+</html>
