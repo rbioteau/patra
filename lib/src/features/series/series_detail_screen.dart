@@ -381,8 +381,9 @@ class _SeriesHero extends ConsumerWidget {
     // "Started" is a fact about the *series*, not about the chapter the button
     // happens to land on. Finishing a volume leaves the next one untouched, so
     // reading it against the target alone made the button say "Start reading"
-    // to someone halfway through a series. Kavita asks the same question of
-    // the series (`hasReadingProgress`).
+    // to someone halfway through a series. Kavita's own web client asks it of
+    // the series too — `hasReadingProgress` is that client's concept and is
+    // not an API field, so this mirrors its rule rather than reading a value.
     final started = entries.any((entry) => entry.chapter.pagesRead > 0);
     for (final entry in entries) {
       final chapter = entry.chapter;
