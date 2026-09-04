@@ -290,6 +290,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get readerSettings => 'Reader settings';
+
+  @override
   String get dragToMagnify => 'Drag to magnify';
 
   @override

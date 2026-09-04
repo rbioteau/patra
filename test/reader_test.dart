@@ -500,4 +500,119 @@ void main() {
     });
   });
 
+
+  group('the reader settings sheet', () {
+    // One cog, not a pill per setting. The direction pill it replaced was a
+    // menu opener rather than a toggle, so this costs no extra tap; what it
+    // buys is room for a control that cannot be drawn as an icon.
+
+    /// Brings the reader's chrome up, which is where the cog lives.
+    Future<void> showChrome(WidgetTester tester) async {
+      final size = tester.getSize(find.byType(PageView));
+      await tester.tapAt(Offset(size.width / 2, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    Future<void> openSheet(WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('the cog opens both settings at once', (tester) async {
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+      );
+      // Nothing in the bar until the reader is asked for its chrome.
+      expect(find.byIcon(Icons.tune), findsNothing);
+
+      await showChrome(tester);
+      expect(find.byIcon(Icons.tune), findsOneWidget);
+
+      await openSheet(tester);
+      expect(find.text('READING DIRECTION'), findsOneWidget);
+      expect(find.text('Left to right'), findsOneWidget);
+      expect(find.text('Right to left'), findsOneWidget);
+      expect(find.text('Vertical'), findsOneWidget);
+      expect(find.text('Drag to magnify'), findsOneWidget);
+    });
+
+    testWidgets('flipping the loupe leaves the sheet open', (tester) async {
+      // A direction row closes the sheet because picking one is the whole
+      // errand. A switch must not: closing the surface it lives on would
+      // leave no way to turn it back off without reopening it.
+      mockSecureStorage();
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+      );
+      await showChrome(tester);
+      await openSheet(tester);
+
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+      await tester.tap(find.byType(Switch));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+      expect(find.text('Drag to magnify'), findsOneWidget,
+          reason: 'the sheet should still be open');
+    });
+
+    testWidgets('turning the loupe on takes effect without leaving the '
+        'chapter', (tester) async {
+      mockSecureStorage();
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+      );
+      expect(
+        tester.widget<PageView>(find.byType(PageView)).physics,
+        isNot(isA<NeverScrollableScrollPhysics>()),
+      );
+
+      await showChrome(tester);
+      await openSheet(tester);
+      await tester.tap(find.byType(Switch));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      // Close the sheet and let the reader rebuild.
+      Navigator.of(tester.element(find.byType(Switch))).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        tester.widget<PageView>(find.byType(PageView)).physics,
+        isA<NeverScrollableScrollPhysics>(),
+        reason: 'the swipe should have been handed to the loupe',
+      );
+    });
+
+    testWidgets('picking a direction closes the sheet and applies it', (
+      tester,
+    ) async {
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+      );
+      await showChrome(tester);
+      await openSheet(tester);
+
+      await tester.tap(find.text('Right to left'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Drag to magnify'), findsNothing,
+          reason: 'the sheet should have closed');
+      // The direction is per-chapter here, and the pager mirrors with it.
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+    });
+  });
+
 }

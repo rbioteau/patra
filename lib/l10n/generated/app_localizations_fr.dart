@@ -291,6 +291,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get readerSettings => 'Réglages de lecture';
+
+  @override
   String get dragToMagnify => 'Glisser pour agrandir';
 
   @override

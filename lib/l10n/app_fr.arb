@@ -71,6 +71,7 @@
   "pageProgress": "Page {current} / {total}",
   "pageCounter": "{current} / {total}",
   "pageSpreadCounter": "{first}–{last} / {total}",
+  "readerSettings": "Réglages de lecture",
   "dragToMagnify": "Glisser pour agrandir",
   "dragToMagnifyExplained": "Un doigt agrandit la page autour du point touché, et la longueur du geste décide de combien. Les pages se tournent en touchant les bords.",
   "readingDirection": "Sens de lecture",

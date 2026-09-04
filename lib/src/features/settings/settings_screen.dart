@@ -11,6 +11,7 @@ import '../../settings/locale_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
+import '../../widgets/reader_settings_sheet.dart';
 import '../../widgets/patra_wordmark.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -189,23 +190,12 @@ class SettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
               child: SectionLabel(l10n.readingDirection),
             ),
-            for (final option in ReadingDirection.values)
-              ListTile(
-                leading: DirectionIcon(
-                  option,
-                  color: option == current ? patraAccent : patraText,
-                ),
-                title: Text(
-                  option.label(l10n),
-                  style: PatraText.body(
-                    color: option == current ? patraAccent : patraText,
-                  ),
-                ),
-                trailing: option == current
-                    ? const Icon(Icons.check, color: patraAccent, size: 18)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(option),
-              ),
+            // The same rows the reader's own sheet draws, so the two
+            // cannot drift into wording the choice differently.
+            ReadingDirectionRows(
+              current: current,
+              onPicked: (option) => Navigator.of(sheetContext).pop(option),
+            ),
           ],
         ),
       ),

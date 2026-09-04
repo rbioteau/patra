@@ -524,6 +524,12 @@ abstract class AppLocalizations {
   /// **'{first}–{last} / {total}'**
   String pageSpreadCounter(int first, int last, int total);
 
+  /// Tooltip on the reader's top-bar cog, which opens the reading direction and the drag-to-magnify switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader settings'**
+  String get readerSettings;
+
   /// Reader setting: a one-finger drag magnifies the page instead of turning it.
   ///
   /// In en, this message translates to:

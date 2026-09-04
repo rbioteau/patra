@@ -274,6 +274,10 @@
       "total": {"type": "int"}
     }
   },
+  "readerSettings": "Reader settings",
+  "@readerSettings": {
+    "description": "Tooltip on the reader's top-bar cog, which opens the reading direction and the drag-to-magnify switch."
+  },
   "dragToMagnify": "Drag to magnify",
   "@dragToMagnify": {
     "description": "Reader setting: a one-finger drag magnifies the page instead of turning it."

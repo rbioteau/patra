@@ -16,7 +16,7 @@ import '../../downloads/image_cache_store.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
-import '../../widgets/direction_icon.dart';
+import '../../widgets/reader_settings_sheet.dart';
 import 'loupe_gesture.dart';
 import 'page_loading.dart';
 import 'spread_layout.dart';
@@ -987,10 +987,10 @@ class _TopChrome extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _DirectionPill(
+                _SettingsCog(
                   direction: direction,
-                  onChanged: onDirectionChanged,
-                  tooltip: l10n.readingDirection,
+                  onDirectionChanged: onDirectionChanged,
+                  tooltip: l10n.readerSettings,
                 ),
               ],
             ),
@@ -1001,58 +1001,42 @@ class _TopChrome extends StatelessWidget {
   }
 }
 
-/// The single control for how pages advance. Icon-only and language-free; the
-/// wording lives in the menu rows.
-class _DirectionPill extends StatelessWidget {
-  const _DirectionPill({
+/// The one control in the reader's top bar. Everything it opens lives in
+/// [showReaderSettingsSheet], which says why this is a cog rather than the
+/// direction pill it replaced.
+class _SettingsCog extends StatelessWidget {
+  const _SettingsCog({
     required this.direction,
-    required this.onChanged,
+    required this.onDirectionChanged,
     required this.tooltip,
   });
 
   final ReadingDirection direction;
-  final ValueChanged<ReadingDirection> onChanged;
+  final ValueChanged<ReadingDirection> onDirectionChanged;
   final String tooltip;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return PopupMenuButton<ReadingDirection>(
-      tooltip: tooltip,
-      color: patraSurface,
-      initialValue: direction,
-      onSelected: onChanged,
-      itemBuilder: (context) => [
-        for (final option in ReadingDirection.values)
-          PopupMenuItem(
-            value: option,
-            child: Row(
-              children: [
-                DirectionIcon(
-                  option,
-                  color: option == direction ? patraAccent : patraText,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  option.label(l10n),
-                  style: PatraText.body(
-                    color: option == direction ? patraAccent : patraText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-      child: Container(
-        height: 36,
-        width: 44,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .12),
-          borderRadius: BorderRadius.circular(radiusPill),
-          border: Border.all(color: Colors.white.withValues(alpha: .18)),
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: () => showReaderSettingsSheet(
+          context,
+          direction: direction,
+          onDirectionChanged: onDirectionChanged,
         ),
-        child: DirectionIcon(direction, size: 21),
+        borderRadius: BorderRadius.circular(radiusPill),
+        child: Container(
+          height: 36,
+          width: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(radiusPill),
+            border: Border.all(color: Colors.white.withValues(alpha: .18)),
+          ),
+          child: const Icon(Icons.tune, size: 21, color: Colors.white),
+        ),
       ),
     );
   }
