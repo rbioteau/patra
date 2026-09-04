@@ -167,27 +167,106 @@ class ThumbLoadQueue {
 
 // --- the strip's geometry ----------------------------------------------------
 //
+// Every length here is a **share of the screen's shortest side**, not a size in
+// points. The shortest side, so that a phone gets the same thumbnail in either
+// orientation — a page is the same thing to recognise whichever way the device
+// is held — and a share, because that is what the strip actually trades away:
+// the swollen thumbnail's width comes out of the slider's track (see
+// [ThumbStrip.sliderPadding]) and out of how many pages fit either side of it,
+// so a size only means something against the screen it is drawn on. The point
+// values in the comments are what each share comes to on the 390pt phone the
+// handoff was drawn for.
+//
 // The handoff drew a 34x48 thumbnail. On a real device that is a stamp: this
 // strip is not read, it is *aimed at*, and a page you cannot recognise is a
-// page you cannot scrub to. So the thumbnails are drawn at twice the handoff's
-// size on a phone and [_tabletScale] again on a tablet, while the strip's own
-// margins stay where they were — the extra height goes into the pictures.
-const _phoneBaseWidth = 68.0;
-const _phoneBaseHeight = 96.0;
-const _phoneNearWidth = 80.0;
-const _phoneNearHeight = 112.0;
-const _phoneCurrentWidth = 92.0;
-const _phoneCurrentHeight = 128.0;
-const _phoneGap = 8.0;
-const _phoneHPadding = 12.0;
-const _phoneVPadding = 6.0;
-const _tabletScale = 1.35;
+// page you cannot scrub to. So the base is twice that, and **the swollen one is
+// a third of the screen** — which is as wide as it can be drawn before the
+// slider under it stops reading as a slider: its track is the screen less the
+// swollen thumbnail, and at half the screen the two markers are a short bar
+// floating between two wide margins. That third leaves about four pages on
+// screen and a track at 61% of the width.
+//
+// Only widths are shares. Heights follow from [_pageAspect], so a thumbnail is
+// never drawn out of shape, and the accordion's law — neighbours halfway
+// between the swollen one and the base — is arithmetic on the shares rather
+// than three numbers that can drift apart.
+const _baseShare = 0.174; // 68pt
+const _currentShare = 0.33; // 129pt, a third of the screen
+const _nearShare = (_baseShare + _currentShare) / 2; // 98pt, halfway
+const _gapShare = 0.021; // 8pt
+const _hPaddingShare = 0.031; // 12pt
+const _vPaddingShare = 0.015; // 6pt
 
-/// Every length in the strip is the phone's, taken through this: a tablet gets
-/// the same strip drawn larger, so the accordion's law is untouched and only
-/// the numbers change.
-double _scaleFor(BuildContext context) =>
-    isTabletLayout(context) ? _tabletScale : 1;
+/// A page is taller than it is wide by this much: the handoff's 34x48
+/// thumbnail, which is about every manga and comic page's proportion.
+const _pageAspect = 48 / 34;
+
+/// What a tablet takes of the shares above — of its own shortest side, which
+/// is twice a phone's.
+///
+/// A tablet is not a big phone. A third of an iPad's 820pt would be a 270pt
+/// thumbnail with the same four pages beside it that a phone shows, which is
+/// the mistake the rest of this app avoids by taking another column rather than
+/// drawing a bigger card. Two thirds of the share puts the thumbnail one step
+/// up from the phone's — 173pt, the same step the strip used to take at 1.35 —
+/// and spends the width it did not take on pages.
+const _tabletShareFactor = 0.64;
+
+/// What the chrome is besides the strip: 28pt of padding above it, the slider,
+/// the page numeral, and 8pt under that — see `_ReaderChrome`. In points, not
+/// shares, because a slider and a line of type are the same size on every
+/// screen. The strip cares about it because of [_heightBudget].
+const _chromeAroundStrip = 104.0;
+
+/// Room left between the chrome and the middle of the screen: a finger's
+/// worth, and enough to cover the home indicator under the chrome, which the
+/// strip cannot read from where it sits — a `SafeArea` takes what it consumes
+/// out of `viewPadding` as well as out of `padding`.
+const _chromeClearance = 24.0;
+
+/// The tallest the strip may be drawn, thumbnails and margins together.
+///
+/// The reader's middle third toggles the chrome, so **the chrome has to stop
+/// short of the middle of the screen**: where it reaches past it, the tap that
+/// would dismiss it lands on the scrubber instead and seeks to whatever page is
+/// under the finger, which is worse than nothing happening. That is a limit in
+/// points rather than a share, because what sits below the strip is.
+///
+/// It leaves every phone and tablet in portrait the shares whole, and an iPad
+/// on its side too. What it catches is a phone on its side — which is where a
+/// spread is read, so the scrubber has to open there — and a short widget-test
+/// surface.
+double _heightBudget(BuildContext context) =>
+    MediaQuery.sizeOf(context).height / 2 -
+    _chromeAroundStrip -
+    _chromeClearance;
+
+/// The share of the screen the whole strip stands on: the swollen thumbnail
+/// plus the margins above and below it.
+const _stripHeightShare = _currentShare * _pageAspect + _vPaddingShare * 2;
+
+/// The smallest fraction of the shares the strip is ever drawn at, which is
+/// where the swollen thumbnail comes back to the 92pt it was before it was
+/// given a third of the screen — the size a phone on its side has always shown.
+///
+/// No size worth drawing keeps the chrome clear of the middle of a screen that
+/// short: that was already lost at the old sizes, whose chrome took 63% of a
+/// landscape phone. So the strip there keeps what it had rather than shrinking
+/// to the stamp [_heightBudget] would allow.
+const _shortScreenFloor = 0.71;
+
+/// What one full share of the screen comes to in points.
+///
+/// Every length in the strip is a share taken through this, so the accordion's
+/// law is untouched and only the numbers change: a tablet draws the same strip
+/// one step larger, and a screen with no room for the result brings every
+/// length down together.
+double _unitFor(BuildContext context) {
+  final short = MediaQuery.sizeOf(context).shortestSide;
+  final unit = isTabletLayout(context) ? short * _tabletShareFactor : short;
+  final fits = _heightBudget(context) / (_stripHeightShare * unit);
+  return unit * fits.clamp(_shortScreenFloor, 1.0);
+}
 
 /// How far inside the strip Material sets a `Slider`'s handle at either end of
 /// its track, measured against this theme rather than assumed. The strip's own
@@ -228,12 +307,12 @@ class ThumbStrip extends StatefulWidget {
   /// thumbnails to it: a picture decoded at a third of the size it is drawn at
   /// is the blur this strip exists to avoid.
   static double thumbWidth(BuildContext context) =>
-      _phoneCurrentWidth * _scaleFor(context);
+      _currentShare * _unitFor(context);
 
   /// Where the first and last thumbnail centres sit, in from the strip's edge:
   /// half a swollen thumbnail past the padding.
   static double edgeInset(BuildContext context) =>
-      (_phoneHPadding + _phoneCurrentWidth / 2) * _scaleFor(context);
+      (_hPaddingShare + _currentShare / 2) * _unitFor(context);
 
   /// The horizontal padding the slider under the strip must be given so its
   /// handle starts and ends exactly where the bulge does.
@@ -251,34 +330,70 @@ class ThumbStrip extends StatefulWidget {
   State<ThumbStrip> createState() => _ThumbStripState();
 }
 
-class _ThumbStripState extends State<ThumbStrip> {
+class _ThumbStripState extends State<ThumbStrip> with TickerProviderStateMixin {
   static const _grow = Duration(milliseconds: 200);
 
-  /// Read in [didChangeDependencies], not in the getters below: those are
-  /// called from scroll callbacks, where an inherited-widget lookup has no
+  /// Read in [didChangeDependencies], not in the getters below: some of them
+  /// are called from animation ticks, where an inherited-widget lookup has no
   /// business being.
-  double _scale = 1;
+  double _unit = 0;
 
-  double get _baseWidth => _phoneBaseWidth * _scale;
-  double get _baseHeight => _phoneBaseHeight * _scale;
-  double get _nearWidth => _phoneNearWidth * _scale;
-  double get _nearHeight => _phoneNearHeight * _scale;
-  double get _currentWidth => _phoneCurrentWidth * _scale;
-  double get _currentHeight => _phoneCurrentHeight * _scale;
-  double get _gap => _phoneGap * _scale;
-  double get _hPadding => _phoneHPadding * _scale;
-  double get _vPadding => _phoneVPadding * _scale;
+  double get _baseWidth => _baseShare * _unit;
+  double get _nearWidth => _nearShare * _unit;
+  double get _currentWidth => _currentShare * _unit;
+  double get _currentHeight => _currentWidth * _pageAspect;
+  double get _gap => _gapShare * _unit;
+  double get _hPadding => _hPaddingShare * _unit;
+  double get _vPadding => _vPaddingShare * _unit;
 
   /// The closest two centres may come before the current thumbnail and its
   /// neighbour lose their gap.
   double get _minStep => (_currentWidth + _nearWidth) / 2 + _gap;
 
-  final _controller = ScrollController();
+  /// The accordion, as one clock.
+  ///
+  /// Everything the strip draws is a function of this animation and the two
+  /// pages it runs between — the widths, the heights, and **where the strip is
+  /// scrolled to**. The sizes and the offset used to be animated apart, and
+  /// measured on a phone that left the swollen thumbnail 123pt from the
+  /// slider's handle, a third of the screen, for the length of every page turn.
+  late final AnimationController _accordion = AnimationController(
+    duration: _grow,
+    vsync: this,
+    value: 1,
+  );
+  late final Animation<double> _turn = CurvedAnimation(
+    parent: _accordion,
+    curve: Curves.easeOut,
+  );
+
+  /// The two pages the accordion is between: the one it is leaving and the one
+  /// it is arriving at. Equal to each other, and to [ThumbStrip.current],
+  /// whenever the strip is at rest.
+  late int _from = widget.current;
+  late int _to = widget.current;
+
+  double _lerp(double from, double to) => from + (to - from) * _turn.value;
+
+  /// Where the strip is scrolled to when a finger has put it somewhere, rather
+  /// than the page being read. Null while it follows the reader, which is what
+  /// it goes back to the moment the page changes.
+  double? _dragged;
+
+  /// A flick's momentum, run through an unbounded controller so the offset it
+  /// produces is read the same way as everything else here: in [build].
+  late final AnimationController _fling = AnimationController.unbounded(
+    vsync: this,
+  );
+
+  /// The last viewport the strip was built at, so a drag has something to clamp
+  /// against outside of layout. Zero until the first build.
+  double _viewport = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _scale = _scaleFor(context);
+    _unit = _unitFor(context);
   }
 
   @override
@@ -287,27 +402,29 @@ class _ThumbStripState extends State<ThumbStrip> {
     widget.queue.onChanged = () {
       if (mounted) setState(() {});
     };
-    _controller.addListener(_syncQueue);
-    // The chrome usually opens mid-chapter: jump to where the reader is
-    // rather than showing page one.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _revealCurrent(animate: false);
-      _syncQueue();
-    });
+    _fling.addListener(_onFling);
   }
 
   @override
   void didUpdateWidget(ThumbStrip old) {
     super.didUpdateWidget(old);
     if (widget.current == old.current) return;
-    // The extents around the current page have just changed; centre on them
-    // once this frame's layout is in.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _revealCurrent();
-      _syncQueue();
-    });
+    // Straight into the build that delivered it. There is nothing here to
+    // schedule or defer any more: the offset is not a scroll position being
+    // commanded, it is a number this widget draws with, so moving the
+    // accordion is an ordinary rebuild in whatever phase the page arrived.
+    final glide = !_accordion.isAnimating && (widget.current - _to).abs() == 1;
+    _from = glide ? _to : widget.current;
+    _to = widget.current;
+    // The reader has moved: the strip goes back to following it, and any flick
+    // still running is over.
+    _dragged = null;
+    _fling.stop();
+    if (glide) {
+      _accordion.forward(from: 0);
+    } else {
+      _accordion.value = 1;
+    }
   }
 
   @override
@@ -315,41 +432,56 @@ class _ThumbStripState extends State<ThumbStrip> {
     // The queue outlives us; only the repaint hook was ours. It goes on
     // fetching, which is the point.
     widget.queue.onChanged = null;
-    _controller.dispose();
+    _accordion.dispose();
+    _fling.dispose();
     super.dispose();
-  }
-
-  /// The pages on screen, give or take one at each end — close enough to
-  /// decide what is worth fetching, and it costs no layout pass.
-  void _syncQueue() {
-    if (!_controller.hasClients) return;
-    final step = _baseWidth + _gap;
-    final offset = _controller.offset - _hPadding;
-    final last = widget.pages - 1;
-    final first = ((offset / step).floor() - 1).clamp(0, last);
-    final end =
-        (((offset + _controller.position.viewportDimension) / step).ceil())
-            .clamp(0, last);
-    widget.queue.update(
-      visible: {for (var page = first; page <= end; page++) page},
-      current: widget.current,
-      pages: widget.pages,
-    );
   }
 
   // --- accordion geometry ---------------------------------------------------
 
-  double _width(int page) => switch ((page - widget.current).abs()) {
+  /// The pages the accordion is drawing wider than the base: the three around
+  /// the page being read, and the three around the one it is leaving while the
+  /// two are being interpolated.
+  Iterable<int> get _swollen => {
+    for (final centre in {_from, _to})
+      for (var page = centre - 1; page <= centre + 1; page++)
+        if (page >= 0 && page < widget.pages) page,
+  };
+
+  /// What the accordion adds to the strip's length, over the base thumbnails
+  /// the swollen ones stand in for.
+  double get _swell =>
+      _swollen.fold(0.0, (sum, page) => sum + _width(page) - _baseWidth);
+
+  double _widthAt(int page, int current) => switch ((page - current).abs()) {
     0 => _currentWidth,
     1 => _nearWidth,
     _ => _baseWidth,
   };
 
-  double _height(int page) => switch ((page - widget.current).abs()) {
-    0 => _currentHeight,
-    1 => _nearHeight,
-    _ => _baseHeight,
-  };
+  double _width(int page) => _lerp(_widthAt(page, _from), _widthAt(page, _to));
+
+  double _height(int page) => _width(page) * _pageAspect;
+
+  /// Where [page] starts along the strip's whole length. Only the pages the
+  /// accordion is touching are wider than the base, so the sum is a
+  /// correction, not a walk over the chapter.
+  double _leadingEdge(int page) {
+    var x = page * (_baseWidth + _gap);
+    for (final swollen in _swollen) {
+      if (swollen < page) x += _width(swollen) - _baseWidth;
+    }
+    return x;
+  }
+
+  /// The strip's whole length, the padding at both ends included.
+  double _content() => _leadingEdge(widget.pages) - _gap + _hPadding * 2;
+
+  /// How far the strip can be scrolled at this width.
+  double _maxOffset(double viewport) {
+    final max = _content() - viewport;
+    return max < 0 ? 0 : max;
+  }
 
   /// Distance between thumbnail centres when the whole chapter fits on screen:
   /// the strip cannot scroll, so the thumbnails themselves spread out to land
@@ -362,50 +494,8 @@ class _ThumbStripState extends State<ThumbStrip> {
     return step >= _minStep ? step : null;
   }
 
-  /// Even centres, uneven widths: what is left between two thumbnails is what
-  /// the accordion is not using.
-  double _gapAfter(int page, double? spread) =>
-      spread == null ? _gap : spread - (_width(page) + _width(page + 1)) / 2;
-
-  /// The first and last centres sit where the handle's travel starts and ends
-  /// — half a *current* thumbnail in from each edge, whatever those pages
-  /// currently measure.
-  EdgeInsetsDirectional _padding(double? spread, double viewport) {
-    if (widget.pages == 1) {
-      final side = (viewport - _currentWidth) / 2;
-      return EdgeInsetsDirectional.fromSTEB(side, _vPadding, side, _vPadding);
-    }
-    if (spread == null) {
-      return EdgeInsetsDirectional.fromSTEB(
-        _hPadding,
-        _vPadding,
-        _hPadding,
-        _vPadding,
-      );
-    }
-    return EdgeInsetsDirectional.fromSTEB(
-      _hPadding + (_currentWidth - _width(0)) / 2,
-      _vPadding,
-      _hPadding + (_currentWidth - _width(widget.pages - 1)) / 2,
-      _vPadding,
-    );
-  }
-
-  /// Where [page] starts along the strip. Only three pages are ever wider than
-  /// the base, so the sum is a correction, not a walk over the chapter.
-  double _leadingEdge(int page) {
-    var x = page * (_baseWidth + _gap);
-    for (final swollen in [
-      widget.current - 1,
-      widget.current,
-      widget.current + 1,
-    ]) {
-      if (swollen >= 0 && swollen < page) x += _width(swollen) - _baseWidth;
-    }
-    return x;
-  }
-
-  /// Puts the swollen thumbnail where the slider's handle is.
+  /// Where the strip sits: under the finger if one has moved it, otherwise
+  /// wherever puts the swollen thumbnail under the slider's handle.
   ///
   /// Centring the current page instead would give the chrome two "you are
   /// here" markers pointing at different places — at page 12 of 40 the handle
@@ -413,139 +503,212 @@ class _ThumbStripState extends State<ThumbStrip> {
   /// current thumbnail's centre travels across the strip on the same law as the
   /// handle travels across its track: from one inset edge to the other, linear
   /// in page / (pages - 1). It falls out exactly at both ends — offset 0 on the
-  /// first page, the end of the scroll on the last.
-  void _revealCurrent({bool animate = true}) {
-    if (!_controller.hasClients) return;
-    final viewport = _controller.position.viewportDimension;
-    // Spread out, every page is already under its own handle position.
-    if (_spread(viewport) != null) return;
-    // Measured from the strip's own geometry rather than from
-    // maxScrollExtent, which is mid-animation while the accordion opens.
-    final content = _leadingEdge(widget.pages) - _gap + _hPadding * 2;
-    final fraction = widget.pages > 1
-        ? widget.current / (widget.pages - 1)
-        : 0.0;
-    final travel = viewport - _hPadding * 2 - _width(widget.current);
-    final target = _leadingEdge(widget.current) - fraction * travel;
-    final offset = target.clamp(0.0, (content - viewport).clamp(0.0, content));
-    if (!animate) {
-      _controller.jumpTo(offset);
-      return;
+  /// first page, the end of the strip on the last.
+  ///
+  /// It is computed from the widths being drawn in the same breath, which is
+  /// what keeps the bulge under the handle at every frame of the accordion
+  /// rather than only once it has settled.
+  double _offset(double viewport) {
+    final dragged = _dragged;
+    if (dragged != null) return dragged.clamp(0.0, _maxOffset(viewport));
+    final last = widget.pages - 1;
+    if (last <= 0) return 0;
+    final fraction = _lerp(_from / last, _to / last);
+    final travel = viewport - _hPadding * 2 - _currentWidth;
+    final target =
+        _leadingEdge(_to) +
+        (_width(_to) - _currentWidth) / 2 -
+        fraction * travel;
+    return target.clamp(0.0, _maxOffset(viewport));
+  }
+
+  /// Where [page]'s centre sits across the strip.
+  double _centre(int page, double viewport, double? spread, double offset) {
+    if (widget.pages == 1) return viewport / 2;
+    // Spread out, every page is put under its own handle position directly —
+    // the same law the offset above follows when the strip scrolls instead.
+    if (spread != null) {
+      final inset = _hPadding + _currentWidth / 2;
+      return inset + (viewport - inset * 2) * page / (widget.pages - 1);
     }
-    _controller.animateTo(offset, duration: _grow, curve: Curves.easeOut);
+    return _hPadding + _leadingEdge(page) + _width(page) / 2 - offset;
+  }
+
+  /// The pages inside the viewport, one either side for luck.
+  ///
+  /// Exact rather than estimated, which is what the strip drawing itself makes
+  /// possible: it is also the window handed to the loader, so nothing is
+  /// fetched for a page nobody can see.
+  (int, int) _window(double offset, double viewport) {
+    final last = widget.pages - 1;
+    if (last <= 0) return (0, 0);
+    final step = _baseWidth + _gap;
+    // A page sits at least this far along, so the walk below starts at or
+    // before the first one on screen and takes a handful of steps at most.
+    var first = (((offset - _swell) / step).floor() - 1).clamp(0, last);
+    while (first < last && _leadingEdge(first + 1) + _hPadding < offset) {
+      first++;
+    }
+    var end = first;
+    while (end < last &&
+        _leadingEdge(end + 1) + _hPadding <= offset + viewport) {
+      end++;
+    }
+    return (first, end);
+  }
+
+  // --- dragging -------------------------------------------------------------
+
+  void _onDragStart(DragStartDetails _) {
+    _fling.stop();
+    _dragged = _offset(_viewport);
+  }
+
+  void _onDragUpdate(DragUpdateDetails details, double sign) {
+    setState(() {
+      _dragged = ((_dragged ?? _offset(_viewport)) - details.delta.dx * sign)
+          .clamp(0.0, _maxOffset(_viewport));
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details, double sign) {
+    final velocity = -details.velocity.pixelsPerSecond.dx * sign;
+    final from = _dragged ?? _offset(_viewport);
+    if (velocity.abs() < 50) return;
+    _fling
+      ..value = from
+      ..animateWith(
+        ClampingScrollSimulation(position: from, velocity: velocity),
+      );
+  }
+
+  void _onFling() {
+    final max = _maxOffset(_viewport);
+    final offset = _fling.value.clamp(0.0, max);
+    if (offset != _fling.value) _fling.stop();
+    setState(() => _dragged = offset);
+  }
+
+  // --- loading --------------------------------------------------------------
+
+  /// Tells the loader what is on screen. Called from [build], because that is
+  /// where the strip works out what it is drawing; the queue only writes down
+  /// what it is given and arms a timer, so there is nothing here that a build
+  /// may not do.
+  void _report(int first, int end) {
+    widget.queue.update(
+      visible: {for (var page = first; page <= end; page++) page},
+      current: widget.current,
+      pages: widget.pages,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    // A drag mirrors with the strip; the geometry above is all measured from
+    // the leading edge, whichever edge that is.
+    final sign = rtl ? -1.0 : 1.0;
+    final height = _currentHeight + _vPadding * 2;
     return SizedBox(
-      height: _currentHeight + _vPadding * 2,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final spread = _spread(constraints.maxWidth);
-          return ListView.custom(
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            // Spread out, the content is exactly the viewport: any scroll is
-            // rounding error, and dragging it would only unstick the strip
-            // from the slider.
-            physics: spread == null
-                ? null
-                : const NeverScrollableScrollPhysics(),
-            padding: _padding(spread, constraints.maxWidth),
-            childrenDelegate: _StripDelegate(
-              childCount: widget.pages,
-              // What the whole strip measures, which the strip knows exactly.
-              // A lazy list otherwise averages the children it has built and
-              // applies that to the rest — and three of these are half again
-              // as wide as the others, so the guess is wrong by tens of points
-              // and the scroll to the last page stops short of it, leaving the
-              // bulge behind the slider's handle. It is also steady while the
-              // accordion animates, which the guess is not.
-              extent: _leadingEdge(widget.pages) - _gap,
-              builder: (context, page) {
-                final selected = page == widget.current;
-                final provider = widget.queue.isReady(page)
-                    ? widget.providerBuilder(page)
-                    : null;
-                return Row(
+      height: height,
+      child: AnimatedBuilder(
+        animation: _turn,
+        builder: (context, _) => LayoutBuilder(
+          builder: (context, constraints) {
+            final viewport = constraints.maxWidth;
+            _viewport = viewport;
+            final spread = _spread(viewport);
+            final offset = spread == null ? _offset(viewport) : 0.0;
+            final (first, end) = spread == null
+                ? _window(offset, viewport)
+                : (0, widget.pages - 1);
+            _report(first, end);
+            return GestureDetector(
+              // A chapter that fits cannot be scrolled: every page is already
+              // under its own handle position, and dragging would only unstick
+              // the strip from the slider.
+              onHorizontalDragStart: spread == null ? _onDragStart : null,
+              onHorizontalDragUpdate: spread == null
+                  ? (details) => _onDragUpdate(details, sign)
+                  : null,
+              onHorizontalDragEnd: spread == null
+                  ? (details) => _onDragEnd(details, sign)
+                  : null,
+              child: ClipRect(
+                child: Stack(
                   children: [
-                    Align(
-                      // The strip is centred on its tallest thumbnail, so the
-                      // accordion opens both ways.
-                      alignment: Alignment.center,
-                      widthFactor: 1,
-                      child: GestureDetector(
-                        onTap: () => widget.onTap(page),
-                        child: AnimatedContainer(
+                    for (var page = first; page <= end; page++)
+                      PositionedDirectional(
+                        start:
+                            _centre(page, viewport, spread, offset) -
+                            _width(page) / 2,
+                        // The strip is centred on its tallest thumbnail, so the
+                        // accordion opens both ways.
+                        top: (height - _height(page)) / 2,
+                        width: _width(page),
+                        height: _height(page),
+                        child: _Thumb(
                           key: ValueKey(page),
-                          duration: _grow,
-                          curve: Curves.easeOut,
-                          width: _width(page),
-                          height: _height(page),
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(radiusThumb),
-                            border: Border.all(
-                              color: selected ? patraAccent : Colors.white24,
-                              width: selected ? 2 : 1,
-                            ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              radiusThumb - 1,
-                            ),
-                            // Until the queue has had its turn the thumbnail is
-                            // just its frame: no request, nothing to shuffle
-                            // around.
-                            child: provider == null
-                                ? const SizedBox.shrink()
-                                : Image(
-                                    image: provider,
-                                    fit: BoxFit.cover,
-                                    gaplessPlayback: true,
-                                    errorBuilder: (_, _, _) =>
-                                        const SizedBox.shrink(),
-                                  ),
-                          ),
+                          selected: page == _to,
+                          provider: widget.queue.isReady(page)
+                              ? widget.providerBuilder(page)
+                              : null,
+                          onTap: () => widget.onTap(page),
                         ),
                       ),
-                    ),
-                    // The gap travels with the thumbnail before it: one child
-                    // per page is what lets the delegate below state the
-                    // strip's extent exactly.
-                    if (page < widget.pages - 1)
-                      AnimatedContainer(
-                        duration: _grow,
-                        curve: Curves.easeOut,
-                        width: _gapAfter(page, spread),
-                      ),
                   ],
-                );
-              },
-            ),
-          );
-        },
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 }
 
-/// A list delegate that knows what its children measure instead of guessing.
-class _StripDelegate extends SliverChildBuilderDelegate {
-  _StripDelegate({
-    required NullableIndexedWidgetBuilder builder,
-    required int childCount,
-    required this.extent,
-  }) : super(builder, childCount: childCount);
+/// One page of the strip: its frame, and its picture once the loader has had
+/// its turn.
+class _Thumb extends StatelessWidget {
+  const _Thumb({
+    super.key,
+    required this.selected,
+    required this.provider,
+    required this.onTap,
+  });
 
-  /// The strip's whole length, padding aside.
-  final double extent;
+  final bool selected;
+  final ImageProvider? provider;
+  final VoidCallback onTap;
 
   @override
-  double? estimateMaxScrollOffset(
-    int firstIndex,
-    int lastIndex,
-    double leadingScrollOffset,
-    double trailingScrollOffset,
-  ) => extent;
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white10,
+          borderRadius: BorderRadius.circular(radiusThumb),
+          border: Border.all(
+            color: selected ? patraAccent : Colors.white24,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radiusThumb - 1),
+          // Until the queue has had its turn the thumbnail is just its frame:
+          // no request, nothing to shuffle around.
+          child: provider == null
+              ? const SizedBox.shrink()
+              : Image(
+                  image: provider!,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+        ),
+      ),
+    );
+  }
 }
