@@ -10,7 +10,7 @@ import 'direction_icon.dart';
 ///
 /// The top bar used to carry the reading direction on a pill of its own, which
 /// was right while the direction was the only thing there was to say. It is
-/// not any more: the loupe cannot be drawn as an icon the way a direction can
+/// not any more: magnifying cannot be drawn as an icon the way a direction can
 /// — a page glyph with a flow arrow really does say "left to right", and
 /// nothing says "a one-finger drag magnifies instead of turning the page" —
 /// and a second pill would eat the chapter title, which already ellipsizes.
@@ -40,7 +40,7 @@ Future<void> showReaderSettingsSheet(
             onPicked: (option) => Navigator.of(sheetContext).pop(option),
           ),
           const Divider(height: 24, indent: gutter, endIndent: gutter),
-          const _LoupeRow(),
+          const _MagnifyRow(),
           const SizedBox(height: 8),
         ],
       ),
@@ -89,38 +89,38 @@ class ReadingDirectionRows extends StatelessWidget {
   }
 }
 
-/// The loupe, in the reader's own sheet.
+/// Magnifying, in the reader's own sheet.
 ///
 /// Writes the preference straight through rather than overriding it for this
 /// chapter, which is the one way it deliberately differs from the direction
 /// above it: a direction belongs to the book, and this belongs to the hand.
-/// A per-chapter loupe would forget itself every time a chapter was opened.
-class _LoupeRow extends ConsumerWidget {
-  const _LoupeRow();
+/// Made per-chapter it would forget itself every time a chapter was opened.
+class _MagnifyRow extends ConsumerWidget {
+  const _MagnifyRow();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final loupe = ref.watch(loupeProvider);
-    void set(bool on) => ref.read(loupeProvider.notifier).set(on);
+    final magnify = ref.watch(magnifyProvider);
+    void set(bool on) => ref.read(magnifyProvider.notifier).set(on);
 
     return MergeSemantics(
       child: ListTile(
         leading: Icon(
           Icons.zoom_in,
           size: 22,
-          color: loupe ? patraAccent : patraText,
+          color: magnify ? patraAccent : patraText,
         ),
         title: Text(
           l10n.dragToMagnify,
-          style: PatraText.body(color: loupe ? patraAccent : patraText),
+          style: PatraText.body(color: magnify ? patraAccent : patraText),
         ),
         subtitle: Text(l10n.dragToMagnifyExplained, style: PatraText.metadata()),
-        trailing: Switch(value: loupe, onChanged: set),
+        trailing: Switch(value: magnify, onChanged: set),
         // The sheet stays open: unlike picking a direction, this is a switch,
         // and a switch that closed the surface it lives on could never be
         // turned back off without reopening it.
-        onTap: () => set(!loupe),
+        onTap: () => set(!magnify),
       ),
     );
   }

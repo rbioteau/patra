@@ -17,7 +17,7 @@ import '../../settings/cache_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/reader_settings_sheet.dart';
-import 'loupe_gesture.dart';
+import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'spread_layout.dart';
 import 'thumb_strip.dart';
@@ -359,7 +359,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // Vertical scrolling is excluded rather than forgotten: there the drag
     // *is* the scroll, and a mode that took it away would leave the direction
     // with no way to advance at all.
-    final loupe = ref.watch(loupeProvider) && !direction.isVerticalScroll;
+    final magnify = ref.watch(magnifyProvider) && !direction.isVerticalScroll;
 
     return OrientationBuilder(
       builder: (context, orientation) {
@@ -390,7 +390,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 page: _page,
                 reverse: rtl,
                 spread: spread,
-                loupe: loupe,
+                magnify: magnify,
                 aspectRatioFor: chapter.aspectRatioFor,
                 imageBuilder: _pageImage,
                 // The span of the page being *arrived at*, which is not the
@@ -512,7 +512,7 @@ class _PagedView extends StatefulWidget {
     required this.page,
     required this.reverse,
     required this.spread,
-    required this.loupe,
+    required this.magnify,
     required this.aspectRatioFor,
     required this.imageBuilder,
     required this.onPageChanged,
@@ -526,7 +526,7 @@ class _PagedView extends StatefulWidget {
   final SpreadLayout? spread;
 
   /// Whether a one-finger drag magnifies the page instead of turning it.
-  final bool loupe;
+  final bool magnify;
 
   final double Function(int page) aspectRatioFor;
   final PageImageBuilder imageBuilder;
@@ -585,11 +585,11 @@ class _PagedViewState extends State<_PagedView> {
     super.dispose();
   }
 
-  /// The page, magnifiable — by the loupe gesture when it is on, and by the
+  /// The page, magnifiable — by the drag gesture when it is on, and by the
   /// usual pinch when it is not. Never both: they would be two recognisers
   /// competing for the same one-finger drag.
-  Widget _zoomable(List<double> aspectRatios, Widget child) => widget.loupe
-      ? _LoupePage(aspectRatios: aspectRatios, child: child)
+  Widget _zoomable(List<double> aspectRatios, Widget child) => widget.magnify
+      ? _MagnifyPage(aspectRatios: aspectRatios, child: child)
       : InteractiveViewer(maxScale: 5, child: child);
 
   @override
@@ -597,11 +597,11 @@ class _PagedViewState extends State<_PagedView> {
     return PageView.builder(
       controller: _controller,
       reverse: widget.reverse,
-      // The loupe owns the one-finger drag, so the swipe that turns a page
+      // Magnifying owns the one-finger drag, so the swipe that turns a page
       // has to give it up — the tap zones are what turn pages in that mode.
       // Two recognisers cannot share one drag, and letting them fight would
       // make both unreliable rather than making either work.
-      physics: widget.loupe ? const NeverScrollableScrollPhysics() : null,
+      physics: widget.magnify ? const NeverScrollableScrollPhysics() : null,
       itemCount: _itemCount,
       onPageChanged: (index) {
         _reported = _firstPageOf(index);
@@ -658,24 +658,24 @@ class _PagedViewState extends State<_PagedView> {
   }
 }
 
-/// One page under the loupe: a one-finger drag magnifies it around the point
+/// One magnifiable page: a one-finger drag magnifies it around the point
 /// pressed, and letting go returns it to the page.
 ///
-/// The gesture's rules are all in [LoupeGesture], which is a pure function of
+/// The gesture's rules are all in [MagnifyGesture], which is a pure function of
 /// the viewport, where the artwork sits and where the finger is. This widget
 /// only measures the first two, feeds it the third, and animates the way back.
-class _LoupePage extends StatefulWidget {
-  const _LoupePage({required this.aspectRatios, required this.child});
+class _MagnifyPage extends StatefulWidget {
+  const _MagnifyPage({required this.aspectRatios, required this.child});
 
   /// The aspect ratio of each page sharing this screen, in drawing order.
   final List<double> aspectRatios;
   final Widget child;
 
   @override
-  State<_LoupePage> createState() => _LoupePageState();
+  State<_MagnifyPage> createState() => _MagnifyPageState();
 }
 
-class _LoupePageState extends State<_LoupePage>
+class _MagnifyPageState extends State<_MagnifyPage>
     with SingleTickerProviderStateMixin {
   /// Letting go returns the page rather than snapping it back: a cut from
   /// 2.5x to the whole page loses the reader their place on it.
@@ -686,8 +686,8 @@ class _LoupePageState extends State<_LoupePage>
     duration: _releaseDuration,
   )..addListener(_onReleaseTick);
 
-  LoupeGesture? _gesture;
-  LoupeTransform? _shown;
+  MagnifyGesture? _gesture;
+  MagnifyTransform? _shown;
 
   /// Where the finger actually touched down.
   ///
@@ -702,8 +702,8 @@ class _LoupePageState extends State<_LoupePage>
 
   /// Where the page was when the finger left it, and where it is going back
   /// to. Held across the animation so a rebuild mid-flight cannot lose them.
-  LoupeTransform? _from;
-  LoupeTransform? _to;
+  MagnifyTransform? _from;
+  MagnifyTransform? _to;
 
   @override
   void dispose() {
@@ -720,14 +720,14 @@ class _LoupePageState extends State<_LoupePage>
       if (_release.isCompleted) {
         _shown = _from = _to = null;
       } else {
-        _shown = LoupeTransform.lerp(from, to, t);
+        _shown = MagnifyTransform.lerp(from, to, t);
       }
     });
   }
 
   void _onStart(DragStartDetails details, Size viewport) {
     _release.stop();
-    final gesture = LoupeGesture(
+    final gesture = MagnifyGesture(
       viewport: viewport,
       content: drawnContent(viewport, widget.aspectRatios),
       anchor: _downAt ?? details.localPosition,
@@ -753,7 +753,7 @@ class _LoupePageState extends State<_LoupePage>
       return;
     }
     _from = from;
-    _to = LoupeTransform.rest(from.content);
+    _to = MagnifyTransform.rest(from.content);
     _release.forward(from: 0);
   }
 

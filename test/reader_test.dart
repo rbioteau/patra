@@ -100,7 +100,7 @@ Future<List<int>> _pumpReader(
   WidgetTester tester, {
   required int initialPage,
   ReadingDirection direction = ReadingDirection.verticalScroll,
-  bool loupe = false,
+  bool magnify = false,
   int? savedPagesRead,
   SliderComponentShape? sliderThumb,
   Set<int> wide = const {},
@@ -130,7 +130,7 @@ Future<List<int>> _pumpReader(
           DownloadsService(root: downloads),
         ),
         initialReadingDirectionProvider.overrideWithValue(direction),
-        initialLoupeProvider.overrideWithValue(loupe),
+        initialMagnifyProvider.overrideWithValue(magnify),
       ],
       child: MaterialApp(
         theme: patraTheme(),
@@ -361,9 +361,9 @@ void main() {
     expect(modes.last, 'SystemUiMode.edgeToEdge');
   });
 
-  group('the loupe gesture', () {
+  group('the magnify gesture', () {
     // The gesture's own rules are covered against the pure module in
-    // `loupe_gesture_test.dart`. What can only be seen in the real tree is
+    // `magnify_gesture_test.dart`. What can only be seen in the real tree is
     // what the mode costs and what it leaves alone: it takes the one-finger
     // drag away from the page turn, and it must give it back on the way out.
 
@@ -383,7 +383,7 @@ void main() {
     double? pagerAt(WidgetTester tester) =>
         tester.widget<PageView>(find.byType(PageView)).controller?.page;
 
-    /// The loupe is the only thing in this tree that scales a child up.
+    /// Magnifying is the only thing in this tree that scales a child up.
     Matrix4? magnified(WidgetTester tester) => tester
         .widgetList<Transform>(find.byType(Transform))
         .map((t) => t.transform)
@@ -398,7 +398,7 @@ void main() {
         tester,
         initialPage: 10,
         direction: ReadingDirection.leftToRight,
-        loupe: true,
+        magnify: true,
       );
       expect(magnified(tester), isNull, reason: 'nothing pressed yet');
       expect(pagerAt(tester), 10);
@@ -436,7 +436,7 @@ void main() {
         tester,
         initialPage: 10,
         direction: ReadingDirection.leftToRight,
-        loupe: true,
+        magnify: true,
       );
       // Tapping is the only thing left that advances a page in this mode, so
       // it has to keep working or the mode strands the reader where they are.
@@ -491,7 +491,7 @@ void main() {
         tester,
         initialPage: 10,
         direction: ReadingDirection.verticalScroll,
-        loupe: true,
+        magnify: true,
       );
       expect(
         tester.widget<Scrollable>(find.byType(Scrollable).first).physics,
@@ -540,7 +540,7 @@ void main() {
       expect(find.text('Drag to magnify'), findsOneWidget);
     });
 
-    testWidgets('flipping the loupe leaves the sheet open', (tester) async {
+    testWidgets('flipping the switch leaves the sheet open', (tester) async {
       // A direction row closes the sheet because picking one is the whole
       // errand. A switch must not: closing the surface it lives on would
       // leave no way to turn it back off without reopening it.
@@ -563,7 +563,7 @@ void main() {
           reason: 'the sheet should still be open');
     });
 
-    testWidgets('turning the loupe on takes effect without leaving the '
+    testWidgets('turning magnifying on takes effect without leaving the '
         'chapter', (tester) async {
       mockSecureStorage();
       await _pumpReader(
@@ -589,7 +589,7 @@ void main() {
       expect(
         tester.widget<PageView>(find.byType(PageView)).physics,
         isA<NeverScrollableScrollPhysics>(),
-        reason: 'the swipe should have been handed to the loupe',
+        reason: 'the swipe should have been handed to the gesture',
       );
     });
 

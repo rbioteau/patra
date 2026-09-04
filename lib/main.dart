@@ -19,7 +19,7 @@ Future<void> main() async {
   final identity = await ClientIdentity.resolve();
   final locale = await LocaleSettingsStore.load();
   final readingDirection = await ReadingSettingsStore.load();
-  final loupe = await ReadingSettingsStore.loadLoupe();
+  final magnify = await ReadingSettingsStore.loadMagnify();
   final cacheLimit = await ImageCacheSettingsStore.load();
   // One sweep on the way in, so a cache left over the budget by the previous
   // session — or by a limit lowered on the last one — is back inside it.
@@ -32,7 +32,7 @@ Future<void> main() async {
         clientIdentityProvider.overrideWithValue(identity),
         initialLocaleProvider.overrideWithValue(locale),
         initialReadingDirectionProvider.overrideWithValue(readingDirection),
-        initialLoupeProvider.overrideWithValue(loupe),
+        initialMagnifyProvider.overrideWithValue(magnify),
         initialImageCacheLimitProvider.overrideWithValue(cacheLimit),
         imageCacheStoreProvider.overrideWithValue(imageCache),
       ],

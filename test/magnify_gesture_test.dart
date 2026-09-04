@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:patra/src/features/reader/loupe_gesture.dart';
+import 'package:patra/src/features/reader/magnify_gesture.dart';
 
 /// A phone-shaped canvas and a 2:3 scan, which is letterboxed in it: the
 /// artwork fills the width and leaves a bar above and below. That mismatch is
@@ -11,11 +11,11 @@ import 'package:patra/src/features/reader/loupe_gesture.dart';
 const _viewport = Size(380, 620);
 final _content = drawnContent(_viewport, const [2 / 3]);
 
-LoupeGesture _from(Offset anchor) =>
-    LoupeGesture(viewport: _viewport, content: _content, anchor: anchor);
+MagnifyGesture _from(Offset anchor) =>
+    MagnifyGesture(viewport: _viewport, content: _content, anchor: anchor);
 
 /// Which point of the artwork (0..1 each way) is under [at].
-Offset _under(LoupeTransform t, Offset at) => Offset(
+Offset _under(MagnifyTransform t, Offset at) => Offset(
   (at.dx - t.origin.dx) / (t.content.width * t.scale),
   (at.dy - t.origin.dy) / (t.content.height * t.scale),
 );
@@ -50,7 +50,7 @@ void main() {
     const anchor = Offset(190, 310);
 
     /// The part of the artwork on screen, in fractions of the page.
-    Rect windowOf(LoupeTransform t) {
+    Rect windowOf(MagnifyTransform t) {
       final width = t.content.width * t.scale;
       final height = t.content.height * t.scale;
       return Rect.fromLTRB(
@@ -103,8 +103,8 @@ void main() {
     test('the artwork stays under the finger wherever there is room for it', () {
       // The underlying rule, shown where the page is big enough to obey it: a
       // drag at full travel has slack to spare.
-      final t = _from(anchor).to(anchor + const Offset(0, kLoupeTravel));
-      final under = _under(t, anchor + const Offset(0, kLoupeTravel));
+      final t = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel));
+      final under = _under(t, anchor + const Offset(0, kMagnifyTravel));
       expect(under.dx, closeTo(0.5, 0.01));
       expect(under.dy, closeTo(0.5, 0.01));
     });
@@ -131,15 +131,15 @@ void main() {
 
     test('it grows from 1 to the ceiling over the travel distance', () {
       expect(_from(anchor).to(anchor).scale, 1);
-      final half = _from(anchor).to(anchor + const Offset(0, kLoupeTravel / 2));
-      expect(half.scale, closeTo(1 + (kLoupeMaxScale - 1) / 2, 0.001));
-      final full = _from(anchor).to(anchor + const Offset(0, kLoupeTravel));
-      expect(full.scale, closeTo(kLoupeMaxScale, 0.001));
+      final half = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel / 2));
+      expect(half.scale, closeTo(1 + (kMagnifyMaxScale - 1) / 2, 0.001));
+      final full = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel));
+      expect(full.scale, closeTo(kMagnifyMaxScale, 0.001));
     });
 
     test('it never passes the ceiling, however far the drag runs', () {
-      final t = _from(anchor).to(anchor + const Offset(0, kLoupeTravel * 4));
-      expect(t.scale, kLoupeMaxScale);
+      final t = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel * 4));
+      expect(t.scale, kMagnifyMaxScale);
     });
 
     test('only the length counts, not the direction', () {
@@ -155,7 +155,7 @@ void main() {
     test('full magnification stays reachable on a screen shorter than the '
         'travel distance', () {
       const small = Size(120, 200);
-      final gesture = LoupeGesture(
+      final gesture = MagnifyGesture(
         viewport: small,
         content: drawnContent(small, const [2 / 3]),
         anchor: const Offset(60, 100),
@@ -164,14 +164,14 @@ void main() {
       // the strongest magnification could not be reached by any drag that
       // fits on the screen.
       final t = gesture.to(const Offset(60, 300));
-      expect(t.scale, kLoupeMaxScale);
+      expect(t.scale, kMagnifyMaxScale);
     });
   });
 
   group('the border is what is held', () {
     // The constraint the design put above everything else: magnifying must
     // never open a band of black beside the artwork.
-    void expectCovers(LoupeTransform t, Size viewport, {String? reason}) {
+    void expectCovers(MagnifyTransform t, Size viewport, {String? reason}) {
       final r = t.rect;
       if (r.width >= viewport.width) {
         expect(r.left, lessThanOrEqualTo(0.01), reason: reason);
@@ -215,7 +215,7 @@ void main() {
             for (var fy = 2.0; fy < _viewport.height; fy += 53) {
               final t = gesture.to(Offset(fx, fy));
               expectCovers(t, _viewport, reason: '($ax,$ay) -> ($fx,$fy)');
-              expect(t.scale, inInclusiveRange(1, kLoupeMaxScale));
+              expect(t.scale, inInclusiveRange(1, kMagnifyMaxScale));
               checked++;
             }
           }
@@ -234,9 +234,9 @@ void main() {
     test('the way back ends exactly at rest', () {
       const anchor = Offset(190, 310);
       final held = _from(anchor).to(anchor + const Offset(0, 200));
-      final rest = LoupeTransform.rest(held.content);
-      expect(LoupeTransform.lerp(held, rest, 0).origin, held.origin);
-      final landed = LoupeTransform.lerp(held, rest, 1);
+      final rest = MagnifyTransform.rest(held.content);
+      expect(MagnifyTransform.lerp(held, rest, 0).origin, held.origin);
+      final landed = MagnifyTransform.lerp(held, rest, 1);
       expect(landed.scale, 1);
       expect(landed.origin, _content.topLeft);
       expect(landed.isRest, isTrue);
@@ -284,7 +284,7 @@ void main() {
       final pair = drawnContent(landscape, const [2 / 3, 1 / 2]);
       // Off-centre at rest, since the narrower scan takes less of its half.
       expect(pair.center.dx, isNot(closeTo(landscape.width / 2, 1)));
-      final gesture = LoupeGesture(
+      final gesture = MagnifyGesture(
         viewport: landscape,
         content: pair,
         anchor: pair.center,
@@ -302,7 +302,7 @@ void main() {
 
   group('a degenerate gesture is inert rather than a crash', () {
     test('an empty viewport or empty artwork resolves to rest', () {
-      const empty = LoupeGesture(
+      const empty = MagnifyGesture(
         viewport: Size.zero,
         content: Rect.zero,
         anchor: Offset.zero,

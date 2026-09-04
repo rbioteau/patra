@@ -22,7 +22,7 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final session = ref.watch(sessionProvider);
     final direction = ref.watch(defaultReadingDirectionProvider);
-    final loupe = ref.watch(loupeProvider);
+    final magnify = ref.watch(magnifyProvider);
     final locale = ref.watch(localeProvider);
 
     return Scaffold(
@@ -62,8 +62,8 @@ class SettingsScreen extends ConsumerWidget {
               icon: const Icon(Icons.zoom_in, size: 18, color: patraAccent),
               title: l10n.dragToMagnify,
               subtitle: l10n.dragToMagnifyExplained,
-              value: loupe,
-              onChanged: (on) => ref.read(loupeProvider.notifier).set(on),
+              value: magnify,
+              onChanged: (on) => ref.read(magnifyProvider.notifier).set(on),
             ),
 
             _Section(label: l10n.storageSectionLabel),

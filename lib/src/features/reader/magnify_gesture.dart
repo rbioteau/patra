@@ -18,22 +18,22 @@ import 'package:flutter/widgets.dart' show Matrix4;
 /// The artwork never stops covering the screen. Where the drag asks to go past
 /// an edge, the page stops at that edge and the artwork slides out from under
 /// the finger instead — **the border is what is held, and the grip is what
-/// gives way**. That is not a rare corner: at [kLoupeMaxScale] over
-/// [kLoupeTravel] there is little slack, so a page is pinned against an edge
+/// gives way**. That is not a rare corner: at [kMagnifyMaxScale] over
+/// [kMagnifyTravel] there is little slack, so a page is pinned against an edge
 /// for most of a typical drag and properly glued only near full travel. The
 /// guarantee a reader can see is therefore about the *view* — pulling down
 /// walks it towards the top of the page, and keeps walking that way for the
 /// whole drag — rather than about a point staying under the fingertip. Both
-/// are pinned in `test/loupe_gesture_test.dart`.
+/// are pinned in `test/magnify_gesture_test.dart`.
 ///
 /// Three other answers were built and rejected: refusing the rest of the drag
 /// once the page runs out (near an edge it refuses almost the whole gesture),
 /// magnifying harder to make room (a jump straight to the ceiling off a short
 /// drag), and aiming a loupe without carrying the page at all (workable, but
 /// it gives up direct manipulation). See
-/// `docs/adr/0001-reader-loupe-gesture.md`.
+/// `docs/adr/0001-reader-magnify-gesture.md`.
 
-/// How far the finger travels for [kLoupeMaxScale], in logical pixels.
+/// How far the finger travels for [kMagnifyMaxScale], in logical pixels.
 ///
 /// Deliberately **not** a fraction of the screen. The ruler for this gesture is
 /// a thumb, and a thumb is the same size on a phone and on a tablet — scaling
@@ -41,17 +41,17 @@ import 'package:flutter/widgets.dart' show Matrix4;
 /// the reach on the bigger device, for no reason a hand would recognise. A
 /// logical pixel is already density-independent, so this is a physical
 /// distance: roughly 6 cm, about one comfortable sweep plus a short regrip.
-const kLoupeTravel = 400.0;
+const kMagnifyTravel = 400.0;
 
 /// The strongest magnification a drag can reach. Low on purpose: a gentle
 /// ceiling is what makes the whole range of the drag useful for aiming, where
 /// a large one spends most of the gesture overshooting.
-const kLoupeMaxScale = 2.5;
+const kMagnifyMaxScale = 2.5;
 
-/// Where the page is, and how big, for one frame of a loupe gesture.
+/// Where the page is, and how big, for one frame of the gesture.
 @immutable
-class LoupeTransform {
-  const LoupeTransform({
+class MagnifyTransform {
+  const MagnifyTransform({
     required this.content,
     required this.scale,
     required this.origin,
@@ -65,7 +65,7 @@ class LoupeTransform {
   /// Where the artwork's top-left corner sits now, in viewport coordinates.
   final Offset origin;
 
-  LoupeTransform.rest(Rect content)
+  MagnifyTransform.rest(Rect content)
     : this(content: content, scale: 1, origin: content.topLeft);
 
   bool get isRest => scale == 1 && origin == content.topLeft;
@@ -88,8 +88,8 @@ class LoupeTransform {
     );
   }
 
-  static LoupeTransform lerp(LoupeTransform a, LoupeTransform b, double t) =>
-      LoupeTransform(
+  static MagnifyTransform lerp(MagnifyTransform a, MagnifyTransform b, double t) =>
+      MagnifyTransform(
         content: a.content,
         scale: a.scale + (b.scale - a.scale) * t,
         origin: Offset.lerp(a.origin, b.origin, t)!,
@@ -97,15 +97,15 @@ class LoupeTransform {
 }
 
 /// A gesture in progress: the finger went down at [anchor], and every position
-/// it reaches from there resolves to a [LoupeTransform].
+/// it reaches from there resolves to a [MagnifyTransform].
 @immutable
-class LoupeGesture {
-  const LoupeGesture({
+class MagnifyGesture {
+  const MagnifyGesture({
     required this.viewport,
     required this.content,
     required this.anchor,
-    this.travel = kLoupeTravel,
-    this.maxScale = kLoupeMaxScale,
+    this.travel = kMagnifyTravel,
+    this.maxScale = kMagnifyMaxScale,
   });
 
   final Size viewport;
@@ -128,8 +128,8 @@ class LoupeGesture {
   bool get _degenerate =>
       content.isEmpty || viewport.isEmpty || travel <= 0 || maxScale <= 1;
 
-  LoupeTransform to(Offset finger) {
-    if (_degenerate) return LoupeTransform.rest(content);
+  MagnifyTransform to(Offset finger) {
+    if (_degenerate) return MagnifyTransform.rest(content);
 
     // The reference point, as a fraction of the artwork.
     final u = ((anchor.dx - content.left) / content.width).clamp(0.0, 1.0);
@@ -141,7 +141,7 @@ class LoupeGesture {
     //
     // The reach is capped at the screen's longest side so that full
     // magnification is always attainable in one drag. On any real device
-    // [kLoupeTravel] is the smaller of the two and the cap never bites; it is
+    // [kMagnifyTravel] is the smaller of the two and the cap never bites; it is
     // here so the constant can be raised without stranding a small screen.
     final reach = math.min(travel, viewport.longestSide);
     final scale = (1 + (finger - anchor).distance / reach * (maxScale - 1))
@@ -149,7 +149,7 @@ class LoupeGesture {
 
     final width = content.width * scale;
     final height = content.height * scale;
-    return LoupeTransform(
+    return MagnifyTransform(
       content: content,
       scale: scale,
       origin: Offset(

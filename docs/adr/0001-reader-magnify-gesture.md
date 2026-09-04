@@ -54,8 +54,8 @@ manipulation — the page no longer follows the hand.
 edge, the page stops at the edge and the grip is what gives way.
 
 Settings: **2.5×** at strongest, over **400 logical pixels** of drag. Letting
-go returns the page — the gesture is momentary, a loupe rather than a mode
-within a mode.
+go returns the page — the gesture is momentary, something held rather than a
+mode within a mode.
 
 The travel distance is deliberately **absolute, not a fraction of the screen**.
 The ruler for this gesture is a thumb, and a thumb is the same size on a phone
@@ -98,5 +98,5 @@ one self-contained HTML file that opens by double-click:
 git show prototype/reader-loupe-gesture:lib/src/features/reader/prototype_zoom_gesture.html > /tmp/loupe.html
 ```
 
-Its `ZoomGesture` module holds all four answers; `lib/src/features/reader/loupe_gesture.dart`
+Its `ZoomGesture` module holds all four answers; `lib/src/features/reader/magnify_gesture.dart`
 is the accepted one, ported.

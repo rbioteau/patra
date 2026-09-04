@@ -81,6 +81,10 @@ _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
 The reading direction in which the pages run as one continuous strip and are scrolled rather than turned. Kavita calls it *webtoon*, after the genre it was built for, and separately offers a **paged** vertical direction we do not — which is why the word here is "scrolling" and not merely "vertical". On screen the one word "Vertical" is enough, since it is the only vertical direction in the picker.
 _Avoid_: webtoon, vertical mode, continuous mode, long strip
 
+**Magnifying**:
+The reading gesture in which a one-finger drag enlarges the page around the point pressed, as an alternative to pinching, which needs a second hand. Held rather than switched on: the page returns when the finger lifts. Off unless asked for, because it takes the swipe that turns a page.
+_Avoid_: loupe (a loupe is a lens over one region; this scales the whole page — the word named a rejected alternative and stuck to the accepted one), zoom mode, pinch, magnifier
+
 **Spread**:
 Two pages shown on one screen, in landscape. Which pages share a screen is a question about the pages, not arithmetic on the page number.
 _Avoid_: double page (that is a wide page), pair

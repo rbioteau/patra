@@ -33,4 +33,38 @@ void main() {
       completion(ReadingDirection.leftToRight),
     );
   });
+
+  group('the magnify preference', () {
+    // The concept was called a loupe until the word was found to be wrong for
+    // it. The identifiers moved; the storage key deliberately did not, because
+    // it is already written on every device that has turned the setting on.
+    test('is stored under its original key, whatever the code calls it', () async {
+      final stored = mockSecureStorage();
+      await ReadingSettingsStore.saveMagnify(true);
+      expect(
+        stored.keys.where((k) => k.endsWith('loupeGesture')),
+        isNotEmpty,
+        reason: 'renaming this key would silently reset the setting on every '
+            'device that has it on',
+      );
+    });
+
+    test('round-trips, and is off when nothing was ever stored', () async {
+      mockSecureStorage();
+      expect(await ReadingSettingsStore.loadMagnify(), isFalse);
+      await ReadingSettingsStore.saveMagnify(true);
+      expect(await ReadingSettingsStore.loadMagnify(), isTrue);
+      await ReadingSettingsStore.saveMagnify(false);
+      expect(await ReadingSettingsStore.loadMagnify(), isFalse);
+    });
+
+    test('a value written before the rename still reads back on', () async {
+      // The exact string a device that turned it on already holds. (Android
+      // prefixes it natively, below the method channel, so what the Dart side
+      // reads is the bare key.)
+      mockSecureStorage({'loupeGesture': 'true'});
+      expect(await ReadingSettingsStore.loadMagnify(), isTrue);
+    });
+  });
+
 }
