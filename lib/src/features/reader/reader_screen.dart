@@ -22,10 +22,12 @@ import 'page_loading.dart';
 import 'spread_layout.dart';
 import 'thumb_strip.dart';
 
-final chapterInfoProvider = FutureProvider.autoDispose
-    .family<ChapterInfo, int>(retry: serverRetry, (ref, chapterId) {
-      return ref.watch(kavitaClientProvider).chapterInfo(chapterId);
-    });
+final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
+  retry: serverRetry,
+  (ref, chapterId) {
+    return ref.watch(kavitaClientProvider).chapterInfo(chapterId);
+  },
+);
 
 /// The reading surface: pure black canvas, chrome as gradient overlays, and a
 /// single reading-direction setting (vertical scrolling is a direction,
@@ -54,6 +56,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// overwrite a later one, and swallows failures (a lost save is resent on
   /// the next page turn).
   Future<void> _progressQueue = Future.value();
+
+  /// The client the page and thumbnail URLs are built from, resolved off the
+  /// layout path for the same reason as [_thumbCacheWidth]: [_imageProvider] is
+  /// called from the strip's item builder, and a `ref.read` there is a read
+  /// during layout. Null while signed out, where `kavitaClientProvider` throws
+  /// and there is nothing to load anything with. The identity it carries
+  /// (base URL, api key) only changes with the session, and changing the
+  /// session leaves the reader.
+  KavitaClient? _client;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    try {
+      _client = ref.read(kavitaClientProvider);
+    } on StateError {
+      _client = null;
+    }
+    _thumbCacheWidth =
+        (ThumbStrip.thumbWidth(context) *
+                MediaQuery.devicePixelRatioOf(context))
+            .round()
+            .clamp(96, 320);
+  }
 
   @override
   void initState() {
@@ -169,7 +195,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // --- images ---------------------------------------------------------------
 
-  SavedChapter? get _saved => ref.read(savedChapterProvider(widget.chapterId));
+  /// The stored copy, mirrored out of [build]'s own `watch` rather than read
+  /// where it is wanted — for the same reason as [_client] and
+  /// [_thumbCacheWidth]: [_imageProvider] is called from the strip's item
+  /// builder, which a lazy list runs during layout, and a provider read there
+  /// is a read during layout. `build` watches it anyway, so this is the same
+  /// value one frame no later.
+  SavedChapter? _savedChapter;
+
+  SavedChapter? get _saved => _savedChapter;
 
   /// Prefers the stored copy, so a saved chapter reads with no server at all.
   /// [thumbnail] switches to Kavita's page-thumbnail endpoint, which is far
@@ -188,8 +222,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ? FileImage(file)
           : ResizeImage(FileImage(file), width: cacheWidth);
     }
-    try {
-      final client = ref.read(kavitaClientProvider);
+    final client = _client;
+    if (client == null) return null;
+    {
       final ImageProvider provider = CachedNetworkImageProvider(
         thumbnail
             ? client.readerThumbnailUrl(widget.chapterId, page)
@@ -208,8 +243,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return cacheWidth == null
           ? provider
           : ResizeImage(provider, width: cacheWidth);
-    } on StateError {
-      return null;
     }
   }
 
@@ -230,10 +263,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// one image and displays another. Asking for less than the strip draws is
   /// the blur the strip exists to avoid; asking for more only costs memory,
   /// since there is no more detail in the source.
-  int get _thumbCacheWidth =>
-      (ThumbStrip.thumbWidth(context) * MediaQuery.devicePixelRatioOf(context))
-          .round()
-          .clamp(96, 320);
+  ///
+  /// Resolved in [didChangeDependencies] rather than read where it is needed,
+  /// because where it is needed is inside the strip's item builder — which a
+  /// lazy list runs during **layout**. Asking for the MediaQuery there makes
+  /// this element one of its dependents in the middle of a layout, and what
+  /// wakes those dependents is a change of screen: a rotation would then
+  /// rebuild the reader mid-layout, and its Scaffold answers a body swapped
+  /// under it with "Each child must be laid out exactly once".
+  int _thumbCacheWidth = 96;
 
   Future<void> _loadThumb(int page) {
     if (!mounted) return Future.value();
@@ -307,6 +345,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final l10n = AppLocalizations.of(context);
     final info = ref.watch(chapterInfoProvider(widget.chapterId));
     final saved = ref.watch(savedChapterProvider(widget.chapterId));
+    _savedChapter = saved;
 
     // Offline, the stored metadata is enough to read a saved chapter.
     final chapter =
@@ -329,11 +368,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         (null, _) => const Center(
           child: CircularProgressIndicator(color: patraAccent),
         ),
-        (final ChapterInfo chapter, _) => _buildReader(
-          context,
-          l10n,
-          chapter,
-        ),
+        (final ChapterInfo chapter, _) => _buildReader(context, l10n, chapter),
       },
     );
   }
@@ -361,113 +396,122 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // with no way to advance at all.
     final magnify = ref.watch(magnifyProvider) && !direction.isVerticalScroll;
 
-    return OrientationBuilder(
-      builder: (context, orientation) {
-        // Landscape shows a two-page spread, but only when paging — and
-        // which pages actually share a screen is the layout's call, since a
-        // scan that is already a double page takes one on its own.
-        final spread =
-            orientation == Orientation.landscape && !direction.isVerticalScroll
-            ? SpreadLayout.of(chapter)
-            : null;
-        final span = spread?.spanOf(_page) ?? 1;
+    // Read off the MediaQuery, not through an `OrientationBuilder`.
+    //
+    // That widget is a `LayoutBuilder` — it derives the orientation from its
+    // own constraints — and this screen asks it a question it does not need
+    // layout to answer: the body fills the window, so the window's own
+    // orientation is the same one. What that bought is a `LayoutBuilder`
+    // wrapped around the whole reader, which runs the builds of everything
+    // under it *during layout*: the pages, the tap zones, the chrome, the
+    // scrubber, every image arriving and every setState the Slider makes. It
+    // is also the widget both of the framework assertions this screen was
+    // dying on named — `debugNeedsLayout` and
+    // `_debugRelayoutBoundaryAlreadyMarkedNeedsLayout`, thrown from
+    // `scheduleLayoutCallback`, after which its Scaffold laid out a body it
+    // had never been handed. A `MediaQuery` dependency rebuilds this screen
+    // in the ordinary build phase instead, which is where a rebuild belongs.
+    final orientation = MediaQuery.orientationOf(context);
+    // Landscape shows a two-page spread, but only when paging — and which
+    // pages actually share a screen is the layout's call, since a scan that
+    // is already a double page takes one on its own.
+    final spread =
+        orientation == Orientation.landscape && !direction.isVerticalScroll
+        ? SpreadLayout.of(chapter)
+        : null;
+    final span = spread?.spanOf(_page) ?? 1;
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (direction.isVerticalScroll)
-              _VerticalScrollView(
-                key: const ValueKey('verticalScroll'),
-                chapter: chapter,
-                page: _page,
-                imageBuilder: _pageImage,
-                onPageChanged: (page) => _onPageChanged(page, chapter),
-              )
-            else
-              _PagedView(
-                key: ValueKey('paged-${spread != null}-$rtl'),
-                pages: chapter.pages,
-                page: _page,
-                reverse: rtl,
-                spread: spread,
-                magnify: magnify,
-                aspectRatioFor: chapter.aspectRatioFor,
-                imageBuilder: _pageImage,
-                // The span of the page being *arrived at*, which is not the
-                // one the screen has been showing.
-                onPageChanged: (page) => _onPageChanged(
-                  page,
-                  chapter,
-                  span: spread?.spanOf(page) ?? 1,
-                ),
-              ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (direction.isVerticalScroll)
+          _VerticalScrollView(
+            key: const ValueKey('verticalScroll'),
+            chapter: chapter,
+            page: _page,
+            imageBuilder: _pageImage,
+            onPageChanged: (page) => _onPageChanged(page, chapter),
+          )
+        else
+          _PagedView(
+            key: ValueKey('paged-${spread != null}-$rtl'),
+            pages: chapter.pages,
+            page: _page,
+            reverse: rtl,
+            spread: spread,
+            magnify: magnify,
+            aspectRatioFor: chapter.aspectRatioFor,
+            imageBuilder: _pageImage,
+            // The span of the page being *arrived at*, which is not the
+            // one the screen has been showing.
+            onPageChanged: (page) =>
+                _onPageChanged(page, chapter, span: spread?.spanOf(page) ?? 1),
+          ),
 
-            // Tap zones: 30 / 40 / 30. The sides page, the middle toggles
-            // chrome; in right-to-left the side meanings swap with the layout.
-            if (!direction.isVerticalScroll)
-              Positioned.fill(
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 30,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: () => _step(rtl, chapter, spread),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 40,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: () => _showChromeAndBars(!_showChrome),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 30,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: () => _step(!rtl, chapter, spread),
-                      ),
-                    ),
-                  ],
+        // Tap zones: 30 / 40 / 30. The sides page, the middle toggles
+        // chrome; in right-to-left the side meanings swap with the layout.
+        if (!direction.isVerticalScroll)
+          Positioned.fill(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 30,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => _step(rtl, chapter, spread),
+                  ),
                 ),
-              )
-            else
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () => _showChromeAndBars(!_showChrome),
+                Expanded(
+                  flex: 40,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => _showChromeAndBars(!_showChrome),
+                  ),
                 ),
-              ),
+                Expanded(
+                  flex: 30,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => _step(!rtl, chapter, spread),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => _showChromeAndBars(!_showChrome),
+            ),
+          ),
 
-            if (_showChrome) ...[
-              _TopChrome(
-                title: chapter.title.isNotEmpty
-                    ? chapter.title
-                    : chapter.seriesName,
-                direction: direction,
-                onDirectionChanged: (next) {
-                  setState(() => _direction = next);
-                  _showChromeAndBars(false);
-                },
-              ),
-              _BottomChrome(
-                chapter: chapter,
-                page: _page,
-                span: span,
-                rtl: rtl,
-                thumbQueue: _thumbs,
-                thumbProvider: (page) => _imageProvider(
-                  page,
-                  cacheWidth: _thumbCacheWidth,
-                  thumbnail: true,
-                ),
-                onSeek: (page) => _goTo(page, chapter),
-              ),
-            ],
-          ],
-        );
-      },
+        if (_showChrome) ...[
+          _TopChrome(
+            title: chapter.title.isNotEmpty
+                ? chapter.title
+                : chapter.seriesName,
+            direction: direction,
+            onDirectionChanged: (next) {
+              setState(() => _direction = next);
+              _showChromeAndBars(false);
+            },
+          ),
+          _BottomChrome(
+            chapter: chapter,
+            page: _page,
+            span: span,
+            rtl: rtl,
+            thumbQueue: _thumbs,
+            thumbProvider: (page) => _imageProvider(
+              page,
+              cacheWidth: _thumbCacheWidth,
+              thumbnail: true,
+            ),
+            onSeek: (page) => _goTo(page, chapter),
+          ),
+        ],
+      ],
     );
   }
 
@@ -566,15 +610,37 @@ class _PagedViewState extends State<_PagedView> {
   int _firstPageOf(int viewIndex) =>
       widget.spread?.firstOf(viewIndex) ?? viewIndex;
 
+  /// True while the view is being moved from here rather than by a finger.
+  ///
+  /// `jumpToPage` dispatches its scroll notification **synchronously**, and
+  /// `PageView` turns that into `onPageChanged` — so a jump made from
+  /// [didUpdateWidget], which runs inside a build, reports a page change from
+  /// inside that build. Landscape is where it bites: the view reports the
+  /// *first* page of the spread it landed on, which for a seek to an odd page
+  /// is not the page that was asked for, so the reader took it for a real page
+  /// turn and called `setState` in the middle of the build that had just
+  /// delivered the seek. The error widget replaced the Scaffold's body, and
+  /// the rest of that frame died on the Scaffold being handed a body it had
+  /// never laid out.
+  ///
+  /// A page the reader asked for is not news to the reader, so it is not
+  /// reported back.
+  var _seeking = false;
+
   @override
   void didUpdateWidget(_PagedView old) {
     super.didUpdateWidget(old);
-    // A seek from the slider or a tap zone: follow it.
+    // A seek from the slider, a tap zone or the scrubber: follow it.
     if (widget.page != _reported) {
       _reported = widget.page;
       final target = _viewIndex(widget.page);
       if (_controller.hasClients && _controller.page?.round() != target) {
-        _controller.jumpToPage(target);
+        _seeking = true;
+        try {
+          _controller.jumpToPage(target);
+        } finally {
+          _seeking = false;
+        }
       }
     }
   }
@@ -604,6 +670,7 @@ class _PagedViewState extends State<_PagedView> {
       physics: widget.magnify ? const NeverScrollableScrollPhysics() : null,
       itemCount: _itemCount,
       onPageChanged: (index) {
+        if (_seeking) return;
         _reported = _firstPageOf(index);
         widget.onPageChanged(_reported);
       },
@@ -611,10 +678,9 @@ class _PagedViewState extends State<_PagedView> {
         final spread = widget.spread;
         if (spread == null) {
           final page = _firstPageOf(index);
-          return _zoomable(
-            [widget.aspectRatioFor(page)],
-            widget.imageBuilder(page),
-          );
+          return _zoomable([
+            widget.aspectRatioFor(page),
+          ], widget.imageBuilder(page));
         }
         final pages = spread.slots[index];
         // Verso left, recto right — mirrored when reading right to left, so

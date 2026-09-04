@@ -12,6 +12,7 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/features/reader/thumb_strip.dart';
 import 'package:patra/src/settings/reading_settings.dart';
 import 'package:patra/src/theme.dart';
 
@@ -315,6 +316,115 @@ void main() {
         epsilon: 1,
       ),
     );
+  });
+
+  testWidgets('seeking to the second page of a spread does not setState in a build', (
+    tester,
+  ) async {
+    // Landscape pairs pages, so a seek to an odd page lands on a spread whose
+    // *first* page is the one before it. `_PagedView.didUpdateWidget` follows
+    // the seek with `jumpToPage`, which dispatches a scroll notification
+    // synchronously — and `PageView` turns that into `onPageChanged`, which
+    // reports the pair's first page. That is a different page from the one
+    // just asked for, so the reader called `setState` from inside the build
+    // that delivered the seek: "setState() or markNeedsBuild() called during
+    // build". The error widget then replaced the Scaffold's body, and the rest
+    // of the frame died on the Scaffold laying out a body it was never handed.
+    tester.view.physicalSize = const Size(2412, 1080);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    await _pumpReader(
+      tester,
+      initialPage: 20,
+      direction: ReadingDirection.leftToRight,
+    );
+    await tester.tapAt(tester.getCenter(find.byType(PageView)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // 27 is the second page of the 26–27 spread.
+    expect(find.byKey(const ValueKey(27)), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey(27)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rotating with the scrubber open does not rebuild mid-layout', (
+    tester,
+  ) async {
+    // A lazy list builds its children during **layout**, so everything the
+    // strip's item builder reaches for is reached for there — and what the
+    // reader used to reach for was its own MediaQuery, its client and its
+    // saved copy. Asking for an inherited widget in a layout makes this
+    // element one of its dependents from inside that layout, and what wakes
+    // those dependents is a change of screen. A rotation then rebuilds the
+    // reader while it is being laid out, its Scaffold is handed a body that is
+    // not the one it laid out, and the frame dies with "Each child must be
+    // laid out exactly once".
+    await _pumpReader(
+      tester,
+      initialPage: 20,
+      direction: ReadingDirection.leftToRight,
+    );
+    await tester.tapAt(tester.getCenter(find.byType(PageView)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ThumbStrip), findsOneWidget);
+
+    for (final size in const [
+      Size(2412, 1080), // on its side
+      Size(1080, 2412), // and back
+    ]) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.takeException(), isNull, reason: 'rotated to $size');
+    }
+  });
+
+  testWidgets('scrubbing to a far page does not scroll inside a build', (
+    tester,
+  ) async {
+    // A tap on a thumbnail comes back to the strip as a new `current`, so the
+    // strip hears about it in `didUpdateWidget` — which runs inside a build.
+    // Starting a scroll from there rebuilds a widget while the tree is being
+    // laid out, and this Scaffold answers that with "Each child must be laid
+    // out exactly once": the body it was handed is not the one it laid out.
+    //
+    // On a phone in landscape, which is what this surface is: sixteen
+    // thumbnails are on screen there, so a tap is almost always more than one
+    // page away and takes the strip's landing path rather than its glide.
+    tester.view.physicalSize = const Size(2412, 1080);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    await _pumpReader(
+      tester,
+      initialPage: 20,
+      direction: ReadingDirection.leftToRight,
+    );
+    // Bring the chrome up: the strip is only built with it.
+    await tester.tapAt(tester.getCenter(find.byType(PageView)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ThumbStrip), findsOneWidget);
+    // Several pages along, and still on screen at this width.
+    await tester.tap(find.byKey(const ValueKey(26)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    // Landscape pairs pages, so the counter names the spread it landed on.
+    expect(find.text('27–28 / $_pages'), findsOneWidget);
   });
 
   testWidgets('the system bars come and go with the reader\'s own chrome', (
