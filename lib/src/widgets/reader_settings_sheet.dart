@@ -40,7 +40,7 @@ Future<void> showReaderSettingsSheet(
             onPicked: (option) => Navigator.of(sheetContext).pop(option),
           ),
           const Divider(height: 24, indent: gutter, endIndent: gutter),
-          const _MagnifyRow(),
+          _MagnifyRow(direction: direction),
           const SizedBox(height: 8),
         ],
       ),
@@ -95,13 +95,22 @@ class ReadingDirectionRows extends StatelessWidget {
 /// chapter, which is the one way it deliberately differs from the direction
 /// above it: a direction belongs to the book, and this belongs to the hand.
 /// Made per-chapter it would forget itself every time a chapter was opened.
+///
+/// It stays switchable while reading vertically, where the gesture is inert —
+/// the preference is global and the next chapter may well be paged, so
+/// refusing the switch would be refusing to set it for anywhere else. What it
+/// must not do is sit there reading "on" and quietly do nothing, so the line
+/// under it says so.
 class _MagnifyRow extends ConsumerWidget {
-  const _MagnifyRow();
+  const _MagnifyRow({required this.direction});
+
+  final ReadingDirection direction;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final magnify = ref.watch(magnifyProvider);
+    final inert = direction.isVerticalScroll;
     void set(bool on) => ref.read(magnifyProvider.notifier).set(on);
 
     return MergeSemantics(
@@ -109,13 +118,20 @@ class _MagnifyRow extends ConsumerWidget {
         leading: Icon(
           Icons.zoom_in,
           size: 22,
-          color: magnify ? patraAccent : patraText,
+          color: magnify && !inert ? patraAccent : patraText,
         ),
         title: Text(
           l10n.dragToMagnify,
-          style: PatraText.body(color: magnify ? patraAccent : patraText),
+          style: PatraText.body(
+            color: magnify && !inert ? patraAccent : patraText,
+          ),
         ),
-        subtitle: Text(l10n.dragToMagnifyExplained, style: PatraText.metadata()),
+        subtitle: Text(
+          inert ? l10n.dragToMagnifyInVertical : l10n.dragToMagnifyExplained,
+          style: PatraText.metadata(
+            color: inert ? patraDanger : null,
+          ),
+        ),
         trailing: Switch(value: magnify, onChanged: set),
         // The sheet stays open: unlike picking a direction, this is a switch,
         // and a switch that closed the surface it lives on could never be

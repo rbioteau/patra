@@ -536,6 +536,12 @@ abstract class AppLocalizations {
   /// **'Drag to magnify'**
   String get dragToMagnify;
 
+  /// Replaces dragToMagnifyExplained in the reader's sheet when the current reading direction is vertical scrolling, where the gesture is deliberately inert.
+  ///
+  /// In en, this message translates to:
+  /// **'Not while reading vertically — there the drag scrolls the chapter.'**
+  String get dragToMagnifyInVertical;
+
   /// Explains what turning the drag-to-magnify setting on changes, including what it costs: the swipe that turns a page.
   ///
   /// In en, this message translates to:

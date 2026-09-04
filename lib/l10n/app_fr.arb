@@ -73,6 +73,7 @@
   "pageSpreadCounter": "{first}–{last} / {total}",
   "readerSettings": "Réglages de lecture",
   "dragToMagnify": "Glisser pour agrandir",
+  "dragToMagnifyInVertical": "Pas en lecture verticale — le glissement y fait défiler le chapitre.",
   "dragToMagnifyExplained": "Un doigt agrandit la page autour du point touché, et la longueur du geste décide de combien. Les pages se tournent en touchant les bords.",
   "readingDirection": "Sens de lecture",
   "readingDirectionLtr": "De gauche à droite",

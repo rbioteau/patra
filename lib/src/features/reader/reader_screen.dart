@@ -1035,7 +1035,7 @@ class _SettingsCog extends StatelessWidget {
             borderRadius: BorderRadius.circular(radiusPill),
             border: Border.all(color: Colors.white.withValues(alpha: .18)),
           ),
-          child: const Icon(Icons.tune, size: 21, color: Colors.white),
+          child: const Icon(Icons.settings, size: 21, color: Colors.white),
         ),
       ),
     );

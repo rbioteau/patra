@@ -282,6 +282,10 @@
   "@dragToMagnify": {
     "description": "Reader setting: a one-finger drag magnifies the page instead of turning it."
   },
+  "dragToMagnifyInVertical": "Not while reading vertically — there the drag scrolls the chapter.",
+  "@dragToMagnifyInVertical": {
+    "description": "Replaces dragToMagnifyExplained in the reader's sheet when the current reading direction is vertical scrolling, where the gesture is deliberately inert."
+  },
   "dragToMagnifyExplained": "One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.",
   "@dragToMagnifyExplained": {
     "description": "Explains what turning the drag-to-magnify setting on changes, including what it costs: the swipe that turns a page."

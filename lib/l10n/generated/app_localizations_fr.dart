@@ -297,6 +297,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get dragToMagnify => 'Glisser pour agrandir';
 
   @override
+  String get dragToMagnifyInVertical =>
+      'Pas en lecture verticale — le glissement y fait défiler le chapitre.';
+
+  @override
   String get dragToMagnifyExplained =>
       'Un doigt agrandit la page autour du point touché, et la longueur du geste décide de combien. Les pages se tournent en touchant les bords.';
 

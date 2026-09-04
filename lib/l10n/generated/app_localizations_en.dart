@@ -296,6 +296,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dragToMagnify => 'Drag to magnify';
 
   @override
+  String get dragToMagnifyInVertical =>
+      'Not while reading vertically — there the drag scrolls the chapter.';
+
+  @override
   String get dragToMagnifyExplained =>
       'One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.';
 

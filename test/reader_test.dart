@@ -515,7 +515,7 @@ void main() {
     }
 
     Future<void> openSheet(WidgetTester tester) async {
-      await tester.tap(find.byIcon(Icons.tune));
+      await tester.tap(find.byIcon(Icons.settings));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -527,10 +527,10 @@ void main() {
         direction: ReadingDirection.leftToRight,
       );
       // Nothing in the bar until the reader is asked for its chrome.
-      expect(find.byIcon(Icons.tune), findsNothing);
+      expect(find.byIcon(Icons.settings), findsNothing);
 
       await showChrome(tester);
-      expect(find.byIcon(Icons.tune), findsOneWidget);
+      expect(find.byIcon(Icons.settings), findsOneWidget);
 
       await openSheet(tester);
       expect(find.text('READING DIRECTION'), findsOneWidget);
@@ -591,6 +591,32 @@ void main() {
         isA<NeverScrollableScrollPhysics>(),
         reason: 'the swipe should have been handed to the gesture',
       );
+    });
+
+    testWidgets('it says so when the gesture cannot apply', (tester) async {
+      // Reading vertically the drag is the scroll, so magnifying is inert
+      // there. The switch stays usable — the preference is global and the
+      // next chapter may well be paged — but a switch reading "on" while
+      // doing nothing, with nothing saying why, is the worst of both.
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.verticalScroll,
+        magnify: true,
+      );
+      final size = tester.getSize(find.byType(Scaffold));
+      await tester.tapAt(Offset(size.width / 2, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await openSheet(tester);
+
+      expect(find.text('Drag to magnify'), findsOneWidget);
+      expect(
+        find.textContaining('Not while reading vertically'),
+        findsOneWidget,
+      );
+      // Still switchable, for the next chapter that is paged.
+      expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
     });
 
     testWidgets('picking a direction closes the sheet and applies it', (

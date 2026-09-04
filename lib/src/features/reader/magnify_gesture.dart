@@ -23,8 +23,11 @@ import 'package:flutter/widgets.dart' show Matrix4;
 /// for most of a typical drag and properly glued only near full travel. The
 /// guarantee a reader can see is therefore about the *view* — pulling down
 /// walks it towards the top of the page, and keeps walking that way for the
-/// whole drag — rather than about a point staying under the fingertip. Both
-/// are pinned in `test/magnify_gesture_test.dart`.
+/// whole drag — rather than about a point staying under the fingertip. That
+/// holds from *every* reference point, which took a correction: a press within
+/// [_band] of a screen edge used to invert it (see there). Both are pinned in
+/// `test/magnify_gesture_test.dart`, whose anchor sweep is exhaustive for the
+/// same reason the border sweep is.
 ///
 /// Three other answers were built and rejected: refusing the rest of the drag
 /// once the page runs out (near an edge it refuses almost the whole gesture),
@@ -128,23 +131,60 @@ class MagnifyGesture {
   bool get _degenerate =>
       content.isEmpty || viewport.isEmpty || travel <= 0 || maxScale <= 1;
 
+  /// How far from the middle of the screen a reference point may sit before
+  /// the direction rule starts to invert.
+  ///
+  /// Derived rather than tuned. The view's position in the page is
+  ///
+  ///     centre(d) = v - (a + d - V/2) / h,   h = H + d·H·(m-1)/T
+  ///
+  /// for a reference point `v` of the way down artwork of height `H`, pressed
+  /// at viewport `a` on a viewport of height `V` and dragged `d`. Differentiate
+  /// and the `d` terms cancel, leaving a condition on the anchor alone: the
+  /// centre moves the way the drag asked only while
+  ///
+  ///     |a - V/2| < T / (m - 1)
+  ///
+  /// Outside that band the page grows faster than the glue can carry it, and
+  /// pulling down walks the view *down* the page instead of up — by little
+  /// (~1.6% of the page at the shipped settings), but the wrong way. `H` and
+  /// `V` cancel out, so this is one number for both axes and every page shape.
+  double get _band => travel / (maxScale - 1);
+
+  /// Where the gesture is treated as having started.
+  ///
+  /// A press outside the band above is pulled to its edge, and the finger is
+  /// carried along by the same amount so the drag vector — and therefore the
+  /// magnification — is untouched. At the shipped settings this only moves a
+  /// press within ~43pt of a screen edge, which is imperceptible, and it is
+  /// what makes the direction rule true everywhere rather than almost
+  /// everywhere.
+  Offset get _start => Offset(
+    anchor.dx.clamp(viewport.width / 2 - _band, viewport.width / 2 + _band),
+    anchor.dy.clamp(viewport.height / 2 - _band, viewport.height / 2 + _band),
+  );
+
   MagnifyTransform to(Offset finger) {
     if (_degenerate) return MagnifyTransform.rest(content);
 
+    final start = _start;
+    // The drag is the finger's own travel, so shifting where the gesture is
+    // deemed to have begun must shift the finger with it.
+    final at = finger + (start - anchor);
+
     // The reference point, as a fraction of the artwork.
-    final u = ((anchor.dx - content.left) / content.width).clamp(0.0, 1.0);
-    final v = ((anchor.dy - content.top) / content.height).clamp(0.0, 1.0);
+    final u = ((start.dx - content.left) / content.width).clamp(0.0, 1.0);
+    final v = ((start.dy - content.top) / content.height).clamp(0.0, 1.0);
 
     // Length of the drag decides the magnification, and only its length: the
     // direction is already spoken for, by which part of the page the finger
     // is carrying towards itself.
     //
-    // The reach is capped at the screen's longest side so that full
-    // magnification is always attainable in one drag. On any real device
-    // [kMagnifyTravel] is the smaller of the two and the cap never bites; it is
-    // here so the constant can be raised without stranding a small screen.
-    final reach = math.min(travel, viewport.longestSide);
-    final scale = (1 + (finger - anchor).distance / reach * (maxScale - 1))
+    // [travel] is used as given. It was briefly capped at the screen's longest
+    // side, which was dead on every real device and, worse, said the opposite
+    // of the reason the constant is absolute: a cap by screen size is exactly
+    // the screen-relative ruler that comment rejects.
+    final scale = (1 + (finger - anchor).distance / travel * (maxScale - 1))
         .clamp(1.0, maxScale);
 
     final width = content.width * scale;
@@ -153,9 +193,9 @@ class MagnifyGesture {
       content: content,
       scale: scale,
       origin: Offset(
-        _place(finger.dx - u * width, width, viewport.width, content.left,
+        _place(at.dx - u * width, width, viewport.width, content.left,
             content.width),
-        _place(finger.dy - v * height, height, viewport.height, content.top,
+        _place(at.dy - v * height, height, viewport.height, content.top,
             content.height),
       ),
     );

@@ -89,6 +89,28 @@ screen.
   the usual way through a chapter; fatal once tapping is the only way. Fixed
   and pinned.
 
+## Corrections after review
+
+A two-axis review of the change found four things, all fixed in place rather
+than deferred:
+
+- **The direction rule inverted near the screen edges.** A press outside
+  `travel / (maxScale - 1)` of the middle grew the page faster than the glue
+  could carry it, so pulling down walked the view *down* — by ~1.6% of the
+  page, the wrong way. The reference point is now clamped into that band, with
+  the finger carried along so the drag length is unchanged. The bound is
+  derived, not tuned: differentiate the view's position and the drag term
+  cancels, leaving a condition on the anchor alone.
+- **The test that should have caught it swept drag length at one centred
+  anchor.** It now sweeps every anchor on both axes, and was checked to fail
+  against the pre-fix model.
+- **The travel distance was capped at the screen's longest side** — dead on
+  every real device, and the exact screen-relative ruler the decision above
+  rejects. Removed.
+- **The cog was drawn as `Icons.tune`** (sliders), where a cog was asked for.
+- **The switch was inert while reading vertically and did not say so.** It now
+  says so, and stays switchable, since the preference is global.
+
 ## The prototype
 
 Kept as a primary source on the throwaway branch **`prototype/reader-loupe-gesture`**,

@@ -100,6 +100,57 @@ void main() {
       }
     });
 
+    test('and does so from every reference point, not just a centred one', () {
+      // The version of this test that swept only drag length, at one anchor in
+      // the middle of the page, could not see the thing that was actually
+      // wrong: a press near either end of the screen used to invert the rule —
+      // pulling down walked the view *down* the page. Small (~1.6% of the
+      // page) and entirely invisible to a centred sweep. The anchor is the
+      // axis that has to be exhaustive here, exactly as it already is for the
+      // border.
+      // A hair of tolerance: the comparison is between two ratios of
+      // floating-point sums, and a stationary result lands a few ulps either
+      // side of the resting value. The defect being guarded against was four
+      // orders of magnitude larger.
+      const slack = 1e-9;
+      for (var ay = 0.0; ay <= _viewport.height; ay += 5) {
+        final at = Offset(190, ay);
+        final rest = windowOf(_from(at).to(at)).center.dy;
+        for (final drag in const [25.0, 50.0, 100.0, 200.0, 300.0, 400.0]) {
+          expect(
+            windowOf(_from(at).to(at + Offset(0, drag))).center.dy,
+            lessThanOrEqualTo(rest + slack),
+            reason: 'pulling down $drag from y=$ay must not walk the view down',
+          );
+          expect(
+            windowOf(_from(at).to(at - Offset(0, drag))).center.dy,
+            greaterThanOrEqualTo(rest - slack),
+            reason: 'pulling up $drag from y=$ay must not walk the view up',
+          );
+        }
+      }
+    });
+
+    test('the same holds across the other axis', () {
+      const slack = 1e-9;
+      for (var ax = 0.0; ax <= _viewport.width; ax += 5) {
+        final at = Offset(ax, 310);
+        final rest = windowOf(_from(at).to(at)).center.dx;
+        for (final drag in const [25.0, 100.0, 250.0, 400.0]) {
+          expect(
+            windowOf(_from(at).to(at + Offset(drag, 0))).center.dx,
+            lessThanOrEqualTo(rest + slack),
+            reason: 'pulling right $drag from x=$ax must not walk the view right',
+          );
+          expect(
+            windowOf(_from(at).to(at - Offset(drag, 0))).center.dx,
+            greaterThanOrEqualTo(rest - slack),
+            reason: 'pulling left $drag from x=$ax must not walk the view left',
+          );
+        }
+      }
+    });
+
     test('the artwork stays under the finger wherever there is room for it', () {
       // The underlying rule, shown where the page is big enough to obey it: a
       // drag at full travel has slack to spare.
@@ -152,19 +203,19 @@ void main() {
       expect(diagonal.scale, closeTo(down.scale, 1e-4));
     });
 
-    test('full magnification stays reachable on a screen shorter than the '
-        'travel distance', () {
+    test('the travel distance is the same on any screen', () {
+      // It was briefly capped at the screen's longest side. That was dead on
+      // every real device and said the opposite of why the constant is
+      // absolute: the ruler is a thumb, and a thumb does not shrink with the
+      // display.
       const small = Size(120, 200);
       final gesture = MagnifyGesture(
         viewport: small,
         content: drawnContent(small, const [2 / 3]),
         anchor: const Offset(60, 100),
       );
-      // The longest side is 200, well under the 400pt travel: without the cap
-      // the strongest magnification could not be reached by any drag that
-      // fits on the screen.
-      final t = gesture.to(const Offset(60, 300));
-      expect(t.scale, kMagnifyMaxScale);
+      final half = gesture.to(const Offset(60, 100 + kMagnifyTravel / 2));
+      expect(half.scale, closeTo(1 + (kMagnifyMaxScale - 1) / 2, 0.001));
     });
   });
 
