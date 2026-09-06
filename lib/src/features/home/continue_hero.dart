@@ -95,13 +95,23 @@ class ContinueHero extends ConsumerWidget {
 
   /// A chapter nobody has opened starts at the beginning; one under way
   /// resumes where it was left.
+  ///
+  /// Zero while the chapter is still in flight. The card is drawn as soon as
+  /// its series is known and fills the chapter in behind, so there is a real
+  /// frame where there is no point yet — and everything read during that
+  /// frame has to survive it. This getter is reached from `build`, not only
+  /// from the button, which is what made a `!` here a crash on startup
+  /// rather than an impossibility.
   int get _resumePage {
-    final point = data.point!;
+    final point = data.point;
+    if (point == null) return 0;
     return point.started ? point.entry.chapter.pagesRead : 0;
   }
 
-  String get _readerLocation =>
-      '/reader/${data.point!.entry.chapter.id}?page=$_resumePage';
+  /// Takes the point rather than reaching for it, so there is no invariant
+  /// held between here and the guard on the button sixty lines away.
+  String _readerLocation(ResumePoint point) =>
+      '/reader/${point.entry.chapter.id}?page=$_resumePage';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -169,9 +179,13 @@ class ContinueHero extends ConsumerWidget {
                         height: 48,
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: data.point == null
-                              ? null
-                              : () => _open(context, _readerLocation),
+                          onPressed: switch (data.point) {
+                            null => null,
+                            final point => () => _open(
+                              context,
+                              _readerLocation(point),
+                            ),
+                          },
                           icon: const Icon(Icons.play_arrow_rounded, size: 20),
                           label: Text(l10n.seriesContinuePlain),
                         ),
