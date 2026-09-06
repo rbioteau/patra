@@ -34,6 +34,12 @@
       "host": {"type": "String"}
     }
   },
+  "connectionBlockedByBrowser": "The browser blocked Patra's request to {host}. Either nothing is answering there, or the server does not allow requests from this page \u2014 Kavita has to be configured to, usually in the reverse proxy in front of it.",
+  "@connectionBlockedByBrowser": {
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
   "connectionTimedOut": "{host} did not answer in time.",
   "@connectionTimedOut": {
     "placeholders": {

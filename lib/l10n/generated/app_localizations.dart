@@ -182,6 +182,12 @@ abstract class AppLocalizations {
   /// **'Could not reach {host}. Check the address, and that this device is on the same network as the server.'**
   String connectionUnreachable(String host);
 
+  /// No description provided for @connectionBlockedByBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'The browser blocked Patra\'s request to {host}. Either nothing is answering there, or the server does not allow requests from this page — Kavita has to be configured to, usually in the reverse proxy in front of it.'**
+  String connectionBlockedByBrowser(String host);
+
   /// No description provided for @connectionTimedOut.
   ///
   /// In en, this message translates to:

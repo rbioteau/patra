@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
 import '../../l10n/generated/app_localizations.dart';
 
@@ -15,6 +16,18 @@ enum ConnectionFailureKind {
   /// Nothing answered: no DNS record, connection refused, no route, or the
   /// platform blocking cleartext.
   unreachable,
+
+  /// The browser would not hand us the answer.
+  ///
+  /// Web only, and deliberately vague about which of two things happened,
+  /// because a browser is too: Chrome reports a server that is not there and
+  /// a server that refused the request through the same XHR error event, and
+  /// dio calls both `connectionError`. Refusal is the ordinary case rather
+  /// than the exotic one — Kavita's production CORS policy names no origin at
+  /// all, so it allows no browser but its own UI — and calling it
+  /// [unreachable] told someone on a public HTTPS domain to check they were
+  /// on the same Wi-Fi as their server.
+  blockedByBrowser,
 
   /// Something is listening but did not finish answering in time.
   timedOut,
@@ -59,7 +72,15 @@ class ConnectionFailure {
   /// body it carries is plain text in the **server account's** locale, so the
   /// six cases can be told apart neither by status nor by anything we could
   /// show. One case covers them, worded so it stays true of a lockout.
-  factory ConnectionFailure.from(Object error) {
+  ///
+  /// [onWeb] decides how a `connectionError` reads, and defaults to the
+  /// platform. It is a parameter only so that one test can drive both
+  /// branches: `kIsWeb` is a compile-time constant, so the branch it does
+  /// not take cannot otherwise be reached.
+  factory ConnectionFailure.from(
+    Object error, {
+    @visibleForTesting bool onWeb = kIsWeb,
+  }) {
     if (error is! DioException) {
       return ConnectionFailure(
         ConnectionFailureKind.unknown,
@@ -67,7 +88,11 @@ class ConnectionFailure {
       );
     }
     final kind = switch (error.type) {
-      DioExceptionType.connectionError => ConnectionFailureKind.unreachable,
+      // On a device this is the plain truth; in a browser it is a guess the
+      // browser itself refuses to settle, so only the web build hedges.
+      DioExceptionType.connectionError => onWeb
+          ? ConnectionFailureKind.blockedByBrowser
+          : ConnectionFailureKind.unreachable,
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout => ConnectionFailureKind.timedOut,
@@ -117,6 +142,9 @@ class ConnectionFailure {
   /// typed, not the URI, so a malformed one still reads.
   String message(AppLocalizations l10n, String host) => switch (kind) {
     ConnectionFailureKind.unreachable => l10n.connectionUnreachable(host),
+    ConnectionFailureKind.blockedByBrowser => l10n.connectionBlockedByBrowser(
+      host,
+    ),
     ConnectionFailureKind.timedOut => l10n.connectionTimedOut(host),
     ConnectionFailureKind.badCertificate => l10n.connectionBadCertificate(host),
     ConnectionFailureKind.badCredentials => l10n.connectionBadCredentials,

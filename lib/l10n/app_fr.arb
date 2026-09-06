@@ -14,6 +14,7 @@
   "signIn": "Se connecter",
   "unexpectedError": "Une erreur est survenue : {error}",
   "connectionUnreachable": "Impossible de joindre {host}. Vérifiez l'adresse, et que cet appareil est bien sur le même réseau que le serveur.",
+  "connectionBlockedByBrowser": "Le navigateur a bloqué la requête de Patra vers {host}. Soit rien ne répond à cette adresse, soit le serveur n'autorise pas les requêtes venant de cette page — Kavita doit être configuré pour cela, généralement dans le proxy inverse placé devant lui.",
   "connectionTimedOut": "{host} n'a pas répondu à temps.",
   "connectionBadCertificate": "{host} présente un certificat que cet appareil ne reconnaît pas. Un certificat auto-signé doit d'abord être installé sur l'appareil.",
   "connectionBadCredentials": "Le serveur a refusé ce nom d'utilisateur ou ce mot de passe.",

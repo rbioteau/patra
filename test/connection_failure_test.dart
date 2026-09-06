@@ -57,7 +57,10 @@ class _Adapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-Future<ConnectionFailure> _failureOf(_Adapter adapter) async {
+Future<ConnectionFailure> _failureOf(
+  _Adapter adapter, {
+  bool onWeb = false,
+}) async {
   try {
     await KavitaClient.login(
       baseUrl: 'http://kavita.test',
@@ -67,7 +70,7 @@ Future<ConnectionFailure> _failureOf(_Adapter adapter) async {
     );
     fail('login should not have succeeded');
   } on Object catch (e) {
-    return ConnectionFailure.from(e);
+    return ConnectionFailure.from(e, onWeb: onWeb);
   }
 }
 
@@ -120,6 +123,23 @@ void main() {
         _Adapter.fails(DioExceptionType.connectionError),
       );
       expect(failure.kind, ConnectionFailureKind.unreachable);
+    });
+
+    test('in a browser, nothing answering is not the only reading', () async {
+      // Chrome reports a server that is not there and a server that refused
+      // the request through the *same* XHR error event, and dio calls both
+      // `connectionError`. Refusal is the common case rather than the exotic
+      // one: Kavita's production CORS policy (Startup.cs) calls
+      // AllowAnyHeader/AllowAnyMethod/AllowCredentials and never names an
+      // origin, so it sends `Access-Control-Allow-Origin` to nobody and a
+      // browser build is refused by every server it can in fact reach.
+      // Blaming the network there told someone on a public HTTPS domain to
+      // check they were on the same Wi-Fi as their server.
+      final failure = await _failureOf(
+        _Adapter.fails(DioExceptionType.connectionError),
+        onWeb: true,
+      );
+      expect(failure.kind, ConnectionFailureKind.blockedByBrowser);
     });
 
     test('something listens but does not finish', () async {

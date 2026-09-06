@@ -60,6 +60,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String connectionBlockedByBrowser(String host) {
+    return 'Le navigateur a bloqué la requête de Patra vers $host. Soit rien ne répond à cette adresse, soit le serveur n\'autorise pas les requêtes venant de cette page — Kavita doit être configuré pour cela, généralement dans le proxy inverse placé devant lui.';
+  }
+
+  @override
   String connectionTimedOut(String host) {
     return '$host n\'a pas répondu à temps.';
   }
