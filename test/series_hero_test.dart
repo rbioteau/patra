@@ -136,11 +136,11 @@ Future<void> _pumpSeries(
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = _SeriesAdapter(volumes);
-  client.refreshHttpClient.httpClientAdapter = _SeriesAdapter(volumes);
+  client.bareHttpClient.httpClientAdapter = _SeriesAdapter(volumes);
 
   await tester.pumpWidget(
     ProviderScope(

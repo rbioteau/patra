@@ -48,11 +48,11 @@ Future<_Adapter> _pump(WidgetTester tester, {required bool admin}) async {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
 
   await tester.pumpWidget(
     ProviderScope(
@@ -64,7 +64,6 @@ Future<_Adapter> _pump(WidgetTester tester, {required bool admin}) async {
                 baseUrl: 'http://kavita.test',
                 username: 'romain',
                 token: 'token',
-                refreshToken: 'refresh',
                 apiKey: 'key',
                 isAdmin: admin,
               ),

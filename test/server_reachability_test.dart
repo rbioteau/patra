@@ -58,7 +58,6 @@ const _server = ServerEntry(
   baseUrl: 'https://kavita.example',
   username: 'romain',
   token: 'token',
-  refreshToken: 'refresh',
   apiKey: 'key',
 );
 
@@ -72,11 +71,11 @@ Future<_Adapter> _pump(
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
 
   await tester.pumpWidget(
     ProviderScope(

@@ -212,6 +212,12 @@ abstract class AppLocalizations {
   /// **'{host} refused: this account is not allowed to do that.'**
   String connectionForbidden(String host);
 
+  /// Shown when opening a remembered server fails because the stored auth key was refused. Deliberately not the bad-credentials message: no password was sent, so nothing the person typed was rejected
+  ///
+  /// In en, this message translates to:
+  /// **'{host} no longer accepts the saved sign-in. Your password is needed again.'**
+  String connectionSignInExpired(String host);
+
   /// No description provided for @connectionNotKavita.
   ///
   /// In en, this message translates to:

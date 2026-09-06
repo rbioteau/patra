@@ -62,6 +62,13 @@
   "@connectionBadCredentials": {
     "description": "Kavita answers every credential failure with a bare 401, so this one message covers a wrong password and a locked-out account alike"
   },
+  "connectionSignInExpired": "{host} no longer accepts the saved sign-in. Your password is needed again.",
+  "@connectionSignInExpired": {
+    "description": "Shown when opening a remembered server fails because the stored auth key was refused. Deliberately not the bad-credentials message: no password was sent, so nothing the person typed was rejected",
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
   "connectionNotKavita": "{host} answered, but there is no Kavita server behind that address.",
   "@connectionNotKavita": {
     "placeholders": {

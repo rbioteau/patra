@@ -74,14 +74,24 @@ void main() {
       seriesName: 'Berserk',
       title: 'Chapter 1',
       pageDimensions: const {
-        0: PageDimension(pageNumber: 0, width: 800, height: 1200, isWide: false),
+        0: PageDimension(
+          pageNumber: 0,
+          width: 800,
+          height: 1200,
+          isWide: false,
+        ),
         1: PageDimension(
           pageNumber: 1,
           width: 1600,
           height: 1200,
           isWide: false,
         ),
-        2: PageDimension(pageNumber: 2, width: 800, height: 1200, isWide: false),
+        2: PageDimension(
+          pageNumber: 2,
+          width: 800,
+          height: 1200,
+          isWide: false,
+        ),
       },
     );
 

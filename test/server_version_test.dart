@@ -38,7 +38,9 @@ class _Adapter implements HttpClientAdapter {
     if (options.path == '/api/Plugin/version') {
       await held?.future;
       return ResponseBody.fromString(
-        versionBody is String ? versionBody! as String : jsonEncode(versionBody),
+        versionBody is String
+            ? versionBody! as String
+            : jsonEncode(versionBody),
         versionStatus,
         headers: {
           Headers.contentTypeHeader: [
@@ -73,7 +75,6 @@ const _server = ServerEntry(
   baseUrl: 'https://kavita.example',
   username: 'romain',
   token: 'token',
-  refreshToken: 'refresh',
   apiKey: 'key',
 );
 
@@ -81,12 +82,12 @@ KavitaClient _client(_Adapter adapter, {void Function()? onSessionExpired}) {
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
     onSessionExpired: onSessionExpired,
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
   return client;
 }
 

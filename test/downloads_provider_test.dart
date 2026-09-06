@@ -80,11 +80,11 @@ void main() {
     final client = KavitaClient(
       baseUrl: 'http://kavita.test',
       token: 'token',
-      refreshToken: 'refresh',
+      username: 'romain',
       apiKey: 'the-api-key',
     );
     client.httpClient.httpClientAdapter = adapter;
-    client.refreshHttpClient.httpClientAdapter = adapter;
+    client.bareHttpClient.httpClientAdapter = adapter;
     container = ProviderContainer.test(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
@@ -157,12 +157,12 @@ void main() {
     final client = KavitaClient(
       baseUrl: 'http://kavita.test',
       token: 'token',
-      refreshToken: 'refresh',
+      username: 'romain',
       // No API key: the server answers 400, like Kavita does.
       apiKey: '',
     );
     client.httpClient.httpClientAdapter = adapter;
-    client.refreshHttpClient.httpClientAdapter = adapter;
+    client.bareHttpClient.httpClientAdapter = adapter;
     final failing = ProviderContainer.test(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),

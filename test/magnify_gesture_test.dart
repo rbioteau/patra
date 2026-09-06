@@ -29,13 +29,16 @@ void main() {
       expect(_content.top, closeTo(25, 0.01));
     });
 
-    test('a finger down but not moved leaves the page exactly where it was', () {
-      final anchor = const Offset(190, 310);
-      final t = _from(anchor).to(anchor);
-      expect(t.scale, 1);
-      expect(t.origin, _content.topLeft);
-      expect(t.isRest, isTrue);
-    });
+    test(
+      'a finger down but not moved leaves the page exactly where it was',
+      () {
+        final anchor = const Offset(190, 310);
+        final t = _from(anchor).to(anchor);
+        expect(t.scale, 1);
+        expect(t.origin, _content.topLeft);
+        expect(t.isRest, isTrue);
+      },
+    );
   });
 
   group('the direction rule', () {
@@ -62,7 +65,10 @@ void main() {
     }
 
     test('at rest the whole page is on screen', () {
-      expect(windowOf(_from(anchor).to(anchor)), const Rect.fromLTRB(0, 0, 1, 1));
+      expect(
+        windowOf(_from(anchor).to(anchor)),
+        const Rect.fromLTRB(0, 0, 1, 1),
+      );
     });
 
     test('pulling down shows the part above', () {
@@ -140,7 +146,8 @@ void main() {
           expect(
             windowOf(_from(at).to(at + Offset(drag, 0))).center.dx,
             lessThanOrEqualTo(rest + slack),
-            reason: 'pulling right $drag from x=$ax must not walk the view right',
+            reason:
+                'pulling right $drag from x=$ax must not walk the view right',
           );
           expect(
             windowOf(_from(at).to(at - Offset(drag, 0))).center.dx,
@@ -151,14 +158,17 @@ void main() {
       }
     });
 
-    test('the artwork stays under the finger wherever there is room for it', () {
-      // The underlying rule, shown where the page is big enough to obey it: a
-      // drag at full travel has slack to spare.
-      final t = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel));
-      final under = _under(t, anchor + const Offset(0, kMagnifyTravel));
-      expect(under.dx, closeTo(0.5, 0.01));
-      expect(under.dy, closeTo(0.5, 0.01));
-    });
+    test(
+      'the artwork stays under the finger wherever there is room for it',
+      () {
+        // The underlying rule, shown where the page is big enough to obey it: a
+        // drag at full travel has slack to spare.
+        final t = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel));
+        final under = _under(t, anchor + const Offset(0, kMagnifyTravel));
+        expect(under.dx, closeTo(0.5, 0.01));
+        expect(under.dy, closeTo(0.5, 0.01));
+      },
+    );
 
     test('the same drag magnifies the same amount whichever way it points', () {
       final scales = [
@@ -182,7 +192,8 @@ void main() {
 
     test('it grows from 1 to the ceiling over the travel distance', () {
       expect(_from(anchor).to(anchor).scale, 1);
-      final half = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel / 2));
+      final half = _from(anchor)
+          .to(anchor + const Offset(0, kMagnifyTravel / 2));
       expect(half.scale, closeTo(1 + (kMagnifyMaxScale - 1) / 2, 0.001));
       final full = _from(anchor).to(anchor + const Offset(0, kMagnifyTravel));
       expect(full.scale, closeTo(kMagnifyMaxScale, 0.001));
@@ -196,9 +207,8 @@ void main() {
     test('only the length counts, not the direction', () {
       final down = _from(anchor).to(anchor + const Offset(0, 100));
       final across = _from(anchor).to(anchor + const Offset(100, 0));
-      final diagonal = _from(
-        anchor,
-      ).to(anchor + const Offset(70.71067, 70.71067));
+      final diagonal = _from(anchor)
+          .to(anchor + const Offset(70.71067, 70.71067));
       expect(across.scale, closeTo(down.scale, 1e-9));
       expect(diagonal.scale, closeTo(down.scale, 1e-4));
     });
@@ -226,22 +236,34 @@ void main() {
       final r = t.rect;
       if (r.width >= viewport.width) {
         expect(r.left, lessThanOrEqualTo(0.01), reason: reason);
-        expect(r.right, greaterThanOrEqualTo(viewport.width - 0.01),
-            reason: reason);
+        expect(
+          r.right,
+          greaterThanOrEqualTo(viewport.width - 0.01),
+          reason: reason,
+        );
       } else {
         // Too small to cover: it must at least stay wholly on screen.
         expect(r.left, greaterThanOrEqualTo(-0.01), reason: reason);
-        expect(r.right, lessThanOrEqualTo(viewport.width + 0.01),
-            reason: reason);
+        expect(
+          r.right,
+          lessThanOrEqualTo(viewport.width + 0.01),
+          reason: reason,
+        );
       }
       if (r.height >= viewport.height) {
         expect(r.top, lessThanOrEqualTo(0.01), reason: reason);
-        expect(r.bottom, greaterThanOrEqualTo(viewport.height - 0.01),
-            reason: reason);
+        expect(
+          r.bottom,
+          greaterThanOrEqualTo(viewport.height - 0.01),
+          reason: reason,
+        );
       } else {
         expect(r.top, greaterThanOrEqualTo(-0.01), reason: reason);
-        expect(r.bottom, lessThanOrEqualTo(viewport.height + 0.01),
-            reason: reason);
+        expect(
+          r.bottom,
+          lessThanOrEqualTo(viewport.height + 0.01),
+          reason: reason,
+        );
       }
     }
 

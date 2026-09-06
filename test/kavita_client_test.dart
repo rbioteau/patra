@@ -6,22 +6,35 @@ import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
 
 /// Simulates a Kavita server whose current valid token is [validToken]:
-/// 401 on any authenticated call made with another token, and a working
-/// refresh endpoint (unless [refreshFails]).
+/// 401 on any authenticated call made with another token, and a login
+/// endpoint that mints [validToken] for the right auth key.
 class _FakeKavitaAdapter implements HttpClientAdapter {
   _FakeKavitaAdapter({
     required this.validToken,
-    this.refreshFails = false,
-    this.refreshReturnsGarbage = false,
+    this.validApiKey = 'key',
+    this.loginReturnsGarbage = false,
+    this.loginStatus,
+    this.loginThrows,
     this.authenticatedStatus = 200,
     this.totalSeries = 0,
   });
 
   final String validToken;
-  final bool refreshFails;
 
-  /// 200 whose body holds no tokens (reverse proxy answering for Kavita).
-  final bool refreshReturnsGarbage;
+  /// The auth key this server still recognises; anything else earns a 401,
+  /// which is what a key rotated in Kavita's web UI looks like from here.
+  final String validApiKey;
+
+  /// 200 whose body holds no token (reverse proxy answering for Kavita).
+  final bool loginReturnsGarbage;
+
+  /// Served to a login instead of a token, when set: a server having a
+  /// problem of its own rather than refusing anything.
+  final int? loginStatus;
+
+  /// Thrown instead of answering a login, when set — the network going away
+  /// between the 401 and the request that would fix it.
+  final Object? loginThrows;
 
   /// Status served to correctly authenticated requests.
   final int authenticatedStatus;
@@ -29,7 +42,8 @@ class _FakeKavitaAdapter implements HttpClientAdapter {
   /// Number of series served by the paginated all-v2 endpoint.
   final int totalSeries;
 
-  int refreshCalls = 0;
+  /// Every login this server was asked for, body and all.
+  final List<Map<String, dynamic>> logins = [];
 
   @override
   Future<ResponseBody> fetch(
@@ -46,11 +60,19 @@ class _FakeKavitaAdapter implements HttpClientAdapter {
           },
         );
 
-    if (options.path == '/api/Account/refresh-token') {
-      refreshCalls++;
-      if (refreshFails) return json({}, status: 401);
-      if (refreshReturnsGarbage) return json({'unexpected': 'html'});
-      return json({'token': validToken, 'refreshToken': 'refresh-2'});
+    if (options.path == '/api/Account/login') {
+      final body = (options.data as Map).cast<String, dynamic>();
+      logins.add(body);
+      if (loginThrows != null) throw loginThrows!;
+      if (loginStatus != null) return json({}, status: loginStatus!);
+      if (body['apiKey'] != validApiKey) return json({}, status: 401);
+      if (loginReturnsGarbage) return json({'unexpected': 'html'});
+      return json({
+        'username': 'romain',
+        'token': validToken,
+        'refreshToken': 'refresh-2',
+        'apiKey': validApiKey,
+      });
     }
     if (options.headers['Authorization'] != 'Bearer $validToken') {
       return json({}, status: 401);
@@ -85,48 +107,100 @@ class _FakeKavitaAdapter implements HttpClientAdapter {
 
 KavitaClient _client(
   _FakeKavitaAdapter adapter, {
-  void Function(String, String)? onTokensRefreshed,
+  String token = 'expired-token',
+  String apiKey = 'key',
+  void Function(String)? onTokenRenewed,
   void Function()? onSessionExpired,
 }) {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
-    token: 'expired-token',
-    refreshToken: 'refresh-1',
-    apiKey: 'key',
-    onTokensRefreshed: onTokensRefreshed,
+    token: token,
+    username: 'romain',
+    apiKey: apiKey,
+    onTokenRenewed: onTokenRenewed,
     onSessionExpired: onSessionExpired,
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
   return client;
 }
 
 ScreenMetrics _phoneScreen() => const ScreenMetrics(412, 915);
 
 void main() {
-  test('a 401 triggers a token refresh and the call is retried', () async {
-    final adapter = _FakeKavitaAdapter(validToken: 'fresh-token');
-    String? newToken;
-    String? newRefreshToken;
-    final client = _client(
-      adapter,
-      onTokensRefreshed: (t, r) {
-        newToken = t;
-        newRefreshToken = r;
-      },
+  test('signing in with an auth key sends no password', () async {
+    // The password-free path the whole design rests on: `LoginDto` documents
+    // that a login carrying an apiKey ignores the username and password, and
+    // Kavita resolves the account from the key. This is that field, filled in.
+    final adapter = _FakeKavitaAdapter(
+      validToken: 'fresh-token',
+      validApiKey: 'the-auth-key',
     );
+
+    final user = await KavitaClient.login(
+      baseUrl: 'http://kavita.test',
+      username: 'romain',
+      credential: Credential.authKey('the-auth-key'),
+      adapter: adapter,
+    );
+
+    expect(adapter.logins.single, {
+      'username': 'romain',
+      'password': '',
+      'apiKey': 'the-auth-key',
+    });
+    expect(user.token, 'fresh-token');
+    expect(user.apiKey, 'the-auth-key');
+  });
+
+  test('signing in with a password sends no auth key', () async {
+    final adapter = _FakeKavitaAdapter(
+      validToken: 'fresh-token',
+      validApiKey: '',
+    );
+
+    await KavitaClient.login(
+      baseUrl: 'http://kavita.test',
+      username: 'romain',
+      credential: Credential.password('hunter2'),
+      adapter: adapter,
+    );
+
+    expect(adapter.logins.single, {
+      'username': 'romain',
+      'password': 'hunter2',
+      'apiKey': '',
+    });
+  });
+
+  test('a 401 mints a new token from the auth key and retries', () async {
+    final adapter = _FakeKavitaAdapter(validToken: 'fresh-token');
+    String? renewed;
+    final client = _client(adapter, onTokenRenewed: (t) => renewed = t);
 
     final libraries = await client.libraries();
 
     expect(libraries, hasLength(1));
     expect(libraries.first.name, 'Mangas');
-    expect(adapter.refreshCalls, 1);
-    expect(newToken, 'fresh-token');
-    expect(newRefreshToken, 'refresh-2');
+    expect(adapter.logins, hasLength(1));
+    expect(adapter.logins.single['apiKey'], 'key');
+    expect(adapter.logins.single['password'], '');
+    expect(renewed, 'fresh-token');
     expect(client.imageHeaders['Authorization'], 'Bearer fresh-token');
   });
 
-  test('concurrent 401s refresh only once', () async {
+  test('a session entered offline mints its token on the first 401', () async {
+    // Resuming with no network enters on the stored key alone, so the client
+    // starts with no JWT at all. The very first request 401s, and the key
+    // that got the session in is what gets it working.
+    final adapter = _FakeKavitaAdapter(validToken: 'fresh-token');
+    final client = _client(adapter, token: '');
+
+    expect(await client.libraries(), hasLength(1));
+    expect(adapter.logins, hasLength(1));
+  });
+
+  test('concurrent 401s sign in only once', () async {
     final adapter = _FakeKavitaAdapter(validToken: 'fresh-token');
     final client = _client(adapter);
 
@@ -137,13 +211,16 @@ void main() {
     ]);
 
     expect(results.every((libs) => libs.length == 1), isTrue);
-    expect(adapter.refreshCalls, 1);
+    expect(adapter.logins, hasLength(1));
   });
 
-  test('a rejected refresh token expires the session', () async {
+  test('a refused auth key expires the session', () async {
+    // What a key rotated in Kavita's web UI looks like: the JWT is stale, the
+    // key that would replace it is no longer the account's, and a password is
+    // the only way back in.
     final adapter = _FakeKavitaAdapter(
       validToken: 'fresh-token',
-      refreshFails: true,
+      validApiKey: 'rotated-since',
     );
     var expired = false;
     final client = _client(adapter, onSessionExpired: () => expired = true);
@@ -152,19 +229,71 @@ void main() {
     expect(expired, isTrue);
   });
 
-  test('a 200 refresh response without tokens expires the session', () async {
-    final adapter = _FakeKavitaAdapter(
-      validToken: 'fresh-token',
-      refreshReturnsGarbage: true,
-    );
-    var expired = false;
-    final client = _client(adapter, onSessionExpired: () => expired = true);
+  test('the renewal carries the username, exactly as a resume does', () async {
+    // `LoginDto` says Kavita ignores it when a key is present, so both shapes
+    // should work — but only one of them is ever exercised against a real
+    // server, and it must not be the one that recovers a session.
+    final adapter = _FakeKavitaAdapter(validToken: 'fresh-token');
+    final client = _client(adapter);
 
-    await expectLater(client.libraries(), throwsA(isA<DioException>()));
-    expect(expired, isTrue);
+    await client.libraries();
+
+    expect(adapter.logins.single['username'], 'romain');
   });
 
-  test('a retry failure after a successful refresh does not log out', () async {
+  group('only a refused key may end the session', () {
+    // This rule is new with the auth key, and it is the key being durable
+    // that makes it matter. While a session was a token pair, expiring it on
+    // any failed renewal cost a credential that had a day left in it. Now
+    // `onSessionExpired` deletes the one secret the server is remembered by,
+    // so anything that is not a refusal must leave it alone.
+
+    test('a 200 without a token does not', () async {
+      // A reverse proxy or captive portal answering in Kavita's place. The
+      // request fails and the credential survives the walled garden.
+      final adapter = _FakeKavitaAdapter(
+        validToken: 'fresh-token',
+        loginReturnsGarbage: true,
+      );
+      var expired = false;
+      final client = _client(adapter, onSessionExpired: () => expired = true);
+
+      await expectLater(client.libraries(), throwsA(isA<DioException>()));
+      expect(expired, isFalse);
+    });
+
+    test('a server error does not', () async {
+      final adapter = _FakeKavitaAdapter(
+        validToken: 'fresh-token',
+        loginStatus: 500,
+      );
+      var expired = false;
+      final client = _client(adapter, onSessionExpired: () => expired = true);
+
+      await expectLater(client.libraries(), throwsA(isA<DioException>()));
+      expect(expired, isFalse);
+    });
+
+    test(
+      'losing the network between the 401 and the renewal does not',
+      () async {
+        final adapter = _FakeKavitaAdapter(
+          validToken: 'fresh-token',
+          loginThrows: DioException(
+            requestOptions: RequestOptions(path: '/api/Account/login'),
+            type: DioExceptionType.connectionError,
+          ),
+        );
+        var expired = false;
+        final client = _client(adapter, onSessionExpired: () => expired = true);
+
+        await expectLater(client.libraries(), throwsA(isA<DioException>()));
+        expect(expired, isFalse);
+      },
+    );
+  });
+
+  test('a retry failure after a successful sign-in does not log out', () async {
     final adapter = _FakeKavitaAdapter(
       validToken: 'fresh-token',
       authenticatedStatus: 400,
@@ -183,7 +312,7 @@ void main() {
         ),
       ),
     );
-    expect(adapter.refreshCalls, 1);
+    expect(adapter.logins, hasLength(1));
     expect(expired, isFalse);
   });
 
@@ -208,12 +337,12 @@ void main() {
       final client = KavitaClient(
         baseUrl: 'http://kavita.test',
         token: 'token',
-        refreshToken: 'refresh',
+        username: 'romain',
         apiKey: 'the-api-key',
       );
       final recorder = _RecordingAdapter((options) => lastRequest = options);
       client.httpClient.httpClientAdapter = recorder;
-      client.refreshHttpClient.httpClientAdapter = recorder;
+      client.bareHttpClient.httpClientAdapter = recorder;
       return client;
     }
 
@@ -264,13 +393,13 @@ void main() {
       final client = KavitaClient(
         baseUrl: 'http://kavita.test',
         token: 'token',
-        refreshToken: 'refresh',
+        username: 'romain',
         apiKey: 'the-api-key',
         identity: identity,
       );
       final recorder = _RecordingAdapter((options) => lastRequest = options);
       client.httpClient.httpClientAdapter = recorder;
-      client.refreshHttpClient.httpClientAdapter = recorder;
+      client.bareHttpClient.httpClientAdapter = recorder;
 
       await client.chapterInfo(7);
 

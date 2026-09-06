@@ -21,21 +21,32 @@
 /// checks every key below against the spec.
 library;
 
-/// What `POST /api/Account/login` answers with: an identity and the tokens to
-/// use it. Not a session — a session is a `ServerEntry` that holds tokens, and
-/// this is only what one is built from.
+/// What `POST /api/Account/login` answers with: an identity, the auth key that
+/// is this account's durable credential, and a JWT to spend it. Not a session
+/// — a session is a `ServerEntry` the app is currently reading as, and this is
+/// only what one is built from.
+///
+/// `refreshToken` is in the response and deliberately not read here: nothing
+/// persists it, and the JWT is renewed by signing in again with the auth key
+/// (ADR-0004).
 class LoginResult {
   const LoginResult({
     required this.username,
     required this.token,
-    required this.refreshToken,
     required this.apiKey,
     this.roles = const [],
   });
 
   final String username;
+
+  /// The JWT to make requests with. Session state and nothing more: it is
+  /// never written down, because the [apiKey] beside it does not expire and
+  /// mints a new one whenever it is needed (ADR-0004).
   final String token;
-  final String refreshToken;
+
+  /// The account's Kavita auth key — `opds`, as `ConstructUserDto` computes
+  /// it. The one durable credential, and the only secret a remembered server
+  /// keeps.
   final String apiKey;
 
   /// Kavita's roles for this account, as `/api/Account/login` returns them.
@@ -53,7 +64,6 @@ class LoginResult {
   factory LoginResult.fromJson(Map<String, dynamic> json) => LoginResult(
     username: json['username'] as String? ?? '',
     token: json['token'] as String? ?? '',
-    refreshToken: json['refreshToken'] as String? ?? '',
     apiKey: json['apiKey'] as String? ?? '',
     roles: [
       for (final role in json['roles'] as List<dynamic>? ?? const [])

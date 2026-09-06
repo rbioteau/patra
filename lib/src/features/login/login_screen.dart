@@ -34,6 +34,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// there is no saved server at all.
   bool _showForm = false;
   bool _busy = false;
+
+  /// The address of the server whose sign-in is in flight, so its row can say
+  /// so. Entering a remembered server is a round trip now, not a state change
+  /// — a row that looked inert for ten seconds would read as a dead tap.
+  String? _signingIn;
   String? _error;
 
   @override
@@ -94,12 +99,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _connect(ServerEntry server) async {
-    if (server.hasSession) {
-      await ref.read(authProvider.notifier).resume(server);
+    if (_signingIn != null) return;
+    if (!server.hasCredential) {
+      // Remembered but signed out: only the password is missing.
+      _openForm(prefill: server, focusPassword: true);
       return;
     }
-    // Remembered but signed out: only the password is missing.
-    _openForm(prefill: server, focusPassword: true);
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _signingIn = server.baseUrl;
+      _error = null;
+    });
+    try {
+      // One request, made with the stored auth key and no password.
+      // Redirection is the router's, as it is after a sign-in.
+      await ref.read(authProvider.notifier).resume(server);
+    } on SignInExpired {
+      if (!mounted) return;
+      // The key is refused, so the server is remembered and signed out and
+      // the only thing still missing is the password: land on the form with
+      // the address and the name already in it, rather than on a row that
+      // would just fail again. `_openForm` clears the error, so it is set
+      // after.
+      //
+      // Worded here rather than by `ConnectionFailure`, which sees the same
+      // bare 401 a mistyped password earns: nothing the person typed was
+      // rejected, because nothing they typed was sent.
+      _openForm(prefill: server, focusPassword: true);
+      setState(() => _error = l10n.connectionSignInExpired(server.host));
+    } catch (e) {
+      if (!mounted) return;
+      // The key is untouched and the row still opens: say what happened and
+      // leave the list as it is.
+      setState(
+        () => _error = ConnectionFailure.from(e).message(l10n, server.host),
+      );
+    } finally {
+      // Guarded: the router tears this route down on success, and the 10s
+      // connect timeout gives it every chance to do so first.
+      if (mounted) setState(() => _signingIn = null);
+    }
   }
 
   Future<void> _forget(ServerEntry server) async {
@@ -200,11 +239,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       children: [
         const _Masthead(),
         const SizedBox(height: sectionGap * 1.5),
+        // A sign-in can fail from here now, so the list needs somewhere to
+        // say why — everything but a refused key leaves the rows as they are.
+        if (_error != null) ...[
+          _ErrorLine(_error!),
+          const SizedBox(height: 12),
+        ],
         SectionLabel(l10n.savedServers),
         const SizedBox(height: 12),
         for (final server in servers) ...[
           _ServerRow(
             server: server,
+            busy: server.baseUrl == _signingIn,
             onTap: () => _connect(server),
             onEdit: () => _openForm(prefill: server, focusPassword: true),
             onForget: () => _forget(server),
@@ -283,7 +329,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           const SizedBox(height: gutter),
           if (_error != null) ...[
-            Text(_error!, style: PatraText.metadata(color: patraDanger)),
+            _ErrorLine(_error!),
             const SizedBox(height: 12),
           ],
           FilledButton(
@@ -392,9 +438,15 @@ class _ServerRow extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onForget,
+    this.busy = false,
   });
 
   final ServerEntry server;
+
+  /// Whether this server's sign-in is in flight: the row says so and accepts
+  /// nothing until it is not.
+  final bool busy;
+
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onForget;
@@ -402,9 +454,9 @@ class _ServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // A live session opens with one tap; otherwise a password is still needed,
-    // and both the chip and the call to action say so.
-    final live = server.hasSession;
+    // A server holding its auth key opens with one tap; otherwise a password
+    // is still needed, and both the chip and the call to action say so.
+    final live = server.hasCredential;
     final initial = server.host.isEmpty
         ? '?'
         : server.host.substring(0, 1).toUpperCase();
@@ -418,7 +470,7 @@ class _ServerRow extends StatelessWidget {
       color: patraSurface,
       borderRadius: BorderRadius.circular(radiusCard),
       child: InkWell(
-        onTap: onTap,
+        onTap: busy ? null : onTap,
         borderRadius: BorderRadius.circular(radiusCard),
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
@@ -476,7 +528,20 @@ class _ServerRow extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (showCta) ...[
+                  // The spinner takes the call to action's place whatever the
+                  // width: it is narrower than the word it replaces, and it is
+                  // the one thing on this row that must not be dropped.
+                  if (busy) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: patraAccent,
+                      ),
+                    ),
+                  ] else if (showCta) ...[
                     const SizedBox(width: 8),
                     Text(cta, style: ctaStyle),
                   ],
@@ -484,13 +549,13 @@ class _ServerRow extends StatelessWidget {
                     tooltip: l10n.editServer,
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.edit_outlined, size: 18),
-                    onPressed: onEdit,
+                    onPressed: busy ? null : onEdit,
                   ),
                   IconButton(
                     tooltip: l10n.forgetServer,
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.close, size: 18),
-                    onPressed: onForget,
+                    onPressed: busy ? null : onForget,
                   ),
                 ],
               );
@@ -500,6 +565,19 @@ class _ServerRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What went wrong, said the same way on the list and on the form — the two
+/// places a sign-in can fail from now that entering a remembered server is a
+/// request of its own.
+class _ErrorLine extends StatelessWidget {
+  const _ErrorLine(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(message, style: PatraText.metadata(color: patraDanger));
 }
 
 /// Everything in a server row that is not the host name or the call to action:

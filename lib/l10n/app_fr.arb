@@ -19,6 +19,7 @@
   "connectionBadCertificate": "{host} présente un certificat que cet appareil ne reconnaît pas. Un certificat auto-signé doit d'abord être installé sur l'appareil.",
   "connectionBadCredentials": "Le serveur a refusé ce nom d'utilisateur ou ce mot de passe.",
   "connectionForbidden": "{host} a refusé : ce compte n'y est pas autorisé.",
+  "connectionSignInExpired": "{host} n'accepte plus la connexion enregistrée. Votre mot de passe est de nouveau nécessaire.",
   "connectionNotKavita": "{host} a répondu, mais aucun serveur Kavita ne se trouve à cette adresse.",
   "connectionServerError": "{host} a répondu par une erreur ({status}).",
   "savedServers": "Vos serveurs",
