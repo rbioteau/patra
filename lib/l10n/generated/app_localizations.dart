@@ -446,6 +446,12 @@ abstract class AppLocalizations {
   /// **'This series is an EPUB. Patra reads image formats and PDFs for now; EPUB support is on the way.'**
   String get formatNotSupportedBody;
 
+  /// Pages remaining in the chapter the home hero would resume
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 page left} other{{count} pages left}}'**
+  String homeHeroPagesLeft(int count);
+
   /// Chapter tally in the series hero
   ///
   /// In en, this message translates to:

@@ -220,6 +220,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'This series is an EPUB. Patra reads image formats and PDFs for now; EPUB support is on the way.';
 
   @override
+  String homeHeroPagesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pages left',
+      one: '1 page left',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String seriesChapterCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

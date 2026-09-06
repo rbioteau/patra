@@ -1,7 +1,7 @@
 /// What the app makes of Kavita's responses.
 ///
 /// These are **not** Kavita's DTOs, which is why they no longer carry the
-/// suffix. Only the fields the app actually uses are mapped — 6 of `SeriesDto`'s
+/// suffix. Only the fields the app actually uses are mapped — 8 of `SeriesDto`'s
 /// 38, 10 of `ChapterDto`'s 81 — and what they carry besides is knowledge the
 /// wire does not: [Volume.isLooseLeaf], [Chapter.isVolumePlaceholder],
 /// [LibraryType.hasStoryline], [MangaFormat.isImageReadable],
@@ -142,6 +142,8 @@ class Series {
     required this.libraryName,
     required this.pages,
     required this.pagesRead,
+    required this.format,
+    required this.latestReadDate,
   });
 
   final int id;
@@ -151,6 +153,18 @@ class Series {
   final int pages;
   final int pagesRead;
 
+  /// What the files behind the series are, which decides whether this app can
+  /// open it at all.
+  final MangaFormat format;
+
+  /// When the series was last read, or null if it never was.
+  ///
+  /// Kavita sends this with no offset and offers no `...Utc` twin for it, so
+  /// it is the server's own local time. That is enough for what it is for:
+  /// these are only ever compared with one another, never with this device's
+  /// clock.
+  final DateTime? latestReadDate;
+
   factory Series.fromJson(Map<String, dynamic> json) => Series(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
@@ -158,7 +172,18 @@ class Series {
     libraryName: json['libraryName'] as String? ?? '',
     pages: json['pages'] as int? ?? 0,
     pagesRead: json['pagesRead'] as int? ?? 0,
+    format: MangaFormat.fromId(json['format'] as int?),
+    latestReadDate: _readDate(json['latestReadDate']),
   );
+}
+
+/// Swashbuckle declares every `date-time` non-nullable, so Kavita answers for
+/// a series nobody has opened with .NET's `DateTime.MinValue` rather than with
+/// nothing at all. Year 1 is not a time anything was read at, and it must
+/// never reach a comparison as though it were.
+DateTime? _readDate(Object? value) {
+  final parsed = value is String ? DateTime.tryParse(value) : null;
+  return parsed == null || parsed.year <= 1 ? null : parsed;
 }
 
 /// The handful of metadata fields the series hero shows.
@@ -183,13 +208,12 @@ class SeriesMetadata {
         entry[key] as String,
   ];
 
-  factory SeriesMetadata.fromJson(Map<String, dynamic> json) =>
-      SeriesMetadata(
-        summary: json['summary'] as String? ?? '',
-        writers: _names(json['writers'], 'name'),
-        genres: _names(json['genres'], 'title'),
-        releaseYear: json['releaseYear'] as int? ?? 0,
-      );
+  factory SeriesMetadata.fromJson(Map<String, dynamic> json) => SeriesMetadata(
+    summary: json['summary'] as String? ?? '',
+    writers: _names(json['writers'], 'name'),
+    genres: _names(json['genres'], 'title'),
+    releaseYear: json['releaseYear'] as int? ?? 0,
+  );
 }
 
 class Volume {

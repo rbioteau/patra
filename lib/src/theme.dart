@@ -27,9 +27,14 @@ const patraDanger = Color(0xFFFF7B92);
 const patraText = Color(0xFFE8E8EA);
 
 final patraTextMuted = patraText.withValues(alpha: .45);
+
+/// The unfilled part of a progress track drawn on its own, away from a cover
+/// (where [CoverProgressBar] sits on the artwork and uses black instead).
+final patraTrack = patraText.withValues(alpha: .14);
 final patraBorder = Colors.white.withValues(alpha: .08);
 
 /// Radii
+
 const radiusThumb = 6.0;
 const radiusCover = 10.0; // covers, buttons, inputs
 const radiusCard = 12.0;
@@ -80,11 +85,11 @@ abstract final class PatraText {
         height: 1.25,
       );
 
-  static TextStyle sectionLabel() => GoogleFonts.spaceGrotesk(
+  static TextStyle sectionLabel({Color? color}) => GoogleFonts.spaceGrotesk(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 1.5,
-    color: patraTextMuted,
+    color: color ?? patraTextMuted,
   );
 
   static TextStyle rowTitle({Color? color, double size = 13.5}) =>
@@ -265,17 +270,24 @@ ThemeData patraTheme() {
 
 /// A section header: uppercase, tracked, muted.
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, this.trailing});
+  const SectionLabel(this.text, {super.key, this.trailing, this.color});
 
   final String text;
   final Widget? trailing;
+
+  /// Muted unless a screen says otherwise — the Continue hero's eyebrow is
+  /// the accent, which is what marks it as being about reading progress.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: Text(text.toUpperCase(), style: PatraText.sectionLabel()),
+          child: Text(
+            text.toUpperCase(),
+            style: PatraText.sectionLabel(color: color),
+          ),
         ),
         ?trailing,
       ],

@@ -117,19 +117,22 @@ void main() {
   });
 
   group('page dimensions', () {
-    test('drive the vertical-scrolling layout when the server reports them', () {
-      final info = ChapterInfo.fromJson({
-        'seriesId': 1,
-        'pages': 2,
-        'pageDimensions': [
-          {'pageNumber': 0, 'width': 800, 'height': 1200, 'isWide': false},
-          {'pageNumber': 1, 'width': 1600, 'height': 1200, 'isWide': true},
-        ],
-      });
-      expect(info.aspectRatioFor(0), closeTo(2 / 3, 0.0001));
-      expect(info.aspectRatioFor(1), closeTo(4 / 3, 0.0001));
-      expect(info.isWide(1), isTrue);
-    });
+    test(
+      'drive the vertical-scrolling layout when the server reports them',
+      () {
+        final info = ChapterInfo.fromJson({
+          'seriesId': 1,
+          'pages': 2,
+          'pageDimensions': [
+            {'pageNumber': 0, 'width': 800, 'height': 1200, 'isWide': false},
+            {'pageNumber': 1, 'width': 1600, 'height': 1200, 'isWide': true},
+          ],
+        });
+        expect(info.aspectRatioFor(0), closeTo(2 / 3, 0.0001));
+        expect(info.aspectRatioFor(1), closeTo(4 / 3, 0.0001));
+        expect(info.isWide(1), isTrue);
+      },
+    );
 
     test('tolerate one-based page numbering', () {
       final info = ChapterInfo.fromJson({
@@ -184,6 +187,49 @@ void main() {
       expect(user(null).isAdmin, isFalse);
       expect(user(const <Object>[]).isAdmin, isFalse);
       expect(user(const [1, 2]).isAdmin, isFalse);
+    });
+  });
+
+  group('Series', () {
+    Series series(Map<String, dynamic> extra) =>
+        Series.fromJson({'id': 5, 'name': 'Vinland Saga', ...extra});
+
+    test('carries the format, so an EPUB can be told apart', () {
+      expect(series({'format': 3}).format, MangaFormat.epub);
+      expect(series({'format': 3}).format.isImageReadable, isFalse);
+      expect(series({'format': 1}).format, MangaFormat.archive);
+    });
+
+    test('an absent format is unknown rather than a crash', () {
+      expect(series({}).format, MangaFormat.unknown);
+    });
+
+    // Kavita sends this one with no offset and has no `...Utc` twin for it,
+    // so it is server-local time and is taken as it arrives.
+    test('carries when the series was last read', () {
+      expect(
+        series({'latestReadDate': '2026-09-05T18:30:00'}).latestReadDate,
+        DateTime(2026, 9, 5, 18, 30),
+      );
+    });
+
+    test('an absent read date is null, not an epoch', () {
+      expect(series({}).latestReadDate, isNull);
+    });
+
+    // Swashbuckle declares every date-time non-nullable, so Kavita sends
+    // .NET's DateTime.MinValue for a series nobody has opened. Year 1 is not
+    // a time anything was read at, and it must never reach a comparison as
+    // though it were.
+    test('the .NET zero date is not a read date', () {
+      expect(
+        series({'latestReadDate': '0001-01-01T00:00:00'}).latestReadDate,
+        isNull,
+      );
+    });
+
+    test('an unparseable read date is null rather than a throw', () {
+      expect(series({'latestReadDate': 'never'}).latestReadDate, isNull);
     });
   });
 }

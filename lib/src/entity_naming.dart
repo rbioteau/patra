@@ -68,4 +68,24 @@ extension LibraryTypeNaming on LibraryType {
     if (title.isEmpty || title == chapter.range || title == base) return base;
     return '$base - $title';
   }
+
+  /// The full name of whatever reading resumes at, which is not always a
+  /// chapter: a volume with no chapter breakdown is known by the volume, and
+  /// its placeholder chapter carries Kavita's -100000 sentinel, which must
+  /// never reach a label. Empty where there is nothing honest to say.
+  String resumeTitle(AppLocalizations l10n, Volume volume, Chapter chapter) {
+    if (chapter.isSpecial) return chapterTitle(l10n, chapter);
+    if (chapter.isVolumePlaceholder) {
+      return volume.isLooseLeaf || volume.isSpecials
+          ? ''
+          : volumeLabel(l10n, volume.name);
+    }
+    // Anything at sentinel scale is Kavita bookkeeping, not a number. Compared
+    // on magnitude: the sentinels differ by sign, this check does not.
+    final number = num.tryParse(chapter.range)?.abs() ?? 0;
+    if (chapter.range.isEmpty || number >= Chapter.defaultNumber.abs()) {
+      return '';
+    }
+    return chapterTitle(l10n, chapter);
+  }
 }

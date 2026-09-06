@@ -58,6 +58,7 @@
   "pdfPreparingBody": "Le serveur découpe ce PDF en pages. Seule la première ouverture attend.",
   "formatNotSupported": "Format pas encore pris en charge",
   "formatNotSupportedBody": "Cette série est un EPUB. Patra lit les formats image et les PDF pour l'instant ; la prise en charge de l'EPUB arrive.",
+  "homeHeroPagesLeft": "{count, plural, =1{1 page restante} other{{count} pages restantes}}",
   "seriesChapterCount": "{count, plural, =0{Aucun chapitre} =1{1 chapitre} other{{count} chapitres}}",
   "seriesVolumeCount": "{count, plural, =1{1 tome} other{{count} tomes}}",
   "seriesContinueVolume": "Reprendre — tome {volume}",
