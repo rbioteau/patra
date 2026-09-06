@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'account_id.dart';
 import 'client_identity.dart';
 import 'models.dart';
 
@@ -330,11 +331,24 @@ class KavitaClient {
     }
   }
 
+  /// The account this session's token belongs to, or null if it cannot be
+  /// read. Recomputed rather than cached because the token is refreshed.
+  int? get accountId => accountIdFrom(_token);
+
   /// Series the user has started but not finished — the "Continue" shelf.
+  ///
+  /// **`userId` is required.** Kavita reads the caller's own id off the query
+  /// string here rather than off the bearer token, and answers 400 without it
+  /// — which is what silently emptied this shelf: a failed shelf draws
+  /// nothing, so the screen looked merely quiet rather than broken.
   Future<List<Series>> currentlyReading({int pageSize = 20}) async {
     final res = await _dio.get<List<dynamic>>(
       '/api/Series/currently-reading',
-      queryParameters: {'PageNumber': 1, 'PageSize': pageSize},
+      queryParameters: {
+        'PageNumber': 1,
+        'PageSize': pageSize,
+        'userId': ?accountId,
+      },
     );
     return res.data!
         .map((e) => Series.fromJson(e as Map<String, dynamic>))
