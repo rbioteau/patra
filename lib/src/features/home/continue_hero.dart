@@ -82,6 +82,11 @@ class ContinueHero extends ConsumerWidget {
   static const _coverWidth = 92.0;
   static const _coverWidthTablet = 160.0;
 
+  /// A bar drawn the full width of a tablet stops reading as progress and
+  /// starts reading as a rule across the card. Held at the button's width so
+  /// the two agree.
+  static const _progressMaxWidth = 280.0;
+
   /// Ink over the artwork: opaque where the words are, thinning towards the
   /// far edge so the cover is still visible there. This is what makes the
   /// title legible over any cover, which is why nothing is blurred.
@@ -98,12 +103,13 @@ class ContinueHero extends ConsumerWidget {
 
   /// A chapter nobody has opened starts at the beginning; one under way
   /// resumes where it was left.
-  String get _readerLocation {
+  int get _resumePage {
     final point = data.point!;
-    final chapter = point.entry.chapter;
-    final page = point.started ? chapter.pagesRead : 0;
-    return '/reader/${chapter.id}?page=$page';
+    return point.started ? point.entry.chapter.pagesRead : 0;
   }
+
+  String get _readerLocation =>
+      '/reader/${data.point!.entry.chapter.id}?page=$_resumePage';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -121,19 +127,24 @@ class ContinueHero extends ConsumerWidget {
           color: patraSurface,
           child: Stack(
             children: [
-              // The same cover as the thumbnail, at the same URL, so it is
-              // fetched once and lives in the store Settings can size and
-              // clear. A raw Image.network here would be a second, uncapped
-              // download of a picture already on disk.
+              // Where you actually are in the book, not its cover — and at
+              // the very URL the reader asks for, so a page just read is
+              // already on disk instead of being fetched again. Until the
+              // chapter is known the cover stands in, which is also what a
+              // page that will not load falls back to.
               Positioned.fill(
                 child: CachedNetworkImage(
-                  imageUrl: client.seriesCoverUrl(series.id),
+                  imageUrl: data.point == null
+                      ? client.seriesCoverUrl(series.id)
+                      : client.readerImageUrl(
+                          data.point!.entry.chapter.id,
+                          _resumePage,
+                        ),
                   httpHeaders: client.imageHeaders,
                   fit: BoxFit.cover,
                   fadeInDuration: Duration.zero,
-                  placeholder: (_, _) => const ColoredBox(color: patraSurface),
-                  errorWidget: (_, _, _) =>
-                      const ColoredBox(color: patraSurface),
+                  placeholder: (_, _) => _CoverBackdrop(series: series),
+                  errorWidget: (_, _, _) => _CoverBackdrop(series: series),
                 ),
               ),
               // The text sits on ink and the artwork shows through on the far
@@ -256,29 +267,64 @@ class _Details extends ConsumerWidget {
         ],
         if (chapter != null) ...[
           const SizedBox(height: 12),
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: Text(
-              l10n.homeHeroPagesLeft(
-                (chapter.pages - chapter.pagesRead).clamp(0, chapter.pages),
-              ),
-              style: PatraText.metadata(size: tablet ? 12 : 10.5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: ContinueHero._progressMaxWidth,
             ),
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(radiusThumb / 3),
-            child: LinearProgressIndicator(
-              value: chapter.pages > 0
-                  ? chapter.pagesRead / chapter.pages
-                  : 0.0,
-              minHeight: 3,
-              backgroundColor: patraTrack,
-              valueColor: const AlwaysStoppedAnimation(patraAccent),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Text(
+                    l10n.homeHeroPagesLeft(
+                      (chapter.pages - chapter.pagesRead).clamp(
+                        0,
+                        chapter.pages,
+                      ),
+                    ),
+                    style: PatraText.metadata(size: tablet ? 12 : 10.5),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(radiusThumb / 3),
+                  child: LinearProgressIndicator(
+                    value: chapter.pages > 0
+                        ? chapter.pagesRead / chapter.pages
+                        : 0.0,
+                    minHeight: 3,
+                    backgroundColor: patraTrack,
+                    valueColor: const AlwaysStoppedAnimation(patraAccent),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The series cover, standing in behind the card until the page is known and
+/// wherever the page will not load.
+class _CoverBackdrop extends ConsumerWidget {
+  const _CoverBackdrop({required this.series});
+
+  final Series series;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(kavitaClientProvider);
+    return CachedNetworkImage(
+      imageUrl: client.seriesCoverUrl(series.id),
+      httpHeaders: client.imageHeaders,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      placeholder: (_, _) => const ColoredBox(color: patraSurface),
+      errorWidget: (_, _, _) => const ColoredBox(color: patraSurface),
     );
   }
 }
