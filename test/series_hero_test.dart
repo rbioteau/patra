@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -235,5 +237,52 @@ void main() {
           .first,
     );
     expect(cover.width, 160);
+  });
+
+  group('the page behind the series hero', () {
+    // Chapter 3 is half read, so the button resumes a chapter genuinely under
+    // way and the hero can show where you are in it.
+    testWidgets('is the page the button would resume', (tester) async {
+      await _pumpSeries(tester, _volumesWithChapters);
+      final backdrop = find.byKey(const ValueKey('heroBackdrop'));
+      expect(backdrop, findsOneWidget);
+      expect(
+        tester.widget<CachedNetworkImage>(backdrop).imageUrl,
+        allOf(
+          contains('/api/Reader/image'),
+          contains('chapterId=103'),
+          contains('page=40'),
+        ),
+      );
+    });
+
+    // Nothing has been opened, so the button starts the series rather than
+    // resuming it. The first page of something unread is not a backdrop, it
+    // is a spoiler with nothing behind it.
+    testWidgets('is absent when no chapter is under way', (tester) async {
+      await _pumpSeries(tester, [
+        {
+          'id': 10,
+          'name': '1',
+          'minNumber': 1,
+          'chapters': [_chapter(101, '1', 100, 0)],
+        },
+      ]);
+      expect(find.byKey(const ValueKey('heroBackdrop')), findsNothing);
+    });
+
+    // Every chapter finished: the button offers to read it again, and there
+    // is no page you are on.
+    testWidgets('is absent when the series is finished', (tester) async {
+      await _pumpSeries(tester, [
+        {
+          'id': 10,
+          'name': '1',
+          'minNumber': 1,
+          'chapters': [_chapter(101, '1', 100, 100)],
+        },
+      ]);
+      expect(find.byKey(const ValueKey('heroBackdrop')), findsNothing);
+    });
   });
 }

@@ -13,6 +13,7 @@ import '../../entity_naming.dart';
 import '../../resume_point.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
+import '../../widgets/page_backdrop.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
 import '../library/library_screen.dart';
@@ -425,81 +426,112 @@ class _SeriesHero extends ConsumerWidget {
       _ => l10n.seriesStartReading,
     };
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, gutter),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: coverWidth,
-            height: coverHeight,
-            child: CoverImage(
-              url: client.seriesCoverUrl(seriesId),
-              headers: client.imageHeaders,
-              progress: series == null || series.pages == 0
-                  ? 0
-                  : series.pagesRead / series.pages,
+    // Only when a chapter is genuinely under way. Where the button starts the
+    // series, or offers it again, there is no page you are on — and the first
+    // page of something unread is a spoiler with nothing behind it.
+    final onPage = switch (target) {
+      (:final entry, started: true, allRead: false)
+          when entry.chapter.pagesRead > 0 =>
+        entry.chapter,
+      _ => null,
+    };
+
+    // Muted grey is tuned against a flat panel; over a page it is the first
+    // thing to go.
+    final secondary = onPage == null ? null : patraTextOnArt;
+
+    return Stack(
+      children: [
+        if (onPage != null)
+          Positioned.fill(
+            child: PageBackdrop(
+              seriesId: seriesId,
+              chapterId: onPage.id,
+              page: onPage.pagesRead,
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: SizedBox(
-              height: coverHeight,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    seriesName,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: PatraText.serifTitle(size: tablet ? 25 : 21),
-                  ),
-                  const SizedBox(height: 6),
-                  if (credits.isNotEmpty)
-                    Text(
-                      credits,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: PatraText.metadata(size: 12),
-                    )
-                  else if (metadata == null)
-                    const Skeleton(height: 11, width: 150),
-                  const SizedBox(height: 6),
-                  if (stats.isNotEmpty)
-                    Text(stats, style: PatraText.metadata(size: 12))
-                  else
-                    const Skeleton(height: 11, width: 110),
-                  const SizedBox(height: 14),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: _actionMaxWidth,
-                    ),
-                    child: SizedBox(
-                      height: 44,
-                      width: double.infinity,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                        ),
-                        onPressed: target == null
-                            ? null
-                            : () => onRead(target.entry.chapter),
-                        child: Text(
-                          label ?? l10n.seriesStartReading,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, gutter),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: coverWidth,
+                height: coverHeight,
+                child: CoverImage(
+                  url: client.seriesCoverUrl(seriesId),
+                  headers: client.imageHeaders,
+                  progress: series == null || series.pages == 0
+                      ? 0
+                      : series.pagesRead / series.pages,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: SizedBox(
+                  height: coverHeight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        seriesName,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: PatraText.serifTitle(size: tablet ? 25 : 21),
+                      ),
+                      const SizedBox(height: 6),
+                      if (credits.isNotEmpty)
+                        Text(
+                          credits,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: PatraText.metadata(size: 12, color: secondary),
+                        )
+                      else if (metadata == null)
+                        const Skeleton(height: 11, width: 150),
+                      const SizedBox(height: 6),
+                      if (stats.isNotEmpty)
+                        Text(
+                          stats,
+                          style: PatraText.metadata(size: 12, color: secondary),
+                        )
+                      else
+                        const Skeleton(height: 11, width: 110),
+                      const SizedBox(height: 14),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: _actionMaxWidth,
+                        ),
+                        child: SizedBox(
+                          height: 44,
+                          width: double.infinity,
+                          child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(44),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                            ),
+                            onPressed: target == null
+                                ? null
+                                : () => onRead(target.entry.chapter),
+                            child: Text(
+                              label ?? l10n.seriesStartReading,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
