@@ -87,13 +87,16 @@ class ContinueHero extends ConsumerWidget {
   /// the two agree.
   static const _progressMaxWidth = 280.0;
 
+  /// How much of the page shows through the ink floor beneath it.
+  static const _backdropOpacity = 0.5;
+
   /// Ink over the artwork: opaque where the words are, thinning towards the
   /// far edge so the cover is still visible there. This is what makes the
   /// title legible over any cover, which is why nothing is blurred.
   static final _scrim = [
-    patraBg.withValues(alpha: .94),
-    patraBg.withValues(alpha: .82),
-    patraBg.withValues(alpha: .35),
+    patraBg.withValues(alpha: .92),
+    patraBg.withValues(alpha: .80),
+    patraBg.withValues(alpha: .45),
   ];
 
   /// Give a button a whole hero to fill and it stops reading as a button.
@@ -132,19 +135,29 @@ class ContinueHero extends ConsumerWidget {
               // already on disk instead of being fetched again. Until the
               // chapter is known the cover stands in, which is also what a
               // page that will not load falls back to.
+              // A cover is dense colour; a page is usually black line art on
+              // white, and a scrim alone cannot hold that down — the words
+              // land on paper and vanish. The floor plus a half-strength
+              // image give the artwork a brightness ceiling it cannot exceed,
+              // whatever the page turns out to be, and the scrim then does
+              // the directional work it was drawn for.
+              const Positioned.fill(child: ColoredBox(color: patraBg)),
               Positioned.fill(
-                child: CachedNetworkImage(
-                  imageUrl: data.point == null
-                      ? client.seriesCoverUrl(series.id)
-                      : client.readerImageUrl(
-                          data.point!.entry.chapter.id,
-                          _resumePage,
-                        ),
-                  httpHeaders: client.imageHeaders,
-                  fit: BoxFit.cover,
-                  fadeInDuration: Duration.zero,
-                  placeholder: (_, _) => _CoverBackdrop(series: series),
-                  errorWidget: (_, _, _) => _CoverBackdrop(series: series),
+                child: Opacity(
+                  opacity: _backdropOpacity,
+                  child: CachedNetworkImage(
+                    imageUrl: data.point == null
+                        ? client.seriesCoverUrl(series.id)
+                        : client.readerImageUrl(
+                            data.point!.entry.chapter.id,
+                            _resumePage,
+                          ),
+                    httpHeaders: client.imageHeaders,
+                    fit: BoxFit.cover,
+                    fadeInDuration: Duration.zero,
+                    placeholder: (_, _) => _CoverBackdrop(series: series),
+                    errorWidget: (_, _, _) => _CoverBackdrop(series: series),
+                  ),
                 ),
               ),
               // The text sits on ink and the artwork shows through on the far
@@ -262,7 +275,10 @@ class _Details extends ConsumerWidget {
             resumeName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: PatraText.metadata(size: tablet ? 13 : 11.5),
+            style: PatraText.metadata(
+              size: tablet ? 13 : 11.5,
+              color: patraTextOnArt,
+            ),
           ),
         ],
         if (chapter != null) ...[
@@ -276,7 +292,7 @@ class _Details extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Align(
-                  alignment: AlignmentDirectional.centerEnd,
+                  alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.homeHeroPagesLeft(
                       (chapter.pages - chapter.pagesRead).clamp(
@@ -284,7 +300,10 @@ class _Details extends ConsumerWidget {
                         chapter.pages,
                       ),
                     ),
-                    style: PatraText.metadata(size: tablet ? 12 : 10.5),
+                    style: PatraText.metadata(
+                      size: tablet ? 12 : 10.5,
+                      color: patraTextOnArt,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
