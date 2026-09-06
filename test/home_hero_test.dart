@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -84,6 +85,10 @@ class _HomeAdapter implements HttpClientAdapter {
   /// hero cannot do without.
   bool volumesFail = false;
 
+  /// Holds the chapter fetch open, so the window where the hero knows its
+  /// series but not yet its chapter can actually be rendered.
+  Completer<void>? volumesGate;
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
     ResponseBody json(Object body) => ResponseBody.fromString(
@@ -104,8 +109,12 @@ class _HomeAdapter implements HttpClientAdapter {
             ? json(continueReading)
             : ResponseBody.fromBytes(const [], 400),
       '/api/Series/on-deck' => json(onDeck),
-      '/api/Series/volumes' =>
-        volumesFail ? ResponseBody.fromBytes(const [], 500) : json(volumes),
+      '/api/Series/volumes' => await () async {
+        await volumesGate?.future;
+        return volumesFail
+            ? ResponseBody.fromBytes(const [], 500)
+            : json(volumes);
+      }(),
       _ => ResponseBody.fromBytes(const [], 404),
     };
   }
@@ -681,6 +690,41 @@ void main() {
       expect(
         tester.getTopLeft(find.text('18 pages left')).dx,
         tester.getTopLeft(find.byType(LinearProgressIndicator)).dx,
+      );
+    });
+
+    // The card is drawn as soon as the series is known and fills its chapter
+    // in behind — so there is a real frame where `point` is null, and
+    // everything the card reads has to survive it.
+    testWidgets('draws before its chapter is known, then fills it in', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final adapter = _oneInProgress()..volumesGate = gate;
+      await _pumpHome(tester, adapter);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ContinueHero), findsOneWidget);
+      expect(find.text('Vinland Saga'), findsOneWidget);
+      // No chapter yet, so no chapter line and no page behind it.
+      expect(find.textContaining('Chapter'), findsNothing);
+      expect(
+        tester.widget<CachedNetworkImage>(_backdrop()).imageUrl,
+        contains('/api/Image/series-cover'),
+      );
+      // And nothing to resume yet.
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chapter 12'), findsOneWidget);
+      expect(
+        tester.widget<CachedNetworkImage>(_backdrop()).imageUrl,
+        contains('/api/Reader/image'),
       );
     });
   });
