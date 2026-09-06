@@ -11,19 +11,23 @@ The self-hosted server that owns the files, the metadata and the reading progres
 _Avoid_: the backend, the API, the remote
 
 **Server version**:
-Which release of Kavita a server is running. It belongs to the server, not to the app or to the account, and it is only ever true of a server we can reach right now — the moment we cannot, we have no version, rather than an old one.
+Which release of Kavita a server is running. It belongs to the server, not to the app or to the profile, and it is only ever true of a server we can reach right now — the moment we cannot, we have no version, rather than an old one.
 _Avoid_: version (unqualified — the app has one of its own), build, release
 
-**Server entry**:
-A Kavita address the user has connected to at least once, remembered along with its tokens but never its password. Several can be remembered at once.
-_Avoid_: account, connection, instance
+**Server**:
+A Kavita address the user has connected to at least once, remembered so it need not be typed again. Several can be remembered at once, and each holds one or more profiles.
+_Avoid_: server entry, instance, connection, backend
+
+**Profile**:
+One person's Kavita account on a server, remembered along with its tokens but never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one.
+_Avoid_: account, user, member, persona
 
 **Session**:
-A server entry that currently holds tokens, i.e. one that is signed in. Exactly one server entry can be the active session.
+The profile the app is currently reading as. Exactly one profile can be the active session, and every request the app makes is made as that one.
 _Avoid_: login
 
 **Login result**:
-What a server answers a sign-in with: who you are, and the tokens to be you. It is not a session — a session is a server entry that holds tokens, and this is only what one is built from.
+What a server answers a sign-in with: who you are, and the tokens to be you. It is not a session — a session is a profile the app is currently reading as, and this is only what one is built from.
 _Avoid_: user, session, credentials (those are what is sent, not what comes back)
 
 **Registered device**:
@@ -110,7 +114,7 @@ _Avoid_: spread, landscape page
 ### Off the server
 
 **Saved chapter**:
-A chapter whose pages are stored on the device because the user asked for them. Chosen deliberately, never evicted, and readable with no server at all. This is what the Downloads tab counts.
+A chapter whose pages are stored on the device because a profile asked for them. Chosen deliberately, never evicted, and readable with no server at all. It belongs to the profile that saved it, so two people sharing a device do not share what each has saved. This is what the Downloads tab counts.
 _Avoid_: download (that is the act of fetching one), cached chapter, offline chapter
 
 **Image cache**:
@@ -133,3 +137,12 @@ The French vocabulary is fixed, and it is not a translator's choice: it matches 
 | book      | livre        |
 | specials  | hors-série   |
 | storyline | arc narratif |
+
+Two more are fixed by choice rather than by that test, because they name the app's own furniture rather than a part of a series:
+
+| English | French   |
+| ------- | -------- |
+| profile | profil   |
+| server  | serveur  |
+
+*Profil* over *compte*, for the same reason the English term avoids "account": on a picker showing faces, the word has to name a person and not a credential.
