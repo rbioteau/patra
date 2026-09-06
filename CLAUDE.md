@@ -210,3 +210,13 @@ The app is localized (English = template/fallback, French). Never hardcode user-
 **The language can be forced from Settings**, and "follow the device" is a value rather than the absence of one: `localeProvider` holds a `Locale?` and null is exactly what `MaterialApp`'s `locale` takes to mean "resolve against the system", so the default option needs no separate representation. It is restored before `runApp` like every other preference (`LocaleSettingsStore`, `initialLocaleProvider`), and a stored code the build no longer ships resolves back to the device rather than to a language with no translations behind it. The picker is built from `supportedLocales`, so a new translation appears in it by existing — the one thing a new locale needs by hand is a line in `languageEndonym`, because **a language is listed under its own name and never translated**: someone who has landed in a language they cannot read has to be able to find their way out of it. `intl` ships no endonyms, so there is nothing to derive it from; `test/locale_settings_test.dart` fails if a shipped locale has no name of its own.
 
 A test that *writes* a preference needs `mockSecureStorage()` from `test_support.dart`. On a test binding `flutter_secure_storage` has no platform behind it and the Linux implementation reaches for libsecret, which never answers — so a `write` **hangs** the test rather than failing it, which reads as a stuck suite rather than as a missing mock.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

@@ -62,3 +62,11 @@ app.*.map.json
 *.certSigningRequest
 *.csr
 *.mobileprovision
+
+# graphify — the graph and its labels are committed; the rest is machine-local
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/graph.html
+graphify-out/.graphify_python
+graphify-out/.graphify_root
