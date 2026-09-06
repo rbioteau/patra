@@ -128,9 +128,7 @@ class _MagnifyRow extends ConsumerWidget {
         ),
         subtitle: Text(
           inert ? l10n.dragToMagnifyInVertical : l10n.dragToMagnifyExplained,
-          style: PatraText.metadata(
-            color: inert ? patraDanger : null,
-          ),
+          style: PatraText.metadata(color: inert ? patraDanger : null),
         ),
         trailing: Switch(value: magnify, onChanged: set),
         // The sheet stays open: unlike picking a direction, this is a switch,

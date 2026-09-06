@@ -89,6 +89,10 @@ class _HomeAdapter implements HttpClientAdapter {
   /// series but not yet its chapter can actually be rendered.
   Completer<void>? volumesGate;
 
+  /// Holds the shelf fetch open, so the window where nothing is known yet can
+  /// be rendered.
+  Completer<void>? readingGate;
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
     ResponseBody json(Object body) => ResponseBody.fromString(
@@ -104,10 +108,12 @@ class _HomeAdapter implements HttpClientAdapter {
       ]),
       // Kavita answers 400 unless the caller names its own account, which
       // is what emptied this shelf on a real server.
-      '/api/Series/currently-reading' =>
-        options.queryParameters.containsKey('userId')
+      '/api/Series/currently-reading' => await () async {
+        await readingGate?.future;
+        return options.queryParameters.containsKey('userId')
             ? json(continueReading)
-            : ResponseBody.fromBytes(const [], 400),
+            : ResponseBody.fromBytes(const [], 400);
+      }(),
       '/api/Series/on-deck' => json(onDeck),
       '/api/Series/volumes' => await () async {
         await volumesGate?.future;
@@ -726,6 +732,25 @@ void main() {
         tester.widget<CachedNetworkImage>(_backdrop()).imageUrl,
         contains('/api/Reader/image'),
       );
+    });
+
+    // "Nothing here" is a statement about the library, not about how far the
+    // requests have got. Keying it on the hero being absent said it out loud
+    // while the promotion was merely unknown.
+    testWidgets('does not say the library is empty while it is still asking', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final adapter = _oneInProgress()..readingGate = gate;
+      await _pumpHome(tester, adapter);
+
+      // Nothing is known yet: no hero, and no verdict on the library either.
+      expect(find.byType(ContinueHero), findsNothing);
+      expect(find.textContaining('Nothing to read yet'), findsNothing);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(ContinueHero), findsOneWidget);
     });
   });
 

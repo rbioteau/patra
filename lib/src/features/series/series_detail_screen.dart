@@ -11,19 +11,13 @@ import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
 import '../../resume_point.dart';
+import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/page_backdrop.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
 import '../library/library_screen.dart';
-
-/// Where a series lives, with the name and library that let its screen draw
-/// a header before the fetch lands.
-String seriesLocation(Series series) => Uri(
-  path: '/series/${series.id}',
-  queryParameters: {'name': series.name, 'library': '${series.libraryId}'},
-).toString();
 
 final volumesProvider = FutureProvider.autoDispose.family<List<Volume>, int>(
   retry: serverRetry,
@@ -235,9 +229,7 @@ class SeriesDetailScreen extends ConsumerWidget {
     Chapter chapter,
   ) async {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
-    await context.push(
-      '/reader/${chapter.id}?page=${started ? chapter.pagesRead : 0}',
-    );
+    await context.push(readerLocation(chapter, started: started));
     ref.invalidate(volumesProvider(seriesId));
     ref.invalidate(seriesProvider(seriesId));
   }
@@ -345,10 +337,6 @@ class _SeriesHero extends ConsumerWidget {
   static const _tabletCoverWidth = 160.0;
   static const _tabletCoverHeight = 235.0;
 
-  /// The action button says two or three words. Let it fill a tablet's hero
-  /// and it stops reading as a button at all — it becomes a banner.
-  static const _actionMaxWidth = 280.0;
-
   /// The chapter the button opens, decided by the one shared rule the home
   /// screen's Continue hero uses too — see `resume_point.dart`.
   ResumePoint? _target() => volumes == null ? null : resumePoint(volumes!);
@@ -438,7 +426,7 @@ class _SeriesHero extends ConsumerWidget {
 
     // Muted grey is tuned against a flat panel; over a page it is the first
     // thing to go.
-    final secondary = onPage == null ? null : patraTextOnArt;
+    final onArt = onPage == null ? null : patraTextOnArt;
 
     return Stack(
       children: [
@@ -486,7 +474,7 @@ class _SeriesHero extends ConsumerWidget {
                           credits,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: PatraText.metadata(size: 12, color: secondary),
+                          style: PatraText.metadata(size: 12, color: onArt),
                         )
                       else if (metadata == null)
                         const Skeleton(height: 11, width: 150),
@@ -494,14 +482,14 @@ class _SeriesHero extends ConsumerWidget {
                       if (stats.isNotEmpty)
                         Text(
                           stats,
-                          style: PatraText.metadata(size: 12, color: secondary),
+                          style: PatraText.metadata(size: 12, color: onArt),
                         )
                       else
                         const Skeleton(height: 11, width: 110),
                       const SizedBox(height: 14),
                       ConstrainedBox(
                         constraints: const BoxConstraints(
-                          maxWidth: _actionMaxWidth,
+                          maxWidth: controlMaxWidth,
                         ),
                         child: SizedBox(
                           height: 44,
@@ -583,7 +571,7 @@ class _ChapterRow extends ConsumerWidget {
     final tablet = isTabletLayout(context);
     final coverWidth = tablet ? rowCoverWidthTablet : rowCoverWidth;
     final coverHeight = tablet ? rowCoverHeightTablet : rowCoverHeight;
-    final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
+    final read = chapter.isRead;
     final inProgress = chapter.pagesRead > 0 && !read;
     final progress = inProgress && chapter.pages > 0
         ? chapter.pagesRead / chapter.pages
@@ -921,9 +909,7 @@ class _ChapterRow extends ConsumerWidget {
     // of the fetch would overwrite whatever comes back.
     ref.read(readOverridesProvider.notifier).clear(chapter.id);
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
-    await context.push(
-      '/reader/${chapter.id}?page=${started ? chapter.pagesRead : 0}',
-    );
+    await context.push(readerLocation(chapter, started: started));
     // Progress changed while reading: the rows and the hero both show it.
     ref.invalidate(volumesProvider(seriesId));
     ref.invalidate(seriesProvider(seriesId));

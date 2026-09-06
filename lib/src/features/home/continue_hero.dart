@@ -12,34 +12,30 @@ import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../library/library_screen.dart';
 import '../../widgets/page_backdrop.dart';
-import '../series/series_detail_screen.dart';
+import '../../routes.dart';
 
 /// The one series the home screen promotes above the Continue shelf, or null
 /// when there is nothing to promote and the hero should not be drawn at all.
 ///
 /// **The candidates are already the answer to "what is being read".** They
 /// come from `/api/Series/currently-reading`, whose whole job is that
-/// question, so this must not ask it again — and asking it again is exactly
-/// what broke the hero the first time: the list `SeriesDto` carries no
-/// per-user progress, `pagesRead` arrives as 0 for a series plainly under way,
-/// and a `pagesRead > 0` test here rejected every candidate on a real server
-/// while every fixture in the tests sailed through. The rule is that a field
-/// the payload does not populate cannot be a filter.
+/// question, so this does not ask it again: re-deriving "started and
+/// unfinished" from the payload would be second-guessing the endpoint's own
+/// contract with fields it has no obligation to fill in.
 ///
-/// What is left to decide here is only what the endpoint does *not* know:
-/// that this app cannot open an EPUB at all — the reader refuses one outright,
-/// so the hero's button, the whole reason the hero exists, would lead nowhere
-/// — and which of the candidates was read most recently. A series carrying no
+/// What is left to decide here is only what the endpoint does not know: that
+/// this app cannot open an EPUB at all — the reader refuses one outright, so
+/// the hero's button, the whole reason the hero exists, would lead nowhere —
+/// and which of the candidates was read most recently. A series carrying no
 /// read date stays eligible; it simply cannot outrank one that says when it
 /// was read, so with no dates anywhere the shelf's own order stands.
 ///
-/// The finished guard survives as a belt-and-braces check for a server that
-/// *does* fill those fields in and hands back something already read; where
-/// they are absent it is inert.
+/// The finished guard is a belt-and-braces check for a server that hands back
+/// something already read.
 Series? featuredSeries(List<Series> candidates) {
   Series? best;
   for (final series in candidates) {
-    if (series.pages > 0 && series.pagesRead >= series.pages) continue;
+    if (series.isRead) continue;
     if (!series.format.isImageReadable) continue;
     if (best == null || _readMoreRecently(series, best)) best = series;
   }
@@ -83,14 +79,6 @@ class ContinueHero extends ConsumerWidget {
   static const _coverWidth = 92.0;
   static const _coverWidthTablet = 160.0;
 
-  /// A bar drawn the full width of a tablet stops reading as progress and
-  /// starts reading as a rule across the card. Held at the button's width so
-  /// the two agree.
-  static const _progressMaxWidth = 280.0;
-
-  /// Give a button a whole hero to fill and it stops reading as a button.
-  static const _actionMaxWidth = 280.0;
-
   String get _seriesLocation => seriesLocation(data.series);
 
   /// A chapter nobody has opened starts at the beginning; one under way
@@ -107,11 +95,6 @@ class ContinueHero extends ConsumerWidget {
     if (point == null) return 0;
     return point.started ? point.entry.chapter.pagesRead : 0;
   }
-
-  /// Takes the point rather than reaching for it, so there is no invariant
-  /// held between here and the guard on the button sixty lines away.
-  String _readerLocation(ResumePoint point) =>
-      '/reader/${point.entry.chapter.id}?page=$_resumePage';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -173,17 +156,20 @@ class ContinueHero extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxWidth: _actionMaxWidth,
+                        maxWidth: controlMaxWidth,
                       ),
                       child: SizedBox(
-                        height: 48,
+                        height: minHitTarget + 4,
                         width: double.infinity,
                         child: FilledButton.icon(
                           onPressed: switch (data.point) {
                             null => null,
                             final point => () => _open(
                               context,
-                              _readerLocation(point),
+                              readerLocation(
+                                point.entry.chapter,
+                                started: point.started,
+                              ),
                             ),
                           },
                           icon: const Icon(Icons.play_arrow_rounded, size: 20),
@@ -246,12 +232,10 @@ class _Details extends ConsumerWidget {
             ),
           ),
         ],
-        if (chapter != null) ...[
+        if (chapter != null && chapter.pages > 0) ...[
           const SizedBox(height: 12),
           ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: ContinueHero._progressMaxWidth,
-            ),
+            constraints: const BoxConstraints(maxWidth: controlMaxWidth),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -273,7 +257,7 @@ class _Details extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(radiusThumb / 3),
+                  borderRadius: BorderRadius.circular(radiusTrack),
                   child: LinearProgressIndicator(
                     value: chapter.pages > 0
                         ? chapter.pagesRead / chapter.pages

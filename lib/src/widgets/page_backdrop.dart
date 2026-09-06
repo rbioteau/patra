@@ -69,16 +69,20 @@ class PageBackdrop extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final client = ref.watch(kavitaClientProvider);
+    // Resolved here rather than inside the LayoutBuilder below: an inherited
+    // lookup made during layout enrols this widget as a dependent from inside
+    // that layout, which is the hazard the reader documents at length.
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     return Stack(
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: patraBg),
-        _artwork(client),
+        _artwork(client, pixelRatio),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
+              begin: AlignmentDirectional.centerStart,
+              end: AlignmentDirectional.centerEnd,
               colors: _scrim,
               stops: const [0, 0.46, 1],
             ),
@@ -88,39 +92,48 @@ class PageBackdrop extends ConsumerWidget {
     );
   }
 
-  Widget _artwork(KavitaClient client) => LayoutBuilder(
-    builder: (context, constraints) => Align(
-      alignment: AlignmentDirectional.centerEnd,
-      child: SizedBox(
-        width: math.min(
-          constraints.maxWidth,
-          constraints.maxHeight * _maxAspect,
-        ),
-        child: ShaderMask(
-          blendMode: BlendMode.dstIn,
-          shaderCallback: (bounds) => const LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [_hidden, _shown],
-            stops: [0, _fade],
-          ).createShader(bounds),
-          child: CachedNetworkImage(
-            key: const ValueKey('heroBackdrop'),
-            imageUrl: chapterId == null
-                ? client.seriesCoverUrl(seriesId)
-                : client.readerImageUrl(chapterId!, page),
-            httpHeaders: client.imageHeaders,
-            fit: BoxFit.cover,
-            // The top of a page is its most composed part; its middle is
-            // wherever a panel happens to fall.
-            alignment: Alignment.topCenter,
-            fadeInDuration: Duration.zero,
-            placeholder: (_, _) => _CoverBackdrop(seriesId: seriesId),
-            errorWidget: (_, _, _) => _CoverBackdrop(seriesId: seriesId),
+  Widget _artwork(KavitaClient client, double pixelRatio) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = math.min(
+        constraints.maxWidth,
+        constraints.maxHeight * _maxAspect,
+      );
+      return Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: SizedBox(
+          width: width,
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: AlignmentDirectional.centerStart,
+              end: AlignmentDirectional.centerEnd,
+              colors: [_hidden, _shown],
+              stops: [0, _fade],
+              // A directional gradient has to be told which way that is;
+              // `createShader` does not read it off the tree by itself.
+            ).createShader(bounds, textDirection: Directionality.of(context)),
+            child: CachedNetworkImage(
+              key: const ValueKey('heroBackdrop'),
+              imageUrl: chapterId == null
+                  ? client.seriesCoverUrl(seriesId)
+                  : client.readerImageUrl(chapterId!, page),
+              httpHeaders: client.imageHeaders,
+              fit: BoxFit.cover,
+              // The top of a page is its most composed part; its middle is
+              // wherever a panel happens to fall.
+              alignment: Alignment.topCenter,
+              // A page is served at reading resolution and drawn here in a
+              // band. Decoding the whole of it is the memory the repo's
+              // decode-width rule exists to avoid.
+              memCacheWidth: (width * pixelRatio).round(),
+              fadeInDuration: Duration.zero,
+              placeholder: (_, _) => _CoverBackdrop(seriesId: seriesId),
+              errorWidget: (_, _, _) => _CoverBackdrop(seriesId: seriesId),
+            ),
           ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 

@@ -84,19 +84,34 @@ class MagnifyTransform {
     final dx = origin.dx - content.left * scale;
     final dy = origin.dy - content.top * scale;
     return Matrix4(
-      scale, 0, 0, 0, //
-      0, scale, 0, 0, //
-      0, 0, 1, 0, //
-      dx, dy, 0, 1, //
+      scale,
+      0,
+      0,
+      0, //
+      0,
+      scale,
+      0,
+      0, //
+      0,
+      0,
+      1,
+      0, //
+      dx,
+      dy,
+      0,
+      1, //
     );
   }
 
-  static MagnifyTransform lerp(MagnifyTransform a, MagnifyTransform b, double t) =>
-      MagnifyTransform(
-        content: a.content,
-        scale: a.scale + (b.scale - a.scale) * t,
-        origin: Offset.lerp(a.origin, b.origin, t)!,
-      );
+  static MagnifyTransform lerp(
+    MagnifyTransform a,
+    MagnifyTransform b,
+    double t,
+  ) => MagnifyTransform(
+    content: a.content,
+    scale: a.scale + (b.scale - a.scale) * t,
+    origin: Offset.lerp(a.origin, b.origin, t)!,
+  );
 }
 
 /// A gesture in progress: the finger went down at [anchor], and every position
@@ -193,10 +208,20 @@ class MagnifyGesture {
       content: content,
       scale: scale,
       origin: Offset(
-        _place(at.dx - u * width, width, viewport.width, content.left,
-            content.width),
-        _place(at.dy - v * height, height, viewport.height, content.top,
-            content.height),
+        _place(
+          at.dx - u * width,
+          width,
+          viewport.width,
+          content.left,
+          content.width,
+        ),
+        _place(
+          at.dy - v * height,
+          height,
+          viewport.height,
+          content.top,
+          content.height,
+        ),
       ),
     );
   }

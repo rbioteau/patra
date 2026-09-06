@@ -6,6 +6,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../resume_point.dart';
+import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
@@ -106,11 +107,17 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final hero = ref.watch(continueHeroProvider);
+    final started = ref.watch(continueReadingProvider);
     final onDeck = _without(ref.watch(onDeckProvider), hero?.series.id);
     final libraries = ref.watch(librariesProvider);
 
+    // Every clause has to be a *resolved* emptiness. `hero == null` alone is
+    // also true while the promotion is merely unknown — in flight, or offline
+    // — so keying the copy on it flashes "nothing here" over a library that
+    // has plenty. An unresolved provider has a null value and fails the test.
     final everythingEmpty =
         hero == null &&
+        (started.value?.isEmpty ?? false) &&
         (onDeck.value?.isEmpty ?? false) &&
         (libraries.value?.isEmpty ?? false);
 
@@ -145,6 +152,7 @@ class HomeScreen extends ConsumerWidget {
                 label: l10n.onDeckSection,
                 series: onDeck,
                 showProgress: true,
+                onReturn: () => _refresh(ref),
               ),
               _LibrariesSection(libraries: libraries),
             ],
@@ -194,12 +202,17 @@ class _Shelf extends ConsumerWidget {
   const _Shelf({
     required this.label,
     required this.series,
+    required this.onReturn,
     this.showProgress = false,
   });
 
   final String label;
   final AsyncValue<List<Series>> series;
   final bool showProgress;
+
+  /// What to ask again once a tile's screen has been popped. The screen owns
+  /// its providers, so the shelf does not name them.
+  final Future<void> Function() onReturn;
 
   static const _tileWidth = 112.0;
 
@@ -266,8 +279,10 @@ class _Shelf extends ConsumerWidget {
                     progress: progress,
                     onTap: () async {
                       await context.push(seriesLocation(s));
-                      ref.invalidate(continueReadingProvider);
-                      ref.invalidate(onDeckProvider);
+                      // Reading changes progress, and which series is
+                      // promoted follows from it — so the hero's chapter has
+                      // to be asked about again too, not just the shelves.
+                      await onReturn();
                     },
                   ),
                 );
