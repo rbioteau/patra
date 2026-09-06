@@ -165,6 +165,10 @@ class Series {
   /// clock.
   final DateTime? latestReadDate;
 
+  /// Every page read. Kavita reports progress as a count rather than a flag,
+  /// and `pages == 0` is a series it has not measured — not a finished one.
+  bool get isRead => pages > 0 && pagesRead >= pages;
+
   factory Series.fromJson(Map<String, dynamic> json) => Series(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
@@ -302,6 +306,9 @@ class Chapter {
 
   /// What the files are. Our reader only handles the image formats.
   final MangaFormat format;
+
+  /// Every page read. See [Series.isRead]; the same question of a chapter.
+  bool get isRead => pages > 0 && pagesRead >= pages;
 
   Chapter copyWith({int? pagesRead}) => Chapter(
     id: id,

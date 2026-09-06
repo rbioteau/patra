@@ -50,6 +50,15 @@ const gutter = 20.0;
 const sectionGap = 24.0;
 const minHitTarget = 44.0;
 
+/// Past this, a control stops reading as one and becomes a banner or a rule
+/// across the screen. Shared, because the numbers drifted when the series
+/// hero and the home hero each held their own — the same reason
+/// [rowCoverWidth] is not written twice.
+const controlMaxWidth = 280.0;
+
+/// A progress track drawn on its own, away from a cover.
+const radiusTrack = 2.0;
+
 /// Covers are always 2:3.
 const coverAspectRatio = 2 / 3;
 

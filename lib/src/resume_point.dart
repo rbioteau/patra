@@ -69,9 +69,9 @@ ResumePoint? resumePoint(List<Volume> volumes) {
   // field, so this mirrors its rule rather than reading a value.
   final started = entries.any((entry) => entry.chapter.pagesRead > 0);
   for (final entry in entries) {
-    final chapter = entry.chapter;
-    final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
-    if (!read) return (entry: entry, started: started, allRead: false);
+    if (!entry.chapter.isRead) {
+      return (entry: entry, started: started, allRead: false);
+    }
   }
   return (entry: entries.first, started: started, allRead: true);
 }

@@ -28,6 +28,7 @@ enum ReadingDirection {
 class ReadingSettingsStore {
   static const _storage = FlutterSecureStorage();
   static const _key = 'readingDirection';
+
   /// Deliberately still `loupeGesture`. The concept was called a loupe
   /// before the word was found to be wrong for it — a loupe is a lens over
   /// a region, and this magnifies the whole page — but the *string* is

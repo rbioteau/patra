@@ -335,7 +335,9 @@ class KavitaClient {
   /// read. Recomputed rather than cached because the token is refreshed.
   int? get accountId => accountIdFrom(_token);
 
-  /// Series the user has started but not finished — the "Continue" shelf.
+  /// Series the user has started but not finished — the candidates the home
+  /// screen's Continue promotion picks from. It is not drawn as a list: On
+  /// deck is the home screen's only shelf.
   ///
   /// **`userId` is required.** Kavita reads the caller's own id off the query
   /// string here rather than off the bearer token, and answers 400 without it

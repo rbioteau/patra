@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../api/connection_failure.dart';
@@ -235,17 +236,9 @@ class _SeriesGrid extends ConsumerWidget {
                 title: s.name,
                 serifTitle: true,
                 progress: progress,
-                read: s.pages > 0 && s.pagesRead >= s.pages,
+                read: s.isRead,
                 onTap: () async {
-                  await context.push(
-                    Uri(
-                      path: '/series/${s.id}',
-                      queryParameters: {
-                        'name': s.name,
-                        'library': '$libraryId',
-                      },
-                    ).toString(),
-                  );
+                  await context.push(seriesLocation(s));
                   // Progress may have changed while reading.
                   ref.invalidate(seriesForLibraryProvider(libraryId));
                 },
