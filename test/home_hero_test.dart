@@ -201,6 +201,13 @@ void _iPad(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// A desktop window in landscape: wide and, for the hero, short.
+void _landscape(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1840, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
 /// A phone: 390x844 logical points.
 void _phone(WidgetTester tester) {
   tester.view.physicalSize = const Size(1170, 2532);
@@ -212,6 +219,12 @@ void _phone(WidgetTester tester) {
 /// `/api/Series/currently-reading` requires as a query parameter.
 const _token =
     'eyJhbGciOiAiSFM1MTIifQ.eyJuYW1lIjogInRlc3RlciIsICJuYW1laWQiOiAiMSJ9.sig';
+
+/// The page behind the card — the one image that is not the cover thumbnail.
+Finder _backdrop() => find.descendant(
+  of: find.byType(ContinueHero),
+  matching: find.byKey(const ValueKey('heroBackdrop')),
+);
 
 void main() {
   group('the series the hero promotes', () {
@@ -724,6 +737,30 @@ void main() {
         tester.getSize(find.byType(LinearProgressIndicator)).width,
         lessThan(280),
       );
+    });
+
+    // A page is portrait and a hero on a wide screen is a letterbox. Covering
+    // that box scales the page to the card's width, so what shows is a
+    // magnified sliver of one panel. The artwork is capped against its own
+    // height instead and hung on the edge the scrim lets it show through.
+    testWidgets('the page is not blown up to fill a landscape card', (
+      tester,
+    ) async {
+      _landscape(tester);
+      await _pumpHome(tester, _oneInProgress());
+      final card = tester.getRect(find.byType(ContinueHero));
+      final art = tester.getRect(_backdrop());
+      expect(art.width, lessThan(card.width / 2));
+      // Hung on the trailing edge, not floating in the middle.
+      expect(art.right, closeTo(card.right - gutter, 0.5));
+    });
+
+    testWidgets('and still spans the card in portrait', (tester) async {
+      _phone(tester);
+      await _pumpHome(tester, _oneInProgress());
+      final art = tester.getRect(_backdrop());
+      final card = tester.getRect(find.byType(ContinueHero));
+      expect(art.width, closeTo(card.width - gutter * 2, 0.5));
     });
   });
 }

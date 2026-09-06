@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -87,9 +90,6 @@ class ContinueHero extends ConsumerWidget {
   /// the two agree.
   static const _progressMaxWidth = 280.0;
 
-  /// How much of the page shows through the ink floor beneath it.
-  static const _backdropOpacity = 0.5;
-
   /// Ink over the artwork: opaque where the words are, thinning towards the
   /// far edge so the cover is still visible there. This is what makes the
   /// title legible over any cover, which is why nothing is blurred.
@@ -130,34 +130,11 @@ class ContinueHero extends ConsumerWidget {
           color: patraSurface,
           child: Stack(
             children: [
-              // Where you actually are in the book, not its cover — and at
-              // the very URL the reader asks for, so a page just read is
-              // already on disk instead of being fetched again. Until the
-              // chapter is known the cover stands in, which is also what a
-              // page that will not load falls back to.
-              // A cover is dense colour; a page is usually black line art on
-              // white, and a scrim alone cannot hold that down — the words
-              // land on paper and vanish. The floor plus a half-strength
-              // image give the artwork a brightness ceiling it cannot exceed,
-              // whatever the page turns out to be, and the scrim then does
-              // the directional work it was drawn for.
-              const Positioned.fill(child: ColoredBox(color: patraBg)),
               Positioned.fill(
-                child: Opacity(
-                  opacity: _backdropOpacity,
-                  child: CachedNetworkImage(
-                    imageUrl: data.point == null
-                        ? client.seriesCoverUrl(series.id)
-                        : client.readerImageUrl(
-                            data.point!.entry.chapter.id,
-                            _resumePage,
-                          ),
-                    httpHeaders: client.imageHeaders,
-                    fit: BoxFit.cover,
-                    fadeInDuration: Duration.zero,
-                    placeholder: (_, _) => _CoverBackdrop(series: series),
-                    errorWidget: (_, _, _) => _CoverBackdrop(series: series),
-                  ),
+                child: _Backdrop(
+                  series: series,
+                  chapterId: data.point?.entry.chapter.id,
+                  page: _resumePage,
                 ),
               ),
               // The text sits on ink and the artwork shows through on the far
@@ -323,6 +300,88 @@ class _Details extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The page reading resumes at, drawn behind the card.
+///
+/// Two things it has to survive. A cover is dense colour; a page is usually
+/// black line art on white, and a scrim alone cannot hold that down — the
+/// words land on paper and vanish. So there is an ink floor under a
+/// half-strength image, which gives the artwork a brightness ceiling it
+/// cannot exceed whatever the page turns out to be.
+///
+/// And a page is portrait while a hero on a wide screen is a letterbox.
+/// Covering that box scales the page to the *card's* width, which magnifies
+/// one panel until a speech bubble fills the card. So the artwork's width is
+/// capped against its own height, leaving it drawn at something near its
+/// natural size, and hung on the trailing edge — the side the scrim thins out
+/// for. Its leading edge is faded rather than cut, or the cap would show as a
+/// seam down the middle of the card.
+class _Backdrop extends ConsumerWidget {
+  const _Backdrop({
+    required this.series,
+    required this.chapterId,
+    required this.page,
+  });
+
+  final Series series;
+  final int? chapterId;
+  final int page;
+
+  /// How much of the page shows through the ink beneath it, as the alpha the
+  /// fade ramps *up to* — one mask doing both jobs rather than a fade layer
+  /// over an opacity layer.
+  static const _shown = Color(0x80000000);
+
+  /// The widest the artwork may be drawn, against its own height. Chosen so a
+  /// card in portrait is covered exactly as it was and only a letterbox is
+  /// ever cut back.
+  static const _maxAspect = 2.0;
+
+  /// How much of the artwork's leading edge is spent fading it in.
+  static const _fade = 0.35;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(kavitaClientProvider);
+    return ColoredBox(
+      color: patraBg,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: SizedBox(
+            width: math.min(
+              constraints.maxWidth,
+              constraints.maxHeight * _maxAspect,
+            ),
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) => const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Color(0x00000000), _shown],
+                stops: [0, _fade],
+              ).createShader(bounds),
+              child: CachedNetworkImage(
+                key: const ValueKey('heroBackdrop'),
+                imageUrl: chapterId == null
+                    ? client.seriesCoverUrl(series.id)
+                    : client.readerImageUrl(chapterId!, page),
+                httpHeaders: client.imageHeaders,
+                fit: BoxFit.cover,
+                // The top of a page is its most composed part; its middle is
+                // wherever a panel happens to fall.
+                alignment: Alignment.topCenter,
+                fadeInDuration: Duration.zero,
+                placeholder: (_, _) => _CoverBackdrop(series: series),
+                errorWidget: (_, _, _) => _CoverBackdrop(series: series),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
