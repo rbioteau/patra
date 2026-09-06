@@ -62,9 +62,11 @@ IconData _libraryIcon(LibraryType type) => switch (type) {
 };
 
 /// The shelf without the series the hero has taken, so one series is never
-/// two things on the same screen. Applied to On deck as well as to Continue:
-/// the rule is that the promoted series appears once, whichever shelves would
-/// otherwise have carried it.
+/// two things on the same screen.
+///
+/// This is also what catches a hero that collapses: the removal is keyed on
+/// the hero actually being there, so a card that could not be completed
+/// leaves its series in the list rather than taking it off the screen.
 AsyncValue<List<Series>> _without(AsyncValue<List<Series>> shelf, int? id) =>
     id == null
     ? shelf
@@ -104,16 +106,11 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final hero = ref.watch(continueHeroProvider);
-    final continueReading = _without(
-      ref.watch(continueReadingProvider),
-      hero?.series.id,
-    );
     final onDeck = _without(ref.watch(onDeckProvider), hero?.series.id);
     final libraries = ref.watch(librariesProvider);
 
     final everythingEmpty =
         hero == null &&
-        (continueReading.value?.isEmpty ?? false) &&
         (onDeck.value?.isEmpty ?? false) &&
         (libraries.value?.isEmpty ?? false);
 
@@ -140,12 +137,15 @@ class HomeScreen extends ConsumerWidget {
                 ),
               if (hero != null)
                 ContinueHero(data: hero, onReturn: () => _refresh(ref)),
+              // On deck is the only list. `currently-reading` still runs, but
+              // only to decide the hero: it and On deck came back as very
+              // nearly the same set of series, so two shelves of them was the
+              // same library twice with two headings over it.
               _Shelf(
-                label: l10n.continueSection,
-                series: continueReading,
+                label: l10n.onDeckSection,
+                series: onDeck,
                 showProgress: true,
               ),
-              _Shelf(label: l10n.onDeckSection, series: onDeck),
               _LibrariesSection(libraries: libraries),
             ],
           ),

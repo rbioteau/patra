@@ -31,7 +31,8 @@ class _StubAdapter implements HttpClientAdapter {
       '/api/Library/libraries' => json([
         {'id': 1, 'name': 'Mangas', 'type': 0},
       ]),
-      '/api/Series/currently-reading' => json([
+      '/api/Series/currently-reading' => json(const <Object>[]),
+      '/api/Series/on-deck' => json([
         {
           'id': 5,
           'name': 'Blame!',
@@ -40,7 +41,6 @@ class _StubAdapter implements HttpClientAdapter {
           'pagesRead': 40,
         },
       ]),
-      '/api/Series/on-deck' => json(const <Object>[]),
       _ => json(const <Object>[]),
     };
   }
@@ -141,11 +141,11 @@ void main() {
     for (final tab in ['Home', 'Library', 'Downloads', 'Settings']) {
       expect(find.text(tab), findsOneWidget, reason: '$tab tab is present');
     }
-    // The home shelf rendered the series the stub server is serving.
-    expect(find.text('CONTINUE'), findsOneWidget);
+    // The home screen's one list rendered what the stub server is serving.
+    expect(find.text('ON DECK'), findsOneWidget);
     expect(find.text('Blame!'), findsOneWidget);
-    // An empty section renders nothing rather than an empty label.
-    expect(find.text('ON DECK'), findsNothing);
+    // Nothing to continue, so the hero is absent rather than empty.
+    expect(find.text('CONTINUE'), findsNothing);
 
     await tester.tap(find.text('Downloads'));
     await tester.pumpAndSettle();

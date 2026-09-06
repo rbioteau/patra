@@ -76,11 +76,13 @@ How much has been read, counted in pages. It exists per chapter and per series, 
 _Avoid_: completion, status, read state
 
 **Continue**:
-The series that have been started and not finished. One set with one name, however it is drawn: the shelf of them on the home screen and the single series promoted above that shelf are the same idea, and the promoted one — the series read most recently — is not repeated in the shelf below it. Kavita calls this *currently reading*; that is the name of its endpoint, not a second concept and not a word we show.
+The series read most recently that has been started and not finished — one series, not a set. It is what the home screen promotes above everything else, and the only thing that promotion is for is opening it again. Kavita calls the endpoint behind it *currently reading*; that is the name of a route, not a second concept and not a word we show.
+
+It was briefly a shelf as well as a promotion, on the reading that Continue and [[On deck]] answer different questions. On a real library they return very nearly the same series, so two shelves of them was one library twice under two headings. What survives of the distinction is that Continue is one series and On deck is a list.
 _Avoid_: currently reading, in progress, resume list, reading list (that is a Kavita feature of its own)
 
 **On deck**:
-The series the app suggests picking up next, as Kavita chooses them. It stands beside Continue on the home screen and is not the same question: Continue is what you have started, On deck is what the server puts forward. Where one series would qualify for both, it is shown once.
+The series with reading progress on them, as Kavita picks and orders them. It is the home screen's one list, and the series the [[Continue]] promotion has taken is removed from it, so no series is two things on the same screen. That removal is also what covers a promotion that fails to draw: it is keyed on the card being there, so a series whose chapter could not be fetched stays in the list rather than leaving the screen with it.
 _Avoid_: next up, recommended, suggestions, up next
 
 ### Reading

@@ -397,13 +397,16 @@ void main() {
       expect(find.textContaining('Continue — '), findsNothing);
     });
 
-    testWidgets('its series is not repeated in the Continue shelf', (
+    testWidgets('its series is not repeated in the list below it', (
       tester,
     ) async {
       await _pumpHome(
         tester,
         _HomeAdapter(
           continueReading: [
+            _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
+          ],
+          onDeck: [
             _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
             _json(6, name: 'Berserk', lastRead: '2026-09-01T10:00:00'),
           ],
@@ -426,11 +429,13 @@ void main() {
         ),
         findsOneWidget,
       );
-      // The rest of the shelf is untouched.
+      // The rest of the list is untouched.
       expect(find.text('Berserk'), findsOneWidget);
     });
 
-    testWidgets('its series is not repeated in On deck either', (tester) async {
+    testWidgets('is taken out of On deck, which is the same set', (
+      tester,
+    ) async {
       await _pumpHome(
         tester,
         _HomeAdapter(
@@ -455,10 +460,13 @@ void main() {
 
     // A hero that cannot be completed is worse than no hero, and its series
     // must not disappear from the screen with it.
-    testWidgets('collapses when the chapter cannot be fetched, and gives the '
-        'series back to the shelf', (tester) async {
+    testWidgets('collapses when the chapter cannot be fetched, and leaves the '
+        'series in the list', (tester) async {
       final adapter = _HomeAdapter(
         continueReading: [
+          _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
+        ],
+        onDeck: [
           _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
         ],
       )..volumesFail = true;
@@ -520,8 +528,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ContinueHero), findsNothing);
-      // And the series is still reachable from the shelf.
-      expect(find.text('Vinland Saga'), findsOneWidget);
     });
 
     // The hero's chapter is a fourth request, and a pull has to reach it too.
@@ -634,6 +640,22 @@ void main() {
       );
       // The thumbnail is still the cover.
       expect(urls, contains(contains('/api/Image/series-cover')));
+    });
+
+    // Two shelves of nearly the same series was the complaint; there is one.
+    testWidgets('there is a single list, headed On deck', (tester) async {
+      final adapter = _oneInProgress()
+        ..onDeck = [_json(6, name: 'Berserk', lastRead: '2026-09-01T10:00:00')];
+      await _pumpHome(tester, adapter);
+      expect(find.text('ON DECK'), findsOneWidget);
+      expect(find.text('CONTINUE'), findsOneWidget); // the hero's eyebrow
+      expect(
+        find.descendant(
+          of: find.byType(ContinueHero),
+          matching: find.text('CONTINUE'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 
