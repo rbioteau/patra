@@ -95,6 +95,7 @@ void main() {
       '/api/Account/login': 'post',
       '/api/Account/refresh-token': 'post',
       '/api/Health': 'get',
+      '/api/Plugin/version': 'get',
       '/api/Library/libraries': 'get',
       '/api/Library/scan': 'post',
       '/api/Series/all-v2': 'post',

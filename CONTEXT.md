@@ -10,6 +10,10 @@ Patra is a mobile reading client for **Kavita**, a self-hosted manga, comics and
 The self-hosted server that owns the files, the metadata and the reading progress. It is the authority on all three.
 _Avoid_: the backend, the API, the remote
 
+**Server version**:
+Which release of Kavita a server is running. It belongs to the server, not to the app or to the account, and it is only ever true of a server we can reach right now — the moment we cannot, we have no version, rather than an old one.
+_Avoid_: version (unqualified — the app has one of its own), build, release
+
 **Server entry**:
 A Kavita address the user has connected to at least once, remembered along with its tokens but never its password. Several can be remembered at once.
 _Avoid_: account, connection, instance

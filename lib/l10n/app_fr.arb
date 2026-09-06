@@ -104,6 +104,7 @@
   "switchServer": "Changer de serveur",
   "serverOnline": "Connecté",
   "serverOffline": "Hors ligne",
+  "serverVersion": "Kavita {version}",
   "serverChecking": "Vérification…",
   "generalSectionLabel": "Général",
   "appLanguage": "Langue",

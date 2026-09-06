@@ -357,6 +357,40 @@ final serverReachableProvider = FutureProvider.autoDispose<bool>(
   },
 );
 
+/// Which release of Kavita the active server is running, or null if it will
+/// not say.
+///
+/// Deliberately a second request beside [serverReachableProvider] rather than
+/// one that answers both questions, even though `/api/Plugin/version` shares
+/// every property that made `/api/Health` the right probe. Two reasons, and
+/// both are about the dot rather than about the version:
+///
+/// The auth key this endpoint takes can expire independently of the session,
+/// and an expired one answers **401 from a server that is plainly up**. Fold
+/// the two together and a credential paints the dot red and tells someone
+/// their server is unreachable.
+///
+/// And [serverReachableProvider] deliberately calls a 500 or a 404
+/// "reachable" — a server that answers at all is there, whatever it answers.
+/// A version fetch cannot make that distinction, because those are exactly
+/// the answers that carry no version.
+///
+/// So a failure here must never be able to move the dot. Null is every kind
+/// of "we do not know": no answer yet, an old server that 404s the endpoint,
+/// an expired key. The settings card renders all of them as no line at all,
+/// which is why nothing here needs to tell them apart.
+final serverVersionProvider = FutureProvider.autoDispose<String?>(
+  retry: serverRetry,
+  (ref) async {
+    final client = ref.watch(kavitaClientProvider);
+    try {
+      return await client.serverVersion();
+    } on DioException {
+      return null;
+    }
+  },
+);
+
 /// Kept across rebuilds so screens still unmounting after a logout get a
 /// usable (if doomed) client instead of a build-time crash, and so a
 /// replaced client can be closed.

@@ -77,6 +77,19 @@ class KavitaClient {
     _ => false,
   };
 
+  /// Marks a request whose `401` says nothing about our JWT, so the handler
+  /// above leaves it alone.
+  ///
+  /// Every endpoint but one authenticates with the Bearer token, which makes
+  /// a `401` mean "refresh and retry". `/api/Plugin/version` is
+  /// `[AllowAnonymous]` and authenticated by the `apiKey` query parameter
+  /// alone — Kavita never looks at the header — so its `401` means the *key*
+  /// has expired while the session is perfectly good. Without this flag that
+  /// answer would spend a refresh, retry a request that must 401 again, and,
+  /// if the refresh itself failed, fire `onSessionExpired` and sign the user
+  /// out over a version string.
+  static const _bearerIsIrrelevant = 'bearerIsIrrelevant';
+
   final String baseUrl;
   final String apiKey;
 
@@ -112,7 +125,8 @@ class KavitaClient {
   ) async {
     final response = error.response;
     final alreadyRetried = error.requestOptions.extra['retried'] == true;
-    if (response?.statusCode != 401 || alreadyRetried) {
+    final ownsAuth = error.requestOptions.extra[_bearerIsIrrelevant] != true;
+    if (response?.statusCode != 401 || alreadyRetried || !ownsAuth) {
       return handler.next(error);
     }
     // Another queued request may have refreshed while we waited; only hit
@@ -200,6 +214,50 @@ class KavitaClient {
   /// through [_dio] is the point — the reachability interceptor turns the
   /// result into [offlineProvider] for the rest of the app.
   Future<void> health() => _dio.get<dynamic>('/api/Health');
+
+  /// Which release of Kavita this server is running, or null if it will not
+  /// say.
+  ///
+  /// `/api/Plugin/version` rather than `/api/Server/server-info-slim`, which
+  /// carries the same number in a richer DTO: `ServerController` is
+  /// `[Authorize(PolicyGroups.AdminPolicy)]` at the class level and none of
+  /// its actions opts out, so a non-admin earns a 403 from it and from
+  /// `check-update` alike. This one is `[AllowAnonymous]` and its controller
+  /// is `[SkipDeviceTracking]` — the same two properties that made
+  /// `/api/Health` the right probe — and it accepts any account's
+  /// non-expired auth key, which is exactly what the login response's
+  /// [apiKey] is.
+  ///
+  /// The login response *also* carries this number, as `UserDto.kavitaVersion`,
+  /// and we deliberately ignore it: a resumed session never logs in again, so
+  /// on most launches there is no value at all, and the value there is would
+  /// be as old as the last sign-in. Kavita's own web client ignores the field
+  /// for the same reason — its `User` model does not even declare it — and
+  /// polls this endpoint instead.
+  ///
+  /// The body is bare `text/plain` (four dot-separated integers, `0.9.1.4`),
+  /// read from the `InstallVersion` setting that `Startup` rewrites from the
+  /// assembly version at every boot. Anything that is not a string is treated
+  /// as no answer rather than stringified onto the screen: the contract
+  /// oracle deliberately does not assert response types, so the guard against
+  /// a future Kavita returning JSON belongs here.
+  ///
+  /// Which is why this must **not** ask for `ResponseType.plain`, however
+  /// well that describes what Kavita sends today: forcing it hands back the
+  /// raw body as a `String` whatever the content type, so a JSON answer would
+  /// sail past the check below and land on the card as a stringified map.
+  /// Left alone, dio decodes by content type and the guard is real.
+  Future<String?> serverVersion() async {
+    final res = await _dio.get<dynamic>(
+      '/api/Plugin/version',
+      queryParameters: {'apiKey': apiKey},
+      options: Options(extra: {_bearerIsIrrelevant: true}),
+    );
+    final version = res.data;
+    if (version is! String) return null;
+    final trimmed = version.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   /// Asks the server to scan a library for new files.
   ///

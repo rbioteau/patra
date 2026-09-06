@@ -413,6 +413,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get serverOffline => 'Hors ligne';
 
   @override
+  String serverVersion(String version) {
+    return 'Kavita $version';
+  }
+
+  @override
   String get serverChecking => 'Vérification…';
 
   @override

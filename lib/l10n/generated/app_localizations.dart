@@ -722,6 +722,12 @@ abstract class AppLocalizations {
   /// **'Offline'**
   String get serverOffline;
 
+  /// On the settings server card, after the username. The server names itself because the About section on the same screen prints Patra's own version, and a bare number under a hostname could be either. Verbatim, four dot-separated integers and no 'v' prefix: Kavita's own admin screen prints the same string unmodified, and this number's job is to be read back into a bug report.
+  ///
+  /// In en, this message translates to:
+  /// **'Kavita {version}'**
+  String serverVersion(String version);
+
   /// The dot's label while the reachability probe is still in flight
   ///
   /// In en, this message translates to:

@@ -509,6 +509,13 @@ class _ServerCardState extends ConsumerState<_ServerCard>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(serverReachableProvider);
+      // A server's version changes when it is upgraded, which means it
+      // restarted — so from here that shows up as a spell of unreachability
+      // and a return. Coming back to the foreground is therefore the moment
+      // to ask again, and there is no other: Kavita pushes `UpdateAvailable`
+      // to admins only and has no restart event at all, so noticing the
+      // string changed is the only mechanism a client of ours has.
+      ref.invalidate(serverVersionProvider);
     }
   }
 
@@ -519,7 +526,17 @@ class _ServerCardState extends ConsumerState<_ServerCard>
     // succeeded a while ago, so being offline outranks a stale success.
     // Null is "not known yet", which is neither colour.
     final probe = ref.watch(serverReachableProvider);
-    final reachable = ref.watch(offlineProvider) ? false : probe.value;
+    final offline = ref.watch(offlineProvider);
+    final reachable = offline ? false : probe.value;
+    // `.value` rather than a pattern match on the state, so a refresh keeps
+    // painting the last answer instead of blanking the line on every
+    // foreground. Offline suppresses it outright: a version is only ever
+    // true of a server we can reach right now, and a card that reads
+    // "Kavita 0.9.1.4 · Offline" asserts a fact about the server in the
+    // same breath as admitting it cannot reach it.
+    final version = reachable == false
+        ? null
+        : ref.watch(serverVersionProvider).value;
     final (dotColor, status) = switch (reachable) {
       true => (patraOnline, l10n.serverOnline),
       false => (patraDanger, l10n.serverOffline),
@@ -578,6 +595,18 @@ class _ServerCardState extends ConsumerState<_ServerCard>
                               style: PatraText.metadata(),
                             ),
                           ),
+                          // Not flexible: eight characters that a long
+                          // username should shorten around rather than push
+                          // off the row. It can never share the line with
+                          // the status word below — being offline is what
+                          // takes the version away.
+                          if (version != null) ...[
+                            Text(' · ', style: PatraText.metadata()),
+                            Text(
+                              l10n.serverVersion(version),
+                              style: PatraText.metadata(),
+                            ),
+                          ],
                           // Said in words only when it is bad news: a green
                           // dot needs no caption, an unreachable server does.
                           if (reachable == false) ...[
