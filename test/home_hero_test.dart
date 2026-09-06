@@ -657,6 +657,19 @@ void main() {
         findsOneWidget,
       );
     });
+
+    // The row once had a percentage at one end and the pages remaining at the
+    // other. With the percentage gone it holds one label, and a lone label
+    // right-aligned drifts onto the brightest part of the page behind it.
+    testWidgets('the pages remaining sit at the start, over the ink', (
+      tester,
+    ) async {
+      await _pumpHome(tester, _oneInProgress());
+      expect(
+        tester.getTopLeft(find.text('18 pages left')).dx,
+        tester.getTopLeft(find.byType(LinearProgressIndicator)).dx,
+      );
+    });
   });
 
   // A tablet's answer to width is more room for the furniture, never a

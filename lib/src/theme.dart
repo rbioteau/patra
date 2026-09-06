@@ -31,6 +31,11 @@ final patraTextMuted = patraText.withValues(alpha: .45);
 /// The unfilled part of a progress track drawn on its own, away from a cover
 /// (where [CoverProgressBar] sits on the artwork and uses black instead).
 final patraTrack = patraText.withValues(alpha: .14);
+
+/// Secondary text laid over artwork rather than over a surface. [patraTextMuted]
+/// is tuned against a flat dark panel and disappears on a page, which may be
+/// anything from black ink to bare white paper.
+final patraTextOnArt = patraText.withValues(alpha: .78);
 final patraBorder = Colors.white.withValues(alpha: .08);
 
 /// Radii
