@@ -11,6 +11,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/features/home/continue_hero.dart';
 import 'package:patra/src/features/home/home_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/cover.dart';
 
@@ -606,6 +607,34 @@ void main() {
 
       expect(find.text('Chapter 13'), findsOneWidget);
     });
+
+    // The backdrop is where you actually are in the book, not its cover — and
+    // it is the same URL the reader uses, so a page just read is already on
+    // disk rather than fetched again.
+    testWidgets('the backdrop is the page reading resumes at', (tester) async {
+      await _pumpHome(tester, _oneInProgress());
+      final urls = tester
+          .widgetList<CachedNetworkImage>(
+            find.descendant(
+              of: find.byType(ContinueHero),
+              matching: find.byType(CachedNetworkImage),
+            ),
+          )
+          .map((w) => w.imageUrl)
+          .toList();
+      expect(
+        urls,
+        contains(
+          allOf(
+            contains('/api/Reader/image'),
+            contains('chapterId=101'),
+            contains('page=12'),
+          ),
+        ),
+      );
+      // The thumbnail is still the cover.
+      expect(urls, contains(contains('/api/Image/series-cover')));
+    });
   });
 
   // A tablet's answer to width is more room for the furniture, never a
@@ -643,6 +672,23 @@ void main() {
       _iPad(tester);
       await _pumpHome(tester, _oneInProgress());
       expect(tester.getSize(find.byType(FilledButton)).width, 280);
+    });
+
+    // A bar that runs the whole width of a tablet stops reading as progress
+    // and starts reading as a rule across the card.
+    testWidgets('the progress bar stops at 280', (tester) async {
+      _iPad(tester);
+      await _pumpHome(tester, _oneInProgress());
+      expect(tester.getSize(find.byType(LinearProgressIndicator)).width, 280);
+    });
+
+    testWidgets('and is narrower than that on a phone', (tester) async {
+      _phone(tester);
+      await _pumpHome(tester, _oneInProgress());
+      expect(
+        tester.getSize(find.byType(LinearProgressIndicator)).width,
+        lessThan(280),
+      );
     });
   });
 }
