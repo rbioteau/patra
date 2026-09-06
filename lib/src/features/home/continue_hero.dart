@@ -16,20 +16,29 @@ import '../series/series_detail_screen.dart';
 /// The one series the home screen promotes above the Continue shelf, or null
 /// when there is nothing to promote and the hero should not be drawn at all.
 ///
-/// Three conditions, and the order they are applied in does not matter:
-/// it must be **started**, **unfinished**, and something this app can
-/// actually open. That last one is why an EPUB is passed over rather than
-/// featured: the reader refuses it outright, so the hero's button — the whole
-/// reason the hero exists — would lead nowhere.
+/// **The candidates are already the answer to "what is being read".** They
+/// come from `/api/Series/currently-reading`, whose whole job is that
+/// question, so this must not ask it again — and asking it again is exactly
+/// what broke the hero the first time: the list `SeriesDto` carries no
+/// per-user progress, `pagesRead` arrives as 0 for a series plainly under way,
+/// and a `pagesRead > 0` test here rejected every candidate on a real server
+/// while every fixture in the tests sailed through. The rule is that a field
+/// the payload does not populate cannot be a filter.
 ///
-/// Among what is left, the most recently read wins. A series carrying no read
-/// date has still been started, so it stays eligible; it simply cannot outrank
-/// one that says when it was read.
+/// What is left to decide here is only what the endpoint does *not* know:
+/// that this app cannot open an EPUB at all — the reader refuses one outright,
+/// so the hero's button, the whole reason the hero exists, would lead nowhere
+/// — and which of the candidates was read most recently. A series carrying no
+/// read date stays eligible; it simply cannot outrank one that says when it
+/// was read, so with no dates anywhere the shelf's own order stands.
+///
+/// The finished guard survives as a belt-and-braces check for a server that
+/// *does* fill those fields in and hands back something already read; where
+/// they are absent it is inert.
 Series? featuredSeries(List<Series> candidates) {
   Series? best;
   for (final series in candidates) {
-    final finished = series.pages > 0 && series.pagesRead >= series.pages;
-    if (series.pagesRead <= 0 || finished) continue;
+    if (series.pages > 0 && series.pagesRead >= series.pages) continue;
     if (!series.format.isImageReadable) continue;
     if (best == null || _readMoreRecently(series, best)) best = series;
   }
