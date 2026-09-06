@@ -96,7 +96,12 @@ class _HomeAdapter implements HttpClientAdapter {
       '/api/Library/libraries' => json([
         {'id': 1, 'name': 'Manga', 'type': 0},
       ]),
-      '/api/Series/currently-reading' => json(continueReading),
+      // Kavita answers 400 unless the caller names its own account, which
+      // is what emptied this shelf on a real server.
+      '/api/Series/currently-reading' =>
+        options.queryParameters.containsKey('userId')
+            ? json(continueReading)
+            : ResponseBody.fromBytes(const [], 400),
       '/api/Series/on-deck' => json(onDeck),
       '/api/Series/volumes' =>
         volumesFail ? ResponseBody.fromBytes(const [], 500) : json(volumes),
@@ -112,7 +117,7 @@ Future<void> _pumpHome(WidgetTester tester, _HomeAdapter adapter) async {
   mockPathProvider();
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
-    token: 'token',
+    token: _token,
     refreshToken: 'refresh',
     apiKey: 'key',
   );
@@ -138,7 +143,7 @@ Future<void> _pumpRouted(WidgetTester tester, _HomeAdapter adapter) async {
   mockPathProvider();
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
-    token: 'token',
+    token: _token,
     refreshToken: 'refresh',
     apiKey: 'key',
   );
@@ -201,6 +206,11 @@ void _phone(WidgetTester tester) {
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 }
+
+/// A token shaped like Kavita's: its `nameid` claim is the account id, which
+/// `/api/Series/currently-reading` requires as a query parameter.
+const _token =
+    'eyJhbGciOiAiSFM1MTIifQ.eyJuYW1lIjogInRlc3RlciIsICJuYW1laWQiOiAiMSJ9.sig';
 
 void main() {
   group('the series the hero promotes', () {
@@ -482,7 +492,7 @@ void main() {
       final adapter = _oneInProgress();
       final client = KavitaClient(
         baseUrl: 'http://kavita.test',
-        token: 'token',
+        token: _token,
         refreshToken: 'refresh',
         apiKey: 'key',
       );
