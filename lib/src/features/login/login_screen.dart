@@ -121,18 +121,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// Reveals the address field on a device that knows one server and is being
-  /// asked for an account on another.
+  /// Empties the form of everything it assumed, address field included.
   ///
-  /// Small, and the only way out of a dead end: without it, the very device
-  /// this screen assumes a server for — one that knows exactly one — could
-  /// never be told about a second.
+  /// Small, and the only way out of a dead end. This screen assumes a server
+  /// whenever it can, and on the path that assumes the most — the last
+  /// remaining profile, signed out, which lands here prefilled — the device
+  /// would otherwise be that person's for good: no address to change, no
+  /// picker behind it to go back to, and no slot to add anybody. The list
+  /// this screen replaced always carried one.
+  ///
+  /// The name goes with the address rather than staying behind it: a
+  /// username belongs to the server that issued it, so keeping one while
+  /// changing the other names nobody.
   void _askForServer() {
     _serverController.clear();
+    _usernameController.clear();
     setState(() {
       _serverIsKnown = false;
       _error = null;
     });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _usernameFocus.unfocus(),
+    );
   }
 
   Future<void> _submit() async {
@@ -313,9 +323,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 : Text(l10n.signIn),
           ),
           // The address this screen assumed, and the way to say it is the
-          // wrong one. Never offered while signing a *remembered* profile
-          // back in: that person's server is not in question.
-          if (_serverIsKnown && _profile == null) ...[
+          // wrong one. Offered wherever anything was assumed — including
+          // while signing a remembered profile back in, which is the one
+          // path with no picker behind it and so the one that would strand a
+          // device on somebody else's server.
+          if (_serverIsKnown) ...[
             const SizedBox(height: 6),
             Center(
               child: TextButton(

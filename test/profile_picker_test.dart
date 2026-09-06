@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
+import 'package:patra/src/api/client_identity.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/features/launch/launch_animation.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
@@ -34,7 +39,11 @@ Profile _profile({
 /// often without one ever succeeding — so anything it needed from a session
 /// would show up here as a `StateError` from [kavitaClientProvider], which
 /// has no session to build one from.
-Future<void> _pump(WidgetTester tester, List<Profile> profiles) async {
+Future<void> _pump(
+  WidgetTester tester,
+  List<Profile> profiles, {
+  SignIn? signIn,
+}) async {
   mockPathProvider();
   await tester.pumpWidget(
     ProviderScope(
@@ -46,6 +55,7 @@ Future<void> _pump(WidgetTester tester, List<Profile> profiles) async {
         initialAuthStateProvider.overrideWithValue(
           AuthState(profiles: profiles),
         ),
+        if (signIn != null) signInProvider.overrideWithValue(signIn),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -184,6 +194,83 @@ void main() {
         .widgetList<CustomPaint>(find.byType(CustomPaint))
         .where((p) => p.painter is DashedBorderPainter);
     expect(dashed, isNotEmpty);
+  });
+
+  group('removing a profile', () {
+    /// Long-presses [name] and returns with the confirmation up.
+    Future<void> longPress(WidgetTester tester, String name) async {
+      await tester.longPress(find.text(name));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('is a long press, and says who it is about', (tester) async {
+      mockSecureStorage();
+      await _pump(tester, [
+        _profile(username: 'romain'),
+        _profile(accountId: 2, username: 'lea'),
+      ]);
+
+      await longPress(tester, 'lea');
+      // Both halves: a server holds several profiles, so it is one of them
+      // being removed rather than the address.
+      expect(find.text('Forget lea on kavita.example?'), findsOneWidget);
+
+      await tester.tap(find.text('Forget'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('lea'), findsNothing);
+      expect(
+        find.text('romain'),
+        findsOneWidget,
+        reason: 'the others on that server stay',
+      );
+    });
+
+    testWidgets('does nothing until it is confirmed', (tester) async {
+      mockSecureStorage();
+      await _pump(tester, [
+        _profile(username: 'romain'),
+        _profile(accountId: 2, username: 'lea'),
+      ]);
+
+      await longPress(tester, 'lea');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('lea'), findsOneWidget);
+      expect(find.text('romain'), findsOneWidget);
+    });
+
+    testWidgets('is refused while a face is being entered', (tester) async {
+      // The one guard there is: a sign-in in flight owns the screen, so a
+      // press cannot remove the profile the app is halfway into.
+      mockSecureStorage();
+      await _pump(
+        tester,
+        [_profile(username: 'romain'), _profile(accountId: 2, username: 'lea')],
+        // A sign-in that never answers, which is the window being tested: a
+        // real one would either resolve or fail on DNS, and neither is a
+        // thing to hang a test on.
+        signIn:
+            ({
+              required String baseUrl,
+              required String username,
+              required Credential credential,
+              ClientIdentity identity = const ClientIdentity.unknown(),
+            }) => Completer<LoginResult>().future,
+      );
+
+      await tester.tap(find.text('romain'));
+      await tester.pump();
+
+      // Not `pumpAndSettle`: the face being entered wears a spinner, which
+      // is an animation that never settles while the request is in flight.
+      await tester.longPress(find.text('romain'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.textContaining('Forget romain'), findsNothing);
+    });
   });
 
   testWidgets('offers the launch animation its lockup', (tester) async {

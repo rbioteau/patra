@@ -87,8 +87,15 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
   ///
   /// Behind a long press rather than a control on the face: a picker is for
   /// entering profiles, and a delete sitting under everybody's thumb is the
-  /// wrong thing to make easy. It moves into Settings with #12, which is also
-  /// where the deliberate sign-out goes.
+  /// wrong thing to make easy.
+  ///
+  /// It is **unguarded** all the same, and knowingly so until #12 moves it
+  /// into Settings: this screen is in front of every session, so anyone
+  /// holding the device can remove anyone's profile without a credential.
+  /// Removal from Settings has the property this does not — you have to be
+  /// able to enter a profile before you can remove it. The confirmation is
+  /// the whole of what stands in the way here, so it names the person and
+  /// the server rather than asking "are you sure".
   Future<void> _forget(Profile profile) async {
     final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(

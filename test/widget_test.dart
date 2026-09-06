@@ -135,6 +135,34 @@ void main() {
     expect(find.text('PASSWORD'), findsOneWidget);
   });
 
+  testWidgets('the last profile needing a password is not a dead end', (
+    tester,
+  ) async {
+    // One profile left, and it is not mine: the form comes up prefilled for
+    // somebody else, on an address I may have nothing to do with. Before
+    // there was a way out of it — the list this screen replaced carried an
+    // add slot — and there has to be one still, or the device is somebody
+    // else's for good.
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(
+          profiles: [Profile(baseUrl: 'https://a.example', username: 'lea')],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('SERVER ADDRESS'), findsNothing);
+    await tester.tap(find.text('Use another server'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // A blank form: the address is asked for, and the name went with it —
+    // a username from another server names nobody.
+    expect(find.text('SERVER ADDRESS'), findsOneWidget);
+    expect(find.text('lea'), findsNothing);
+  });
+
   testWidgets('a device with several profiles opens on the picker', (
     tester,
   ) async {
