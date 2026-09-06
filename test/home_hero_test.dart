@@ -204,9 +204,8 @@ void _phone(WidgetTester tester) {
 
 void main() {
   group('the series the hero promotes', () {
-    test('there is none when nothing has been started', () {
+    test('there is none when the shelf is empty', () {
       expect(featuredSeries(const []), isNull);
-      expect(featuredSeries([_series(1, read: 0)]), isNull);
     });
 
     test('a finished series is not promoted', () {
@@ -259,6 +258,24 @@ void main() {
 
     test('with no dates at all the first still gets promoted', () {
       expect(featuredSeries([_series(7), _series(8)])!.id, 7);
+    });
+
+    // What a real server sends: /api/Series/currently-reading answers with
+    // SeriesDto and does not populate per-user progress on it, so `pagesRead`
+    // arrives as 0 for series that are plainly under way. The endpoint has
+    // already decided they are being read; the client must not second-guess
+    // that with a field the payload does not carry.
+    test('a shelf whose payload carries no progress still promotes', () {
+      final featured = featuredSeries([
+        Series.fromJson({
+          'id': 5,
+          'name': 'Vinland Saga',
+          'libraryId': 1,
+          'libraryName': 'Manga',
+          'pages': 300,
+        }),
+      ]);
+      expect(featured?.id, 5);
     });
   });
 
