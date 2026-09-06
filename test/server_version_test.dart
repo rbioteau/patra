@@ -71,7 +71,7 @@ class _Adapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-const _server = ServerEntry(
+final _profile = Profile(
   baseUrl: 'https://kavita.example',
   username: 'romain',
   token: 'token',
@@ -98,10 +98,7 @@ Future<_Adapter> _pump(WidgetTester tester, {_Adapter? adapter}) async {
     ProviderScope(
       overrides: [
         initialAuthStateProvider.overrideWithValue(
-          const AuthState(
-            servers: [_server],
-            activeUrl: 'https://kavita.example',
-          ),
+          AuthState(profiles: [_profile], activeId: _profile.id),
         ),
         kavitaClientProvider.overrideWithValue(_client(used)),
       ],

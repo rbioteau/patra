@@ -19,7 +19,7 @@ sealed class Credential {
   /// What a person types the first time.
   const factory Credential.password(String value) = PasswordCredential;
 
-  /// What a remembered server signs in with afterwards. `LoginDto` states
+  /// What a remembered profile signs in with afterwards. `LoginDto` states
   /// that a login carrying one *"will ignore username/password for
   /// validation"*.
   const factory Credential.authKey(String value) = AuthKeyCredential;
@@ -242,7 +242,7 @@ class KavitaClient {
   /// a client exists.
   ///
   /// Two ways in, one endpoint, and [Credential] is which. A password is what
-  /// a person types the first time; an auth key is what a remembered server
+  /// a person types the first time; an auth key is what a remembered profile
   /// signs in with afterwards, so reopening the app never asks for a password
   /// again. Kavita resolves the account from the key, still checks
   /// `LoginRole`, and still answers with the whole `UserDto` — the two paths

@@ -13,7 +13,7 @@ import 'package:patra/src/theme.dart';
 
 import 'test_support.dart';
 
-const _server = ServerEntry(
+final _profile = Profile(
   baseUrl: 'https://kavita.example',
   username: 'rb',
   token: 'token',
@@ -67,10 +67,7 @@ Future<void> _settings(WidgetTester tester, ClientIdentity identity) async {
     ProviderScope(
       overrides: [
         initialAuthStateProvider.overrideWithValue(
-          const AuthState(
-            servers: [_server],
-            activeUrl: 'https://kavita.example',
-          ),
+          AuthState(profiles: [_profile], activeId: _profile.id),
         ),
         clientIdentityProvider.overrideWithValue(identity),
         kavitaClientProvider.overrideWithValue(client),

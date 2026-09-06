@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../api/account_id.dart';
 import '../api/client_device.dart';
 import '../api/client_identity.dart';
 import '../api/kavita_client.dart';
@@ -17,22 +18,45 @@ String serverHost(String baseUrl) {
   return parsed.isEmpty ? baseUrl : parsed;
 }
 
-/// A Kavita server the user has connected to at least once.
+/// One person's Kavita account on one server — a **server** is an address, and
+/// a profile is somebody on it.
 ///
-/// One secret is stored, the account's auth key, so a saved server can be
-/// reopened without retyping a password; the password itself is never
-/// persisted, and neither is the JWT the key mints. An empty [apiKey] means
-/// the entry is remembered but signed out.
-class ServerEntry {
-  const ServerEntry({
+/// A device holds several, and several of them can share one address: that is
+/// what a family tablet is. Everything the *server* owns then comes out right
+/// by construction — reading progress, library access and age restriction are
+/// kept per account and cannot be divided any other way (ADR-0003) — but
+/// nothing the **device** owns is scoped yet: saved chapters are still filed
+/// by chapter id alone, so two profiles on one server currently share one
+/// offline library. That is #13, and until it lands this class is the only
+/// half of the separation that exists.
+///
+/// One secret is stored, the account's auth key, so a profile can be reopened
+/// without retyping a password; the password itself is never persisted, and
+/// neither is the JWT the key mints. An empty [apiKey] means the profile is
+/// remembered but signed out.
+class Profile {
+  const Profile({
     required this.baseUrl,
     required this.username,
+    this.accountId,
     this.apiKey = '',
     this.token = '',
     this.isAdmin = false,
   });
 
   final String baseUrl;
+
+  /// Kavita's own id for this account, read out of the JWT the session was
+  /// minted with (`accountIdFrom`) rather than asked for — so it is there on a
+  /// resume and not only on the sign-in that first learned it.
+  ///
+  /// Null only where a token carried no readable one; [id] says what that
+  /// costs.
+  final int? accountId;
+
+  /// What the server calls this person, for the row and for the sign-in body.
+  /// A label rather than an identity: it can change on the server, and [id]
+  /// is deliberately built without it.
   final String username;
 
   /// The account's Kavita auth key: the whole of what is remembered about
@@ -48,36 +72,61 @@ class ServerEntry {
 
   /// The JWT for the session in progress. **Never persisted**: it is minted
   /// from [apiKey] on entry and discarded with the session, so it is empty on
-  /// every entry loaded from storage.
+  /// every profile loaded from storage.
   final String token;
 
   /// Whether this account holds Kavita's `Admin` role, as the login response
   /// reported it.
   ///
   /// Persisted rather than asked for again, because a resumed session never
-  /// logs in a second time. It is therefore as old as the last sign-in: an
-  /// entry saved before this existed, or an account promoted since, reads
+  /// logs in a second time. It is therefore as old as the last sign-in: a
+  /// profile saved before this existed, or an account promoted since, reads
   /// false until the next one — which costs an admin a button, and never
   /// offers a non-admin one that could only fail.
   final bool isAdmin;
 
-  /// Whether this server can be opened without asking for a password.
+  /// Which profile this is, and the only thing anything else keys on.
   ///
-  /// The auth key and nothing else: [token] is session state, so an entry
+  /// The normalized address plus Kavita's id for the account, because a user
+  /// id is only unique on the server that issued it: `https://a.example#3`.
+  /// The **username is deliberately not part of it** — someone who renames
+  /// themselves in Kavita is the same person, and has to be recognised rather
+  /// than added a second time.
+  ///
+  /// Where a token carried no readable id the name stands in
+  /// (`https://a.example#@romain`), so such a device still remembers one
+  /// profile per person rather than one per sign-in. What that costs is
+  /// exactly the rename this key exists to survive, and it is accepted: a
+  /// real Kavita signs `nameid` on every token it issues, so this is a guard
+  /// and not a path.
+  String get id => '$baseUrl#${accountId ?? '@${username.toLowerCase()}'}';
+
+  /// Whether this profile can be entered without asking for a password.
+  ///
+  /// The auth key and nothing else: [token] is session state, so a profile
   /// just read back from storage always has one and never the other.
   bool get hasCredential => apiKey.isNotEmpty;
+
+  /// What names this profile on screen: the person, falling back to the host
+  /// where there is no name to show. One definition, because a row and the
+  /// dialog that removes it have to call the same profile the same thing.
+  String get displayName => username.isEmpty ? host : username;
 
   /// Host part of [baseUrl], for display; falls back to the raw value so a
   /// malformed address still labels its row.
   String get host => serverHost(baseUrl);
 
-  ServerEntry copyWith({
+  /// A copy with the session state and the label changed. [baseUrl] and
+  /// [accountId] are not among them on purpose: they are the identity, and
+  /// something that changed them would be a different profile.
+  Profile copyWith({
     String? username,
     String? apiKey,
     String? token,
     bool? isAdmin,
-  }) => ServerEntry(
+  }) => Profile(
     baseUrl: baseUrl,
+    accountId: accountId,
     username: username ?? this.username,
     apiKey: apiKey ?? this.apiKey,
     token: token ?? this.token,
@@ -85,50 +134,89 @@ class ServerEntry {
   );
 
   /// What reaches the keychain — [token] deliberately absent, and read back
-  /// as empty by [fromJson].
+  /// as empty by [fromJson]. [id] is absent too: it is derived from the two
+  /// fields above it, so there is no way for a stored key to disagree with
+  /// the profile it belongs to.
   Map<String, dynamic> toJson() => {
     'baseUrl': baseUrl,
+    'accountId': accountId,
     'username': username,
     'apiKey': apiKey,
     'isAdmin': isAdmin,
   };
 
-  static ServerEntry? fromJson(Object? json) {
+  /// Defensive to the last field, and not out of habit: this is read from
+  /// `main()` **before** `runApp`, so a value of the wrong type would throw a
+  /// `TypeError` — an `Error`, which no `on Exception` up the chain catches —
+  /// and a single bad row in the keychain would fail every start of the app
+  /// for good. A row that cannot be read is a profile that has to be signed
+  /// into again; it is never a device that cannot open Patra.
+  static Profile? fromJson(Object? json) {
     if (json is! Map) return null;
     final baseUrl = json['baseUrl'];
     if (baseUrl is! String || baseUrl.isEmpty) return null;
-    return ServerEntry(
+    final accountId = json['accountId'];
+    return Profile(
       baseUrl: baseUrl,
-      username: json['username'] as String? ?? '',
-      apiKey: json['apiKey'] as String? ?? '',
-      isAdmin: json['isAdmin'] as bool? ?? false,
+      accountId: accountId is int ? accountId : int.tryParse('$accountId'),
+      username: json['username'] is String ? json['username'] as String : '',
+      apiKey: json['apiKey'] is String ? json['apiKey'] as String : '',
+      isAdmin: json['isAdmin'] == true,
     );
   }
 }
 
-/// The active server, once it holds a live session.
-typedef Session = ServerEntry;
+/// The profile the app is currently reading as, once it holds a live session.
+typedef Session = Profile;
 
 class AuthState {
-  const AuthState({this.servers = const [], this.activeUrl});
+  const AuthState({this.profiles = const [], this.activeId});
 
-  final List<ServerEntry> servers;
-  final String? activeUrl;
+  final List<Profile> profiles;
+
+  /// [Profile.id] of the profile being read as, or null while signed out.
+  final String? activeId;
 
   /// Null while signed out, which is what the router redirect keys off.
   Session? get active {
-    for (final server in servers) {
-      if (server.baseUrl == activeUrl && server.hasCredential) return server;
+    for (final profile in profiles) {
+      if (profile.id == activeId && profile.hasCredential) return profile;
     }
     return null;
   }
 }
 
-/// Persists servers in the platform keychain/keystore.
+/// Persists profiles in the platform keychain/keystore.
 class SessionStorage {
   static const _storage = FlutterSecureStorage();
-  static const _serversKey = 'servers';
-  static const _activeKey = 'activeServer';
+  static const _profilesKey = 'profiles';
+  static const _activeKey = 'activeProfile';
+
+  /// What the two layouts before this one wrote: a list of servers keyed by
+  /// address, and before that a single server spread over five keys.
+  ///
+  /// **Deleted on first load and never read.** Neither can say which *account*
+  /// its key belongs to — that id only ever arrives in a token, and no layout
+  /// kept one — so a migrated profile would carry the name-based fallback id
+  /// and be created a second time under its real id at its very next sign-in,
+  /// leaving a row nothing would ever enter again. Deleting is also the safer
+  /// half of the choice: each of these holds an auth key, and an auth key is a
+  /// whole Kavita account (ADR-0004), so one nothing will ever use again has
+  /// no business sitting in the keychain. What that costs is the whole row and
+  /// not merely its secret: the address and the name go with it, so every
+  /// server is found and typed once more. Keeping them and dropping only the
+  /// key would land in the "remembered but signed out" state this app already
+  /// draws — and it would mean reading a layout this one is defined as never
+  /// reading, for a device that has been through one upgrade.
+  static const _retiredKeys = [
+    'servers',
+    'activeServer',
+    'baseUrl',
+    'username',
+    'apiKey',
+    'token',
+    'refreshToken',
+  ];
 
   static Future<AuthState> load() async {
     final Map<String, String> values;
@@ -140,50 +228,46 @@ class SessionStorage {
       return const AuthState();
     }
 
-    final raw = values[_serversKey];
-    if (raw != null) {
-      try {
-        final decoded = jsonDecode(raw);
-        final servers = <ServerEntry>[
+    await _forgetRetired(values);
+
+    final raw = values[_profilesKey];
+    if (raw == null) return const AuthState();
+    try {
+      final decoded = jsonDecode(raw);
+      return AuthState(
+        profiles: [
           if (decoded is List)
-            for (final entry in decoded) ?ServerEntry.fromJson(entry),
-        ];
-        return AuthState(servers: servers, activeUrl: values[_activeKey]);
-      } on FormatException {
-        return const AuthState();
+            for (final profile in decoded) ?Profile.fromJson(profile),
+        ],
+        activeId: values[_activeKey],
+      );
+    } on FormatException {
+      return const AuthState();
+    }
+  }
+
+  /// Deletes what the earlier layouts left behind, once, on the first load
+  /// that finds any of it. A keychain we cannot write to is not worth failing
+  /// a startup over — the keys are dead either way, and the next load tries
+  /// again.
+  static Future<void> _forgetRetired(Map<String, String> values) async {
+    for (final key in _retiredKeys) {
+      if (!values.containsKey(key)) continue;
+      try {
+        await _storage.delete(key: key);
+      } on Exception {
+        // Nothing reads them; leaving one behind changes nothing this run.
       }
     }
-
-    // Migration from the single-server layout shipped earlier. The address is
-    // the whole of what makes an entry worth keeping — a server with no key
-    // is remembered and signed out, which is a state this app draws, rather
-    // than one it forgets. The stored token and refresh token are dropped on
-    // the way through: they are the credentials that are no longer kept.
-    final baseUrl = values['baseUrl'];
-    if (baseUrl == null) return const AuthState();
-    final apiKey = values['apiKey'] ?? '';
-    final migrated = AuthState(
-      servers: [
-        ServerEntry(
-          baseUrl: baseUrl,
-          username: values['username'] ?? '',
-          apiKey: apiKey,
-        ),
-      ],
-      // A server that cannot be entered is not the active one.
-      activeUrl: apiKey.isEmpty ? null : baseUrl,
-    );
-    await save(migrated);
-    return migrated;
   }
 
   static Future<void> save(AuthState state) async {
     try {
       await _storage.write(
-        key: _serversKey,
-        value: jsonEncode([for (final s in state.servers) s.toJson()]),
+        key: _profilesKey,
+        value: jsonEncode([for (final p in state.profiles) p.toJson()]),
       );
-      final active = state.activeUrl;
+      final active = state.activeId;
       if (active == null) {
         await _storage.delete(key: _activeKey);
       } else {
@@ -234,7 +318,7 @@ typedef SignIn = Future<LoginResult> Function({
 
 /// How [AuthNotifier] signs in.
 ///
-/// A provider rather than a direct call, because entering a remembered server
+/// A provider rather than a direct call, because entering a remembered profile
 /// is a request now: without a seam here every test of resuming would need a
 /// network, and there is nothing else in this notifier that reaches one.
 final signInProvider = Provider<SignIn>((ref) => KavitaClient.login);
@@ -246,7 +330,8 @@ class AuthNotifier extends Notifier<AuthState> {
   static String _normalize(String baseUrl) =>
       baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
 
-  /// Authenticates against [baseUrl] and makes it the active server.
+  /// Signs in with a password, and makes whoever that turns out to be the
+  /// active profile.
   Future<void> login({
     required String baseUrl,
     required String username,
@@ -262,7 +347,7 @@ class AuthNotifier extends Notifier<AuthState> {
     await _enter(url, username, user);
   }
 
-  /// Reopens a saved server, signing in again with its stored auth key.
+  /// Reopens a remembered profile, signing in again with its stored auth key.
   ///
   /// No password, and no clock: the key does not expire, so this works
   /// however long the app has been closed. What it costs is one request
@@ -272,65 +357,78 @@ class AuthNotifier extends Notifier<AuthState> {
   ///
   /// Three failures, and they are three different facts. A server that
   /// cannot be **reached** is not a credential that has been refused: the
-  /// entry is opened anyway on the key it already holds, because offline
+  /// profile is entered anyway on the key it already holds, because offline
   /// there is nothing to ask and nothing to ask it of — what such a session
   /// reads is what it saved, and this is the one failure that does not
   /// throw. A **401** is the key itself being refused, rotated in
   /// Kavita's web UI or belonging to an account that is gone — and it is the
   /// only answer that means that, since Kavita reports every credential-side
-  /// failure of this endpoint, `LoginRole` included, as a bare 401. The entry
-  /// stays remembered and loses its secret, so the next tap asks for a
+  /// failure of this endpoint, `LoginRole` included, as a bare 401. The
+  /// profile stays remembered and loses its secret, so the next tap asks for a
   /// password. Anything else (a 500, a proxy answering in Kavita's place)
   /// says nothing about the credential and leaves it alone: throwing away a
   /// working key over a fault that fixes itself would cost a password for
   /// nothing. Those two throw — the 401 as [SignInExpired], which is the
   /// screen's cue to ask for a password, and everything else as it came.
-  Future<void> resume(ServerEntry server) async {
-    if (!server.hasCredential) return;
+  Future<void> resume(Profile profile) async {
+    if (!profile.hasCredential) return;
     final LoginResult user;
     try {
       user = await ref.read(signInProvider)(
-        baseUrl: server.baseUrl,
-        username: server.username,
-        credential: Credential.authKey(server.apiKey),
+        baseUrl: profile.baseUrl,
+        username: profile.username,
+        credential: Credential.authKey(profile.apiKey),
         identity: ref.read(clientIdentityProvider),
       );
     } on DioException catch (error) {
       if (KavitaClient.isUnreachable(error)) {
+        // Entered on the identity it already holds, id included: nothing was
+        // asked, so nothing about which account this is has changed.
         await _commit(
-          AuthState(servers: state.servers, activeUrl: server.baseUrl),
+          AuthState(profiles: state.profiles, activeId: profile.id),
         );
         return;
       }
       if (error.response?.statusCode == 401) {
-        await _dropCredential(server);
+        await _dropCredential(profile);
         throw SignInExpired(error);
       }
       rethrow;
     }
-    await _enter(server.baseUrl, server.username, user);
+    await _enter(profile.baseUrl, profile.username, user);
   }
 
-  /// Makes [url] the active server on the strength of a sign-in that just
-  /// succeeded, whichever credential paid for it.
+  /// Makes the account that just signed in the active profile, whichever
+  /// credential paid for it.
+  ///
+  /// Which account that is comes out of the token rather than out of anything
+  /// that was typed, so a person who renamed themselves in Kavita lands back
+  /// on their own profile wearing the new name, and a second account on a
+  /// server the device already knows lands beside the first instead of on top
+  /// of it.
   Future<void> _enter(String url, String username, LoginResult user) async {
-    final entry = ServerEntry(
+    final profile = Profile(
       baseUrl: url,
+      accountId: accountIdFrom(user.token),
       username: user.username.isEmpty ? username : user.username,
       apiKey: user.apiKey,
       token: user.token,
       isAdmin: user.isAdmin,
     );
-    await _commit(AuthState(servers: _upsert(entry), activeUrl: url));
+    await _commit(AuthState(profiles: _upsert(profile), activeId: profile.id));
   }
 
-  /// Keeps the server and forgets how to be this person on it.
-  Future<void> _dropCredential(ServerEntry server) => _commit(
+  /// Keeps the profile and forgets how to be this person.
+  Future<void> _dropCredential(Profile profile) => _commit(
     AuthState(
-      servers: _upsert(
-        ServerEntry(baseUrl: server.baseUrl, username: server.username),
+      profiles: _upsert(
+        Profile(
+          baseUrl: profile.baseUrl,
+          accountId: profile.accountId,
+          username: profile.username,
+        ),
       ),
-      activeUrl: state.activeUrl == server.baseUrl ? null : state.activeUrl,
+      activeId: state.activeId == profile.id ? null : state.activeId,
     ),
   );
 
@@ -342,48 +440,69 @@ class AuthNotifier extends Notifier<AuthState> {
     if (active == null) return;
     await _commit(
       AuthState(
-        servers: _upsert(active.copyWith(token: token)),
-        activeUrl: state.activeUrl,
+        profiles: _upsert(active.copyWith(token: token)),
+        activeId: state.activeId,
       ),
     );
   }
 
-  /// Leaves the current server without forgetting it: the entry keeps its
-  /// address and username, and asks for a password next time.
+  /// Leaves the current profile without forgetting it: it keeps its address,
+  /// its account and its name, and asks for a password next time.
   Future<void> signOut() async {
     final active = state.active;
-    final servers = active == null
-        ? state.servers
+    final profiles = active == null
+        ? state.profiles
         : _upsert(
-            ServerEntry(baseUrl: active.baseUrl, username: active.username),
+            Profile(
+              baseUrl: active.baseUrl,
+              accountId: active.accountId,
+              username: active.username,
+            ),
           );
-    await _commit(AuthState(servers: servers, activeUrl: null));
+    await _commit(AuthState(profiles: profiles, activeId: null));
   }
 
-  /// Goes back to the server list while keeping each server's auth key, so
-  /// switching back is a single tap.
-  Future<void> switchServer() async {
-    await _commit(AuthState(servers: state.servers, activeUrl: null));
+  /// Goes back to the profile list while keeping every auth key, so returning
+  /// to any of them is a single tap.
+  Future<void> switchProfile() async {
+    await _commit(AuthState(profiles: state.profiles, activeId: null));
   }
 
-  Future<void> forget(String baseUrl) async {
-    final servers = [
-      for (final server in state.servers)
-        if (server.baseUrl != baseUrl) server,
+  /// Removes one profile, credential and all. The others on its server stay:
+  /// a person leaving the household is not the server being forgotten.
+  Future<void> forget(String profileId) async {
+    final profiles = [
+      for (final profile in state.profiles)
+        if (profile.id != profileId) profile,
     ];
     await _commit(
       AuthState(
-        servers: servers,
-        activeUrl: state.activeUrl == baseUrl ? null : state.activeUrl,
+        profiles: profiles,
+        activeId: state.activeId == profileId ? null : state.activeId,
       ),
     );
   }
 
-  List<ServerEntry> _upsert(ServerEntry entry) => [
-    entry,
-    for (final server in state.servers)
-      if (server.baseUrl != entry.baseUrl) server,
-  ];
+  /// [profile] first, and every other profile that is not it — the same
+  /// account on the same server, and never merely the same address.
+  ///
+  /// Two ids count as this one. Its own, and the name-based id it would have
+  /// had while its account id was unreadable ([Profile.id]), because that row
+  /// still holds an auth key: a profile that arrives with a readable id at
+  /// last has to absorb the one it left behind rather than open beside it.
+  /// Same server plus same name is safe to call the same account — Kavita
+  /// will not issue two accounts one username.
+  List<Profile> _upsert(Profile profile) {
+    final beforeItHadAnId = Profile(
+      baseUrl: profile.baseUrl,
+      username: profile.username,
+    ).id;
+    return [
+      profile,
+      for (final other in state.profiles)
+        if (other.id != profile.id && other.id != beforeItHadAnId) other,
+    ];
+  }
 
   Future<void> _commit(AuthState next) async {
     state = next;
@@ -517,7 +636,7 @@ final kavitaClientProvider = Provider<KavitaClient>(
   retry: (retryCount, error) => null,
   (ref) {
     final identity = ref.watch(
-      sessionProvider.select((s) => s == null ? null : (s.baseUrl, s.apiKey)),
+      sessionProvider.select((s) => s == null ? null : (s.id, s.apiKey)),
     );
     if (identity == null) {
       // Logout in progress: the router is redirecting, but watching screens

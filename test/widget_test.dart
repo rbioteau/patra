@@ -53,8 +53,9 @@ class _StubAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-const _server = ServerEntry(
+final _profile = Profile(
   baseUrl: 'https://kavita.example',
+  accountId: 1,
   username: 'romain',
   token: 'token',
   apiKey: 'key',
@@ -92,7 +93,7 @@ void main() {
   // Secure storage and the image cache both reach for the binding.
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('with no saved server, the login form is shown', (tester) async {
+  testWidgets('with no remembered profile, the login form is shown', (tester) async {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
@@ -107,22 +108,24 @@ void main() {
     );
   });
 
-  testWidgets('a remembered server is listed instead of the form', (
+  testWidgets('a remembered profile is listed instead of the form', (
     tester,
   ) async {
     await tester.pumpWidget(
       _app(
-        auth: const AuthState(
+        auth: AuthState(
           // Remembered but signed out: no active session.
-          servers: [ServerEntry(baseUrl: 'https://a.example', username: 'rb')],
+          profiles: [Profile(baseUrl: 'https://a.example', username: 'rb')],
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('YOUR SERVERS'), findsOneWidget);
+    expect(find.text('YOUR PROFILES'), findsOneWidget);
+    // The person names the row, the server labels it underneath.
+    expect(find.text('rb'), findsOneWidget);
     expect(find.text('a.example'), findsOneWidget);
-    expect(find.text('Add a server'), findsOneWidget);
+    expect(find.text('Add a profile'), findsOneWidget);
     expect(find.text('SERVER ADDRESS'), findsNothing);
   });
 
@@ -136,10 +139,7 @@ void main() {
 
     await tester.pumpWidget(
       _app(
-        auth: const AuthState(
-          servers: [_server],
-          activeUrl: 'https://kavita.example',
-        ),
+        auth: AuthState(profiles: [_profile], activeId: _profile.id),
         downloadsRoot: root,
       ),
     );
@@ -178,10 +178,7 @@ void main() {
       tester.view.devicePixelRatio = 3;
       await tester.pumpWidget(
         _app(
-          auth: const AuthState(
-            servers: [_server],
-            activeUrl: 'https://kavita.example',
-          ),
+          auth: AuthState(profiles: [_profile], activeId: _profile.id),
           downloadsRoot: root,
         ),
       );
@@ -198,9 +195,10 @@ void main() {
     expect(wide.labelBehavior, NavigationDestinationLabelBehavior.alwaysShow);
   });
 
-  group('opening a remembered server', () {
-    const remembered = ServerEntry(
+  group('opening a remembered profile', () {
+    final remembered = Profile(
       baseUrl: 'https://kavita.example',
+      accountId: 1,
       username: 'romain',
       apiKey: 'the-auth-key',
     );
@@ -215,7 +213,7 @@ void main() {
       Map<String, String>? sentWith;
       await tester.pumpWidget(
         _app(
-          auth: const AuthState(servers: [remembered]),
+          auth: AuthState(profiles: [remembered]),
           downloadsRoot: root,
           signIn:
               ({
@@ -263,7 +261,7 @@ void main() {
       mockSecureStorage();
       await tester.pumpWidget(
         _app(
-          auth: const AuthState(servers: [remembered]),
+          auth: AuthState(profiles: [remembered]),
           signIn:
               ({
                 required String baseUrl,
@@ -294,10 +292,11 @@ void main() {
       // the person typed was rejected.
       expect(
         find.text(
-          'kavita.example no longer accepts the saved sign-in. '
+          'The saved sign-in for romain on kavita.example was refused. '
           'Your password is needed again.',
         ),
         findsOneWidget,
+        reason: 'it names the person: a server can hold several profiles',
       );
       // The form is up with the address and the name already in it: the only
       // thing missing is the password.
@@ -317,7 +316,7 @@ void main() {
 
       await tester.pumpWidget(
         _app(
-          auth: const AuthState(servers: [remembered]),
+          auth: AuthState(profiles: [remembered]),
           downloadsRoot: root,
           signIn:
               ({
@@ -342,6 +341,32 @@ void main() {
       // being offline is not the same fact as being refused.
       expect(find.byType(NavigationBar), findsOneWidget);
     });
+  });
+
+  testWidgets('two accounts on one server are two rows', (tester) async {
+    // The shape this ticket exists for: one address, two people, each with
+    // their own credential — and the row says which is which, since the host
+    // under both of them is the same word.
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(
+          profiles: [
+            _profile,
+            Profile(
+              baseUrl: 'https://kavita.example',
+              accountId: 2,
+              username: 'lea',
+              apiKey: 'key-lea',
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('romain'), findsOneWidget);
+    expect(find.text('lea'), findsOneWidget);
+    expect(find.text('kavita.example'), findsNWidgets(2));
   });
 
   group('the server address field refuses what dio could not use', () {

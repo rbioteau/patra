@@ -19,7 +19,7 @@ A Kavita address the user has connected to at least once, remembered so it need 
 _Avoid_: server entry, instance, connection, backend
 
 **Profile**:
-One person's Kavita account on a server, remembered along with its auth key and never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one.
+One person's Kavita account on a server, remembered along with its auth key and never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one. Which profile it is, is the server's address plus Kavita's own id for the account — never the name, which is a label the server lets its owner change.
 _Avoid_: account, user, member, persona
 
 **Credential**:
