@@ -582,6 +582,18 @@ class KavitaClient {
     data: {'deviceId': deviceId, 'name': name},
   );
 
+  /// The avatar Kavita holds for an account.
+  ///
+  /// Static, and the only cover URL here that is: it is what a **profile**
+  /// is drawn with, and the picker draws every remembered profile before any
+  /// of them is a session — so there is no client to ask. The account id and
+  /// its auth key are the whole of what it takes, and a profile keeps both.
+  static String userCoverUrl({
+    required String baseUrl,
+    required int userId,
+    required String apiKey,
+  }) => '$baseUrl/api/Image/user-cover?userId=$userId&apiKey=$apiKey';
+
   String seriesCoverUrl(int seriesId) =>
       '$baseUrl/api/Image/series-cover?seriesId=$seriesId&apiKey=$apiKey';
 

@@ -99,19 +99,16 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get savedProfiles => 'Vos profils';
-
-  @override
   String get addProfile => 'Ajouter un profil';
 
   @override
-  String get openProfile => 'Ouvrir';
+  String get whoIsReading => 'Qui lit ?';
+
+  @override
+  String get useAnotherServer => 'Utiliser un autre serveur';
 
   @override
   String get backToProfiles => 'Retour à vos profils';
-
-  @override
-  String get editProfile => 'Modifier';
 
   @override
   String get forgetProfile => 'Oublier';

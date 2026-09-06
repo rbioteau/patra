@@ -13,6 +13,7 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/login/login_screen.dart';
+import 'package:patra/src/features/profiles/profile_picker_screen.dart';
 
 import 'test_support.dart';
 
@@ -77,7 +78,9 @@ Widget _app({
 
   return ProviderScope(
     overrides: [
-      initialAuthStateProvider.overrideWithValue(auth),
+      // Through `atLaunch`, as main() does: these tests say what the device
+      // remembered, and the app answers with the screen that opens on it.
+      initialAuthStateProvider.overrideWithValue(auth.atLaunch),
       kavitaClientProvider.overrideWithValue(client),
       if (signIn != null) signInProvider.overrideWithValue(signIn),
       if (downloadsRoot != null)
@@ -108,25 +111,78 @@ void main() {
     );
   });
 
-  testWidgets('a remembered profile is listed instead of the form', (
+  testWidgets('a lone profile needing a password lands on its own form', (
     tester,
   ) async {
     await tester.pumpWidget(
       _app(
         auth: AuthState(
-          // Remembered but signed out: no active session.
+          // Remembered but signed out: no active session, and no key left.
           profiles: [Profile(baseUrl: 'https://a.example', username: 'rb')],
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('YOUR PROFILES'), findsOneWidget);
-    // The person names the row, the server labels it underneath.
+    // No picker: there is nobody to choose between, and asking a question
+    // with one answer is a tap this device never had to make.
+    expect(find.byType(ProfilePickerScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    // The address and the name are already here; the password is the whole
+    // of what is missing.
     expect(find.text('rb'), findsOneWidget);
-    expect(find.text('a.example'), findsOneWidget);
-    expect(find.text('Add a profile'), findsOneWidget);
     expect(find.text('SERVER ADDRESS'), findsNothing);
+    expect(find.text('PASSWORD'), findsOneWidget);
+  });
+
+  testWidgets('a device with several profiles opens on the picker', (
+    tester,
+  ) async {
+    // The shape this ticket exists for: somebody read last, and on a shared
+    // device that is a previous reader rather than the current one.
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(
+          profiles: [
+            _profile,
+            Profile(
+              baseUrl: 'https://kavita.example',
+              accountId: 2,
+              username: 'lea',
+              apiKey: 'key-lea',
+            ),
+          ],
+          activeId: _profile.id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfilePickerScreen), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('romain'), findsOneWidget);
+    expect(find.text('lea'), findsOneWidget);
+  });
+
+  testWidgets('a lone profile opens in itself even after a switch', (
+    tester,
+  ) async {
+    final root = Directory.systemTemp.createTempSync('patra-lone-test');
+    addTearDown(() => root.deleteSync(recursive: true));
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    // `switchProfile` writes "nobody is active" through to the keychain, and
+    // a single-profile device has nobody to switch to — so this is what its
+    // every start would look like if `atLaunch` did not answer for it.
+    await tester.pumpWidget(
+      _app(auth: AuthState(profiles: [_profile]), downloadsRoot: root),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfilePickerScreen), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
   });
 
   testWidgets('an active session lands on the four-tab shell', (tester) async {
@@ -203,6 +259,15 @@ void main() {
       apiKey: 'the-auth-key',
     );
 
+    /// The other face on the device, so these run on the picker rather than
+    /// on the one-profile shortcut past it.
+    final other = Profile(
+      baseUrl: 'https://kavita.example',
+      accountId: 2,
+      username: 'lea',
+      apiKey: 'key-lea',
+    );
+
     testWidgets('costs one tap and no password', (tester) async {
       final root = Directory.systemTemp.createTempSync('patra-resume-test');
       addTearDown(() => root.deleteSync(recursive: true));
@@ -213,7 +278,7 @@ void main() {
       Map<String, String>? sentWith;
       await tester.pumpWidget(
         _app(
-          auth: AuthState(profiles: [remembered]),
+          auth: AuthState(profiles: [remembered, other]),
           downloadsRoot: root,
           signIn:
               ({
@@ -239,10 +304,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // The row says the server opens straight away, rather than asking to
-      // sign in.
-      expect(find.text('Open'), findsOneWidget);
-      await tester.tap(find.text('kavita.example'));
+      // Both faces open with a tap: neither is marked as wanting a password.
+      expect(find.text('Sign in'), findsNothing);
+      await tester.tap(find.text('romain'));
       await tester.pumpAndSettle();
 
       expect(sentWith, {
@@ -261,7 +325,7 @@ void main() {
       mockSecureStorage();
       await tester.pumpWidget(
         _app(
-          auth: AuthState(profiles: [remembered]),
+          auth: AuthState(profiles: [remembered, other]),
           signIn:
               ({
                 required String baseUrl,
@@ -282,7 +346,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('kavita.example'));
+      await tester.tap(find.text('romain'));
       // Not `pumpAndSettle`: the form lands with the password field focused,
       // and a blinking cursor is an animation that never settles.
       await tester.pump();
@@ -298,10 +362,10 @@ void main() {
         findsOneWidget,
         reason: 'it names the person: a server can hold several profiles',
       );
-      // The form is up with the address and the name already in it: the only
-      // thing missing is the password.
-      expect(find.text('SERVER ADDRESS'), findsOneWidget);
-      expect(find.text('https://kavita.example'), findsOneWidget);
+      // The form is up knowing this person's server and name: the only thing
+      // missing is the password, so the address is not asked for at all.
+      expect(find.text('SERVER ADDRESS'), findsNothing);
+      expect(find.text('PASSWORD'), findsOneWidget);
       expect(find.text('romain'), findsOneWidget);
     });
 
@@ -316,7 +380,7 @@ void main() {
 
       await tester.pumpWidget(
         _app(
-          auth: AuthState(profiles: [remembered]),
+          auth: AuthState(profiles: [remembered, other]),
           downloadsRoot: root,
           signIn:
               ({
@@ -334,7 +398,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('kavita.example'));
+      await tester.tap(find.text('romain'));
       await tester.pumpAndSettle();
 
       // What a saved chapter on a train is for: the key is already here, so
@@ -343,10 +407,10 @@ void main() {
     });
   });
 
-  testWidgets('two accounts on one server are two rows', (tester) async {
-    // The shape this ticket exists for: one address, two people, each with
-    // their own credential — and the row says which is which, since the host
-    // under both of them is the same word.
+  testWidgets('two accounts on one server are two faces', (tester) async {
+    // One address, two people, each with their own credential — and the name
+    // is what tells them apart, since the host under both would be the same
+    // word twice.
     await tester.pumpWidget(
       _app(
         auth: AuthState(
@@ -366,7 +430,83 @@ void main() {
 
     expect(find.text('romain'), findsOneWidget);
     expect(find.text('lea'), findsOneWidget);
-    expect(find.text('kavita.example'), findsNWidgets(2));
+    expect(find.text('kavita.example'), findsNothing);
+  });
+
+  group('adding a profile from the picker', () {
+    /// Opens the picker on [profiles] and taps its add slot.
+    Future<void> add(WidgetTester tester, List<Profile> profiles) async {
+      await tester.pumpWidget(_app(auth: AuthState(profiles: profiles)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add a profile'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    testWidgets('asks for a name and a password when one server is known', (
+      tester,
+    ) async {
+      await add(tester, [
+        _profile,
+        Profile(
+          baseUrl: 'https://kavita.example',
+          accountId: 2,
+          username: 'lea',
+          apiKey: 'key-lea',
+        ),
+      ]);
+
+      // Nobody should have to type an address the device already knows —
+      // which on a family tablet is every address there is.
+      expect(find.text('SERVER ADDRESS'), findsNothing);
+      expect(find.text('USERNAME'), findsOneWidget);
+      expect(find.text('PASSWORD'), findsOneWidget);
+      // …and the way out of that assumption, for the second Kavita nobody
+      // could otherwise reach.
+      expect(find.text('Use another server'), findsOneWidget);
+    });
+
+    testWidgets('is a drill-down, so the system back button comes back', (
+      tester,
+    ) async {
+      await add(tester, [
+        _profile,
+        Profile(
+          baseUrl: 'https://kavita.example',
+          accountId: 2,
+          username: 'lea',
+          apiKey: 'key-lea',
+        ),
+      ]);
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      // What Android's back button does. Reached with `go` this used to
+      // leave Patra altogether, which is the failure CLAUDE.md's rule about
+      // push and go is written to prevent.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProfilePickerScreen), findsOneWidget);
+      expect(find.text('Add a profile'), findsOneWidget);
+    });
+
+    testWidgets('asks for the address too when several servers are known', (
+      tester,
+    ) async {
+      await add(tester, [
+        _profile,
+        Profile(
+          baseUrl: 'https://other.example',
+          accountId: 1,
+          username: 'romain',
+          apiKey: 'key-other',
+        ),
+      ]);
+
+      expect(find.text('SERVER ADDRESS'), findsOneWidget);
+      expect(find.text('USERNAME'), findsOneWidget);
+      expect(find.text('PASSWORD'), findsOneWidget);
+    });
   });
 
   group('the server address field refuses what dio could not use', () {

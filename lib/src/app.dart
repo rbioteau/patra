@@ -9,28 +9,55 @@ import 'features/home/home_screen.dart';
 import 'features/launch/launch_animation.dart';
 import 'features/library/library_screen.dart';
 import 'features/login/login_screen.dart';
+import 'features/profiles/profile_picker_screen.dart';
 import 'features/reader/reader_screen.dart';
 import 'features/series/series_detail_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'routes.dart';
 import 'settings/locale_settings.dart';
 import 'theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier(0);
   ref.listen(sessionProvider, (_, _) => refresh.value++);
+  // The profiles themselves, and not only the session: forgetting the last
+  // one but one turns the picker into the form, and nothing about the active
+  // session moved.
+  ref.listen(
+    authProvider.select((auth) => auth.profiles.length),
+    (_, _) => refresh.value++,
+  );
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
     refreshListenable: refresh,
     redirect: (context, state) {
-      final loggedIn = ref.read(sessionProvider) != null;
-      final onLogin = state.matchedLocation == '/login';
-      if (!loggedIn) return onLogin ? null : '/login';
-      if (onLogin) return '/';
-      return null;
+      final auth = ref.read(authProvider);
+      final location = state.matchedLocation;
+      final onGate = location == '/login' || location == profilesLocation;
+      if (auth.active != null) return onGate ? '/' : null;
+
+      // Signed out: the gate this device belongs at, unless it is already
+      // there. `/login` counts as being there whatever the gate says — it is
+      // where adding a profile and signing a refused one back in both
+      // happen, and both are reached *from* the picker, so a device with
+      // several profiles must not be bounced back to it.
+      final gate = signedOutLocation(auth);
+      if (location == '/login' || location == gate) return null;
+      return gate;
     },
     routes: [
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: profilesLocation,
+        builder: (_, _) => const ProfilePickerScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (_, state) => LoginScreen(
+          profileId: state.uri.queryParameters['profile'],
+          expired: state.uri.queryParameters['expired'] == '1',
+        ),
+      ),
 
       // Drill-down screens live outside the shell: full-screen, with the
       // system back button popping them (see CLAUDE.md on push vs go).

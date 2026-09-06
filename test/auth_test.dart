@@ -69,6 +69,11 @@ class _FakeSignIn {
   /// cope with a token carrying no readable id.
   final String? token;
 
+  /// The face the response carries, as Kavita's own `coverImage` and
+  /// `primaryColor` come back on it.
+  bool hasAvatar = false;
+  String color = '';
+
   /// Thrown instead of answering, when set.
   final Object? fails;
 
@@ -94,6 +99,8 @@ class _FakeSignIn {
       token: token ?? _tokenFor(accountId),
       apiKey: apiKey,
       roles: const ['Login'],
+      hasAvatar: hasAvatar,
+      color: color,
     );
   }
 }
@@ -163,6 +170,141 @@ void main() {
         ).id,
         reason: 'the same person on the same server',
       );
+    });
+  });
+
+  group('the face a profile is drawn with', () {
+    final withFace = Profile(
+      baseUrl: 'https://a.example',
+      accountId: 1,
+      username: 'romain',
+      apiKey: 'key-romain',
+      hasAvatar: true,
+      color: '#4AC694',
+    );
+
+    test('survives storage, because the picker draws before any request', () {
+      final stored = Profile.fromJson(
+        jsonDecode(jsonEncode(withFace.toJson())),
+      )!;
+
+      expect(stored.hasAvatar, isTrue);
+      expect(stored.color, '#4AC694');
+    });
+
+    test('is fetched by account, and only while the key is held', () {
+      expect(
+        withFace.avatarUrl,
+        'https://a.example/api/Image/user-cover?userId=1&apiKey=key-romain',
+      );
+      // Signed out there is no key to authenticate the image with, so there
+      // is no picture to ask for — the colour and the initial are what is
+      // left, and they are enough to recognise a face by.
+      final signedOut = withFace.copyWith(apiKey: '');
+      expect(signedOut.avatarUrl, isNull);
+      expect(signedOut.color, '#4AC694');
+      // An account with no avatar is drawn as its initial, never as a
+      // request that can only 404.
+      expect(_romain.hasAvatar, isFalse);
+      expect(_romain.avatarUrl, isNull);
+    });
+
+    test('is kept when a profile is signed out, not only when it is live', () async {
+      // Dropping the credential rebuilds the profile from its identity; the
+      // face is not part of what a refused key invalidates, and losing it
+      // would blank a picker that has no network to fetch it again with.
+      final signIn = _FakeSignIn(fails: _refused(401));
+      final container = _container(
+        AuthState(profiles: [withFace], activeId: withFace.id),
+        signIn: signIn,
+      );
+
+      await expectLater(
+        container.read(authProvider.notifier).resume(withFace),
+        throwsA(isA<SignInExpired>()),
+      );
+
+      final kept = container.read(authProvider).profiles.single;
+      expect(kept.hasCredential, isFalse);
+      expect(kept.color, '#4AC694');
+      expect(kept.hasAvatar, isTrue);
+    });
+
+    test('is what the sign-in response said, kept on the profile', () async {
+      final signIn = _FakeSignIn(accountId: 1, apiKey: 'key-romain')
+        ..hasAvatar = true
+        ..color = '#4AC694';
+      final container = _container(const AuthState(), signIn: signIn);
+
+      await container.read(authProvider.notifier).login(
+        baseUrl: 'https://a.example',
+        username: 'romain',
+        password: 'hunter2',
+      );
+
+      final profile = container.read(authProvider).profiles.single;
+      expect(profile.hasAvatar, isTrue);
+      expect(profile.color, '#4AC694');
+    });
+  });
+
+  group('opening the app', () {
+    test('a device holding one profile goes straight back into it', () {
+      // What a single-profile device has always done, and must keep doing:
+      // no picker, no extra tap, straight to the shelves.
+      final opened = AuthState(
+        profiles: [_romain],
+        activeId: _romain.id,
+      ).atLaunch;
+
+      expect(opened.active?.id, _romain.id);
+    });
+
+    test('a device holding one opens in it whatever storage said', () {
+      // `switchProfile` writes `activeId: null` through to the keychain, and
+      // a single-profile device has nobody to switch *to* — so without this
+      // one tap on Settings' switch would leave that device opening on a
+      // picker of one face at every start, for ever.
+      final opened = AuthState(profiles: [_romain]).atLaunch;
+
+      expect(opened.active?.id, _romain.id);
+    });
+
+    test('a lone profile with no key left still lands on the form', () {
+      // Nothing to open it with: this is the one single-profile device that
+      // is asked for something, and what it is asked for is a password.
+      final signedOut = _romain.copyWith(apiKey: '');
+
+      expect(AuthState(profiles: [signedOut]).atLaunch.active, isNull);
+    });
+
+    test('a device holding several lands on the picker, whoever read last', () {
+      final opened = AuthState(
+        profiles: [_romain, _lea],
+        activeId: _lea.id,
+      ).atLaunch;
+
+      expect(opened.active, isNull, reason: 'the picker asks who is reading');
+      expect(
+        opened.profiles.map((p) => p.id),
+        [_romain.id, _lea.id],
+        reason: 'nobody is forgotten — only nobody is active yet',
+      );
+      expect(
+        opened.profiles.every((p) => p.hasCredential),
+        isTrue,
+        reason: 'every key is kept, so entering any of them is one tap',
+      );
+    });
+
+    test('leaves what storage read alone', () {
+      // The rule is about opening the app, not about what the keychain
+      // holds: which profile was last active is a true fact, and the rest of
+      // the session goes on writing and reading it.
+      final stored = AuthState(profiles: [_romain, _lea], activeId: _lea.id);
+
+      expect(stored.active?.id, _lea.id);
+      expect(stored.atLaunch.activeId, isNull);
     });
   });
 
@@ -438,6 +580,10 @@ void main() {
       'username': 'romain',
       'apiKey': 'key-romain',
       'isAdmin': false,
+      // What the picker draws this person with, and nothing else: the whole
+      // row is asserted, so a secret added here has to be added here too.
+      'hasAvatar': false,
+      'color': '',
     });
   });
 

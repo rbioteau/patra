@@ -230,35 +230,29 @@ abstract class AppLocalizations {
   /// **'{host} answered with an error ({status}).'**
   String connectionServerError(String host, int status);
 
-  /// Section label above the list of profiles this device remembers
-  ///
-  /// In en, this message translates to:
-  /// **'Your profiles'**
-  String get savedProfiles;
-
   /// No description provided for @addProfile.
   ///
   /// In en, this message translates to:
   /// **'Add a profile'**
   String get addProfile;
 
-  /// Call to action on a profile that still holds its auth key: one tap and it opens
+  /// Heading over the profile picker
   ///
   /// In en, this message translates to:
-  /// **'Open'**
-  String get openProfile;
+  /// **'Who is reading?'**
+  String get whoIsReading;
+
+  /// Reveals the address field when the device knows one server and the account being added is on another
+  ///
+  /// In en, this message translates to:
+  /// **'Use another server'**
+  String get useAnotherServer;
 
   /// Leaves the sign-in form for the list of remembered profiles
   ///
   /// In en, this message translates to:
   /// **'Back to your profiles'**
   String get backToProfiles;
-
-  /// No description provided for @editProfile.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit'**
-  String get editProfile;
 
   /// No description provided for @forgetProfile.
   ///

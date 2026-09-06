@@ -181,6 +181,41 @@ void main() {
       expect(user(['Login', 'Download', 'Change Password']).isAdmin, isFalse);
     });
 
+    test('carries the face the picker draws with no network', () {
+      // Both are Kavita's own: `coverImage` is the avatar it holds for the
+      // account, `primaryColor` the colour its web UI paints that account in.
+      // The picker keeps them so a shared device can draw everybody before it
+      // has reached a server — or without ever reaching one.
+      final withFace = LoginResult.fromJson({
+        'username': 'romain',
+        'token': 't',
+        'apiKey': 'k',
+        'coverImage': 'romain_1.png',
+        'primaryColor': '#4AC694',
+      });
+
+      expect(withFace.hasAvatar, isTrue);
+      expect(withFace.color, '#4AC694');
+    });
+
+    test('an account with no avatar and no colour of its own says so', () {
+      // Kavita omits both for an account that never set one, and an empty
+      // string is what its own DTO carries where a value was cleared.
+      final plain = user(null);
+      expect(plain.hasAvatar, isFalse);
+      expect(plain.color, isEmpty);
+
+      final cleared = LoginResult.fromJson({
+        'username': 'romain',
+        'token': 't',
+        'apiKey': 'k',
+        'coverImage': '',
+        'primaryColor': '',
+      });
+      expect(cleared.hasAvatar, isFalse);
+      expect(cleared.color, isEmpty);
+    });
+
     test('a server that omits roles is not an admin by accident', () {
       // Kavita omits null fields, and "unknown" has to fail closed: guessing
       // yes would draw a button whose only possible answer is a 403.

@@ -22,6 +22,26 @@ _Avoid_: server entry, instance, connection, backend
 One person's Kavita account on a server, remembered along with its auth key and never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one. Which profile it is, is the server's address plus Kavita's own id for the account — never the name, which is a label the server lets its owner change.
 _Avoid_: account, user, member, persona
 
+**Gate**:
+The screen a device with no session lands on — the [[Picker]] or the sign-in form. Which one is a rule about the device rather than a screen's own decision, and the app has exactly one place that decides it.
+_Avoid_: landing screen, splash (that is the launch animation), auth screen
+
+**Picker**:
+The screen a shared device opens on: every remembered profile, drawn as a face, asking who is reading before anything is read. It is drawn entirely from what the device remembers, so it appears with no network. A device holding one profile never sees it — being asked a question with one answer is a tap nobody agreed to.
+_Avoid_: profile switcher, chooser, who's watching, account selector
+
+**Face**:
+One profile on the picker: its avatar or its initial, its name, and its server where more than one is remembered. What a person recognises themselves by, which is why it is not called a row.
+_Avoid_: tile, card, profile row
+
+**Avatar**:
+The picture Kavita holds for an account. The app knows whether there is one and fetches it by account id, never by file name; where there is none, or no key left to fetch it with, the face is the profile's initial on its colour.
+_Avoid_: profile picture, photo, icon
+
+**Profile colour**:
+The colour Kavita's own web UI paints an account in, carried on the sign-in response and remembered with the profile. It is what an initial is drawn on, and it is per person — never the app's accent as a design token, which stands for reading progress and the app's own identity. An account with none falls back to it all the same, because a face with no colour is one that fails to be told apart.
+_Avoid_: theme colour, accent, brand colour
+
 **Credential**:
 What a sign-in is made with: a password the first time, an auth key every time after. Never both and never neither, which is why it is a sealed type in code rather than two optional fields — the wire format cannot express the choice, so the client does.
 _Avoid_: credentials (plural), login, secret

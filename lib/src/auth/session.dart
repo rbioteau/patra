@@ -42,6 +42,8 @@ class Profile {
     this.apiKey = '',
     this.token = '',
     this.isAdmin = false,
+    this.hasAvatar = false,
+    this.color = '',
   });
 
   final String baseUrl;
@@ -85,6 +87,33 @@ class Profile {
   /// offers a non-admin one that could only fail.
   final bool isAdmin;
 
+  /// Whether Kavita holds an avatar for this account, as the last sign-in
+  /// reported it. Kept on the profile rather than asked for, because the
+  /// picker is drawn before there is a session and sometimes with no network
+  /// at all: what is not remembered cannot be shown.
+  final bool hasAvatar;
+
+  /// The colour Kavita paints this account in, verbatim (`#4AC694`), or empty
+  /// where the account has none — which is what the initial is drawn on.
+  final String color;
+
+  /// Where this profile's avatar can be fetched, or null when there is
+  /// nothing to fetch: no picture on the server, no account id to ask by, or
+  /// no key left to authenticate the request with.
+  ///
+  /// An image URL carries its credential as a query parameter, so a
+  /// signed-out profile has no avatar to draw and falls back to its initial
+  /// on [color] — which it keeps.
+  String? get avatarUrl {
+    final id = accountId;
+    if (!hasAvatar || id == null || apiKey.isEmpty) return null;
+    return KavitaClient.userCoverUrl(
+      baseUrl: baseUrl,
+      userId: id,
+      apiKey: apiKey,
+    );
+  }
+
   /// Which profile this is, and the only thing anything else keys on.
   ///
   /// The normalized address plus Kavita's id for the account, because a user
@@ -124,6 +153,8 @@ class Profile {
     String? apiKey,
     String? token,
     bool? isAdmin,
+    bool? hasAvatar,
+    String? color,
   }) => Profile(
     baseUrl: baseUrl,
     accountId: accountId,
@@ -131,6 +162,8 @@ class Profile {
     apiKey: apiKey ?? this.apiKey,
     token: token ?? this.token,
     isAdmin: isAdmin ?? this.isAdmin,
+    hasAvatar: hasAvatar ?? this.hasAvatar,
+    color: color ?? this.color,
   );
 
   /// What reaches the keychain — [token] deliberately absent, and read back
@@ -143,6 +176,8 @@ class Profile {
     'username': username,
     'apiKey': apiKey,
     'isAdmin': isAdmin,
+    'hasAvatar': hasAvatar,
+    'color': color,
   };
 
   /// Defensive to the last field, and not out of habit: this is read from
@@ -162,6 +197,8 @@ class Profile {
       username: json['username'] is String ? json['username'] as String : '',
       apiKey: json['apiKey'] is String ? json['apiKey'] as String : '',
       isAdmin: json['isAdmin'] == true,
+      hasAvatar: json['hasAvatar'] == true,
+      color: json['color'] is String ? json['color'] as String : '',
     );
   }
 }
@@ -176,6 +213,41 @@ class AuthState {
 
   /// [Profile.id] of the profile being read as, or null while signed out.
   final String? activeId;
+
+  /// The addresses behind these profiles, each once.
+  ///
+  /// One definition, because two screens ask the same question of it and
+  /// mean the same thing by it: the picker names a server under a face only
+  /// where there is more than one, and the sign-in form asks for an address
+  /// only where there is not exactly one to assume.
+  Set<String> get servers => {for (final profile in profiles) profile.baseUrl};
+
+  /// What a cold start opens in, which is not quite what was written down.
+  ///
+  /// A device with **several** profiles opens on the picker, whoever read
+  /// last — a shared tablet has no last reader, only a previous one, and
+  /// landing in their session is how one person's page turn moves another
+  /// person's place. Every key is kept, so being asked is a tap and never a
+  /// password.
+  ///
+  /// A device with **one** opens in it, and does so whatever the keychain
+  /// says about who was active. Not merely a shortcut: `switchProfile`
+  /// writes `activeId: null` through to storage, so a single-profile device
+  /// whose owner once tapped *Switch profile* would otherwise open on a
+  /// picker of one face, at every start, for good — being asked a question
+  /// with one answer, permanently. There is nobody to choose between, so
+  /// nobody is asked.
+  ///
+  /// Applied where the app starts rather than where storage is read: which
+  /// profile was last active is a true fact worth writing down (it is what
+  /// [active] means for the rest of the session), and this is a rule about
+  /// opening the app, not about what the keychain holds.
+  AuthState get atLaunch {
+    if (profiles.length > 1) return AuthState(profiles: profiles);
+    final only = profiles.length == 1 ? profiles.single : null;
+    if (only == null || !only.hasCredential) return this;
+    return AuthState(profiles: profiles, activeId: only.id);
+  }
 
   /// Null while signed out, which is what the router redirect keys off.
   Session? get active {
@@ -279,7 +351,9 @@ class SessionStorage {
   }
 }
 
-/// Auth state restored from storage before the app started; injected in main().
+/// The state the app opened in: restored from storage before it started and
+/// put through [AuthState.atLaunch] there, so a shared device arrives here
+/// with nobody active and lands on the picker. Injected in main().
 final initialAuthStateProvider = Provider<AuthState>(
   (ref) => const AuthState(),
 );
@@ -414,20 +488,20 @@ class AuthNotifier extends Notifier<AuthState> {
       apiKey: user.apiKey,
       token: user.token,
       isAdmin: user.isAdmin,
+      hasAvatar: user.hasAvatar,
+      color: user.color,
     );
     await _commit(AuthState(profiles: _upsert(profile), activeId: profile.id));
   }
 
   /// Keeps the profile and forgets how to be this person.
+  ///
+  /// The two secrets and nothing else: the name, the role and the face this
+  /// profile is drawn with are not what a refused key invalidates, and a
+  /// picker with no network could never fetch them again.
   Future<void> _dropCredential(Profile profile) => _commit(
     AuthState(
-      profiles: _upsert(
-        Profile(
-          baseUrl: profile.baseUrl,
-          accountId: profile.accountId,
-          username: profile.username,
-        ),
-      ),
+      profiles: _upsert(profile.copyWith(apiKey: '', token: '')),
       activeId: state.activeId == profile.id ? null : state.activeId,
     ),
   );
@@ -452,13 +526,7 @@ class AuthNotifier extends Notifier<AuthState> {
     final active = state.active;
     final profiles = active == null
         ? state.profiles
-        : _upsert(
-            Profile(
-              baseUrl: active.baseUrl,
-              accountId: active.accountId,
-              username: active.username,
-            ),
-          );
+        : _upsert(active.copyWith(apiKey: '', token: ''));
     await _commit(AuthState(profiles: profiles, activeId: null));
   }
 

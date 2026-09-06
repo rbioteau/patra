@@ -47,6 +47,12 @@ const radiusPill = 999.0;
 
 /// Spacing
 const gutter = 20.0;
+
+/// The wider gutter of the two screens that stand in front of the app — the
+/// picker and the sign-in form. Both hold a single column on an otherwise
+/// empty screen, and both are the handoff's login screen at heart, so the
+/// number lives here rather than once in each of them.
+const gateGutter = 32.0;
 const sectionGap = 24.0;
 const minHitTarget = 44.0;
 
