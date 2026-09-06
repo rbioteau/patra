@@ -37,8 +37,8 @@ class SettingsScreen extends ConsumerWidget {
               _ServerCard(
                 host: session.host,
                 username: session.username,
-                actionLabel: l10n.switchServer,
-                onTap: () => ref.read(authProvider.notifier).switchServer(),
+                actionLabel: l10n.switchProfile,
+                onTap: () => ref.read(authProvider.notifier).switchProfile(),
               ),
 
             _Section(label: l10n.generalSectionLabel),

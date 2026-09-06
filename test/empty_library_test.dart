@@ -54,22 +54,20 @@ Future<_Adapter> _pump(WidgetTester tester, {required bool admin}) async {
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
 
+  final profile = Profile(
+    baseUrl: 'http://kavita.test',
+    accountId: 1,
+    username: 'romain',
+    token: 'token',
+    apiKey: 'key',
+    isAdmin: admin,
+  );
+
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         initialAuthStateProvider.overrideWithValue(
-          AuthState(
-            servers: [
-              ServerEntry(
-                baseUrl: 'http://kavita.test',
-                username: 'romain',
-                token: 'token',
-                apiKey: 'key',
-                isAdmin: admin,
-              ),
-            ],
-            activeUrl: 'http://kavita.test',
-          ),
+          AuthState(profiles: [profile], activeId: profile.id),
         ),
         kavitaClientProvider.overrideWithValue(client),
       ],

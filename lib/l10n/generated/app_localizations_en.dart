@@ -83,8 +83,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String connectionSignInExpired(String host) {
-    return '$host no longer accepts the saved sign-in. Your password is needed again.';
+  String connectionSignInExpired(String name, String host) {
+    return 'The saved sign-in for $name on $host was refused. Your password is needed again.';
   }
 
   @override
@@ -98,26 +98,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get savedServers => 'Your servers';
+  String get savedProfiles => 'Your profiles';
 
   @override
-  String get addServer => 'Add a server';
+  String get addProfile => 'Add a profile';
 
   @override
-  String get openServer => 'Open';
+  String get openProfile => 'Open';
 
   @override
-  String get backToServers => 'Back to your servers';
+  String get backToProfiles => 'Back to your profiles';
 
   @override
-  String get editServer => 'Edit';
+  String get editProfile => 'Edit';
 
   @override
-  String get forgetServer => 'Forget';
+  String get forgetProfile => 'Forget';
 
   @override
-  String forgetServerConfirm(String server) {
-    return 'Forget $server?';
+  String forgetProfileConfirm(String name, String host) {
+    return 'Forget $name on $host?';
   }
 
   @override
@@ -419,7 +419,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverSectionLabel => 'Server';
 
   @override
-  String get switchServer => 'Switch server';
+  String get switchProfile => 'Switch profile';
 
   @override
   String get serverOnline => 'Connected';

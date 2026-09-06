@@ -62,10 +62,11 @@
   "@connectionBadCredentials": {
     "description": "Kavita answers every credential failure with a bare 401, so this one message covers a wrong password and a locked-out account alike"
   },
-  "connectionSignInExpired": "{host} no longer accepts the saved sign-in. Your password is needed again.",
+  "connectionSignInExpired": "The saved sign-in for {name} on {host} was refused. Your password is needed again.",
   "@connectionSignInExpired": {
-    "description": "Shown when opening a remembered server fails because the stored auth key was refused. Deliberately not the bad-credentials message: no password was sent, so nothing the person typed was rejected",
+    "description": "Shown when opening a remembered profile fails because the stored auth key was refused. Named by person and host, because a server can hold several profiles and only one of them was refused. Deliberately not the bad-credentials message: no password was sent, so nothing the person typed was rejected",
     "placeholders": {
+      "name": {"type": "String"},
       "host": {"type": "String"}
     }
   },
@@ -82,26 +83,27 @@
       "status": {"type": "int"}
     }
   },
-  "savedServers": "Your servers",
-  "@savedServers": {
-    "description": "Section label above the list of previously used servers"
+  "savedProfiles": "Your profiles",
+  "@savedProfiles": {
+    "description": "Section label above the list of profiles this device remembers"
   },
-  "addServer": "Add a server",
-  "openServer": "Open",
-  "@openServer": {
-    "description": "Call to action on a saved server that still has a live session: one tap and it opens"
+  "addProfile": "Add a profile",
+  "openProfile": "Open",
+  "@openProfile": {
+    "description": "Call to action on a profile that still holds its auth key: one tap and it opens"
   },
-  "backToServers": "Back to your servers",
-  "@backToServers": {
-    "description": "Leaves the sign-in form for the list of saved servers"
+  "backToProfiles": "Back to your profiles",
+  "@backToProfiles": {
+    "description": "Leaves the sign-in form for the list of remembered profiles"
   },
-  "editServer": "Edit",
-  "forgetServer": "Forget",
-  "forgetServerConfirm": "Forget {server}?",
-  "@forgetServerConfirm": {
-    "description": "Confirmation title; server is a host name",
+  "editProfile": "Edit",
+  "forgetProfile": "Forget",
+  "forgetProfileConfirm": "Forget {name} on {host}?",
+  "@forgetProfileConfirm": {
+    "description": "Confirmation title; name is the profile's username and host a host name. Both, because a server can hold several profiles and one of them is being removed",
     "placeholders": {
-      "server": {"type": "String"}
+      "name": {"type": "String"},
+      "host": {"type": "String"}
     }
   },
   "cancel": "Cancel",
@@ -381,7 +383,7 @@
   },
   "settingsTitle": "Settings",
   "serverSectionLabel": "Server",
-  "switchServer": "Switch server",
+  "switchProfile": "Switch profile",
   "serverOnline": "Connected",
   "@serverOnline": {
     "description": "Accessible label for the reachability dot on the settings server card"

@@ -30,14 +30,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   final _passwordFocus = FocusNode();
 
-  /// The form replaces the server list when adding or editing, and whenever
-  /// there is no saved server at all.
+  /// The form replaces the profile list when adding or editing, and whenever
+  /// there is no remembered profile at all.
   bool _showForm = false;
   bool _busy = false;
 
-  /// The address of the server whose sign-in is in flight, so its row can say
-  /// so. Entering a remembered server is a round trip now, not a state change
-  /// — a row that looked inert for ten seconds would read as a dead tap.
+  /// The [Profile.id] of the profile whose sign-in is in flight, so its row
+  /// can say so. Entering a remembered profile is a round trip now, not a
+  /// state change — a row that looked inert for ten seconds would read as a
+  /// dead tap. The id rather than the address, since two profiles can share
+  /// one server and only one of them is signing in.
   String? _signingIn;
   String? _error;
 
@@ -50,7 +52,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _openForm({ServerEntry? prefill, bool focusPassword = false}) {
+  void _openForm({Profile? prefill, bool focusPassword = false}) {
     _serverController.text = prefill?.baseUrl ?? '';
     _usernameController.text = prefill?.username ?? '';
     _passwordController.clear();
@@ -98,22 +100,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _connect(ServerEntry server) async {
+  Future<void> _connect(Profile profile) async {
     if (_signingIn != null) return;
-    if (!server.hasCredential) {
+    if (!profile.hasCredential) {
       // Remembered but signed out: only the password is missing.
-      _openForm(prefill: server, focusPassword: true);
+      _openForm(prefill: profile, focusPassword: true);
       return;
     }
     final l10n = AppLocalizations.of(context);
     setState(() {
-      _signingIn = server.baseUrl;
+      _signingIn = profile.id;
       _error = null;
     });
     try {
       // One request, made with the stored auth key and no password.
       // Redirection is the router's, as it is after a sign-in.
-      await ref.read(authProvider.notifier).resume(server);
+      await ref.read(authProvider.notifier).resume(profile);
     } on SignInExpired {
       if (!mounted) return;
       // The key is refused, so the server is remembered and signed out and
@@ -125,14 +127,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Worded here rather than by `ConnectionFailure`, which sees the same
       // bare 401 a mistyped password earns: nothing the person typed was
       // rejected, because nothing they typed was sent.
-      _openForm(prefill: server, focusPassword: true);
-      setState(() => _error = l10n.connectionSignInExpired(server.host));
+      _openForm(prefill: profile, focusPassword: true);
+      setState(
+        () => _error = l10n.connectionSignInExpired(
+          profile.displayName,
+          profile.host,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       // The key is untouched and the row still opens: say what happened and
       // leave the list as it is.
       setState(
-        () => _error = ConnectionFailure.from(e).message(l10n, server.host),
+        () => _error = ConnectionFailure.from(e).message(l10n, profile.host),
       );
     } finally {
       // Guarded: the router tears this route down on success, and the 10s
@@ -141,14 +148,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _forget(ServerEntry server) async {
+  Future<void> _forget(Profile profile) async {
     final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: patraSurface,
         title: Text(
-          l10n.forgetServerConfirm(server.host),
+          // Both halves: a server can hold several profiles, and it is one
+          // of them being removed rather than the address.
+          l10n.forgetProfileConfirm(profile.displayName, profile.host),
           style: PatraText.body(),
         ),
         actions: [
@@ -159,7 +168,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
-              l10n.forgetServer,
+              l10n.forgetProfile,
               style: PatraText.body(color: patraDanger),
             ),
           ),
@@ -167,15 +176,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
     if (confirmed ?? false) {
-      await ref.read(authProvider.notifier).forget(server.baseUrl);
+      await ref.read(authProvider.notifier).forget(profile.id);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final servers = ref.watch(authProvider).servers;
-    final showList = servers.isNotEmpty && !_showForm;
+    final profiles = ref.watch(authProvider).profiles;
+    final showList = profiles.isNotEmpty && !_showForm;
 
     return Scaffold(
       body: SafeArea(
@@ -201,8 +210,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 420),
                         child: showList
-                            ? _buildServerList(servers)
-                            : _buildForm(canGoBack: servers.isNotEmpty),
+                            ? _buildProfileList(profiles)
+                            : _buildForm(canGoBack: profiles.isNotEmpty),
                       ),
                     ),
                   ),
@@ -232,7 +241,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildServerList(List<ServerEntry> servers) {
+  Widget _buildProfileList(List<Profile> profiles) {
     final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,20 +254,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _ErrorLine(_error!),
           const SizedBox(height: 12),
         ],
-        SectionLabel(l10n.savedServers),
+        SectionLabel(l10n.savedProfiles),
         const SizedBox(height: 12),
-        for (final server in servers) ...[
-          _ServerRow(
-            server: server,
-            busy: server.baseUrl == _signingIn,
-            onTap: () => _connect(server),
-            onEdit: () => _openForm(prefill: server, focusPassword: true),
-            onForget: () => _forget(server),
+        for (final profile in profiles) ...[
+          _ProfileRow(
+            profile: profile,
+            busy: profile.id == _signingIn,
+            onTap: () => _connect(profile),
+            onEdit: () => _openForm(prefill: profile, focusPassword: true),
+            onForget: () => _forget(profile),
           ),
           const SizedBox(height: 10),
         ],
         const SizedBox(height: 4),
-        _AddServerButton(onPressed: () => _openForm()),
+        _AddProfileButton(onPressed: () => _openForm()),
       ],
     );
   }
@@ -357,7 +366,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 }),
                 style: TextButton.styleFrom(foregroundColor: patraTextMuted),
                 icon: const Icon(Icons.chevron_left, size: 18),
-                label: Text(l10n.backToServers),
+                label: Text(l10n.backToProfiles),
               ),
             ),
           ],
@@ -432,18 +441,20 @@ class _Field extends StatelessWidget {
   }
 }
 
-class _ServerRow extends StatelessWidget {
-  const _ServerRow({
-    required this.server,
+/// One remembered profile: who, on which server, and whether it opens with a
+/// tap or wants a password first.
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({
+    required this.profile,
     required this.onTap,
     required this.onEdit,
     required this.onForget,
     this.busy = false,
   });
 
-  final ServerEntry server;
+  final Profile profile;
 
-  /// Whether this server's sign-in is in flight: the row says so and accepts
+  /// Whether this profile's sign-in is in flight: the row says so and accepts
   /// nothing until it is not.
   final bool busy;
 
@@ -454,13 +465,21 @@ class _ServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // A server holding its auth key opens with one tap; otherwise a password
+    // A profile holding its auth key opens with one tap; otherwise a password
     // is still needed, and both the chip and the call to action say so.
-    final live = server.hasCredential;
-    final initial = server.host.isEmpty
+    final live = profile.hasCredential;
+    // The person names the row and the server labels it underneath: two
+    // accounts on one address are two rows that would otherwise read the
+    // same word twice.
+    final name = profile.displayName;
+    // `characters`, not `substring(0, 1)`: a name starting with an astral
+    // character — an emoji, some CJK extensions — would otherwise be cut in
+    // half and drawn as a replacement glyph. The host this replaced was
+    // effectively always plain ASCII; a username is whatever someone typed.
+    final initial = name.isEmpty
         ? '?'
-        : server.host.substring(0, 1).toUpperCase();
-    final cta = live ? l10n.openServer : l10n.signIn;
+        : name.characters.first.toUpperCase();
+    final cta = live ? l10n.openProfile : l10n.signIn;
     final ctaStyle = PatraText.metadata(
       size: 12,
       color: live ? patraAccent : patraTextMuted,
@@ -482,12 +501,12 @@ class _ServerRow extends StatelessWidget {
             builder: (context, constraints) {
               // The call to action is the first thing to go: "Se connecter" is
               // half again as long as "Sign in", and on a small phone it would
-              // leave the host name no room. The chip already says, in colour,
-              // whether this server opens straight away.
+              // leave the name no room. The chip already says, in colour,
+              // whether this profile opens straight away.
               final ctaWidth = _measureWidth(context, cta, ctaStyle);
               final showCta =
-                  constraints.maxWidth - _serverRowFixedWidth - ctaWidth >=
-                  _serverRowMinHostWidth;
+                  constraints.maxWidth - _profileRowFixedWidth - ctaWidth >=
+                  _profileRowMinNameWidth;
               return Row(
                 children: [
                   Container(
@@ -511,15 +530,15 @@ class _ServerRow extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          server.host,
+                          name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: PatraText.rowTitle(),
                         ),
-                        if (server.username.isNotEmpty) ...[
+                        if (name != profile.host) ...[
                           const SizedBox(height: 3),
                           Text(
-                            server.username,
+                            profile.host,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: PatraText.metadata(),
@@ -546,13 +565,13 @@ class _ServerRow extends StatelessWidget {
                     Text(cta, style: ctaStyle),
                   ],
                   IconButton(
-                    tooltip: l10n.editServer,
+                    tooltip: l10n.editProfile,
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     onPressed: busy ? null : onEdit,
                   ),
                   IconButton(
-                    tooltip: l10n.forgetServer,
+                    tooltip: l10n.forgetProfile,
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: busy ? null : onForget,
@@ -568,7 +587,7 @@ class _ServerRow extends StatelessWidget {
 }
 
 /// What went wrong, said the same way on the list and on the form — the two
-/// places a sign-in can fail from now that entering a remembered server is a
+/// places a sign-in can fail from now that entering a remembered profile is a
 /// request of its own.
 class _ErrorLine extends StatelessWidget {
   const _ErrorLine(this.message);
@@ -580,12 +599,12 @@ class _ErrorLine extends StatelessWidget {
       Text(message, style: PatraText.metadata(color: patraDanger));
 }
 
-/// Everything in a server row that is not the host name or the call to action:
+/// Everything in a profile row that is not the name or the call to action:
 /// the chip, its gaps and the two compact icon buttons.
-const _serverRowFixedWidth = 12 + 38 + 12 + 8 + 40 + 40 + 4;
+const _profileRowFixedWidth = 12 + 38 + 12 + 8 + 40 + 40 + 4;
 
-/// What the host name is worth keeping, ellipsis included.
-const _serverRowMinHostWidth = 96.0;
+/// What the name is worth keeping, ellipsis included.
+const _profileRowMinNameWidth = 96.0;
 
 double _measureWidth(BuildContext context, String text, TextStyle style) {
   final painter = TextPainter(
@@ -596,10 +615,10 @@ double _measureWidth(BuildContext context, String text, TextStyle style) {
   return painter.width;
 }
 
-/// The empty slot at the end of the server list: dashed, so it reads as a
+/// The empty slot at the end of the profile list: dashed, so it reads as a
 /// place to fill rather than as a second button competing with "Sign in".
-class _AddServerButton extends StatelessWidget {
-  const _AddServerButton({required this.onPressed});
+class _AddProfileButton extends StatelessWidget {
+  const _AddProfileButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -623,7 +642,7 @@ class _AddServerButton extends StatelessWidget {
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    l10n.addServer,
+                    l10n.addProfile,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: PatraText.rowTitle(color: color),

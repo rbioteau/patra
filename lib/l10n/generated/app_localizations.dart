@@ -212,11 +212,11 @@ abstract class AppLocalizations {
   /// **'{host} refused: this account is not allowed to do that.'**
   String connectionForbidden(String host);
 
-  /// Shown when opening a remembered server fails because the stored auth key was refused. Deliberately not the bad-credentials message: no password was sent, so nothing the person typed was rejected
+  /// Shown when opening a remembered profile fails because the stored auth key was refused. Named by person and host, because a server can hold several profiles and only one of them was refused. Deliberately not the bad-credentials message: no password was sent, so nothing the person typed was rejected
   ///
   /// In en, this message translates to:
-  /// **'{host} no longer accepts the saved sign-in. Your password is needed again.'**
-  String connectionSignInExpired(String host);
+  /// **'The saved sign-in for {name} on {host} was refused. Your password is needed again.'**
+  String connectionSignInExpired(String name, String host);
 
   /// No description provided for @connectionNotKavita.
   ///
@@ -230,47 +230,47 @@ abstract class AppLocalizations {
   /// **'{host} answered with an error ({status}).'**
   String connectionServerError(String host, int status);
 
-  /// Section label above the list of previously used servers
+  /// Section label above the list of profiles this device remembers
   ///
   /// In en, this message translates to:
-  /// **'Your servers'**
-  String get savedServers;
+  /// **'Your profiles'**
+  String get savedProfiles;
 
-  /// No description provided for @addServer.
+  /// No description provided for @addProfile.
   ///
   /// In en, this message translates to:
-  /// **'Add a server'**
-  String get addServer;
+  /// **'Add a profile'**
+  String get addProfile;
 
-  /// Call to action on a saved server that still has a live session: one tap and it opens
+  /// Call to action on a profile that still holds its auth key: one tap and it opens
   ///
   /// In en, this message translates to:
   /// **'Open'**
-  String get openServer;
+  String get openProfile;
 
-  /// Leaves the sign-in form for the list of saved servers
+  /// Leaves the sign-in form for the list of remembered profiles
   ///
   /// In en, this message translates to:
-  /// **'Back to your servers'**
-  String get backToServers;
+  /// **'Back to your profiles'**
+  String get backToProfiles;
 
-  /// No description provided for @editServer.
+  /// No description provided for @editProfile.
   ///
   /// In en, this message translates to:
   /// **'Edit'**
-  String get editServer;
+  String get editProfile;
 
-  /// No description provided for @forgetServer.
+  /// No description provided for @forgetProfile.
   ///
   /// In en, this message translates to:
   /// **'Forget'**
-  String get forgetServer;
+  String get forgetProfile;
 
-  /// Confirmation title; server is a host name
+  /// Confirmation title; name is the profile's username and host a host name. Both, because a server can hold several profiles and one of them is being removed
   ///
   /// In en, this message translates to:
-  /// **'Forget {server}?'**
-  String forgetServerConfirm(String server);
+  /// **'Forget {name} on {host}?'**
+  String forgetProfileConfirm(String name, String host);
 
   /// No description provided for @cancel.
   ///
@@ -716,11 +716,11 @@ abstract class AppLocalizations {
   /// **'Server'**
   String get serverSectionLabel;
 
-  /// No description provided for @switchServer.
+  /// No description provided for @switchProfile.
   ///
   /// In en, this message translates to:
-  /// **'Switch server'**
-  String get switchServer;
+  /// **'Switch profile'**
+  String get switchProfile;
 
   /// Accessible label for the reachability dot on the settings server card
   ///

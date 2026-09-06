@@ -23,7 +23,7 @@ library;
 
 /// What `POST /api/Account/login` answers with: an identity, the auth key that
 /// is this account's durable credential, and a JWT to spend it. Not a session
-/// — a session is a `ServerEntry` the app is currently reading as, and this is
+/// — a session is a `Profile` the app is currently reading as, and this is
 /// only what one is built from.
 ///
 /// `refreshToken` is in the response and deliberately not read here: nothing
@@ -45,7 +45,7 @@ class LoginResult {
   final String token;
 
   /// The account's Kavita auth key — `opds`, as `ConstructUserDto` computes
-  /// it. The one durable credential, and the only secret a remembered server
+  /// it. The one durable credential, and the only secret a remembered profile
   /// keeps.
   final String apiKey;
 

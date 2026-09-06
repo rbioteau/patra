@@ -84,8 +84,8 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String connectionSignInExpired(String host) {
-    return '$host n\'accepte plus la connexion enregistrée. Votre mot de passe est de nouveau nécessaire.';
+  String connectionSignInExpired(String name, String host) {
+    return 'La connexion enregistrée de $name sur $host a été refusée. Votre mot de passe est de nouveau nécessaire.';
   }
 
   @override
@@ -99,26 +99,26 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get savedServers => 'Vos serveurs';
+  String get savedProfiles => 'Vos profils';
 
   @override
-  String get addServer => 'Ajouter un serveur';
+  String get addProfile => 'Ajouter un profil';
 
   @override
-  String get openServer => 'Ouvrir';
+  String get openProfile => 'Ouvrir';
 
   @override
-  String get backToServers => 'Retour à vos serveurs';
+  String get backToProfiles => 'Retour à vos profils';
 
   @override
-  String get editServer => 'Modifier';
+  String get editProfile => 'Modifier';
 
   @override
-  String get forgetServer => 'Oublier';
+  String get forgetProfile => 'Oublier';
 
   @override
-  String forgetServerConfirm(String server) {
-    return 'Oublier $server ?';
+  String forgetProfileConfirm(String name, String host) {
+    return 'Oublier $name sur $host ?';
   }
 
   @override
@@ -420,7 +420,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get serverSectionLabel => 'Serveur';
 
   @override
-  String get switchServer => 'Changer de serveur';
+  String get switchProfile => 'Changer de profil';
 
   @override
   String get serverOnline => 'Connecté';
