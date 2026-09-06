@@ -17,7 +17,6 @@ const _server = ServerEntry(
   baseUrl: 'https://kavita.example',
   username: 'rb',
   token: 'token',
-  refreshToken: 'refresh',
   apiKey: 'key',
 );
 
@@ -59,11 +58,11 @@ Future<void> _settings(WidgetTester tester, ClientIdentity identity) async {
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = _Adapter();
-  client.refreshHttpClient.httpClientAdapter = _Adapter();
+  client.bareHttpClient.httpClientAdapter = _Adapter();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

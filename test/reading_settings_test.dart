@@ -38,16 +38,20 @@ void main() {
     // The concept was called a loupe until the word was found to be wrong for
     // it. The identifiers moved; the storage key deliberately did not, because
     // it is already written on every device that has turned the setting on.
-    test('is stored under its original key, whatever the code calls it', () async {
-      final stored = mockSecureStorage();
-      await ReadingSettingsStore.saveMagnify(true);
-      expect(
-        stored.keys.where((k) => k.endsWith('loupeGesture')),
-        isNotEmpty,
-        reason: 'renaming this key would silently reset the setting on every '
-            'device that has it on',
-      );
-    });
+    test(
+      'is stored under its original key, whatever the code calls it',
+      () async {
+        final stored = mockSecureStorage();
+        await ReadingSettingsStore.saveMagnify(true);
+        expect(
+          stored.keys.where((k) => k.endsWith('loupeGesture')),
+          isNotEmpty,
+          reason:
+              'renaming this key would silently reset the setting on every '
+              'device that has it on',
+        );
+      },
+    );
 
     test('round-trips, and is off when nothing was ever stored', () async {
       mockSecureStorage();
@@ -66,5 +70,4 @@ void main() {
       expect(await ReadingSettingsStore.loadMagnify(), isTrue);
     });
   });
-
 }

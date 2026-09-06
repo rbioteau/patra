@@ -60,11 +60,11 @@ Future<void> _pump(WidgetTester tester, Widget screen, _Adapter adapter) async {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
 
   await tester.pumpWidget(
     ProviderScope(

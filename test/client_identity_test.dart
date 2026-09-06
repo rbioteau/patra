@@ -69,10 +69,7 @@ void main() {
       // current version: a hardcoded number is the thing that drifts, and
       // moving it off the const is the whole point of reading the binary.
       expect(ClientIdentity.fallbackAppVersion, '0.0.0');
-      expect(
-        const ClientIdentity.unknown().userAgent,
-        'Patra/0.0.0 (Flutter)',
-      );
+      expect(const ClientIdentity.unknown().userAgent, 'Patra/0.0.0 (Flutter)');
     });
 
     test('a device model cannot break the header or its syntax', () {
@@ -267,12 +264,12 @@ KavitaClient _clientWith(ClientIdentity identity, _DeviceAdapter adapter) {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
     identity: identity,
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
   return client;
 }
 

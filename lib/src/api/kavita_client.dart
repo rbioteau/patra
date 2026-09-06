@@ -5,6 +5,38 @@ import 'account_id.dart';
 import 'client_identity.dart';
 import 'models.dart';
 
+/// What a sign-in is made with. A password the first time, the account's
+/// auth key every time after — and never both, never neither.
+///
+/// `LoginDto` carries all three fields flat, so the shape on the wire cannot
+/// say that; a type here can. Which field is filled is what picks the
+/// password path or the key path inside `AccountController.Login`, so the
+/// choice is a fork rather than two settings, and [KavitaClient._loginBody]
+/// is the one place that turns it back into Kavita's flat shape.
+sealed class Credential {
+  const Credential();
+
+  /// What a person types the first time.
+  const factory Credential.password(String value) = PasswordCredential;
+
+  /// What a remembered server signs in with afterwards. `LoginDto` states
+  /// that a login carrying one *"will ignore username/password for
+  /// validation"*.
+  const factory Credential.authKey(String value) = AuthKeyCredential;
+}
+
+class PasswordCredential extends Credential {
+  const PasswordCredential(this.value);
+
+  final String value;
+}
+
+class AuthKeyCredential extends Credential {
+  const AuthKeyCredential(this.value);
+
+  final String value;
+}
+
 /// Thin hand-written client for the handful of Kavita endpoints the app uses.
 /// The full API exposes ~500 endpoints; generating a client for all of them
 /// is not worth the weight.
@@ -12,10 +44,10 @@ class KavitaClient {
   KavitaClient({
     required this.baseUrl,
     required String token,
-    required this._refreshToken,
+    required this.username,
     required this.apiKey,
     this.identity = const ClientIdentity.unknown(),
-    this.onTokensRefreshed,
+    this.onTokenRenewed,
     this.onSessionExpired,
     this.onReachabilityChanged,
   }) : _token = token,
@@ -27,18 +59,18 @@ class KavitaClient {
            receiveTimeout: const Duration(seconds: 30),
          ),
        ),
-       // Separate bare instance for the refresh call: routing it through
+       // Separate bare instance for the renewal call: routing it through
        // _dio would deadlock the queued interceptor below.
-       _refreshDio = Dio(
+       _bareDio = Dio(
          BaseOptions(
            baseUrl: baseUrl,
            connectTimeout: const Duration(seconds: 10),
          ),
        ) {
     // Stamped per request rather than frozen into BaseOptions: part of the
-    // identity is the screen, which turns when the device does. The refresh
+    // identity is the screen, which turns when the device does. The bare
     // instance gets it too — it is the one that replays a retried request.
-    for (final dio in [_dio, _refreshDio]) {
+    for (final dio in [_dio, _bareDio]) {
       dio.interceptors.add(
         InterceptorsWrapper(
           onRequest: (options, handler) {
@@ -62,7 +94,7 @@ class KavitaClient {
       ),
     );
     _dio.interceptors.add(
-      // Queued so concurrent 401s refresh once, then retry in order.
+      // Queued so concurrent 401s renew the token once, then retry in order.
       QueuedInterceptorsWrapper(onError: _onError),
     );
   }
@@ -92,17 +124,38 @@ class KavitaClient {
   static const _bearerIsIrrelevant = 'bearerIsIrrelevant';
 
   final String baseUrl;
+
+  /// Whose account this is, sent with every sign-in this client makes.
+  ///
+  /// `LoginDto` says Kavita ignores it when an [apiKey] is present, so it is
+  /// belt and braces — but it costs one field, and it makes the renewal below
+  /// exactly the request `AuthNotifier.resume` makes. The alternative was one
+  /// shape exercised against a real server and a second, subtly different one
+  /// on the path that recovers a session.
+  final String username;
+
+  /// The account's Kavita auth key: the one credential this client holds that
+  /// does not expire.
+  ///
+  /// Two jobs, and they are the same secret. Image URLs carry it as a query
+  /// parameter, because an `<img>` cannot always send a header. And it is what
+  /// mints a JWT — `LoginDto` states that a login carrying an `apiKey` ignores
+  /// the username and password, and `AccountController.Login` resolves the
+  /// account from the key and skips the password check entirely. So a 401 on
+  /// an expired JWT is answered by signing in again with this, rather than by
+  /// the refresh-token pair the app deliberately no longer keeps (ADR-0004).
   final String apiKey;
 
   /// What this installation tells the server it is; sent on every request.
   final ClientIdentity identity;
 
-  /// Notified with the new (token, refreshToken) pair so the session can be
-  /// persisted.
-  final void Function(String token, String refreshToken)? onTokensRefreshed;
+  /// Notified with a freshly minted JWT, so the live session carries it.
+  ///
+  /// Nothing writes it down — see [apiKey].
+  final void Function(String token)? onTokenRenewed;
 
-  /// Notified when the refresh token itself is rejected: the user must log
-  /// in again.
+  /// Notified when the server refuses [apiKey]: the key has been rotated or
+  /// the account is gone, and only a password can get back in.
   final void Function()? onSessionExpired;
 
   /// Notified with false when the server could not be reached at all, and
@@ -110,15 +163,14 @@ class KavitaClient {
   final void Function(bool reachable)? onReachabilityChanged;
 
   String _token;
-  String _refreshToken;
   final Dio _dio;
-  final Dio _refreshDio;
+  final Dio _bareDio;
 
   @visibleForTesting
   Dio get httpClient => _dio;
 
   @visibleForTesting
-  Dio get refreshHttpClient => _refreshDio;
+  Dio get bareHttpClient => _bareDio;
 
   Future<void> _onError(
     DioException error,
@@ -130,45 +182,52 @@ class KavitaClient {
     if (response?.statusCode != 401 || alreadyRetried || !ownsAuth) {
       return handler.next(error);
     }
-    // Another queued request may have refreshed while we waited; only hit
-    // the server if this request was sent with the current token.
+    // Another queued request may have renewed while we waited; only hit the
+    // server if this request was sent with the current token.
     final sentWith = error.requestOptions.headers['Authorization'];
     if (sentWith == 'Bearer $_token') {
-      // Refresh failures mean the session is over; failures of the retried
+      // A refused key means the session is over; failures of the retried
       // request below do not — keep the two failure domains separate.
       try {
-        final res = await _refreshDio.post<Map<String, dynamic>>(
-          '/api/Account/refresh-token',
-          data: {'token': _token, 'refreshToken': _refreshToken},
+        final res = await _bareDio.post<Map<String, dynamic>>(
+          '/api/Account/login',
+          data: _loginBody(username, AuthKeyCredential(apiKey)),
         );
         final token = res.data?['token'];
-        final refreshToken = res.data?['refreshToken'];
-        if (token is! String || refreshToken is! String) {
-          // 200 without tokens: a reverse proxy or captive portal answered
-          // in Kavita's place. Treat as an expired session.
-          onSessionExpired?.call();
+        if (token is! String || token.isEmpty) {
+          // 200 without a token: a reverse proxy or captive portal answered
+          // in Kavita's place. It says nothing about the key, so the request
+          // simply fails — see below for why that matters now.
           return handler.next(error);
         }
         _token = token;
-        _refreshToken = refreshToken;
         _dio.options.headers['Authorization'] = 'Bearer $_token';
-        onTokensRefreshed?.call(_token, _refreshToken);
-      } on DioException {
-        onSessionExpired?.call();
+        onTokenRenewed?.call(_token);
+      } on DioException catch (renewal) {
+        // **Only a refusal ends the session.** This used to fire on any
+        // failure, which was affordable while the session was a token pair
+        // that was expiring anyway: what it cost was a credential with a day
+        // left in it. The auth key is durable, and `onSessionExpired` now
+        // deletes it — so a 500, a proxy answering in Kavita's place, or the
+        // network dropping between the 401 and this call would cost a working
+        // credential and a password for a fault that fixes itself. That is
+        // the same rule `AuthNotifier.resume` states, and the key is refused
+        // in exactly one way: a bare 401.
+        if (renewal.response?.statusCode == 401) onSessionExpired?.call();
         return handler.next(error);
       }
     }
     try {
       // Replayed on the bare instance: sending it through _dio would make its
       // failure wait on this very handler in the queued interceptor.
-      final retried = await _refreshDio.fetch<dynamic>(
+      final retried = await _bareDio.fetch<dynamic>(
         error.requestOptions
           ..headers['Authorization'] = 'Bearer $_token'
           ..extra['retried'] = true,
       );
       return handler.resolve(retried);
     } on DioException catch (e) {
-      // The tokens are fine; surface the retry's own error, not the stale 401.
+      // The key is fine; surface the retry's own error, not the stale 401.
       return handler.next(e);
     }
   }
@@ -176,15 +235,27 @@ class KavitaClient {
   /// Closes the underlying HTTP clients; in-flight requests may complete.
   void close() {
     _dio.close();
-    _refreshDio.close();
+    _bareDio.close();
   }
 
   /// Authenticates against a Kavita server. Static because it happens before
   /// a client exists.
+  ///
+  /// Two ways in, one endpoint, and [Credential] is which. A password is what
+  /// a person types the first time; an auth key is what a remembered server
+  /// signs in with afterwards, so reopening the app never asks for a password
+  /// again. Kavita resolves the account from the key, still checks
+  /// `LoginRole`, and still answers with the whole `UserDto` — the two paths
+  /// differ only in what is sent.
+  ///
+  /// `POST /api/Plugin/authenticate?apiKey=` mints the same token pair and is
+  /// deliberately not used: it checks no role at all, takes the key in the
+  /// query string, answers with a partial DTO carrying neither roles nor the
+  /// key itself, and logs the raw key in cleartext when it fails (ADR-0004).
   static Future<LoginResult> login({
     required String baseUrl,
     required String username,
-    required String password,
+    required Credential credential,
     ClientIdentity identity = const ClientIdentity.unknown(),
     @visibleForTesting HttpClientAdapter? adapter,
   }) async {
@@ -198,10 +269,29 @@ class KavitaClient {
     if (adapter != null) dio.httpClientAdapter = adapter;
     final res = await dio.post<Map<String, dynamic>>(
       '/api/Account/login',
-      data: {'username': username, 'password': password, 'apiKey': ''},
+      data: _loginBody(username, credential),
     );
     return LoginResult.fromJson(res.data!);
   }
+
+  /// `LoginDto`, whose three fields Kavita binds by name. All three go on the
+  /// wire every time, filled or empty — it is the shape the endpoint expects,
+  /// and the empty one is how the server knows which path this is.
+  static Map<String, String> _loginBody(
+    String username,
+    Credential credential,
+  ) => switch (credential) {
+    PasswordCredential(:final value) => {
+      'username': username,
+      'password': value,
+      'apiKey': '',
+    },
+    AuthKeyCredential(:final value) => {
+      'username': username,
+      'password': '',
+      'apiKey': value,
+    },
+  };
 
   /// Cheapest proof that the server is there.
   ///

@@ -35,9 +35,6 @@ void main() {
     await tester.pump(PageLoading.explainAfter);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Preparing the PDF'), findsOneWidget);
-    expect(
-      find.textContaining('Only the first open waits'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Only the first open waits'), findsOneWidget);
   });
 }

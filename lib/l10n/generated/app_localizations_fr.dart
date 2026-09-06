@@ -84,6 +84,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String connectionSignInExpired(String host) {
+    return '$host n\'accepte plus la connexion enregistrée. Votre mot de passe est de nouveau nécessaire.';
+  }
+
+  @override
   String connectionNotKavita(String host) {
     return '$host a répondu, mais aucun serveur Kavita ne se trouve à cette adresse.';
   }

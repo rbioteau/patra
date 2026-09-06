@@ -116,12 +116,12 @@ Future<List<int>> _pumpReader(
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   final adapter = _ReaderAdapter(posted, wide: wide);
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
 
   await tester.pumpWidget(
     ProviderScope(
@@ -187,19 +187,20 @@ class _ProbeThumb extends SliderComponentShape {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('vertical scrolling opens where the chapter was left, not at page 0', (
-    tester,
-  ) async {
-    final posted = await _pumpReader(tester, initialPage: 20);
-    expect(posted, [20], reason: 'the page it opened at is saved on open');
+  testWidgets(
+    'vertical scrolling opens where the chapter was left, not at page 0',
+    (tester) async {
+      final posted = await _pumpReader(tester, initialPage: 20);
+      expect(posted, [20], reason: 'the page it opened at is saved on open');
 
-    // The strip starts at offset 0 until it is placed. A scroll before that
-    // reports page 0 and posts it back, wiping the reader's place.
-    await tester.drag(find.byType(ListView), const Offset(0, -40));
-    await tester.pump(const Duration(milliseconds: 300));
+      // The strip starts at offset 0 until it is placed. A scroll before that
+      // reports page 0 and posts it back, wiping the reader's place.
+      await tester.drag(find.byType(ListView), const Offset(0, -40));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(posted, isNot(contains(0)));
-  });
+      expect(posted, isNot(contains(0)));
+    },
+  );
 
   testWidgets('a paged chapter opens where it was left too', (tester) async {
     final posted = await _pumpReader(
@@ -318,40 +319,41 @@ void main() {
     );
   });
 
-  testWidgets('seeking to the second page of a spread does not setState in a build', (
-    tester,
-  ) async {
-    // Landscape pairs pages, so a seek to an odd page lands on a spread whose
-    // *first* page is the one before it. `_PagedView.didUpdateWidget` follows
-    // the seek with `jumpToPage`, which dispatches a scroll notification
-    // synchronously — and `PageView` turns that into `onPageChanged`, which
-    // reports the pair's first page. That is a different page from the one
-    // just asked for, so the reader called `setState` from inside the build
-    // that delivered the seek: "setState() or markNeedsBuild() called during
-    // build". The error widget then replaced the Scaffold's body, and the rest
-    // of the frame died on the Scaffold laying out a body it was never handed.
-    tester.view.physicalSize = const Size(2412, 1080);
-    tester.view.devicePixelRatio = 3;
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'seeking to the second page of a spread does not setState in a build',
+    (tester) async {
+      // Landscape pairs pages, so a seek to an odd page lands on a spread whose
+      // *first* page is the one before it. `_PagedView.didUpdateWidget` follows
+      // the seek with `jumpToPage`, which dispatches a scroll notification
+      // synchronously — and `PageView` turns that into `onPageChanged`, which
+      // reports the pair's first page. That is a different page from the one
+      // just asked for, so the reader called `setState` from inside the build
+      // that delivered the seek: "setState() or markNeedsBuild() called during
+      // build". The error widget then replaced the Scaffold's body, and the rest
+      // of the frame died on the Scaffold laying out a body it was never handed.
+      tester.view.physicalSize = const Size(2412, 1080);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
 
-    await _pumpReader(
-      tester,
-      initialPage: 20,
-      direction: ReadingDirection.leftToRight,
-    );
-    await tester.tapAt(tester.getCenter(find.byType(PageView)));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
+      await _pumpReader(
+        tester,
+        initialPage: 20,
+        direction: ReadingDirection.leftToRight,
+      );
+      await tester.tapAt(tester.getCenter(find.byType(PageView)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    // 27 is the second page of the 26–27 spread.
-    expect(find.byKey(const ValueKey(27)), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey(27)));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      // 27 is the second page of the 26–27 spread.
+      expect(find.byKey(const ValueKey(27)), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey(27)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('rotating with the scrubber open does not rebuild mid-layout', (
     tester,
@@ -610,7 +612,6 @@ void main() {
     });
   });
 
-
   group('the reader settings sheet', () {
     // One cog, not a pill per setting. The direction pill it replaced was a
     // menu opener rather than a toggle, so this costs no extra tap; what it
@@ -669,8 +670,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
-      expect(find.text('Drag to magnify'), findsOneWidget,
-          reason: 'the sheet should still be open');
+      expect(
+        find.text('Drag to magnify'),
+        findsOneWidget,
+        reason: 'the sheet should still be open',
+      );
     });
 
     testWidgets('turning magnifying on takes effect without leaving the '
@@ -744,11 +748,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.text('Drag to magnify'), findsNothing,
-          reason: 'the sheet should have closed');
+      expect(
+        find.text('Drag to magnify'),
+        findsNothing,
+        reason: 'the sheet should have closed',
+      );
       // The direction is per-chapter here, and the pager mirrors with it.
       expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
     });
   });
-
 }

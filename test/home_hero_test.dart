@@ -134,11 +134,11 @@ Future<void> _pumpHome(WidgetTester tester, _HomeAdapter adapter) async {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: _token,
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
 
   await tester.pumpWidget(
     ProviderScope(
@@ -160,11 +160,11 @@ Future<void> _pumpRouted(WidgetTester tester, _HomeAdapter adapter) async {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: _token,
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = adapter;
-  client.refreshHttpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
 
   final router = GoRouter(
     routes: [
@@ -530,11 +530,11 @@ void main() {
       final client = KavitaClient(
         baseUrl: 'http://kavita.test',
         token: _token,
-        refreshToken: 'refresh',
+        username: 'romain',
         apiKey: 'key',
       );
       client.httpClient.httpClientAdapter = adapter;
-      client.refreshHttpClient.httpClientAdapter = adapter;
+      client.bareHttpClient.httpClientAdapter = adapter;
 
       final container = ProviderContainer(
         overrides: [kavitaClientProvider.overrideWithValue(client)],

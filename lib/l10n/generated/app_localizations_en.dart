@@ -83,6 +83,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String connectionSignInExpired(String host) {
+    return '$host no longer accepts the saved sign-in. Your password is needed again.';
+  }
+
+  @override
   String connectionNotKavita(String host) {
     return '$host answered, but there is no Kavita server behind that address.';
   }

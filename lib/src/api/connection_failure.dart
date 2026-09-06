@@ -90,9 +90,10 @@ class ConnectionFailure {
     final kind = switch (error.type) {
       // On a device this is the plain truth; in a browser it is a guess the
       // browser itself refuses to settle, so only the web build hedges.
-      DioExceptionType.connectionError => onWeb
-          ? ConnectionFailureKind.blockedByBrowser
-          : ConnectionFailureKind.unreachable,
+      DioExceptionType.connectionError =>
+        onWeb
+            ? ConnectionFailureKind.blockedByBrowser
+            : ConnectionFailureKind.unreachable,
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout => ConnectionFailureKind.timedOut,

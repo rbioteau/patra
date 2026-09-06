@@ -40,7 +40,8 @@ void main() {
     expect(
       attributes.existsSync(),
       isTrue,
-      reason: '.gitattributes is gone, and with it the only half of the merge '
+      reason:
+          '.gitattributes is gone, and with it the only half of the merge '
           'driver a clone inherits',
     );
     final declared = attributes.readAsLinesSync().any((line) {
@@ -50,7 +51,8 @@ void main() {
     expect(
       declared,
       isTrue,
-      reason: 'add `$graph merge=graphify` to .gitattributes, or run '
+      reason:
+          'add `$graph merge=graphify` to .gitattributes, or run '
           '`graphify hook install`',
     );
   });
@@ -62,7 +64,8 @@ void main() {
     expect(
       _git(['ls-files', '--error-unmatch', graph])?.exitCode,
       0,
-      reason: '$graph is not tracked; either track it or drop the '
+      reason:
+          '$graph is not tracked; either track it or drop the '
           '.gitattributes line that claims to merge it',
     );
   }, skip: inRepo ? null : 'not a git work tree');
@@ -74,13 +77,15 @@ void main() {
     expect(
       driver,
       isNotNull,
-      reason: 'run `graphify hook install` to register '
+      reason:
+          'run `graphify hook install` to register '
           'merge.graphify.driver in this clone',
     );
     expect(
       _config('merge.graphify.name'),
       isNotNull,
-      reason: 'merge.graphify.name is what `git config --list` and '
+      reason:
+          'merge.graphify.name is what `git config --list` and '
           '`graphify hook status` read back; run `graphify hook install`',
     );
   }, skip: _skipUnlessInstalled(inRepo, installed));
@@ -96,7 +101,8 @@ void main() {
           ? File(command).existsSync()
           : _onPath(command),
       isTrue,
-      reason: '`$command` is gone — the driver was pinned to an interpreter '
+      reason:
+          '`$command` is gone — the driver was pinned to an interpreter '
           'this machine no longer has. Re-run `graphify hook install`',
     );
   }, skip: driver == null ? 'no driver registered' : null);

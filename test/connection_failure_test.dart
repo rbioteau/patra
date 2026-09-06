@@ -65,7 +65,7 @@ Future<ConnectionFailure> _failureOf(
     await KavitaClient.login(
       baseUrl: 'http://kavita.test',
       username: 'u',
-      password: 'p',
+      credential: Credential.password('p'),
       adapter: adapter,
     );
     fail('login should not have succeeded');

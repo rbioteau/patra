@@ -19,15 +19,23 @@ A Kavita address the user has connected to at least once, remembered so it need 
 _Avoid_: server entry, instance, connection, backend
 
 **Profile**:
-One person's Kavita account on a server, remembered along with its tokens but never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one.
+One person's Kavita account on a server, remembered along with its auth key and never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one.
 _Avoid_: account, user, member, persona
+
+**Credential**:
+What a sign-in is made with: a password the first time, an auth key every time after. Never both and never neither, which is why it is a sealed type in code rather than two optional fields — the wire format cannot express the choice, so the client does.
+_Avoid_: credentials (plural), login, secret
+
+**Auth key**:
+The one secret a profile keeps: Kavita's non-expiring `opds` key, which signs a profile in with no password and authenticates image URLs. It is the durable credential — the JWT it mints is session state and is never written down — and it is a whole account, so a device holding four profiles holds four complete account credentials (ADR-0004).
+_Avoid_: API key, token, password
 
 **Session**:
 The profile the app is currently reading as. Exactly one profile can be the active session, and every request the app makes is made as that one.
 _Avoid_: login
 
 **Login result**:
-What a server answers a sign-in with: who you are, and the tokens to be you. It is not a session — a session is a profile the app is currently reading as, and this is only what one is built from.
+What a server answers a sign-in with: who you are, the auth key to keep, and a JWT to spend. It is not a session — a session is a profile the app is currently reading as, and this is only what one is built from.
 _Avoid_: user, session, credentials (those are what is sent, not what comes back)
 
 **Registered device**:

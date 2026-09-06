@@ -40,7 +40,8 @@ void main() {
     expect(
       directory.existsSync(),
       isTrue,
-      reason: 'docs/openapi is missing; the client has nothing to check against',
+      reason:
+          'docs/openapi is missing; the client has nothing to check against',
     );
     final candidates =
         directory
@@ -57,8 +58,9 @@ void main() {
           '${candidates.map((f) => f.uri.pathSegments.last).toList()}',
     );
     specName = candidates.single.uri.pathSegments.last;
-    spec =
-        jsonDecode(candidates.single.readAsStringSync()) as Map<String, dynamic>;
+    spec = jsonDecode(
+      candidates.single.readAsStringSync(),
+    ) as Map<String, dynamic>;
   });
 
   Map<String, dynamic> schemas() =>
@@ -205,49 +207,52 @@ void main() {
       expect(reads.keys, containsAll(schemaFor.keys));
     });
 
-    test('exists on that schema, is typed compatibly, and is not deprecated', () {
-      final problems = <String>[];
-      final checks = {
-        for (final entry in reads.entries) schemaFor[entry.key]!: entry.value,
-        ...nested,
-      };
+    test(
+      'exists on that schema, is typed compatibly, and is not deprecated',
+      () {
+        final problems = <String>[];
+        final checks = {
+          for (final entry in reads.entries) schemaFor[entry.key]!: entry.value,
+          ...nested,
+        };
 
-      for (final entry in checks.entries) {
-        final properties =
-            schema(entry.key)['properties'] as Map<String, dynamic>?;
-        if (properties == null) {
-          problems.add('${entry.key} declares no properties at all');
-          continue;
-        }
-        for (final read in entry.value.entries) {
-          final property = properties[read.key];
-          if (property == null) {
-            problems.add('${entry.key}.${read.key} is not in the spec');
+        for (final entry in checks.entries) {
+          final properties =
+              schema(entry.key)['properties'] as Map<String, dynamic>?;
+          if (properties == null) {
+            problems.add('${entry.key} declares no properties at all');
             continue;
           }
-          final declared = resolve(property as Map<String, dynamic>);
-          if (declared['deprecated'] == true) {
-            problems.add('${entry.key}.${read.key} is deprecated');
-          }
-          final cast = read.value;
-          if (cast == null) continue;
-          final allowed = castsFor[declared['type']];
-          if (allowed == null) {
-            problems.add(
-              '${entry.key}.${read.key} declares type '
-              '${declared['type']}, which this test has no rule for',
-            );
-          } else if (!allowed.contains(cast)) {
-            problems.add(
-              '${entry.key}.${read.key} is ${declared['type']} in the spec '
-              'but read as $cast',
-            );
+          for (final read in entry.value.entries) {
+            final property = properties[read.key];
+            if (property == null) {
+              problems.add('${entry.key}.${read.key} is not in the spec');
+              continue;
+            }
+            final declared = resolve(property as Map<String, dynamic>);
+            if (declared['deprecated'] == true) {
+              problems.add('${entry.key}.${read.key} is deprecated');
+            }
+            final cast = read.value;
+            if (cast == null) continue;
+            final allowed = castsFor[declared['type']];
+            if (allowed == null) {
+              problems.add(
+                '${entry.key}.${read.key} declares type '
+                '${declared['type']}, which this test has no rule for',
+              );
+            } else if (!allowed.contains(cast)) {
+              problems.add(
+                '${entry.key}.${read.key} is ${declared['type']} in the spec '
+                'but read as $cast',
+              );
+            }
           }
         }
-      }
 
-      expect(problems, isEmpty, reason: problems.join('\n'));
-    });
+        expect(problems, isEmpty, reason: problems.join('\n'));
+      },
+    );
   });
 
   group('every enum value the client hardcodes', () {
@@ -269,11 +274,11 @@ void main() {
     }
 
     test('the /api/Series/all-v2 filter body', () {
+      expect(nameOf('FilterComparison', FilterComparison.contains), 'Contains');
       expect(
-        nameOf('FilterComparison', FilterComparison.contains),
-        'Contains',
+        nameOf('SeriesFilterField', SeriesFilterField.libraries),
+        'Libraries',
       );
-      expect(nameOf('SeriesFilterField', SeriesFilterField.libraries), 'Libraries');
       expect(nameOf('FilterCombination', FilterCombination.and), 'And');
       expect(nameOf('SeriesSortField', SeriesSortField.sortName), 'SortName');
     });

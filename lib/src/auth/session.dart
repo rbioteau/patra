@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/client_device.dart';
 import '../api/client_identity.dart';
 import '../api/kavita_client.dart';
+import '../api/models.dart';
 
 /// Host part of a server address, for display, falling back to the raw value
 /// so a malformed one still names itself in a row or an error message.
@@ -18,24 +19,37 @@ String serverHost(String baseUrl) {
 
 /// A Kavita server the user has connected to at least once.
 ///
-/// Tokens are stored so a saved server can be reopened without retyping a
-/// password; the password itself is never persisted. An empty [token] means
+/// One secret is stored, the account's auth key, so a saved server can be
+/// reopened without retyping a password; the password itself is never
+/// persisted, and neither is the JWT the key mints. An empty [apiKey] means
 /// the entry is remembered but signed out.
 class ServerEntry {
   const ServerEntry({
     required this.baseUrl,
     required this.username,
-    this.token = '',
-    this.refreshToken = '',
     this.apiKey = '',
+    this.token = '',
     this.isAdmin = false,
   });
 
   final String baseUrl;
   final String username;
-  final String token;
-  final String refreshToken;
+
+  /// The account's Kavita auth key: the whole of what is remembered about
+  /// how to be this person.
+  ///
+  /// It does not expire — the `opds` and `image-only` keys are created with
+  /// `ExpiresAtUtc = null` — which is the point: a refresh token dies in
+  /// about a day on Kavita's 0.9.0.x line, so a device picked up each evening
+  /// would land on "sign in again" nearly every time it was opened
+  /// (ADR-0004). Its owner rotating it in Kavita's web UI is what ends it,
+  /// and the only signal is a 401.
   final String apiKey;
+
+  /// The JWT for the session in progress. **Never persisted**: it is minted
+  /// from [apiKey] on entry and discarded with the session, so it is empty on
+  /// every entry loaded from storage.
+  final String token;
 
   /// Whether this account holds Kavita's `Admin` role, as the login response
   /// reported it.
@@ -47,7 +61,11 @@ class ServerEntry {
   /// offers a non-admin one that could only fail.
   final bool isAdmin;
 
-  bool get hasSession => token.isNotEmpty;
+  /// Whether this server can be opened without asking for a password.
+  ///
+  /// The auth key and nothing else: [token] is session state, so an entry
+  /// just read back from storage always has one and never the other.
+  bool get hasCredential => apiKey.isNotEmpty;
 
   /// Host part of [baseUrl], for display; falls back to the raw value so a
   /// malformed address still labels its row.
@@ -55,24 +73,22 @@ class ServerEntry {
 
   ServerEntry copyWith({
     String? username,
-    String? token,
-    String? refreshToken,
     String? apiKey,
+    String? token,
     bool? isAdmin,
   }) => ServerEntry(
     baseUrl: baseUrl,
     username: username ?? this.username,
-    token: token ?? this.token,
-    refreshToken: refreshToken ?? this.refreshToken,
     apiKey: apiKey ?? this.apiKey,
+    token: token ?? this.token,
     isAdmin: isAdmin ?? this.isAdmin,
   );
 
+  /// What reaches the keychain — [token] deliberately absent, and read back
+  /// as empty by [fromJson].
   Map<String, dynamic> toJson() => {
     'baseUrl': baseUrl,
     'username': username,
-    'token': token,
-    'refreshToken': refreshToken,
     'apiKey': apiKey,
     'isAdmin': isAdmin,
   };
@@ -84,8 +100,6 @@ class ServerEntry {
     return ServerEntry(
       baseUrl: baseUrl,
       username: json['username'] as String? ?? '',
-      token: json['token'] as String? ?? '',
-      refreshToken: json['refreshToken'] as String? ?? '',
       apiKey: json['apiKey'] as String? ?? '',
       isAdmin: json['isAdmin'] as bool? ?? false,
     );
@@ -104,7 +118,7 @@ class AuthState {
   /// Null while signed out, which is what the router redirect keys off.
   Session? get active {
     for (final server in servers) {
-      if (server.baseUrl == activeUrl && server.hasSession) return server;
+      if (server.baseUrl == activeUrl && server.hasCredential) return server;
     }
     return null;
   }
@@ -140,21 +154,24 @@ class SessionStorage {
       }
     }
 
-    // Migration from the single-server layout shipped earlier.
+    // Migration from the single-server layout shipped earlier. The address is
+    // the whole of what makes an entry worth keeping — a server with no key
+    // is remembered and signed out, which is a state this app draws, rather
+    // than one it forgets. The stored token and refresh token are dropped on
+    // the way through: they are the credentials that are no longer kept.
     final baseUrl = values['baseUrl'];
-    final token = values['token'];
-    if (baseUrl == null || token == null) return const AuthState();
+    if (baseUrl == null) return const AuthState();
+    final apiKey = values['apiKey'] ?? '';
     final migrated = AuthState(
       servers: [
         ServerEntry(
           baseUrl: baseUrl,
           username: values['username'] ?? '',
-          token: token,
-          refreshToken: values['refreshToken'] ?? '',
-          apiKey: values['apiKey'] ?? '',
+          apiKey: apiKey,
         ),
       ],
-      activeUrl: baseUrl,
+      // A server that cannot be entered is not the active one.
+      activeUrl: apiKey.isEmpty ? null : baseUrl,
     );
     await save(migrated);
     return migrated;
@@ -189,6 +206,39 @@ final clientIdentityProvider = Provider<ClientIdentity>(
   (ref) => const ClientIdentity.unknown(),
 );
 
+/// Thrown by [AuthNotifier.resume] when the server refuses the stored auth
+/// key, and by nothing else.
+///
+/// The screen has to tell this apart from every other way a sign-in can fail
+/// — it is the one that lands on the password form, and the one whose message
+/// must not be `ConnectionFailure`'s "wrong username or password", since no
+/// password was sent. `resume` is what saw the 401, so it says so here rather
+/// than leaving the screen to infer it from state it did not throw.
+class SignInExpired implements Exception {
+  const SignInExpired(this.cause);
+
+  /// The 401 underneath, kept so nothing is lost on the way up.
+  final DioException cause;
+
+  @override
+  String toString() => 'SignInExpired: the server refused the stored auth key';
+}
+
+/// Signing in, with whichever [Credential] this is.
+typedef SignIn = Future<LoginResult> Function({
+  required String baseUrl,
+  required String username,
+  required Credential credential,
+  ClientIdentity identity,
+});
+
+/// How [AuthNotifier] signs in.
+///
+/// A provider rather than a direct call, because entering a remembered server
+/// is a request now: without a seam here every test of resuming would need a
+/// network, and there is nothing else in this notifier that reaches one.
+final signInProvider = Provider<SignIn>((ref) => KavitaClient.login);
+
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() => ref.read(initialAuthStateProvider);
@@ -203,39 +253,98 @@ class AuthNotifier extends Notifier<AuthState> {
     required String password,
   }) async {
     final url = _normalize(baseUrl);
-    final user = await KavitaClient.login(
+    final user = await ref.read(signInProvider)(
       baseUrl: url,
       username: username,
-      password: password,
+      credential: Credential.password(password),
       identity: ref.read(clientIdentityProvider),
     );
+    await _enter(url, username, user);
+  }
+
+  /// Reopens a saved server, signing in again with its stored auth key.
+  ///
+  /// No password, and no clock: the key does not expire, so this works
+  /// however long the app has been closed. What it costs is one request
+  /// before anything else works — hidden behind the launch animation, which
+  /// keeps the app mounted from the first frame precisely so its own first
+  /// requests are made and answered while the splash plays.
+  ///
+  /// Three failures, and they are three different facts. A server that
+  /// cannot be **reached** is not a credential that has been refused: the
+  /// entry is opened anyway on the key it already holds, because offline
+  /// there is nothing to ask and nothing to ask it of — what such a session
+  /// reads is what it saved, and this is the one failure that does not
+  /// throw. A **401** is the key itself being refused, rotated in
+  /// Kavita's web UI or belonging to an account that is gone — and it is the
+  /// only answer that means that, since Kavita reports every credential-side
+  /// failure of this endpoint, `LoginRole` included, as a bare 401. The entry
+  /// stays remembered and loses its secret, so the next tap asks for a
+  /// password. Anything else (a 500, a proxy answering in Kavita's place)
+  /// says nothing about the credential and leaves it alone: throwing away a
+  /// working key over a fault that fixes itself would cost a password for
+  /// nothing. Those two throw — the 401 as [SignInExpired], which is the
+  /// screen's cue to ask for a password, and everything else as it came.
+  Future<void> resume(ServerEntry server) async {
+    if (!server.hasCredential) return;
+    final LoginResult user;
+    try {
+      user = await ref.read(signInProvider)(
+        baseUrl: server.baseUrl,
+        username: server.username,
+        credential: Credential.authKey(server.apiKey),
+        identity: ref.read(clientIdentityProvider),
+      );
+    } on DioException catch (error) {
+      if (KavitaClient.isUnreachable(error)) {
+        await _commit(
+          AuthState(servers: state.servers, activeUrl: server.baseUrl),
+        );
+        return;
+      }
+      if (error.response?.statusCode == 401) {
+        await _dropCredential(server);
+        throw SignInExpired(error);
+      }
+      rethrow;
+    }
+    await _enter(server.baseUrl, server.username, user);
+  }
+
+  /// Makes [url] the active server on the strength of a sign-in that just
+  /// succeeded, whichever credential paid for it.
+  Future<void> _enter(String url, String username, LoginResult user) async {
     final entry = ServerEntry(
       baseUrl: url,
       username: user.username.isEmpty ? username : user.username,
-      token: user.token,
-      refreshToken: user.refreshToken,
       apiKey: user.apiKey,
+      token: user.token,
       isAdmin: user.isAdmin,
     );
     await _commit(AuthState(servers: _upsert(entry), activeUrl: url));
   }
 
-  /// Reopens a saved server that still holds tokens.
-  Future<void> resume(ServerEntry server) async {
-    if (!server.hasSession) return;
-    await _commit(AuthState(servers: state.servers, activeUrl: server.baseUrl));
-  }
+  /// Keeps the server and forgets how to be this person on it.
+  Future<void> _dropCredential(ServerEntry server) => _commit(
+    AuthState(
+      servers: _upsert(
+        ServerEntry(baseUrl: server.baseUrl, username: server.username),
+      ),
+      activeUrl: state.activeUrl == server.baseUrl ? null : state.activeUrl,
+    ),
+  );
 
-  /// Called by the API client after a successful token refresh.
-  Future<void> updateTokens({
-    required String token,
-    required String refreshToken,
-  }) async {
+  /// Called by the API client once it has minted a fresh JWT from the key.
+  /// The new token is session state like the one it replaces — this only
+  /// puts it where the client provider will read it next.
+  Future<void> updateToken(String token) async {
     final active = state.active;
     if (active == null) return;
-    final updated = active.copyWith(token: token, refreshToken: refreshToken);
     await _commit(
-      AuthState(servers: _upsert(updated), activeUrl: state.activeUrl),
+      AuthState(
+        servers: _upsert(active.copyWith(token: token)),
+        activeUrl: state.activeUrl,
+      ),
     );
   }
 
@@ -251,8 +360,8 @@ class AuthNotifier extends Notifier<AuthState> {
     await _commit(AuthState(servers: servers, activeUrl: null));
   }
 
-  /// Goes back to the server list while keeping tokens, so switching back is
-  /// a single tap.
+  /// Goes back to the server list while keeping each server's auth key, so
+  /// switching back is a single tap.
   Future<void> switchServer() async {
     await _commit(AuthState(servers: state.servers, activeUrl: null));
   }
@@ -421,12 +530,11 @@ final kavitaClientProvider = Provider<KavitaClient>(
     final client = KavitaClient(
       baseUrl: session.baseUrl,
       token: session.token,
-      refreshToken: session.refreshToken,
+      username: session.username,
       apiKey: session.apiKey,
       identity: ref.read(clientIdentityProvider),
-      onTokensRefreshed: (token, refreshToken) => ref
-          .read(authProvider.notifier)
-          .updateTokens(token: token, refreshToken: refreshToken),
+      onTokenRenewed: (token) =>
+          ref.read(authProvider.notifier).updateToken(token),
       onSessionExpired: () => ref.read(authProvider.notifier).signOut(),
       onReachabilityChanged: (reachable) =>
           ref.read(offlineProvider.notifier).set(!reachable),

@@ -5,12 +5,16 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/login/login_screen.dart';
+
+import 'test_support.dart';
 
 /// A Kavita server with one library and one series.
 class _StubAdapter implements HttpClientAdapter {
@@ -53,24 +57,28 @@ const _server = ServerEntry(
   baseUrl: 'https://kavita.example',
   username: 'romain',
   token: 'token',
-  refreshToken: 'refresh',
   apiKey: 'key',
 );
 
-Widget _app({AuthState auth = const AuthState(), Directory? downloadsRoot}) {
+Widget _app({
+  AuthState auth = const AuthState(),
+  Directory? downloadsRoot,
+  SignIn? signIn,
+}) {
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
     token: 'token',
-    refreshToken: 'refresh',
+    username: 'romain',
     apiKey: 'key',
   );
   client.httpClient.httpClientAdapter = _StubAdapter();
-  client.refreshHttpClient.httpClientAdapter = _StubAdapter();
+  client.bareHttpClient.httpClientAdapter = _StubAdapter();
 
   return ProviderScope(
     overrides: [
       initialAuthStateProvider.overrideWithValue(auth),
       kavitaClientProvider.overrideWithValue(client),
+      if (signIn != null) signInProvider.overrideWithValue(signIn),
       if (downloadsRoot != null)
         downloadsServiceProvider.overrideWithValue(
           DownloadsService(root: downloadsRoot),
@@ -188,6 +196,152 @@ void main() {
     // A tablet, or the same phone in landscape: they fit.
     final wide = await pumpAt(const Size(3000, 2000));
     expect(wide.labelBehavior, NavigationDestinationLabelBehavior.alwaysShow);
+  });
+
+  group('opening a remembered server', () {
+    const remembered = ServerEntry(
+      baseUrl: 'https://kavita.example',
+      username: 'romain',
+      apiKey: 'the-auth-key',
+    );
+
+    testWidgets('costs one tap and no password', (tester) async {
+      final root = Directory.systemTemp.createTempSync('patra-resume-test');
+      addTearDown(() => root.deleteSync(recursive: true));
+      tester.view.physicalSize = const Size(1200, 2200);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+
+      Map<String, String>? sentWith;
+      await tester.pumpWidget(
+        _app(
+          auth: const AuthState(servers: [remembered]),
+          downloadsRoot: root,
+          signIn:
+              ({
+                required String baseUrl,
+                required String username,
+                required Credential credential,
+                ClientIdentity identity = const ClientIdentity.unknown(),
+              }) async {
+                sentWith = {
+                  'username': username,
+                  'credential': switch (credential) {
+                    PasswordCredential(:final value) => 'password $value',
+                    AuthKeyCredential(:final value) => 'key $value',
+                  },
+                };
+                return const LoginResult(
+                  username: 'romain',
+                  token: 'fresh-token',
+                  apiKey: 'the-auth-key',
+                );
+              },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The row says the server opens straight away, rather than asking to
+      // sign in.
+      expect(find.text('Open'), findsOneWidget);
+      await tester.tap(find.text('kavita.example'));
+      await tester.pumpAndSettle();
+
+      expect(sentWith, {
+        'username': 'romain',
+        'credential': 'key the-auth-key',
+      });
+      expect(find.byType(NavigationBar), findsOneWidget);
+    });
+
+    testWidgets('asks for the password again once the key is refused', (
+      tester,
+    ) async {
+      // This is the one path here that *awaits* a write: dropping the
+      // credential is what the rethrow waits on, and an unmocked keychain
+      // never answers on Linux.
+      mockSecureStorage();
+      await tester.pumpWidget(
+        _app(
+          auth: const AuthState(servers: [remembered]),
+          signIn:
+              ({
+                required String baseUrl,
+                required String username,
+                required Credential credential,
+                ClientIdentity identity = const ClientIdentity.unknown(),
+              }) async {
+                throw DioException(
+                  requestOptions: RequestOptions(path: '/api/Account/login'),
+                  response: Response(
+                    requestOptions: RequestOptions(path: '/api/Account/login'),
+                    statusCode: 401,
+                  ),
+                  type: DioExceptionType.badResponse,
+                );
+              },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('kavita.example'));
+      // Not `pumpAndSettle`: the form lands with the password field focused,
+      // and a blinking cursor is an animation that never settles.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Not the bad-credentials wording: no password was sent, so nothing
+      // the person typed was rejected.
+      expect(
+        find.text(
+          'kavita.example no longer accepts the saved sign-in. '
+          'Your password is needed again.',
+        ),
+        findsOneWidget,
+      );
+      // The form is up with the address and the name already in it: the only
+      // thing missing is the password.
+      expect(find.text('SERVER ADDRESS'), findsOneWidget);
+      expect(find.text('https://kavita.example'), findsOneWidget);
+      expect(find.text('romain'), findsOneWidget);
+    });
+
+    testWidgets('opens anyway when the server cannot be reached', (
+      tester,
+    ) async {
+      final root = Directory.systemTemp.createTempSync('patra-offline-test');
+      addTearDown(() => root.deleteSync(recursive: true));
+      tester.view.physicalSize = const Size(1200, 2200);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _app(
+          auth: const AuthState(servers: [remembered]),
+          downloadsRoot: root,
+          signIn:
+              ({
+                required String baseUrl,
+                required String username,
+                required Credential credential,
+                ClientIdentity identity = const ClientIdentity.unknown(),
+              }) async {
+                throw DioException(
+                  requestOptions: RequestOptions(path: '/api/Account/login'),
+                  type: DioExceptionType.connectionError,
+                );
+              },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('kavita.example'));
+      await tester.pumpAndSettle();
+
+      // What a saved chapter on a train is for: the key is already here, so
+      // being offline is not the same fact as being refused.
+      expect(find.byType(NavigationBar), findsOneWidget);
+    });
   });
 
   group('the server address field refuses what dio could not use', () {

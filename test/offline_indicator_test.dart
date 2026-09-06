@@ -54,13 +54,13 @@ Future<void> _pumpHome(WidgetTester tester, {bool reachable = true}) async {
           final client = KavitaClient(
             baseUrl: 'http://kavita.test',
             token: 'token',
-            refreshToken: 'refresh',
+            username: 'romain',
             apiKey: 'key',
             onReachabilityChanged: (reachable) =>
                 ref.read(offlineProvider.notifier).set(!reachable),
           );
           client.httpClient.httpClientAdapter = _Adapter(reachable: reachable);
-          client.refreshHttpClient.httpClientAdapter = _Adapter(
+          client.bareHttpClient.httpClientAdapter = _Adapter(
             reachable: reachable,
           );
           return client;
