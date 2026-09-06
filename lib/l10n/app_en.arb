@@ -198,6 +198,13 @@
   "@formatNotSupportedBody": {
     "description": "Explanation shown in place of the reader for a format it cannot open"
   },
+  "homeHeroPagesLeft": "{count, plural, =1{1 page left} other{{count} pages left}}",
+  "@homeHeroPagesLeft": {
+    "description": "Pages remaining in the chapter the home hero would resume",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "seriesChapterCount": "{count, plural, =0{No chapters} =1{1 chapter} other{{count} chapters}}",
   "@seriesChapterCount": {
     "description": "Chapter tally in the series hero",

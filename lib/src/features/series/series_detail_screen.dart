@@ -10,11 +10,19 @@ import '../../auth/session.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
+import '../../resume_point.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
 import '../library/library_screen.dart';
+
+/// Where a series lives, with the name and library that let its screen draw
+/// a header before the fetch lands.
+String seriesLocation(Series series) => Uri(
+  path: '/series/${series.id}',
+  queryParameters: {'name': series.name, 'library': '${series.libraryId}'},
+).toString();
 
 final volumesProvider = FutureProvider.autoDispose.family<List<Volume>, int>(
   retry: serverRetry,
@@ -112,52 +120,18 @@ _Buckets _split(List<Volume> volumes) {
       }
     }
   }
-  loose.sort(_bySortOrder);
-  specials.sort(_bySortOrder);
+  loose.sort(bySortOrder);
+  specials.sort(bySortOrder);
   return (numberedVolumes: numberedVolumes, loose: loose, specials: specials);
 }
 
 /// The chapters a numbered volume shows: a special inside one is listed under
 /// Specials, and would otherwise appear twice on a screen that has sections
 /// rather than tabs.
-List<Chapter> _volumeChapters(Volume volume) => _sorted([
+List<Chapter> _volumeChapters(Volume volume) => sortedChapters([
   for (final c in volume.chapters)
     if (!c.isSpecial) c,
 ]);
-
-int _bySortOrder(Chapter a, Chapter b) =>
-    a.sortOrder.compareTo(b.sortOrder);
-
-List<Chapter> _sorted(List<Chapter> chapters) =>
-    [...chapters]..sort(_bySortOrder);
-
-typedef _Entry = ({Volume volume, Chapter chapter});
-
-/// Every chapter in reading order — volumes first, then loose chapters, then
-/// specials, the order the sections below are rendered in — each paired with
-/// the volume it belongs to, which is what names a chapterless volume.
-List<_Entry> _orderedChapters(List<Volume> volumes) {
-  final inVolumes = <_Entry>[];
-  final loose = <_Entry>[];
-  final specials = <_Entry>[];
-  for (final volume in volumes) {
-    final numbered = !volume.isLooseLeaf && !volume.isSpecials;
-    for (final chapter in _sorted(volume.chapters)) {
-      final entry = (volume: volume, chapter: chapter);
-      if (chapter.isSpecial) {
-        specials.add(entry);
-      } else if (numbered) {
-        inVolumes.add(entry);
-      } else {
-        loose.add(entry);
-      }
-    }
-  }
-  for (final list in [loose, specials]) {
-    list.sort((a, b) => _bySortOrder(a.chapter, b.chapter));
-  }
-  return [...inVolumes, ...loose, ...specials];
-}
 
 class SeriesDetailScreen extends ConsumerWidget {
   const SeriesDetailScreen({
@@ -374,26 +348,9 @@ class _SeriesHero extends ConsumerWidget {
   /// and it stops reading as a button at all — it becomes a banner.
   static const _actionMaxWidth = 280.0;
 
-  /// The chapter the button opens: the first one not finished, else the first.
-  ({_Entry entry, bool started, bool allRead})? _target() {
-    final entries = volumes == null ? null : _orderedChapters(volumes!);
-    if (entries == null || entries.isEmpty) return null;
-    // "Started" is a fact about the *series*, not about the chapter the button
-    // happens to land on. Finishing a volume leaves the next one untouched, so
-    // reading it against the target alone made the button say "Start reading"
-    // to someone halfway through a series. Kavita's own web client asks it of
-    // the series too — `hasReadingProgress` is that client's concept and is
-    // not an API field, so this mirrors its rule rather than reading a value.
-    final started = entries.any((entry) => entry.chapter.pagesRead > 0);
-    for (final entry in entries) {
-      final chapter = entry.chapter;
-      final read = chapter.pages > 0 && chapter.pagesRead >= chapter.pages;
-      if (!read) {
-        return (entry: entry, started: started, allRead: false);
-      }
-    }
-    return (entry: entries.first, started: started, allRead: true);
-  }
+  /// The chapter the button opens, decided by the one shared rule the home
+  /// screen's Continue hero uses too — see `resume_point.dart`.
+  ResumePoint? _target() => volumes == null ? null : resumePoint(volumes!);
 
   /// What to call the thing the button opens, in the library's own unit.
   ///
@@ -403,7 +360,7 @@ class _SeriesHero extends ConsumerWidget {
   /// every time, since its files often carry a title and no number at all.
   /// There the button says only what it does; the title is already on the row
   /// it opens.
-  String _resumeLabel(_Entry entry, AppLocalizations l10n) {
+  String _resumeLabel(ResumeEntry entry, AppLocalizations l10n) {
     final chapter = entry.chapter;
 
     // A special is never numbered, whatever the library counts in.
@@ -451,7 +408,7 @@ class _SeriesHero extends ConsumerWidget {
         l10n.seriesVolumeCount(
           list.where((v) => !v.isLooseLeaf && !v.isSpecials).length,
         ),
-      final list => l10n.seriesChapterCount(_orderedChapters(list).length),
+      final list => l10n.seriesChapterCount(orderedChapters(list).length),
     };
     final stats = [
       ?tally,

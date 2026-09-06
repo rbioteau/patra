@@ -75,6 +75,14 @@ _Avoid_: timeline, reading order
 How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says.
 _Avoid_: completion, status, read state
 
+**Continue**:
+The series that have been started and not finished. One set with one name, however it is drawn: the shelf of them on the home screen and the single series promoted above that shelf are the same idea, and the promoted one — the series read most recently — is not repeated in the shelf below it. Kavita calls this *currently reading*; that is the name of its endpoint, not a second concept and not a word we show.
+_Avoid_: currently reading, in progress, resume list, reading list (that is a Kavita feature of its own)
+
+**On deck**:
+The series the app suggests picking up next, as Kavita chooses them. It stands beside Continue on the home screen and is not the same question: Continue is what you have started, On deck is what the server puts forward. Where one series would qualify for both, it is shown once.
+_Avoid_: next up, recommended, suggestions, up next
+
 ### Reading
 
 **Reading direction**:

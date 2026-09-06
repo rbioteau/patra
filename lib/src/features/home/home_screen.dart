@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../resume_point.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
@@ -12,6 +13,8 @@ import '../../widgets/patra_frond.dart';
 import '../../widgets/patra_wordmark.dart';
 import '../launch/launch_animation.dart';
 import '../library/library_screen.dart';
+import '../series/series_detail_screen.dart';
+import 'continue_hero.dart';
 
 final continueReadingProvider = FutureProvider.autoDispose<List<Series>>(
   retry: serverRetry,
@@ -23,6 +26,32 @@ final onDeckProvider = FutureProvider.autoDispose<List<Series>>(
   (ref) => ref.watch(kavitaClientProvider).onDeck(),
 );
 
+/// Whether there is a hero at all, and what it says.
+///
+/// Null means the hero is not drawn *and* the Continue shelf keeps its series
+/// — the two are one decision, or a series that failed to be promoted would
+/// vanish from the home screen entirely. It is null when nothing is in
+/// progress, when the app is offline, and when the chapter fetch fails; it is
+/// non-null with a null `point` while that fetch is still in flight, so the
+/// card can show its cover and title without waiting.
+final continueHeroProvider = Provider.autoDispose<ContinueHeroData?>((ref) {
+  if (ref.watch(offlineProvider)) return null;
+  final started = ref.watch(continueReadingProvider).value;
+  final featured = featuredSeries(started ?? const []);
+  if (featured == null) return null;
+  // Deliberately the raw fetch and not `seriesVolumesProvider`, which lays
+  // the series screen's optimistic mark-read over it: that override map is
+  // autoDispose so that it dies with that screen and the next visit is the
+  // server's word again, and a home screen watching it would keep it alive
+  // for the life of the app. What keeps this honest instead is that every
+  // path back from reading re-fetches — see `_refresh`.
+  final volumes = ref.watch(volumesProvider(featured.id));
+  if (volumes.hasError) return null;
+  final point = volumes.value == null ? null : resumePoint(volumes.value!);
+  if (volumes.hasValue && point == null) return null;
+  return (series: featured, point: point);
+});
+
 /// Library type → icon, matching Kavita's own taxonomy.
 IconData _libraryIcon(LibraryType type) => switch (type) {
   LibraryType.manga => Icons.menu_book,
@@ -32,10 +61,29 @@ IconData _libraryIcon(LibraryType type) => switch (type) {
   LibraryType.lightNovel => Icons.article_outlined,
 };
 
+/// The shelf without the series the hero has taken, so one series is never
+/// two things on the same screen. Applied to On deck as well as to Continue:
+/// the rule is that the promoted series appears once, whichever shelves would
+/// otherwise have carried it.
+AsyncValue<List<Series>> _without(AsyncValue<List<Series>> shelf, int? id) =>
+    id == null
+    ? shelf
+    : shelf.whenData(
+        (list) => [
+          for (final series in list)
+            if (series.id != id) series,
+        ],
+      );
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _refresh(WidgetRef ref) async {
+    // The hero's chapter is a fourth request, hanging off whichever series is
+    // promoted. A pull has to reach it too, or the card would keep naming the
+    // chapter the shelf has just stopped agreeing with.
+    final featured = ref.read(continueHeroProvider)?.series.id;
+    if (featured != null) ref.invalidate(volumesProvider(featured));
     ref.invalidate(continueReadingProvider);
     ref.invalidate(onDeckProvider);
     ref.invalidate(librariesProvider);
@@ -44,16 +92,27 @@ class HomeScreen extends ConsumerWidget {
       ref.read(onDeckProvider.future),
       ref.read(librariesProvider.future),
     ]).catchError((Object _) => const <List<Object>>[]);
+    // The shelves have moved, so the promoted series may not be the one whose
+    // chapter was invalidated above.
+    final promoted = ref.read(continueHeroProvider)?.series.id;
+    if (promoted != null && promoted != featured) {
+      ref.invalidate(volumesProvider(promoted));
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final continueReading = ref.watch(continueReadingProvider);
-    final onDeck = ref.watch(onDeckProvider);
+    final hero = ref.watch(continueHeroProvider);
+    final continueReading = _without(
+      ref.watch(continueReadingProvider),
+      hero?.series.id,
+    );
+    final onDeck = _without(ref.watch(onDeckProvider), hero?.series.id);
     final libraries = ref.watch(librariesProvider);
 
     final everythingEmpty =
+        hero == null &&
         (continueReading.value?.isEmpty ?? false) &&
         (onDeck.value?.isEmpty ?? false) &&
         (libraries.value?.isEmpty ?? false);
@@ -79,6 +138,8 @@ class HomeScreen extends ConsumerWidget {
                     style: PatraText.body(color: patraTextMuted),
                   ),
                 ),
+              if (hero != null)
+                ContinueHero(data: hero, onReturn: () => _refresh(ref)),
               _Shelf(
                 label: l10n.continueSection,
                 series: continueReading,
@@ -204,15 +265,7 @@ class _Shelf extends ConsumerWidget {
                     serifTitle: true,
                     progress: progress,
                     onTap: () async {
-                      await context.push(
-                        Uri(
-                          path: '/series/${s.id}',
-                          queryParameters: {
-                            'name': s.name,
-                            'library': '${s.libraryId}',
-                          },
-                        ).toString(),
-                      );
+                      await context.push(seriesLocation(s));
                       ref.invalidate(continueReadingProvider);
                       ref.invalidate(onDeckProvider);
                     },

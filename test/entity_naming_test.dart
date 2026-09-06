@@ -131,4 +131,77 @@ void main() {
       expect(LibraryType.manga.chapterTitle(fr, chapter()), 'Chapitre 12');
     });
   });
+
+  group('naming what reading resumes at', () {
+    Volume volume(num minNumber, List<Map<String, dynamic>> chapters) =>
+        Volume.fromJson({
+          'id': 1,
+          'name': '1',
+          'minNumber': minNumber,
+          'chapters': chapters,
+        });
+    Map<String, dynamic> placeholder() => {
+      'id': 2,
+      'range': '-100000',
+      'minNumber': -100000,
+    };
+
+    // A volume with no chapter breakdown is known by the volume, and its
+    // placeholder chapter carries Kavita's sentinel, which must never be
+    // shown as a number.
+    test('a volume with no chapters is named by the volume', () {
+      final v = volume(1, [placeholder()]);
+      expect(
+        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
+        'Volume 1',
+      );
+      expect(LibraryType.book.resumeTitle(en, v, v.chapters.first), 'Book 1');
+      expect(LibraryType.manga.resumeTitle(fr, v, v.chapters.first), 'Tome 1');
+    });
+
+    test('the sentinel never reaches the screen', () {
+      final v = volume(1, [placeholder()]);
+      expect(
+        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
+        isNot(contains('100000')),
+      );
+      // A placeholder inside the loose-leaf pseudo-volume names nothing at
+      // all rather than naming a volume that does not exist.
+      final loose = volume(-100000, [placeholder()]);
+      expect(
+        LibraryType.manga.resumeTitle(en, loose, loose.chapters.first),
+        '',
+      );
+    });
+
+    test('an ordinary chapter is named as one, title and all', () {
+      final v = volume(1, [
+        {'id': 3, 'range': '12', 'minNumber': 12, 'titleName': 'Le duel'},
+      ]);
+      expect(
+        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
+        'Chapter 12 - Le duel',
+      );
+      expect(
+        LibraryType.comic.resumeTitle(en, v, v.chapters.first),
+        'Issue #12 - Le duel',
+      );
+    });
+
+    test('a special is known by its title alone', () {
+      final v = volume(100000, [
+        {
+          'id': 4,
+          'range': '1',
+          'minNumber': 1,
+          'isSpecial': true,
+          'titleName': 'Prologue',
+        },
+      ]);
+      expect(
+        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
+        'Prologue',
+      );
+    });
+  });
 }
