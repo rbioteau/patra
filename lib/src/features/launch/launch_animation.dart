@@ -130,12 +130,30 @@ class _LaunchAnimationState extends State<LaunchAnimation>
     }
   }
 
+  /// The last beat, as a fraction of the whole.
+  static const _handoff = LaunchCue.handoff / LaunchCue.total;
+
+  /// How long a skipped outro takes to land.
+  static const _skipLanding = Duration(milliseconds: 500);
+
   /// Skipping still lands: the frond is sent straight to the last beat and
   /// flies home, rather than the splash being cut out from under the app.
+  ///
+  /// **A skip only ever moves the clock forward.** Seeking to the handoff is
+  /// the right answer to a tap during the four beats before it, and exactly
+  /// the wrong one to a tap during the outro itself — which is when it is most
+  /// likely, since by then the app is already faded up behind the frond and
+  /// looks ready to touch. Setting the clock back there replayed the whole
+  /// last beat: the ink slammed back over the app, the frond snapped from the
+  /// header to the middle of the screen, and a finger tapping faster than the
+  /// outro is long could hold the splash on screen indefinitely. Past the
+  /// handoff there is nothing to skip to, so what is left of the outro is
+  /// simply hurried along at the same pace a full skip would land at.
   void _skip() {
     if (_done) return;
-    _controller.value = LaunchCue.handoff / LaunchCue.total;
-    _controller.animateTo(1, duration: const Duration(milliseconds: 500));
+    if (_controller.value < _handoff) _controller.value = _handoff;
+    final left = (1 - _controller.value) / (1 - _handoff);
+    _controller.animateTo(1, duration: _skipLanding * left);
   }
 
   @override

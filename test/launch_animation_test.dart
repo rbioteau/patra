@@ -202,14 +202,79 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.byType(Stack), findsWidgets);
 
-      await tester.tapAt(const Offset(195, 700));
+      await tester.tapAt(_somewhere);
       await tester.pump();
-      // Skipping still plays the landing: the app is not there yet.
+      // The tap seeks to the handoff — the outro is what a skip plays.
+      expect(_ink(tester), 1, reason: 'the last beat has not begun');
       expect(tester.widget<Opacity>(_appOpacity(tester)).opacity, lessThan(1));
 
       await tester.pumpAndSettle();
       expect(find.byType(LaunchAnimation), findsOneWidget);
       // Done: the splash has taken itself out of the tree.
+      expect(_splashInk(), findsNothing);
+    });
+
+    testWidgets('a tap during the outro never rewinds it', (tester) async {
+      // The skip used to *set* the clock to the handoff cue, which is only a
+      // seek forward while the outro has not begun. Tapping once it has —
+      // which is exactly what someone impatient does, since the app is on
+      // screen by then and looks ready — sent the clock backwards: the ink
+      // slammed back over the app, the frond snapped from the header to the
+      // middle of the screen and the whole last beat played again.
+      await tester.pumpWidget(_app());
+      await tester.pump(
+        const Duration(milliseconds: ((LaunchCue.handoff + 0.6) * 1000) ~/ 1),
+      );
+
+      final frond = tester.getRect(find.byKey(_FlyingFrondTile.key));
+      final ink = _ink(tester);
+      final app = tester.widget<Opacity>(_appOpacity(tester)).opacity;
+      expect(ink, lessThan(1), reason: 'the outro is genuinely under way');
+
+      await tester.tapAt(_somewhere);
+      await tester.pump();
+
+      expect(_ink(tester), lessThanOrEqualTo(ink), reason: 'the ink came back');
+      expect(
+        tester.widget<Opacity>(_appOpacity(tester)).opacity,
+        greaterThanOrEqualTo(app),
+        reason: 'the app faded back out',
+      );
+      expect(
+        tester.getRect(find.byKey(_FlyingFrondTile.key)).center.dy,
+        lessThanOrEqualTo(frond.center.dy),
+        reason: 'the frond flew back down to the middle of the screen',
+      );
+
+      await tester.pumpAndSettle();
+      expect(_splashInk(), findsNothing);
+    });
+
+    testWidgets('tapping over and over only ever hurries it along', (
+      tester,
+    ) async {
+      // A finger tapping faster than the outro is long used to restart the
+      // last beat on every tap: the ink strobed back to full each time and the
+      // splash outlasted the animation it was being asked to skip. The ink
+      // only ever lifting is the whole of it — it is the one value the entire
+      // handoff is crossfaded on.
+      await tester.pumpWidget(_app());
+      await tester.pump(const Duration(milliseconds: 600));
+
+      var ink = _ink(tester);
+      for (var i = 0; i < 12; i++) {
+        await tester.tapAt(_somewhere);
+        // No time passes: whatever the tap itself did to the ink is all this
+        // frame can be showing.
+        await tester.pump();
+        if (_splashInk().evaluate().isEmpty) break;
+        expect(_ink(tester), lessThanOrEqualTo(ink), reason: 'tap ${i + 1}');
+        await tester.pump(const Duration(milliseconds: 120));
+        if (_splashInk().evaluate().isEmpty) break;
+        ink = _ink(tester);
+      }
+
+      await tester.pumpAndSettle();
       expect(_splashInk(), findsNothing);
     });
 
@@ -296,6 +361,23 @@ void main() {
     });
   });
 }
+
+/// Anywhere on the splash. The test surface is 800x600 whatever the
+/// MediaQuery says, so a point taken from the phone size the composition is
+/// laid out at can fall clean off it and the tap hit nothing at all.
+const _somewhere = Offset(195, 300);
+
+/// How much of the ink the splash is painted on is still showing. It is the
+/// first Opacity in the splash's own stack.
+double _ink(WidgetTester tester) => tester
+    .widgetList<Opacity>(
+      find.descendant(
+        of: find.byType(LaunchAnimation),
+        matching: find.byType(Opacity),
+      ),
+    )
+    .first
+    .opacity;
 
 /// The app-fading Opacity the splash wraps its child in.
 Finder _appOpacity(WidgetTester tester) => find
