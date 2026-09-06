@@ -115,6 +115,7 @@ void main() {
       '/api/Image/series-cover': 'get',
       '/api/Image/volume-cover': 'get',
       '/api/Image/chapter-cover': 'get',
+      '/api/Image/user-cover': 'get',
       '/api/Device/client/devices': 'get',
       '/api/Device/client/update-name': 'post',
     };

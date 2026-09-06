@@ -35,6 +35,8 @@ class LoginResult {
     required this.token,
     required this.apiKey,
     this.roles = const [],
+    this.hasAvatar = false,
+    this.color = '',
   });
 
   final String username;
@@ -51,6 +53,23 @@ class LoginResult {
 
   /// Kavita's roles for this account, as `/api/Account/login` returns them.
   final List<String> roles;
+
+  /// Whether Kavita holds an avatar for this account.
+  ///
+  /// The response carries the file name (`coverImage`); the name itself is of
+  /// no use to us, because the image is fetched by account id rather than by
+  /// path. What it answers is the only question the picker asks — whether
+  /// there is a picture to fetch at all, or whether this person is drawn as
+  /// an initial on [color].
+  final bool hasAvatar;
+
+  /// The colour Kavita's own web UI paints this account in, as it wrote it:
+  /// `#4AC694`, or empty where the account has none.
+  ///
+  /// Kept verbatim rather than parsed here, for the same reason the server
+  /// version is: a value we do not understand is one we can fall back from,
+  /// and the model has no business knowing what a theme does with it.
+  final String color;
 
   /// Kavita's `PolicyConstants.AdminRole`.
   ///
@@ -69,6 +88,8 @@ class LoginResult {
       for (final role in json['roles'] as List<dynamic>? ?? const [])
         if (role is String) role,
     ],
+    hasAvatar: (json['coverImage'] as String? ?? '').isNotEmpty,
+    color: json['primaryColor'] as String? ?? '',
   );
 }
 

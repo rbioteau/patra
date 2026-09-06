@@ -13,7 +13,9 @@ import 'src/settings/reading_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final auth = await SessionStorage.load();
+  // `atLaunch`, not the stored state itself: a device holding more than one
+  // profile opens on the picker rather than in whoever read last.
+  final auth = (await SessionStorage.load()).atLaunch;
   // Resolved before runApp so the very first request — a resumed session's —
   // already identifies itself to the server.
   final identity = await ClientIdentity.resolve();

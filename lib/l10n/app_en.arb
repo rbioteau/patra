@@ -83,20 +83,19 @@
       "status": {"type": "int"}
     }
   },
-  "savedProfiles": "Your profiles",
-  "@savedProfiles": {
-    "description": "Section label above the list of profiles this device remembers"
-  },
   "addProfile": "Add a profile",
-  "openProfile": "Open",
-  "@openProfile": {
-    "description": "Call to action on a profile that still holds its auth key: one tap and it opens"
+  "whoIsReading": "Who is reading?",
+  "@whoIsReading": {
+    "description": "Heading over the profile picker"
+  },
+  "useAnotherServer": "Use another server",
+  "@useAnotherServer": {
+    "description": "Reveals the address field when the device knows one server and the account being added is on another"
   },
   "backToProfiles": "Back to your profiles",
   "@backToProfiles": {
     "description": "Leaves the sign-in form for the list of remembered profiles"
   },
-  "editProfile": "Edit",
   "forgetProfile": "Forget",
   "forgetProfileConfirm": "Forget {name} on {host}?",
   "@forgetProfileConfirm": {
