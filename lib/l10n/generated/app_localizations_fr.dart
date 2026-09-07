@@ -390,6 +390,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Serveur inaccessible — mode hors ligne. Les chapitres enregistrés restent lisibles.';
 
   @override
+  String get homeOfflineWithSaved =>
+      'Le serveur est hors de portée. Ce que vous avez enregistré est toujours là.';
+
+  @override
+  String get homeOfflineNothingSaved =>
+      'Le serveur est hors de portée, et rien n\'est encore enregistré sur cet appareil.';
+
+  @override
+  String get seeDownloads => 'Voir vos téléchargements';
+
+  @override
   String get storageSectionLabel => 'Stockage';
 
   @override
