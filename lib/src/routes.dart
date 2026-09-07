@@ -65,3 +65,66 @@ String signedOutLocation(AuthState auth) {
   if (only != null && !only.hasCredential) return loginLocation(profile: only);
   return profilesLocation;
 }
+
+/// Whether a location names **content** — a series or a chapter, the two
+/// things [seriesLocation] and [readerLocation] build and the two a link from
+/// outside the app can point at.
+///
+/// Everything else a location can be is the app's own furniture: a gate, or
+/// whichever tab somebody happened to be on. Nobody links to those, and one
+/// held would send the next person signing in to where the previous one was.
+///
+/// The id has to be one, and that is not pedantry: both screens parse theirs
+/// out of the path, so `/series/nowhere` is not a link that opens nothing —
+/// it is a link that opens a crash. A link nothing can be made of is dropped
+/// here and the app opens where it always would.
+bool linksToContent(String location) {
+  final segments = Uri.parse(location).pathSegments;
+  if (segments.length != 2) return false;
+  if (segments.first != 'series' && segments.first != 'reader') return false;
+  return int.tryParse(segments[1]) != null;
+}
+
+/// A link the app was opened with, held while it asks who is reading.
+///
+/// A link names content and a profile names who is reading, and identity
+/// comes first: followed as it arrives, a link would open in whichever
+/// session was last used, which on a shared device is a coin toss. So the
+/// app opens at its own gate and the link waits here; the first moment
+/// somebody is reading, it is spent.
+///
+/// It lives beside the builders that make these locations because it is the
+/// same subject — what a location is, and what becomes of one that had to
+/// wait.
+///
+/// **A launch is the only thing that ever fills one**, and that is a rule
+/// about who, not about tidiness. Filling it from anywhere else — the
+/// redirect, say, which meets a content location again whenever a session
+/// ends under somebody still reading one — would hold the screen person A
+/// was on and push it at person B when they signed in. That is the coin toss
+/// this exists to prevent, arriving an hour later. What it costs is a link
+/// that reaches an app already running and signed out: it goes where
+/// go_router takes it, which is the gate, and is not held.
+class PendingLink {
+  /// Holds [location] if it is a link at all ([linksToContent]); anything
+  /// else is nothing held.
+  PendingLink(String location)
+    : _held = linksToContent(location) ? location : null;
+
+  /// Nothing held, which is what every app built after the first one is
+  /// given: `defaultRouteName` still names the link that started the
+  /// process, so a container built for somebody else (`SessionScope`) must
+  /// start empty or one person's link opens in another's session.
+  PendingLink.none() : _held = null;
+
+  String? _held;
+
+  /// What was held, if anything — and never twice. A link is spent by being
+  /// opened, so switching profile an hour later opens Home like any other
+  /// switch.
+  String? take() {
+    final held = _held;
+    _held = null;
+    return held;
+  }
+}
