@@ -74,6 +74,10 @@ _Avoid_: code (unqualified), passcode, password
 What a switch followed by somebody else's arrival amounts to: the app is built again on a container of its own, so nothing a provider was holding for the previous person can reach the next one. It is not a launch — the splash does not play — and it is not a resume either.
 _Avoid_: restart, reload, refresh
 
+**Link**:
+A location arriving from outside the app that names something to read — a series or a chapter, and nothing else the app can be pointed at. It says what to open and not who is reading, so on a device with faces it waits for one; it is opened on top of the app rather than instead of it, and it is spent the first moment somebody is reading. Called a *deep link* where the point is where it came from; here it is simply a link.
+_Avoid_: URL, route, destination
+
 **Login result**:
 What a server answers a sign-in with: who you are, the auth key to keep, and a JWT to spend. It is not a session — a session is a profile the app is currently reading as, and this is only what one is built from.
 _Avoid_: user, session, credentials (those are what is sent, not what comes back)

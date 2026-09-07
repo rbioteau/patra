@@ -19,6 +19,14 @@ import 'theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier(0);
+  // The link the app was opened with, if it was opened with one: the OS puts
+  // one in `defaultRouteName`, and go_router would otherwise take it as its
+  // initial location and follow it before anybody had said who they were.
+  // Only on a launch — that value stays there for the life of the process,
+  // so a handover building this again must not read it a second time.
+  final pending = ref.watch(isLaunchProvider)
+      ? PendingLink(WidgetsBinding.instance.platformDispatcher.defaultRouteName)
+      : PendingLink.none();
   ref.listen(sessionProvider, (_, _) => refresh.value++);
   // The profiles themselves, and not only the session: forgetting the last
   // one but one turns the picker into the form, and nothing about the active
@@ -29,13 +37,45 @@ final _routerProvider = Provider<GoRouter>((ref) {
   );
   ref.onDispose(refresh.dispose);
 
-  final router = GoRouter(
+  late final GoRouter router;
+
+  /// Opens [link] on top of the app, once the app is there to open it on.
+  ///
+  /// Pushed rather than returned from the redirect, because what a redirect
+  /// returns *replaces* the stack: a series with nothing under it draws no
+  /// back arrow and the reader's own close button calls `maybePop`, which on
+  /// a lone page does nothing at all — a link would open the app into a room
+  /// with no door. So the app is built at its own first screen and the link
+  /// arrives on top of it, exactly where a tap would have put it. A frame
+  /// later, because this runs from inside the parse that is still deciding
+  /// where the app is.
+  void open(String? link) {
+    if (link == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // The container may have been handed to somebody else in the meantime,
+      // and this router disposed with it.
+      if (ref.mounted) router.push(link);
+    });
+  }
+
+  router = GoRouter(
+    // The platform's own initial location is deliberately not followed: it
+    // is where a link arrives, and a link waits for a profile. `pending`
+    // holds it instead, and `open` spends it once somebody is reading.
+    initialLocation: '/',
+    overridePlatformDefaultLocation: true,
     refreshListenable: refresh,
     redirect: (context, state) {
       final auth = ref.read(authProvider);
       final location = state.matchedLocation;
       final onGate = location == '/login' || location == profilesLocation;
-      if (auth.active != null) return onGate ? '/' : null;
+      if (auth.active != null) {
+        // Somebody is reading, so anything that was waiting on that can be
+        // opened — whether the wait was a picker, a password, or no wait at
+        // all on a device with one profile.
+        open(pending.take());
+        return onGate ? '/' : null;
+      }
 
       // Signed out: the gate this device belongs at, unless it is already
       // there. `/login` counts as being there whatever the gate says — it is
