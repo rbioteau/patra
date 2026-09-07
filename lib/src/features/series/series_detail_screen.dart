@@ -179,7 +179,7 @@ class SeriesDetailScreen extends ConsumerWidget {
                 seriesId: seriesId,
                 seriesName: seriesName,
                 type: type,
-                volumes: volumes.value,
+                volumes: volumes,
                 onRead: (chapter) => _read(context, ref, chapter),
               ),
               ...switch (volumes) {
@@ -326,8 +326,11 @@ class _SeriesHero extends ConsumerWidget {
   /// Names the resume button in the library's own vocabulary.
   final LibraryType type;
 
-  /// Null while the chapter list is still loading: the button waits for it.
-  final List<Volume>? volumes;
+  /// The chapter list as the screen has it — the whole [AsyncValue] and not
+  /// only its value, because the hero has to tell a list still on its way
+  /// from one that is never coming: the button waits for the first, and the
+  /// tally's skeleton must stop shimmering for the second.
+  final AsyncValue<List<Volume>> volumes;
   final void Function(Chapter chapter) onRead;
 
   static const _coverWidth = 124.0;
@@ -339,7 +342,10 @@ class _SeriesHero extends ConsumerWidget {
 
   /// The chapter the button opens, decided by the one shared rule the home
   /// screen's Continue hero uses too — see `resume_point.dart`.
-  ResumePoint? _target() => volumes == null ? null : resumePoint(volumes!);
+  ResumePoint? _target() {
+    final list = volumes.value;
+    return list == null ? null : resumePoint(list);
+  }
 
   /// What to call the thing the button opens, in the library's own unit.
   ///
@@ -379,7 +385,8 @@ class _SeriesHero extends ConsumerWidget {
     final coverHeight = tablet ? _tabletCoverHeight : _coverHeight;
     final client = ref.watch(kavitaClientProvider);
     final series = ref.watch(seriesProvider(seriesId)).value;
-    final metadata = ref.watch(seriesMetadataProvider(seriesId)).value;
+    final metadataAsync = ref.watch(seriesMetadataProvider(seriesId));
+    final metadata = metadataAsync.value;
     final target = _target();
 
     // "Author · Genre", dropping whichever half the server does not have.
@@ -391,7 +398,7 @@ class _SeriesHero extends ConsumerWidget {
 
     // A volume-organised series is counted in volumes: calling four volumes
     // "4 chapters" reads as wrong to anyone looking at the list below.
-    final tally = switch (volumes) {
+    final tally = switch (volumes.value) {
       null => null,
       final list when list.any((v) => !v.isLooseLeaf && !v.isSpecials) =>
         l10n.seriesVolumeCount(
@@ -476,7 +483,11 @@ class _SeriesHero extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: PatraText.metadata(size: 12, color: onArt),
                         )
-                      else if (metadata == null)
+                      // Only while it may still arrive. A resolved failure
+                      // is not a slow answer, and a skeleton keyed on a null
+                      // value alone shimmers for one that is never coming.
+                      else if (metadata == null &&
+                          !metadataAsync.isResolvedFailure)
                         const Skeleton(height: 11, width: 150),
                       const SizedBox(height: 6),
                       if (stats.isNotEmpty)
@@ -484,7 +495,10 @@ class _SeriesHero extends ConsumerWidget {
                           stats,
                           style: PatraText.metadata(size: 12, color: onArt),
                         )
-                      else
+                      // Same rule, and the volumes alone answer it: a list
+                      // that arrived always counts to something, so an empty
+                      // tally means the fetch is either in flight or refused.
+                      else if (!volumes.isResolvedFailure)
                         const Skeleton(height: 11, width: 110),
                       const SizedBox(height: 14),
                       ConstrainedBox(

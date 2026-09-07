@@ -26,9 +26,14 @@ Map<String, dynamic> _chapter(int id, String range, int pages, int read) => {
 };
 
 class _SeriesAdapter implements HttpClientAdapter {
-  _SeriesAdapter(this.volumes);
+  _SeriesAdapter(this.volumes, {this.refuse = false});
 
   final List<Map<String, dynamic>> volumes;
+
+  /// A server that answers, and refuses: what a series this account cannot
+  /// see looks like, since Kavita scopes the lookup to the account and says
+  /// the series does not exist.
+  final bool refuse;
 
   @override
   Future<ResponseBody> fetch(
@@ -43,6 +48,7 @@ class _SeriesAdapter implements HttpClientAdapter {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
     );
+    if (refuse) return ResponseBody.fromString('nope', 400);
     return switch (options.path) {
       '/api/Series/5' => json({
         'id': 5,
@@ -130,8 +136,9 @@ final _volumesWithoutChapters = <Map<String, dynamic>>[
 
 Future<void> _pumpSeries(
   WidgetTester tester,
-  List<Map<String, dynamic>> volumes,
-) async {
+  List<Map<String, dynamic>> volumes, {
+  bool refuse = false,
+}) async {
   final cacheDir = mockPathProvider();
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
@@ -139,8 +146,11 @@ Future<void> _pumpSeries(
     username: 'romain',
     apiKey: 'key',
   );
-  client.httpClient.httpClientAdapter = _SeriesAdapter(volumes);
-  client.bareHttpClient.httpClientAdapter = _SeriesAdapter(volumes);
+  client.httpClient.httpClientAdapter = _SeriesAdapter(volumes, refuse: refuse);
+  client.bareHttpClient.httpClientAdapter = _SeriesAdapter(
+    volumes,
+    refuse: refuse,
+  );
 
   await tester.pumpWidget(
     ProviderScope(
@@ -185,6 +195,23 @@ void main() {
     // Chapter 3 is started but unfinished: that is where reading resumes.
     expect(find.text('Continue — Ch. 3'), findsOneWidget);
     expect(find.text('VOLUMES'), findsOneWidget);
+  });
+
+  testWidgets('a refused fetch stops the hero shimmering', (tester) async {
+    tester.view.physicalSize = const Size(1100, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    // A failure is not a slow answer: the credits and the tally are never
+    // coming, so their skeletons have to stop rather than shimmer for good.
+    // `pumpAndSettle` inside `_pumpSeries` is half the assertion — it can
+    // only return once nothing is still animating.
+    await _pumpSeries(tester, _volumesWithChapters, refuse: true);
+
+    expect(find.byType(Skeleton), findsNothing);
+    // What says why is the screen's own failure state, not a placeholder
+    // standing in for an answer.
+    expect(find.text('Retry'), findsOneWidget);
   });
 
   testWidgets('a volume with no chapters is named, never numbered -100000', (
