@@ -37,8 +37,63 @@ class DownloadsState {
   );
 }
 
+/// Where every profile's saved chapters live, which the **device** owns —
+/// null meaning the documents directory, as the service resolves it itself.
+///
+/// Overridable so a test can hand the store a temp directory while still
+/// letting the real provider below do the profile scoping, which is the part
+/// worth exercising.
+final downloadsRootProvider = Provider<Directory?>((ref) => null);
+
+/// The service this container built, kept for the same reason
+/// [kavitaClientProvider] keeps its client: Riverpod flushes a dirty provider
+/// that has listeners at the end of the frame, so a session going null
+/// recomputes the service while the shell is still on screen and still
+/// reading through it. Per container, so it cannot outlive the profile it was
+/// built for.
+class _ServiceHolder {
+  DownloadsService? service;
+}
+
+final _serviceHolderProvider = Provider<_ServiceHolder>(
+  (ref) => _ServiceHolder(),
+);
+
+/// The store of any profile this device remembers, by [Profile.id].
+///
+/// Settings needs one for a profile nobody is signed in as — removing a face
+/// takes its saved chapters with it, and that has to work for an account
+/// deleted on the server, which nothing could ever enter again.
+final profileDownloadsProvider = Provider.family<DownloadsService, String>(
+  (ref, profileId) => DownloadsService(
+    root: ref.watch(downloadsRootProvider),
+    profileId: profileId,
+  ),
+);
+
+/// The active profile's store, and what every screen but Settings reads.
+///
+/// Scoped to the session rather than to the device, because two people on one
+/// server share every chapter id there is: filed by chapter alone, a chapter
+/// one of them saved was listed in the other's Downloads tab, readable there,
+/// and writing its progress back over theirs. Entering somebody else builds
+/// the whole container again (`SessionScope`), so this is resolved once per
+/// profile and never swapped under a screen.
 final downloadsServiceProvider = Provider<DownloadsService>(
-  (ref) => DownloadsService(),
+  // The no-session StateError is control flow, not a transient failure.
+  retry: (retryCount, error) => null,
+  (ref) {
+    final profileId = ref.watch(sessionProvider.select((s) => s?.id));
+    final holder = ref.read(_serviceHolderProvider);
+    if (profileId == null) {
+      final previous = holder.service;
+      if (previous != null) return previous;
+      throw StateError('No active session');
+    }
+    final service = ref.watch(profileDownloadsProvider(profileId));
+    holder.service = service;
+    return service;
+  },
 );
 
 class DownloadsNotifier extends AsyncNotifier<DownloadsState> {

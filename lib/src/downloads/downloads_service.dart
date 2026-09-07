@@ -83,17 +83,32 @@ class SavedChapter {
   }
 }
 
-/// Stores reader pages under the app's documents directory.
+/// Stores reader pages under the app's documents directory, filed by the
+/// profile that saved them.
+///
+/// `<documents>/downloads/<profile>/<chapterId>/`, and the profile segment is
+/// what makes a family tablet work: two people on one server share every
+/// chapter id there is, so a store keyed by chapter alone put one person's
+/// saved reading in the other's Downloads tab — listed, readable, and writing
+/// its progress back over theirs.
 ///
 /// `meta.json` is written last, so a chapter directory without one is a
 /// partial download and gets cleaned up on the next scan.
 class DownloadsService {
-  DownloadsService({Directory? root}) : _rootOverride = root;
+  DownloadsService({Directory? root, required this.profileId})
+    : _rootOverride = root;
+
+  /// Whose store this is — [Profile.id], the only thing anything keys a
+  /// profile on. Fixed for the life of the service, because the container it
+  /// is built in lasts exactly as long as the profile it serves.
+  final String profileId;
 
   final Directory? _rootOverride;
   Directory? _root;
 
-  Future<Directory> _rootDir() async {
+  /// The downloads root, which the **device** owns: every profile's store is
+  /// a directory inside it, and so is whatever the flat layout left behind.
+  Future<Directory> _downloadsRoot() async {
     final existing = _root ?? _rootOverride;
     if (existing != null) {
       _root = existing;
@@ -105,8 +120,22 @@ class DownloadsService {
     return root;
   }
 
+  /// Where this profile's saved chapters live.
+  Future<Directory> profileRoot() async =>
+      Directory('${(await _downloadsRoot()).path}/${dirNameFor(profileId)}');
+
+  /// A directory name for [profileId], which is an address with an account
+  /// id on the end of it (`https://kavita.example#3`) and so carries `:`,
+  /// `/` and `#`.
+  ///
+  /// Percent-encoded rather than hashed: it is reversible by eye when
+  /// somebody is looking at a device's files, and — unlike a hash — two
+  /// profiles cannot possibly land on one directory, which is the whole bug
+  /// this layout exists to prevent.
+  static String dirNameFor(String profileId) => Uri.encodeComponent(profileId);
+
   Future<Directory> chapterDir(int chapterId) async =>
-      Directory('${(await _rootDir()).path}/$chapterId');
+      Directory('${(await profileRoot()).path}/$chapterId');
 
   /// Page files are extension-less: Kavita serves jpg, png or webp and the
   /// decoder sniffs the content anyway.
@@ -121,9 +150,11 @@ class DownloadsService {
   Future<File> pageFile(int chapterId, int page) async =>
       File('${(await chapterDir(chapterId)).path}/${pageFileName(page)}');
 
-  /// Saved chapters, keyed by chapter id. Partial downloads are deleted.
+  /// Saved chapters, keyed by chapter id. Partial downloads are deleted, and
+  /// so is anything the flat layout left in the downloads root.
   Future<Map<int, SavedChapter>> scan() async {
-    final root = await _rootDir();
+    await _sweepFlatLayout();
+    final root = await profileRoot();
     if (!root.existsSync()) return {};
     final result = <int, SavedChapter>{};
     for (final entity in root.listSync()) {
@@ -209,6 +240,62 @@ class DownloadsService {
 
   Future<void> remove(int chapterId) async =>
       _deleteQuietly(await chapterDir(chapterId));
+
+  /// How much saved reading this profile holds, for the confirmation that
+  /// stands in front of removing it: what is about to go has to be said
+  /// before it goes, since nothing can reach these files afterwards.
+  ///
+  /// Added up from each `meta.json` rather than by measuring every page file,
+  /// which is one read per chapter instead of one per page — and is the same
+  /// number the Downloads tab totals, so the two cannot disagree. Unlike
+  /// [scan] it deletes nothing: this is asked of a profile nobody is reading
+  /// as, and a partial download of theirs is not ours to sweep.
+  Future<({int chapters, int bytes})> savedTotals() async {
+    final root = await profileRoot();
+    if (!root.existsSync()) return (chapters: 0, bytes: 0);
+    var chapters = 0;
+    var bytes = 0;
+    for (final entity in root.listSync()) {
+      if (entity is! Directory) continue;
+      final meta = File('${entity.path}/meta.json');
+      if (!meta.existsSync()) continue;
+      try {
+        final saved = SavedChapter.fromJson(
+          jsonDecode(meta.readAsStringSync()),
+        );
+        if (saved == null) continue;
+        chapters++;
+        bytes += saved.bytes;
+      } on Exception {
+        continue;
+      }
+    }
+    return (chapters: chapters, bytes: bytes);
+  }
+
+  /// Deletes everything this profile saved. Called when the profile is
+  /// removed from the device: nothing could reach these files again, so
+  /// leaving them would be disk no screen could ever explain.
+  Future<void> removeAll() async => _deleteQuietly(await profileRoot());
+
+  /// Deletes the chapter directories the previous, profile-less layout wrote
+  /// straight into the downloads root.
+  ///
+  /// There is no migration — a saved chapter cannot be attributed to an
+  /// account after the fact (#8) — so this is the same sweep that already
+  /// removes a download it considers incomplete, reaching one level up. A
+  /// chapter directory is named for a chapter id and so is all digits, which
+  /// no encoded profile id ever is.
+  Future<void> _sweepFlatLayout() async {
+    final root = await _downloadsRoot();
+    if (!root.existsSync()) return;
+    for (final entity in root.listSync()) {
+      if (entity is! Directory) continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      if (int.tryParse(name) == null) continue;
+      await _deleteQuietly(entity);
+    }
+  }
 
   Future<void> _deleteQuietly(Directory dir) async {
     try {

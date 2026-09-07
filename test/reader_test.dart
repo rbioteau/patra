@@ -76,8 +76,15 @@ class _ReaderAdapter implements HttpClientAdapter {
 
 /// A chapter already on disk, as `DownloadsService.scan()` expects to find it:
 /// page files plus the `meta.json` that makes the directory complete.
-void _writeSavedChapter(Directory root, {required int pagesRead}) {
-  final dir = Directory('${root.path}/7')..createSync(recursive: true);
+///
+/// Written through the service so it lands under the profile that saved it —
+/// a copy put straight in the downloads root is what the previous layout
+/// wrote, and the scan deletes those rather than listing them.
+Future<void> _writeSavedChapter(
+  DownloadsService service, {
+  required int pagesRead,
+}) async {
+  final dir = (await service.chapterDir(7))..createSync(recursive: true);
   for (var page = 0; page < 3; page++) {
     File('${dir.path}/${DownloadsService.pageFileName(page)}')
         .writeAsBytesSync(const [0]);
@@ -107,9 +114,12 @@ Future<List<int>> _pumpReader(
   Set<int> wide = const {},
 }) async {
   final dir = mockPathProvider();
-  final downloads = Directory('${dir.path}/downloads')..createSync();
+  final downloads = DownloadsService(
+    root: Directory('${dir.path}/downloads')..createSync(),
+    profileId: 'https://kavita.test#1',
+  );
   if (savedPagesRead != null) {
-    _writeSavedChapter(downloads, pagesRead: savedPagesRead);
+    await _writeSavedChapter(downloads, pagesRead: savedPagesRead);
   }
 
   final posted = <int>[];
@@ -127,9 +137,7 @@ Future<List<int>> _pumpReader(
     ProviderScope(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
-        downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: downloads),
-        ),
+        downloadsServiceProvider.overrideWithValue(downloads),
         initialReadingDirectionProvider.overrideWithValue(direction),
         initialMagnifyProvider.overrideWithValue(magnify),
       ],

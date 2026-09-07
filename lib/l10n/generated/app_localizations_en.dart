@@ -121,6 +121,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String forgetProfileDownloads(int count, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count saved chapters ($size) will be deleted too.',
+      one: '1 saved chapter ($size) will be deleted too.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get cancel => 'Cancel';
 
   @override

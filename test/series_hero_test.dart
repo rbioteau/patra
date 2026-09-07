@@ -147,7 +147,7 @@ Future<void> _pumpSeries(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: cacheDir),
+          DownloadsService(root: cacheDir, profileId: 'https://kavita.test#1'),
         ),
       ],
       child: MaterialApp(

@@ -11,7 +11,6 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
-import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/login/login_screen.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
 
@@ -84,9 +83,7 @@ Widget _app({
       kavitaClientProvider.overrideWithValue(client),
       if (signIn != null) signInProvider.overrideWithValue(signIn),
       if (downloadsRoot != null)
-        downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: downloadsRoot),
-        ),
+        downloadsRootProvider.overrideWithValue(downloadsRoot),
     ],
     child: const PatraApp(),
   );

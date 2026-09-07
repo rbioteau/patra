@@ -122,6 +122,17 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String forgetProfileDownloads(int count, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chapitres enregistrés ($size) seront aussi supprimés.',
+      one: '1 chapitre enregistré ($size) sera aussi supprimé.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get cancel => 'Annuler';
 
   @override

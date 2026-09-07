@@ -69,6 +69,10 @@ const _otherChapter = SavedChapter(
   bytes: 0,
 );
 
+/// Whose store these tests are: the provider is handed a service directly
+/// here, so the profile it belongs to is named rather than resolved.
+const _profileId = 'https://kavita.test#1';
+
 void main() {
   late Directory root;
   late _KavitaLikeAdapter adapter;
@@ -89,7 +93,7 @@ void main() {
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: root),
+          DownloadsService(root: root, profileId: _profileId),
         ),
       ],
     );
@@ -167,7 +171,7 @@ void main() {
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: root),
+          DownloadsService(root: root, profileId: _profileId),
         ),
       ],
     );
@@ -199,12 +203,14 @@ void main() {
     await container.read(downloadsProvider.notifier).recordProgress(12, 2);
 
     expect(container.read(savedChapterProvider(12))?.pagesRead, 2);
-    // Persisted, so the Downloads tab still knows after a restart.
-    final meta = File('${root.path}/12/meta.json');
+    // Persisted under this profile's own root, so the Downloads tab still
+    // knows after a restart — and the profile beside it does not.
+    final service = DownloadsService(root: root, profileId: _profileId);
+    final meta = File('${(await service.chapterDir(12)).path}/meta.json');
     expect(jsonDecode(meta.readAsStringSync())['pagesRead'], 2);
 
     // And a fresh scan reads it back.
-    final rescanned = await DownloadsService(root: root).scan();
+    final rescanned = await service.scan();
     expect(rescanned[12]?.pagesRead, 2);
     expect(rescanned[12]?.progress, closeTo(2 / 3, 0.001));
     expect(rescanned[12]?.isRead, isFalse);

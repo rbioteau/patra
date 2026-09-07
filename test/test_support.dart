@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
 
 /// Points path_provider at a temp directory for the duration of a test.
 ///
@@ -70,4 +71,48 @@ String signedToken(int accountId, {String signature = 'signature'}) {
       base64Url.encode(utf8.encode(jsonEncode(claims))).replaceAll('=', '');
   return '${segment({'alg': 'HS512'})}.'
       '${segment({'nameid': '$accountId'})}.$signature';
+}
+
+/// A chapter already on disk under [profileId]'s store, written the way a
+/// finished download is: page files first, `meta.json` last.
+///
+/// Shared because every fixture here has to go **through the service**. A
+/// chapter directory written straight into the downloads root is what the
+/// previous, profile-less layout wrote, and `scan` now deletes those rather
+/// than listing them — so a hand-built path does not merely file the chapter
+/// somewhere odd, it makes the test that reads it back quietly vacuous.
+Future<SavedChapter> saveChapterFixture(
+  Directory root,
+  String profileId, {
+  required int chapterId,
+  String seriesName = 'Blame!',
+  String title = 'Chapter 1',
+  int pages = 1,
+  int bytes = 3,
+  int pagesRead = 0,
+  int seriesId = 5,
+  int volumeId = 1,
+  int libraryId = 1,
+}) async {
+  final chapter = SavedChapter(
+    chapterId: chapterId,
+    seriesId: seriesId,
+    volumeId: volumeId,
+    libraryId: libraryId,
+    seriesName: seriesName,
+    title: title,
+    pages: pages,
+    bytes: bytes,
+    pagesRead: pagesRead,
+  );
+  final dir = (await DownloadsService(
+    root: root,
+    profileId: profileId,
+  ).chapterDir(chapterId))..createSync(recursive: true);
+  for (var page = 0; page < pages; page++) {
+    File('${dir.path}/${DownloadsService.pageFileName(page)}')
+        .writeAsBytesSync(const [0]);
+  }
+  File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(chapter.toJson()));
+  return chapter;
 }

@@ -272,6 +272,12 @@ abstract class AppLocalizations {
   /// **'Forget {name} on {host}?'**
   String forgetProfileConfirm(String name, String host);
 
+  /// Second line of the confirmation for removing a profile, naming the saved reading that goes with it. Nothing can reach those files once the profile is gone, so what is about to be deleted has to be said before it is
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 saved chapter ({size}) will be deleted too.} other{{count} saved chapters ({size}) will be deleted too.}}'**
+  String forgetProfileDownloads(int count, String size);
+
   /// No description provided for @cancel.
   ///
   /// In en, this message translates to:
