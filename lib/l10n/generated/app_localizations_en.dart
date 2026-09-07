@@ -444,6 +444,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get switchProfile => 'Switch profile';
 
   @override
+  String get profileLock => 'Lock this profile';
+
+  @override
+  String get profileLockExplained =>
+      'A PIN keeps the people you share this device with out of your profile. It is not protection for a lost or stolen device: what is stored here can still be read off one.';
+
+  @override
+  String get profileLockSuggested =>
+      'Worth doing on a shared device: nothing on the server holds this profile back from anything.';
+
+  @override
+  String get profileLockChange => 'Change the PIN';
+
+  @override
+  String get profileLockChoose => 'Choose a PIN';
+
+  @override
+  String get profileLockRepeat => 'Enter it again';
+
+  @override
+  String get profileLockMismatch => 'Those two PINs are different.';
+
+  @override
+  String profileLockEnterFor(String name) {
+    return 'Enter the PIN for $name';
+  }
+
+  @override
+  String get profileLockWrong => 'Wrong PIN.';
+
+  @override
+  String get profileLockUseBiometrics => 'Unlock without the PIN';
+
+  @override
+  String profileLockBiometricReason(String name) {
+    return 'Unlock $name\'s profile';
+  }
+
+  @override
+  String get profileLockBackspace => 'Delete';
+
+  @override
+  String get profileLockedBadge => 'Locked';
+
+  @override
   String get serverOnline => 'Connected';
 
   @override

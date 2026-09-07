@@ -5,11 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/connection_failure.dart';
 import '../../auth/session.dart';
+import '../../lock/profile_lock.dart';
 import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/dashed_border.dart';
 import '../../widgets/patra_masthead.dart';
 import '../../widgets/profile_avatar.dart';
+import '../../widgets/profile_lock_sheet.dart';
 
 /// Who is reading, asked once, on the way in.
 ///
@@ -32,6 +34,14 @@ import '../../widgets/profile_avatar.dart';
 /// **Entering a profile is all it does.** Removing one is in Settings, which
 /// asks for a credential this screen cannot — see `_confirmForget` there for
 /// why the press that used to be here had to go.
+///
+/// It is also **the one place a lock is enforced**, which is why a locked
+/// profile is never opened into at launch (`AuthState.atLaunch`): every way
+/// into a session that spends a stored key comes through a tap here, so a
+/// second enforcement point would be a second thing to keep in step. Typing a
+/// password is not one of those ways and is deliberately not locked — a
+/// password is the credential itself, and somebody who has it is who the lock
+/// is for rather than who it is against.
 class ProfilePickerScreen extends ConsumerStatefulWidget {
   const ProfilePickerScreen({super.key});
 
@@ -53,6 +63,13 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
       // Remembered, and the only thing missing is the password.
       context.push(loginLocation(profile: profile));
       return;
+    }
+    // Before the request and not after it: the lock is enforced on this
+    // device, so it is asked for offline too — which is the only way it could
+    // work at all on the train this screen exists for.
+    if (ref.read(profileLocksProvider).containsKey(profile.id)) {
+      final unlocked = await askProfilePin(context, profile);
+      if (!unlocked || !mounted) return;
     }
     final l10n = AppLocalizations.of(context);
     setState(() {
@@ -91,6 +108,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final profiles = ref.watch(authProvider).profiles;
+    final locks = ref.watch(profileLocksProvider);
     // The host is what tells two faces apart, and only then: with one server
     // remembered it is the same word under every face, saying nothing.
     //
@@ -147,6 +165,7 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
                             _Face(
                               profile: profile,
                               showHost: showHost,
+                              locked: locks.containsKey(profile.id),
                               busy: profile.id == _entering,
                               onTap: () => _enter(profile),
                             ),
@@ -178,11 +197,17 @@ class _Face extends StatelessWidget {
   const _Face({
     required this.profile,
     required this.showHost,
+    required this.locked,
     required this.busy,
     required this.onTap,
   });
 
   final Profile profile;
+
+  /// Whether this face asks for a PIN before it opens. Said on the face for
+  /// the same reason a refused key is: what a tap is about to cost is worth
+  /// knowing before making it.
+  final bool locked;
 
   /// Whether the server is worth naming under this face — true only where the
   /// device remembers more than one.
@@ -208,6 +233,7 @@ class _Face extends StatelessWidget {
         name,
         if (showHost) profile.host,
         if (needsPassword) l10n.signIn,
+        if (locked && !needsPassword) l10n.profileLockedBadge,
       ].join(', '),
       excludeSemantics: true,
       child: InkWell(
@@ -244,7 +270,17 @@ class _Face extends StatelessWidget {
                       else if (needsPassword)
                         const Align(
                           alignment: Alignment.bottomRight,
-                          child: _StaleKeyBadge(),
+                          child: _FaceBadge(icon: Icons.key_off_outlined),
+                        )
+                      // A lock is a cost of the tap like a refused key, and
+                      // is marked in the same place for the same reason. It
+                      // can never share the corner with one: a profile with
+                      // no key left is signed in with a password, which is
+                      // the stronger credential and asks for no PIN.
+                      else if (locked)
+                        const Align(
+                          alignment: Alignment.bottomRight,
+                          child: _FaceBadge(icon: Icons.lock_outline),
                         ),
                     ],
                   ),
@@ -276,6 +312,19 @@ class _Face extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: PatraText.metadata(color: patraAccent),
                   ),
+                ] else if (locked) ...[
+                  const SizedBox(height: 2),
+                  // The word alone: the padlock is already on the avatar,
+                  // and a second one beside its own caption would be the
+                  // same glyph twice on one face — "Sign in" is worded the
+                  // same way under its badge.
+                  Text(
+                    l10n.profileLockedBadge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: PatraText.metadata(),
+                  ),
                 ],
               ],
             ),
@@ -286,21 +335,23 @@ class _Face extends StatelessWidget {
   }
 }
 
-/// The mark on a face whose key the server has stopped accepting.
+/// The mark on a face that costs something extra to open: a key the server
+/// has stopped accepting, or a lock.
 ///
-/// The dimming says *something* is different about this face; the badge says
-/// what, and it is on the avatar because that is where a reader choosing
-/// between faces is looking — the word under the name is read after the
-/// choice, not while making it. Both stay: the handoff's rule is that a cost
-/// is always worded and never icon-only, and a struck-through key says
-/// nothing to a screen reader, which takes the whole face as one label.
+/// The badge is on the avatar because that is where a reader choosing between
+/// faces is looking — the word under the name is read after the choice, not
+/// while making it. Both stay: the handoff's rule is that a cost is always
+/// worded and never icon-only, and neither a struck-through key nor a padlock
+/// says anything to a screen reader, which takes the whole face as one label.
 ///
 /// In [patraAccent] rather than [patraDanger]: nothing has gone wrong and
-/// nothing is being destroyed — this profile still opens, and what it costs
-/// is a password. Purple is identity here, which is exactly what is being
-/// asked for again.
-class _StaleKeyBadge extends StatelessWidget {
-  const _StaleKeyBadge();
+/// nothing is being destroyed — the profile still opens, and what it costs is
+/// a password or four digits. Purple is identity here, which is exactly what
+/// is being asked for again.
+class _FaceBadge extends StatelessWidget {
+  const _FaceBadge({required this.icon});
+
+  final IconData icon;
 
   static const _size = 24.0;
 
@@ -317,7 +368,7 @@ class _StaleKeyBadge extends StatelessWidget {
         // colour Kavita gave the account underneath.
         border: Border.all(color: patraBg, width: 2),
       ),
-      child: const Icon(Icons.key_off_outlined, size: 13, color: patraAccent),
+      child: Icon(icon, size: 13, color: patraAccent),
     );
   }
 }

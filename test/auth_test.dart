@@ -245,7 +245,7 @@ void main() {
       final opened = AuthState(
         profiles: [_romain],
         activeId: _romain.id,
-      ).atLaunch;
+      ).atLaunch();
 
       expect(opened.active?.id, _romain.id);
     });
@@ -255,7 +255,7 @@ void main() {
       // a single-profile device has nobody to switch *to* — so without this
       // one tap on Settings' switch would leave that device opening on a
       // picker of one face at every start, for ever.
-      final opened = AuthState(profiles: [_romain]).atLaunch;
+      final opened = AuthState(profiles: [_romain]).atLaunch();
 
       expect(opened.active?.id, _romain.id);
     });
@@ -265,14 +265,14 @@ void main() {
       // is asked for something, and what it is asked for is a password.
       final signedOut = _romain.copyWith(apiKey: '');
 
-      expect(AuthState(profiles: [signedOut]).atLaunch.active, isNull);
+      expect(AuthState(profiles: [signedOut]).atLaunch().active, isNull);
     });
 
     test('a device holding several lands on the picker, whoever read last', () {
       final opened = AuthState(
         profiles: [_romain, _lea],
         activeId: _lea.id,
-      ).atLaunch;
+      ).atLaunch();
 
       expect(opened.active, isNull, reason: 'the picker asks who is reading');
       expect(
@@ -322,7 +322,7 @@ void main() {
       final stored = AuthState(profiles: [_romain, _lea], activeId: _lea.id);
 
       expect(stored.active?.id, _lea.id);
-      expect(stored.atLaunch.activeId, isNull);
+      expect(stored.atLaunch().activeId, isNull);
     });
   });
 
@@ -598,8 +598,10 @@ void main() {
       'username': 'romain',
       'apiKey': 'key-romain',
       'isAdmin': false,
-      // What the picker draws this person with, and nothing else: the whole
+      // What the picker draws this person with, plus the two facts about the
+      // account itself that outlive a sign-in — and nothing else: the whole
       // row is asserted, so a secret added here has to be added here too.
+      'ageRestricted': false,
       'hasAvatar': false,
       'color': '',
     });

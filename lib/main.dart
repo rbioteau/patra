@@ -7,15 +7,23 @@ import 'src/app.dart';
 import 'src/auth/session.dart';
 import 'src/session_scope.dart';
 import 'src/downloads/image_cache_store.dart';
+import 'src/lock/profile_lock.dart';
 import 'src/settings/cache_settings.dart';
 import 'src/settings/locale_settings.dart';
 import 'src/settings/reading_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Read before the auth state is put through `atLaunch`, because which
+  // profiles are locked is half of that rule: a device holding one locked
+  // profile has to open signed out, or the lock would never be asked for at
+  // all — the picker is the only thing that asks, and such a device would
+  // never see one.
+  final locks = ProfileLockStore();
+  await locks.load();
   // `atLaunch`, not the stored state itself: a device holding more than one
   // profile opens on the picker rather than in whoever read last.
-  final auth = (await SessionStorage.load()).atLaunch;
+  final auth = (await SessionStorage.load()).atLaunch(locked: locks.lockedIds);
   // Resolved before runApp so the very first request — a resumed session's —
   // already identifies itself to the server.
   final identity = await ClientIdentity.resolve();
@@ -42,6 +50,12 @@ Future<void> main() async {
         initialMagnifyProvider.overrideWithValue(magnify),
         initialImageCacheLimitProvider.overrideWithValue(cacheLimit),
         imageCacheStoreProvider.overrideWithValue(imageCache),
+        // The store instance and not its contents: a lock belongs to the
+        // device, so it has to survive a handover building the app again on
+        // a container of its own — and a lock *set* during a session has to
+        // survive it too, which an initial value read once before `runApp`
+        // could not.
+        profileLockStoreProvider.overrideWithValue(locks),
       ],
       child: const PatraApp(),
     ),

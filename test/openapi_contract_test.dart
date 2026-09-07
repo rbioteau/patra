@@ -152,10 +152,13 @@ void main() {
 
     /// The nested reads the regex below cannot see: `SeriesMetadata._names`
     /// takes the key as a parameter, so `writers[].name` and `genres[].title`
-    /// are invisible in the source and listed by hand.
+    /// are invisible in the source and listed by hand — and
+    /// `LoginResult._isRestricted` reads its key off the sub-object rather
+    /// than off `json`, which is the same blind spot.
     const nested = {
       'PersonDto': {'name': 'String'},
       'GenreTagDto': {'title': 'String'},
+      'AgeRestrictionDto': {'ageRating': 'int'},
     };
 
     /// What a declared JSON type may be cast to in Dart. An `integer` may be
