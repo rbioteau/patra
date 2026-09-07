@@ -109,6 +109,14 @@ void main() {
       find.text('Leaf by leaf. A reader for your Kavita library.'),
       findsOneWidget,
     );
+    // Not "tokens": the JWT is never written down, and what the keychain
+    // holds is the account's auth key (ADR-0004). The footer is the app's
+    // one claim about what it keeps, made on the screen that asks for a
+    // password, so it has to be true.
+    expect(
+      find.textContaining('Sign-in kept in secure storage'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a lone profile needing a password lands on its own form', (

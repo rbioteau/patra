@@ -1,7 +1,7 @@
 {
   "@@locale": "fr",
   "appTagline": "Feuille après feuille. Un lecteur pour votre bibliothèque Kavita.",
-  "loginFooter": "Nécessite un serveur Kavita v0.9+ · Jetons conservés dans le stockage sécurisé",
+  "loginFooter": "Nécessite un serveur Kavita v0.9+ · Connexion conservée dans le stockage sécurisé",
   "serverAddress": "Adresse du serveur",
   "serverAddressHint": "https://kavita.example.com",
   "serverAddressRequired": "Adresse requise",

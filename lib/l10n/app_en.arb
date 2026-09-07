@@ -4,9 +4,9 @@
   "@appTagline": {
     "description": "Subtitle under the wordmark on the login screen. 'patra' is Sanskrit for leaf, hence the opening."
   },
-  "loginFooter": "Requires a Kavita server v0.9+ · Tokens kept in secure storage",
+  "loginFooter": "Requires a Kavita server v0.9+ · Sign-in kept in secure storage",
   "@loginFooter": {
-    "description": "Reassurance note pinned to the bottom of the login screen"
+    "description": "Reassurance note pinned to the bottom of the sign-in screen. Says sign-in and not token on purpose: the JWT is never written down, and what the keychain holds is the account auth key (ADR-0004)"
   },
   "serverAddress": "Server address",
   "serverAddressHint": "https://kavita.example.com",

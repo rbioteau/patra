@@ -104,10 +104,10 @@ abstract class AppLocalizations {
   /// **'Leaf by leaf. A reader for your Kavita library.'**
   String get appTagline;
 
-  /// Reassurance note pinned to the bottom of the login screen
+  /// Reassurance note pinned to the bottom of the sign-in screen. Says sign-in and not token on purpose: the JWT is never written down, and what the keychain holds is the account auth key (ADR-0004)
   ///
   /// In en, this message translates to:
-  /// **'Requires a Kavita server v0.9+ · Tokens kept in secure storage'**
+  /// **'Requires a Kavita server v0.9+ · Sign-in kept in secure storage'**
   String get loginFooter;
 
   /// No description provided for @serverAddress.

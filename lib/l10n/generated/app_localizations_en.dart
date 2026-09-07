@@ -14,7 +14,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginFooter =>
-      'Requires a Kavita server v0.9+ · Tokens kept in secure storage';
+      'Requires a Kavita server v0.9+ · Sign-in kept in secure storage';
 
   @override
   String get serverAddress => 'Server address';
