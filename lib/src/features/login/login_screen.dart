@@ -20,9 +20,8 @@ import '../../widgets/patra_masthead.dart';
 /// which one. Signing a remembered profile back in asks for the password
 /// alone: everything else about that person is already here.
 ///
-/// The list of profiles used to live here too, and is now the picker
-/// ([ProfilePickerScreen]); [signedOutLocation] decides which of the two a
-/// signed-out device lands on.
+/// The list of profiles used to live here too, and is now the picker;
+/// [signedOutLocation] decides which of the two a signed-out device lands on.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.profileId, this.expired = false});
 
