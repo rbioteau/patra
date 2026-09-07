@@ -638,6 +638,23 @@ class OfflineNotifier extends Notifier<bool> {
 Duration? serverRetry(int retryCount, Object error) =>
     retryCount >= 2 ? null : Duration(milliseconds: 200 * (1 << retryCount));
 
+/// Whether this provider has **finished**, with nothing to show for it.
+///
+/// The other half of [serverRetry], and the half a widget has to ask. Bounded
+/// retries stop the requests; they do not stop a `Skeleton`, which is an
+/// `AnimationController..repeat()` and goes on shimmering for as long as the
+/// widget draws one. `AsyncValue.value` is null both while an answer is on
+/// its way and once it has resolved into a failure, so a section that keys a
+/// skeleton on that alone shimmers for an answer that is never coming — the
+/// same forever-redraw by a different route.
+///
+/// Ask this instead, and draw nothing: offline, the app bar's own indicator
+/// is what says why, and a paragraph over the content is what this app
+/// deliberately stopped doing.
+extension ResolvedFailure<T> on AsyncValue<T> {
+  bool get isResolvedFailure => hasError && !hasValue;
+}
+
 /// A live check that the server is actually there, behind the indicator on
 /// the settings screen.
 ///
