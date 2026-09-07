@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'account_id.dart';
 import 'client_identity.dart';
 import 'models.dart';
 
@@ -421,33 +420,17 @@ class KavitaClient {
     }
   }
 
-  /// The account this session's token belongs to, or null if it cannot be
-  /// read. Recomputed rather than cached because the token is refreshed.
-  int? get accountId => accountIdFrom(_token);
-
-  /// Series the user has started but not finished — the candidates the home
-  /// screen's Continue promotion picks from. It is not drawn as a list: On
-  /// deck is the home screen's only shelf.
+  /// Next thing to read in each series — the "On deck" shelf, and the
+  /// candidates the home screen's Continue promotion picks from.
   ///
-  /// **`userId` is required.** Kavita reads the caller's own id off the query
-  /// string here rather than off the bearer token, and answers 400 without it
-  /// — which is what silently emptied this shelf: a failed shelf draws
-  /// nothing, so the screen looked merely quiet rather than broken.
-  Future<List<Series>> currentlyReading({int pageSize = 20}) async {
-    final res = await _dio.get<List<dynamic>>(
-      '/api/Series/currently-reading',
-      queryParameters: {
-        'PageNumber': 1,
-        'PageSize': pageSize,
-        'userId': ?accountId,
-      },
-    );
-    return res.data!
-        .map((e) => Series.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  /// Next thing to read in each series — the "On deck" shelf.
+  /// `/api/Series/currently-reading` is deliberately **not** wrapped, despite
+  /// the name: Kavita filters it on `ReadLast GreaterThan
+  /// OnDeckProgressDays`, and `SeriesFilter.HasReadLast` inverts that
+  /// comparison into `MaxDate < now - N` — the series started and *not*
+  /// touched for over a month, which is this endpoint's complement rather
+  /// than a better answer to the same question. It also needs the caller's
+  /// own id as a `userId` query parameter and answers 400 without one; this
+  /// one reads the user off the bearer token, so it has no such trap.
   Future<List<Series>> onDeck({int pageSize = 20}) async {
     final res = await _dio.post<List<dynamic>>(
       '/api/Series/on-deck',

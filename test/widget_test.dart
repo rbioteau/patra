@@ -35,7 +35,6 @@ class _StubAdapter implements HttpClientAdapter {
       '/api/Library/libraries' => json([
         {'id': 1, 'name': 'Mangas', 'type': 0},
       ]),
-      '/api/Series/currently-reading' => json(const <Object>[]),
       '/api/Series/on-deck' => json([
         {
           'id': 5,

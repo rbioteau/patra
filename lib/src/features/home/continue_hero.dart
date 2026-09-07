@@ -18,10 +18,16 @@ import '../../routes.dart';
 /// when there is nothing to promote and the hero should not be drawn at all.
 ///
 /// **The candidates are already the answer to "what is being read".** They
-/// come from `/api/Series/currently-reading`, whose whole job is that
-/// question, so this does not ask it again: re-deriving "started and
-/// unfinished" from the payload would be second-guessing the endpoint's own
-/// contract with fields it has no obligation to fill in.
+/// come from `/api/Series/on-deck`, which Kavita builds from `PagesRead > 0
+/// && PagesRead < Pages` plus a recency clause, so this does not ask it
+/// again: re-deriving "started and unfinished" from the payload would be
+/// second-guessing the endpoint's own contract with fields it has no
+/// obligation to fill in.
+///
+/// It is deliberately **not** `/api/Series/currently-reading`, whose name is
+/// the trap — that one is `ReadLast GreaterThan OnDeckProgressDays`, which
+/// the server inverts into "last read more than a month ago". See
+/// `onDeckProvider`.
 ///
 /// What is left to decide here is only what the endpoint does not know: that
 /// this app cannot open an EPUB at all — the reader refuses one outright, so

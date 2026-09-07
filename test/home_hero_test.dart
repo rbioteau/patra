@@ -71,13 +71,9 @@ Map<String, dynamic> _chapter(
 };
 
 class _HomeAdapter implements HttpClientAdapter {
-  _HomeAdapter({
-    this.continueReading = const [],
-    this.onDeck = const [],
-    this.volumes = const [],
-  });
+  _HomeAdapter({this.onDeck = const [], this.volumes = const []});
 
-  List<Map<String, dynamic>> continueReading;
+  /// On deck is the home screen's only shelf *and* the hero's candidates.
   List<Map<String, dynamic>> onDeck;
   List<Map<String, dynamic>> volumes;
 
@@ -91,10 +87,14 @@ class _HomeAdapter implements HttpClientAdapter {
 
   /// Holds the shelf fetch open, so the window where nothing is known yet can
   /// be rendered.
-  Completer<void>? readingGate;
+  Completer<void>? onDeckGate;
+
+  /// Every path asked for, so a test can assert what is *not* requested.
+  final List<String> seen = [];
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    seen.add(options.path);
     ResponseBody json(Object body) => ResponseBody.fromString(
       jsonEncode(body),
       200,
@@ -106,15 +106,10 @@ class _HomeAdapter implements HttpClientAdapter {
       '/api/Library/libraries' => json([
         {'id': 1, 'name': 'Manga', 'type': 0},
       ]),
-      // Kavita answers 400 unless the caller names its own account, which
-      // is what emptied this shelf on a real server.
-      '/api/Series/currently-reading' => await () async {
-        await readingGate?.future;
-        return options.queryParameters.containsKey('userId')
-            ? json(continueReading)
-            : ResponseBody.fromBytes(const [], 400);
+      '/api/Series/on-deck' => await () async {
+        await onDeckGate?.future;
+        return json(onDeck);
       }(),
-      '/api/Series/on-deck' => json(onDeck),
       '/api/Series/volumes' => await () async {
         await volumesGate?.future;
         return volumesFail
@@ -129,7 +124,11 @@ class _HomeAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-Future<void> _pumpHome(WidgetTester tester, _HomeAdapter adapter) async {
+Future<void> _pumpHome(
+  WidgetTester tester,
+  _HomeAdapter adapter, {
+  bool settle = true,
+}) async {
   mockPathProvider();
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
@@ -151,7 +150,15 @@ Future<void> _pumpHome(WidgetTester tester, _HomeAdapter adapter) async {
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+    return;
+  }
+  // The shelf's own `Skeleton` is an `AnimationController..repeat()`, so a
+  // held request leaves the tree shimmering and `pumpAndSettle` never
+  // returns. Pump the frames the requests need instead.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 /// The home screen under a router, so a tap can be followed to where it goes.
@@ -196,7 +203,7 @@ Future<void> _pumpRouted(WidgetTester tester, _HomeAdapter adapter) async {
 }
 
 _HomeAdapter _oneInProgress() => _HomeAdapter(
-  continueReading: [
+  onDeck: [
     _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
   ],
   volumes: [
@@ -328,7 +335,7 @@ void main() {
       await _pumpHome(
         tester,
         _HomeAdapter(
-          continueReading: [
+          onDeck: [
             _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
             _json(6, name: 'Berserk', lastRead: '2026-09-01T10:00:00'),
           ],
@@ -358,7 +365,7 @@ void main() {
       await _pumpHome(
         tester,
         _HomeAdapter(
-          continueReading: [_json(5, lastRead: '2026-09-05T10:00:00')],
+          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
           volumes: [
             {
               'id': 1,
@@ -385,7 +392,7 @@ void main() {
       await _pumpHome(
         tester,
         _HomeAdapter(
-          continueReading: [_json(5, lastRead: '2026-09-05T10:00:00')],
+          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
           volumes: [
             {
               'id': 1,
@@ -404,7 +411,7 @@ void main() {
       await _pumpHome(
         tester,
         _HomeAdapter(
-          continueReading: [_json(5, lastRead: '2026-09-05T10:00:00')],
+          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
           volumes: [
             {
               'id': 1,
@@ -431,9 +438,6 @@ void main() {
       await _pumpHome(
         tester,
         _HomeAdapter(
-          continueReading: [
-            _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
-          ],
           onDeck: [
             _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
             _json(6, name: 'Berserk', lastRead: '2026-09-01T10:00:00'),
@@ -461,29 +465,38 @@ void main() {
       expect(find.text('Berserk'), findsOneWidget);
     });
 
-    testWidgets('is taken out of On deck, which is the same set', (
+    // **`currently-reading` is not the question the hero asks.** Kavita
+    // builds it from `ReadLast GreaterThan OnDeckProgressDays`, and
+    // `SeriesFilter.HasReadLast` deliberately flips that comparison — "we are
+    // flipping the logical comparisons such that the read filter in the UI is
+    // more natural" — into `MaxDate < now - N`: the series last read *more
+    // than* a month ago. On deck is its complement (`LatestReadDate >= now -
+    // N`, or a chapter added recently), so the two are disjoint on the read
+    // date rather than "very nearly the same set", and a series read this
+    // week is only ever in On deck. Promoting from the stale pile is why a
+    // person who reads regularly saw no hero at all while the shelf below it
+    // listed the very series they were reading.
+    //
+    // The endpoint is asserted *absent* rather than empty: once the hero
+    // takes its candidates from the shelf, no fixture at this seam can tell
+    // "promoted from On deck" apart from "promoted from a currently-reading
+    // that happens to agree". Not asking is the property.
+    testWidgets('is promoted from On deck, and never from the stale pile', (
       tester,
     ) async {
-      await _pumpHome(
-        tester,
-        _HomeAdapter(
-          continueReading: [
-            _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
-          ],
-          onDeck: [
-            _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
-          ],
-          volumes: [
-            {
-              'id': 1,
-              'name': '1',
-              'minNumber': 1,
-              'chapters': [_chapter(101, 12, pages: 30, read: 12)],
-            },
-          ],
+      final adapter = _oneInProgress();
+      await _pumpHome(tester, adapter);
+
+      expect(find.byType(ContinueHero), findsOne);
+      expect(
+        find.descendant(
+          of: find.byType(ContinueHero),
+          matching: find.text('Vinland Saga'),
         ),
+        findsOneWidget,
       );
-      expect(find.text('Vinland Saga'), findsOneWidget);
+      expect(adapter.seen, contains('/api/Series/on-deck'));
+      expect(adapter.seen, isNot(contains('/api/Series/currently-reading')));
     });
 
     // A hero that cannot be completed is worse than no hero, and its series
@@ -491,9 +504,6 @@ void main() {
     testWidgets('collapses when the chapter cannot be fetched, and leaves the '
         'series in the list', (tester) async {
       final adapter = _HomeAdapter(
-        continueReading: [
-          _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
-        ],
         onDeck: [
           _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
         ],
@@ -589,7 +599,7 @@ void main() {
       await _pumpHome(
         tester,
         _HomeAdapter(
-          continueReading: [_json(5, lastRead: '2026-09-05T10:00:00')],
+          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
           volumes: [
             {
               'id': 1,
@@ -673,7 +683,10 @@ void main() {
     // Two shelves of nearly the same series was the complaint; there is one.
     testWidgets('there is a single list, headed On deck', (tester) async {
       final adapter = _oneInProgress()
-        ..onDeck = [_json(6, name: 'Berserk', lastRead: '2026-09-01T10:00:00')];
+        ..onDeck = [
+          _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
+          _json(6, name: 'Berserk', lastRead: '2026-09-01T10:00:00'),
+        ];
       await _pumpHome(tester, adapter);
       expect(find.text('ON DECK'), findsOneWidget);
       expect(find.text('CONTINUE'), findsOneWidget); // the hero's eyebrow
@@ -741,8 +754,8 @@ void main() {
       tester,
     ) async {
       final gate = Completer<void>();
-      final adapter = _oneInProgress()..readingGate = gate;
-      await _pumpHome(tester, adapter);
+      final adapter = _oneInProgress()..onDeckGate = gate;
+      await _pumpHome(tester, adapter, settle: false);
 
       // Nothing is known yet: no hero, and no verdict on the library either.
       expect(find.byType(ContinueHero), findsNothing);

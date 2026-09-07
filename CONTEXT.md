@@ -132,13 +132,13 @@ How much has been read, counted in pages. It exists per chapter and per series, 
 _Avoid_: completion, status, read state
 
 **Continue**:
-The series read most recently that has been started and not finished — one series, not a set. It is what the home screen promotes above everything else, and the only thing that promotion is for is opening it again. Kavita calls the endpoint behind it *currently reading*; that is the name of a route, not a second concept and not a word we show.
+The series read most recently that has been started and not finished — one series, not a set. It is what the home screen promotes above everything else, and the only thing that promotion is for is opening it again. It is picked **out of** [[On deck]] rather than fetched: one request answers both, so the card and the shelf beneath it can never disagree about what is being read.
 
-It was briefly a shelf as well as a promotion, on the reading that Continue and [[On deck]] answer different questions. On a real library they return very nearly the same series, so two shelves of them was one library twice under two headings. What survives of the distinction is that Continue is one series and On deck is a list.
+Kavita has a route called *currently reading*, and it is **not** this concept — the name is the trap. It filters on `ReadLast GreaterThan OnDeckProgressDays`, a comparison `SeriesFilter.HasReadLast` deliberately inverts into `MaxDate < now - N`: the series you started and have *not* touched for over a month. That is On deck's complement, not a better name for it, so promoting from it meant anybody who reads regularly had no promotion at all while the shelf beneath listed the very series they were reading. Continue is one series and On deck is a list; both come from the same answer.
 _Avoid_: currently reading, in progress, resume list, reading list (that is a Kavita feature of its own)
 
 **On deck**:
-The series with reading progress on them, as Kavita picks and orders them. It is the home screen's one list, and the series the [[Continue]] promotion has taken is removed from it, so no series is two things on the same screen. That removal is also what covers a promotion that fails to draw: it is keyed on the card being there, so a series whose chapter could not be fetched stays in the list rather than leaving the screen with it.
+The series with reading progress on them, as Kavita picks and orders them — started, unfinished, and still live (`PagesRead > 0 && PagesRead < Pages`, plus a recency clause). It is the home screen's one list *and* the pool the [[Continue]] promotion is chosen from, and the series that promotion has taken is removed from it, so no series is two things on the same screen. That removal is also what covers a promotion that fails to draw: it is keyed on the card being there, so a series whose chapter could not be fetched stays in the list rather than leaving the screen with it.
 _Avoid_: next up, recommended, suggestions, up next
 
 ### Reading

@@ -63,15 +63,16 @@ void main() {
   ) async {
     final adapter = await _pumpHome(tester);
 
-    // Home asks for three things: continue-reading, on-deck and libraries.
-    expect(adapter.calls, 3, reason: 'the screen should have tried once each');
+    // Home asks for two things: on-deck — which is both the shelf and the
+    // hero's candidates — and libraries.
+    expect(adapter.calls, 2, reason: 'the screen should have tried once each');
 
     // A short bounded backoff catches a momentary blip...
     await tester.pump(const Duration(seconds: 5));
     final settled = adapter.calls;
     expect(
       settled,
-      lessThanOrEqualTo(9),
+      lessThanOrEqualTo(6),
       reason: 'three attempts per provider at most, not an open-ended climb',
     );
 

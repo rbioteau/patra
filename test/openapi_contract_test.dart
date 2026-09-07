@@ -101,7 +101,6 @@ void main() {
       '/api/Library/libraries': 'get',
       '/api/Library/scan': 'post',
       '/api/Series/all-v2': 'post',
-      '/api/Series/currently-reading': 'get',
       '/api/Series/on-deck': 'post',
       '/api/Series/{seriesId}': 'get',
       '/api/Series/metadata': 'get',
