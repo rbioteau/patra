@@ -135,13 +135,29 @@
   "libraryEmpty": "This library is empty",
   "libraryEmptyBody": "Patra shows what your server has scanned. Add files to {library} on the server, then scan it from Kavita.",
   "@libraryEmptyBody": {
+    "description": "Shown to somebody who is not an administrator, and so has no way to ask for a scan from here: Kavita is still the only route, so the sentence keeps pointing at it",
     "placeholders": {
       "library": {"type": "String"}
     }
   },
+  "libraryEmptyBodyAdmin": "Patra shows what your server has scanned. Add files to {library} on the server, then ask for a scan.",
+  "@libraryEmptyBodyAdmin": {
+    "description": "Shown to an administrator, who has the button right below: sending them to Kavita for something they can do here would be wrong",
+    "placeholders": {
+      "library": {"type": "String"}
+    }
+  },
+  "libraryActions": "Library actions",
+  "@libraryActions": {
+    "description": "Tooltip of the Library tab's app bar menu. Only drawn for an administrator, and only once a library is selected"
+  },
   "askServerToScan": "Ask server to scan",
   "@askServerToScan": {
-    "description": "Only shown to a Kavita admin: every scan endpoint is behind AdminPolicy"
+    "description": "Only shown to a Kavita administrator: every scan endpoint is behind AdminPolicy. Worded, never an icon: a refresh glyph would be confused with the pull-to-refresh on the same screen, which asks Kavita what it already knows"
+  },
+  "scanNeedsServer": "Needs the server — offline",
+  "@scanNeedsServer": {
+    "description": "Why the scan menu item is disabled offline. Disabled with its reason rather than hidden, so it cannot be mistaken for having lost the admin role"
   },
   "scanning": "Scanning…",
   "scanRequested": "Scan requested. Kavita may take a while — pull down to refresh.",

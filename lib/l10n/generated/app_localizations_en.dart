@@ -168,7 +168,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String libraryEmptyBodyAdmin(String library) {
+    return 'Patra shows what your server has scanned. Add files to $library on the server, then ask for a scan.';
+  }
+
+  @override
+  String get libraryActions => 'Library actions';
+
+  @override
   String get askServerToScan => 'Ask server to scan';
+
+  @override
+  String get scanNeedsServer => 'Needs the server — offline';
 
   @override
   String get scanning => 'Scanning…';

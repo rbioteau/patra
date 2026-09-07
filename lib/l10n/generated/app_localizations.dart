@@ -338,17 +338,35 @@ abstract class AppLocalizations {
   /// **'This library is empty'**
   String get libraryEmpty;
 
-  /// No description provided for @libraryEmptyBody.
+  /// Shown to somebody who is not an administrator, and so has no way to ask for a scan from here: Kavita is still the only route, so the sentence keeps pointing at it
   ///
   /// In en, this message translates to:
   /// **'Patra shows what your server has scanned. Add files to {library} on the server, then scan it from Kavita.'**
   String libraryEmptyBody(String library);
 
-  /// Only shown to a Kavita admin: every scan endpoint is behind AdminPolicy
+  /// Shown to an administrator, who has the button right below: sending them to Kavita for something they can do here would be wrong
+  ///
+  /// In en, this message translates to:
+  /// **'Patra shows what your server has scanned. Add files to {library} on the server, then ask for a scan.'**
+  String libraryEmptyBodyAdmin(String library);
+
+  /// Tooltip of the Library tab's app bar menu. Only drawn for an administrator, and only once a library is selected
+  ///
+  /// In en, this message translates to:
+  /// **'Library actions'**
+  String get libraryActions;
+
+  /// Only shown to a Kavita administrator: every scan endpoint is behind AdminPolicy. Worded, never an icon: a refresh glyph would be confused with the pull-to-refresh on the same screen, which asks Kavita what it already knows
   ///
   /// In en, this message translates to:
   /// **'Ask server to scan'**
   String get askServerToScan;
+
+  /// Why the scan menu item is disabled offline. Disabled with its reason rather than hidden, so it cannot be mistaken for having lost the admin role
+  ///
+  /// In en, this message translates to:
+  /// **'Needs the server — offline'**
+  String get scanNeedsServer;
 
   /// No description provided for @scanning.
   ///

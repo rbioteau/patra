@@ -169,7 +169,18 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String libraryEmptyBodyAdmin(String library) {
+    return 'Patra affiche ce que votre serveur a analysé. Ajoutez des fichiers à $library sur le serveur, puis demandez une analyse.';
+  }
+
+  @override
+  String get libraryActions => 'Actions de la bibliothèque';
+
+  @override
   String get askServerToScan => 'Demander une analyse';
+
+  @override
+  String get scanNeedsServer => 'Nécessite le serveur — hors ligne';
 
   @override
   String get scanning => 'Analyse en cours…';

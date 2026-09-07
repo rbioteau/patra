@@ -22,6 +22,10 @@ _Avoid_: server entry, instance, connection, backend
 One person's Kavita account on a server, remembered along with its auth key and never its password. Reading progress, library access and age restriction all belong to a profile and to nothing else, because the server keeps them per account and offers no way to divide one. Which profile it is, is the server's address plus Kavita's own id for the account — never the name, which is a label the server lets its owner change.
 _Avoid_: account, user, member, persona
 
+**Administrator**:
+A [[Profile]] Kavita grants its admin role. It is the server's fact about an account, carried on the sign-in response and remembered with the profile, so it is only as fresh as the last time that profile signed in — an offline resume keeps the previous answer. The app draws an administrator's controls and never draws them for anyone else, because every one of them would earn a refusal from the server.
+_Avoid_: admin (in prose — the word is fine in code), owner, superuser
+
 **Gate**:
 The screen a device with no session lands on — the [[Picker]] or the sign-in form. Which one is a rule about the device rather than a screen's own decision, and the app has exactly one place that decides it.
 _Avoid_: landing screen, splash (that is the launch animation), auth screen
@@ -87,12 +91,16 @@ Kavita's own record of a client that has talked to it. One per installation of t
 _Avoid_: session, client, install
 
 **Library**:
-A collection of series on the server, scanned from a folder and carrying a type. A library can be empty, which means the server has not scanned it yet.
+A collection of series on the server, built from a folder and carrying a type. What is in it is whatever the last [[Scan]] found, so it drifts from the folder as the folder changes and is only ever as current as that scan. A library can also be empty, which means no scan has yet found anything there.
 _Avoid_: collection, folder, shelf
 
 **Library type**:
 Which of Kavita's six kinds a library is (Manga, Comic, Book, Image, Light Novel, ComicVine). It decides what a series is made of and what every part of it is called, so it is never cosmetic.
 _Avoid_: format, genre, category
+
+**Scan**:
+What the server does when it reads a [[Library]]'s folder again and takes in what changed. It is *asked for*, never finished, by the app: Kavita answers the request and does the work afterwards, so nothing the app can say about a scan is ever a report of its result. Only an [[Administrator]] can ask. Distinct from refreshing a screen, which asks Kavita what it already knows — a scan is what changes the answer, a refresh is what fetches it.
+_Avoid_: sync, reindex, refresh, rescan
 
 **Series**:
 One work: a manga, a comic run, a book. The thing a cover in the grid stands for.

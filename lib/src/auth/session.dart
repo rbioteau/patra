@@ -80,11 +80,19 @@ class Profile {
   /// Whether this account holds Kavita's `Admin` role, as the login response
   /// reported it.
   ///
-  /// Persisted rather than asked for again, because a resumed session never
-  /// logs in a second time. It is therefore as old as the last sign-in: a
-  /// profile saved before this existed, or an account promoted since, reads
-  /// false until the next one — which costs an admin a button, and never
-  /// offers a non-admin one that could only fail.
+  /// Persisted because the picker and a session's first frame are drawn
+  /// before any request has answered — but **not** frozen at the first
+  /// sign-in: `resume` signs in again with the auth key and rebuilds the
+  /// profile from that response, so the role refreshes on every launch that
+  /// reaches the server. What it really is, is as old as the last
+  /// *successful* sign-in: a session resumed offline keeps the previous
+  /// answer, and an account promoted while the app is open reads false until
+  /// the next launch — which costs an admin a control and never offers a
+  /// non-admin one that could only fail.
+  ///
+  /// A **403** from an admin-only endpoint clears it inside the session
+  /// (`AuthNotifier.clearAdmin`), since that answer is fresher than this
+  /// flag; nothing sets it the other way round.
   final bool isAdmin;
 
   /// Whether the server limits what this account may open, as the last
@@ -552,6 +560,31 @@ class AuthNotifier extends Notifier<AuthState> {
       activeId: state.activeId == profile.id ? null : state.activeId,
     ),
   );
+
+  /// Records the server having just refused this profile an administrator's
+  /// request.
+  ///
+  /// A 403 from an admin-only endpoint is the server's own answer, and it is
+  /// **fresher** than [Profile.isAdmin], which is only ever as old as the
+  /// last successful sign-in: an account demoted in Kavita reads true here
+  /// until the next launch, and every control the flag draws can then earn
+  /// nothing but another 403. So the flag goes, and the controls go with it
+  /// until a sign-in says otherwise — the same move made on a refused key,
+  /// and in the same direction, since guessing yes draws a button that
+  /// cannot work.
+  ///
+  /// It is never set the other way round: a 200 from one admin endpoint is
+  /// not a role, and promotion is noticed at the next sign-in.
+  Future<void> clearAdmin() async {
+    final active = state.active;
+    if (active == null || !active.isAdmin) return;
+    await _commit(
+      AuthState(
+        profiles: _upsert(active.copyWith(isAdmin: false)),
+        activeId: state.activeId,
+      ),
+    );
+  }
 
   /// Called by the API client once it has minted a fresh JWT from the key.
   /// The new token is session state like the one it replaces — this only
