@@ -12,7 +12,6 @@ import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/session_scope.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
-import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/library/library_screen.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
 import 'package:patra/src/theme.dart';
@@ -104,7 +103,7 @@ Widget _app({required List<Profile> profiles, required Directory root}) {
     auth: AuthState(profiles: profiles).atLaunch,
     overrides: [
       signInProvider.overrideWithValue(_signIn),
-      downloadsServiceProvider.overrideWithValue(DownloadsService(root: root)),
+      downloadsRootProvider.overrideWithValue(root),
       // Built from the session, as the real provider is: a stub client handed
       // in whole would be the same one in both sessions, and these tests are
       // about telling the two apart.
@@ -297,6 +296,48 @@ void main() {
     expect(find.byType(ProfilePickerScreen), findsOneWidget);
     expect(find.text('romain'), findsNothing);
     expect(find.text('lea'), findsOneWidget);
+  });
+
+  testWidgets('the Downloads tab is the profile\'s own', (tester) async {
+    // Two people on one server share every chapter id there is, so a store
+    // filed by chapter alone put one person's saved reading in the other's
+    // list — readable there, and writing its progress back over theirs.
+    final root = _room(tester, 'patra-switch-downloads');
+    await saveChapterFixture(
+      root,
+      _romain.id,
+      chapterId: 42,
+      seriesName: 'Blame!',
+    );
+    await saveChapterFixture(
+      root,
+      _lea.id,
+      chapterId: 42,
+      seriesName: 'Nausicaä',
+    );
+    await tester.pumpWidget(_app(profiles: [_romain, _lea], root: root));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Downloads'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Blame!'), findsOneWidget);
+    expect(find.text('Nausicaä'), findsNothing);
+
+    // Back to Home for the face: it is on that bar and nowhere else.
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Switch profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('lea'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Downloads'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nausicaä'), findsOneWidget);
+    expect(find.text('Blame!'), findsNothing);
   });
 
   testWidgets('a switch is not a launch', (tester) async {

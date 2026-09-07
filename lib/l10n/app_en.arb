@@ -109,6 +109,14 @@
       "host": {"type": "String"}
     }
   },
+  "forgetProfileDownloads": "{count, plural, =1{1 saved chapter ({size}) will be deleted too.} other{{count} saved chapters ({size}) will be deleted too.}}",
+  "@forgetProfileDownloads": {
+    "description": "Second line of the confirmation for removing a profile, naming the saved reading that goes with it. Nothing can reach those files once the profile is gone, so what is about to be deleted has to be said before it is",
+    "placeholders": {
+      "count": {"type": "int"},
+      "size": {"type": "String"}
+    }
+  },
   "cancel": "Cancel",
   "navHome": "Home",
   "navLibrary": "Library",

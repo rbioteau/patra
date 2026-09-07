@@ -24,11 +24,10 @@ String serverHost(String baseUrl) {
 /// A device holds several, and several of them can share one address: that is
 /// what a family tablet is. Everything the *server* owns then comes out right
 /// by construction — reading progress, library access and age restriction are
-/// kept per account and cannot be divided any other way (ADR-0003) — but
-/// nothing the **device** owns is scoped yet: saved chapters are still filed
-/// by chapter id alone, so two profiles on one server currently share one
-/// offline library. That is #13, and until it lands this class is the only
-/// half of the separation that exists.
+/// kept per account and cannot be divided any other way (ADR-0003) — and what
+/// the **device** owns is scoped by [id]: saved chapters are filed under a
+/// directory named for it (`DownloadsService`), so two profiles on one server
+/// hold their own copy of a chapter and their own place in it.
 ///
 /// One secret is stored, the account's auth key, so a profile can be reopened
 /// without retyping a password; the password itself is never persisted, and

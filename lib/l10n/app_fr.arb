@@ -29,6 +29,7 @@
   "forgetProfile": "Oublier",
   "forgetThisProfile": "Oublier ce profil",
   "forgetProfileConfirm": "Oublier {name} sur {host} ?",
+  "forgetProfileDownloads": "{count, plural, =1{1 chapitre enregistré ({size}) sera aussi supprimé.} other{{count} chapitres enregistrés ({size}) seront aussi supprimés.}}",
   "cancel": "Annuler",
   "navHome": "Accueil",
   "navLibrary": "Bibliothèque",

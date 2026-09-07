@@ -158,23 +158,17 @@ Future<void> _pump(
   final cacheDir = mockPathProvider();
   if (savedChapter != null) {
     // A stored copy, which is what puts the remove action on the row's
-    // trailing edge. `meta.json` last, as the service requires.
-    final dir = Directory('${cacheDir.path}/downloads/$savedChapter')
-      ..createSync(recursive: true);
-    File('${dir.path}/${DownloadsService.pageFileName(0)}')
-        .writeAsBytesSync(const [0]);
-    File('${dir.path}/meta.json').writeAsStringSync(
-      jsonEncode({
-        'chapterId': savedChapter,
-        'seriesId': 7,
-        'volumeId': 10,
-        'libraryId': 1,
-        'seriesName': 'Berserk',
-        'title': 'Chapter 1',
-        'pages': 100,
-        'bytes': 1,
-        'pagesRead': 0,
-      }),
+    // trailing edge — written through the service, so it lands under the
+    // profile that saved it.
+    await saveChapterFixture(
+      Directory('${cacheDir.path}/downloads'),
+      _profileId,
+      chapterId: savedChapter,
+      seriesId: 7,
+      volumeId: 10,
+      seriesName: 'Berserk',
+      pages: 1,
+      bytes: 1,
     );
   }
   final client = KavitaClient(
@@ -198,7 +192,10 @@ Future<void> _pump(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: Directory('${cacheDir.path}/downloads')),
+          DownloadsService(
+            root: Directory('${cacheDir.path}/downloads'),
+            profileId: _profileId,
+          ),
         ),
       ],
       child: MaterialApp(
@@ -245,6 +242,11 @@ class _PushHost extends StatelessWidget {
     ),
   );
 }
+
+/// Whose store the fixtures go in: the service is handed to the provider
+/// directly here, so the profile it belongs to is named rather than resolved
+/// from a session.
+const _profileId = 'https://kavita.test#1';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

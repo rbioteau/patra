@@ -61,13 +61,18 @@ const _chapter = SavedChapter(
   bytes: 0,
 );
 
+/// Two people on one server: the same chapter ids, and nothing else in
+/// common.
+const _romain = 'https://kavita.example#1';
+const _lea = 'https://kavita.example#2';
+
 void main() {
   late Directory root;
   late DownloadsService service;
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('patra-downloads-test');
-    service = DownloadsService(root: root);
+    service = DownloadsService(root: root, profileId: _romain);
   });
 
   tearDown(() {
@@ -168,5 +173,115 @@ void main() {
 
     await expectLater(download, throwsA(isA<DioException>()));
     expect((await service.chapterDir(42)).existsSync(), isFalse);
+  });
+
+  test('a chapter is stored under the profile that saved it', () async {
+    await service.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_) {},
+    );
+
+    final dir = await service.chapterDir(42);
+    expect(dir.parent.path, (await service.profileRoot()).path);
+    expect(dir.parent.parent.path, root.path);
+  });
+
+  test('two profiles save one chapter without meeting', () async {
+    final lea = DownloadsService(root: root, profileId: _lea);
+
+    await service.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_) {},
+    );
+    await lea.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter.copyWith(pagesRead: 2),
+      onProgress: (_) {},
+    );
+
+    // Each reads their own copy back, with their own progress.
+    expect((await service.scan())[42]!.pagesRead, 0);
+    expect((await lea.scan())[42]!.pagesRead, 2);
+
+    // And a page turn on one side stays on that side.
+    await lea.writeMeta((await lea.scan())[42]!.copyWith(pagesRead: 3));
+    expect((await service.scan())[42]!.pagesRead, 0);
+    expect((await lea.scan())[42]!.pagesRead, 3);
+  });
+
+  test('one profile removing a chapter leaves the other copy', () async {
+    final lea = DownloadsService(root: root, profileId: _lea);
+    for (final each in [service, lea]) {
+      await each.download(
+        client: _client(_PageAdapter()),
+        chapter: _chapter,
+        onProgress: (_) {},
+      );
+    }
+
+    await service.remove(42);
+
+    expect(await service.scan(), isEmpty);
+    expect((await lea.scan()).keys, [42]);
+  });
+
+  test('scan deletes a chapter left by the flat layout', () async {
+    // What the previous layout wrote: a chapter directory sitting directly
+    // in the downloads root, meta.json and all. There is no migration, so
+    // the sweep that already removes an incomplete download removes this.
+    final stale = Directory('${root.path}/42')..createSync(recursive: true);
+    File('${stale.path}/meta.json')
+        .writeAsStringSync(jsonEncode(_chapter.toJson()));
+
+    expect(await service.scan(), isEmpty);
+    expect(stale.existsSync(), isFalse);
+  });
+
+  test('scan leaves another profile alone', () async {
+    final lea = DownloadsService(root: root, profileId: _lea);
+    await lea.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_) {},
+    );
+
+    expect(await service.scan(), isEmpty);
+    expect((await lea.scan()).keys, [42]);
+  });
+
+  test('the totals say what a profile holds', () async {
+    final lea = DownloadsService(root: root, profileId: _lea);
+    await service.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_) {},
+    );
+
+    final mine = await service.savedTotals();
+    expect(mine.chapters, 1);
+    // 1 + 2 + 3 bytes of pages, the same total the Downloads tab adds up.
+    expect(mine.bytes, 6);
+
+    final hers = await lea.savedTotals();
+    expect(hers.chapters, 0);
+    expect(hers.bytes, 0);
+  });
+
+  test('removing a profile takes its chapters and nobody else\'s', () async {
+    final lea = DownloadsService(root: root, profileId: _lea);
+    for (final each in [service, lea]) {
+      await each.download(
+        client: _client(_PageAdapter()),
+        chapter: _chapter,
+        onProgress: (_) {},
+      );
+    }
+
+    await lea.removeAll();
+
+    expect((await lea.profileRoot()).existsSync(), isFalse);
+    expect((await service.scan()).keys, [42]);
   });
 }

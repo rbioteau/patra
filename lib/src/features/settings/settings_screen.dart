@@ -200,13 +200,25 @@ class SettingsScreen extends ConsumerWidget {
 /// entered a profile, which means holding a credential on this device.
 ///
 /// It names the person *and* the server, because one server holds several
-/// profiles and it is one of them being removed rather than the address.
+/// profiles and it is one of them being removed rather than the address —
+/// and it names the **saved reading** that goes with them. Those files
+/// belong to this profile alone, so once it is gone nothing on any screen
+/// could reach them or explain them: what is about to be deleted has to be
+/// said while there is still somebody to say it to. A profile holding
+/// nothing saved is told nothing, since a "0 MB" line is a sentence about
+/// an absence.
 Future<void> _confirmForget(
   BuildContext context,
   WidgetRef ref,
   Profile profile,
 ) async {
   final l10n = AppLocalizations.of(context);
+  // The store of the profile being removed, which is not necessarily the one
+  // doing the removing: Settings tidies up every face this device holds,
+  // including one nothing can sign into any more.
+  final downloads = ref.read(profileDownloadsProvider(profile.id));
+  final saved = await downloads.savedTotals();
+  if (!context.mounted) return;
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -215,6 +227,15 @@ Future<void> _confirmForget(
         l10n.forgetProfileConfirm(profile.displayName, profile.host),
         style: PatraText.body(),
       ),
+      content: saved.chapters == 0
+          ? null
+          : Text(
+              l10n.forgetProfileDownloads(
+                saved.chapters,
+                formatBytes(l10n, saved.bytes),
+              ),
+              style: PatraText.metadata(),
+            ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -231,6 +252,12 @@ Future<void> _confirmForget(
     ),
   );
   if (confirmed ?? false) {
+    // The files first: forgetting the profile being read as ends the session
+    // that owns the store, and a deletion asked for after that would be
+    // asking a container on its way out. This is the only path to `forget`,
+    // and has to stay so — a profile removed anywhere else would leave its
+    // chapters on disk with nothing left that could reach or explain them.
+    await downloads.removeAll();
     // That person alone: the others on their server stay, because somebody
     // leaving the household is not the server being forgotten. Removing the
     // profile being read as ends the session, and the redirect then lands on
