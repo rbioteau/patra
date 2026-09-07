@@ -93,7 +93,9 @@ void main() {
   // Secure storage and the image cache both reach for the binding.
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('with no remembered profile, the login form is shown', (tester) async {
+  testWidgets('with no remembered profile, the login form is shown', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
@@ -252,7 +254,10 @@ void main() {
     // a single-profile device has nobody to switch to — so this is what its
     // every start would look like if `atLaunch` did not answer for it.
     await tester.pumpWidget(
-      _app(auth: AuthState(profiles: [_profile]), downloadsRoot: root),
+      _app(
+        auth: AuthState(profiles: [_profile]),
+        downloadsRoot: root,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -445,6 +450,73 @@ void main() {
       expect(find.text('SERVER ADDRESS'), findsNothing);
       expect(find.text('PASSWORD'), findsOneWidget);
       expect(find.text('romain'), findsOneWidget);
+    });
+
+    testWidgets('typing the password there puts the profile back', (
+      tester,
+    ) async {
+      // The other half of the refusal: the form is not a dead end, and what
+      // it earns is a *replacement* key rather than a one-off session — the
+      // next launch must not ask again.
+      mockSecureStorage();
+      // Refuses the stored key, accepts a typed password. Two profiles, so
+      // the device opens on the picker and the refusal is earned by a tap
+      // rather than by the launch.
+      var asked = 0;
+      await tester.pumpWidget(
+        _app(
+          auth: AuthState(profiles: [remembered, other]),
+          signIn:
+              ({
+                required String baseUrl,
+                required String username,
+                required Credential credential,
+                ClientIdentity identity = const ClientIdentity.unknown(),
+              }) async {
+                asked++;
+                if (credential is AuthKeyCredential) {
+                  throw DioException(
+                    requestOptions: RequestOptions(path: '/api/Account/login'),
+                    response: Response(
+                      requestOptions: RequestOptions(
+                        path: '/api/Account/login',
+                      ),
+                      statusCode: 401,
+                    ),
+                    type: DioExceptionType.badResponse,
+                  );
+                }
+                return LoginResult(
+                  username: username,
+                  token: signedToken(1),
+                  apiKey: 'a-brand-new-key',
+                );
+              },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('romain'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('PASSWORD'), findsOneWidget);
+
+      await tester.enterText(
+        find.byType(TextFormField).last,
+        'the-real-password',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(asked, 2, reason: 'the key first, then what was typed');
+      // In, and remembered by the new key rather than the refused one.
+      expect(find.byType(NavigationBar), findsOneWidget);
+      final profile = tester
+          .container()
+          .read(authProvider)
+          .profiles
+          .firstWhere((p) => p.id == remembered.id);
+      expect(profile.apiKey, 'a-brand-new-key');
     });
 
     testWidgets('opens anyway when the server cannot be reached', (
