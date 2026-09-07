@@ -14,6 +14,7 @@ import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../settings/cache_settings.dart';
+import '../../settings/profile_preferences.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/reader_settings_sheet.dart';
@@ -225,10 +226,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final client = _client;
     if (client == null) return null;
     {
+      final url = thumbnail
+          ? client.readerThumbnailUrl(widget.chapterId, page)
+          : client.readerImageUrl(widget.chapterId, page);
       final ImageProvider provider = CachedNetworkImageProvider(
-        thumbnail
-            ? client.readerThumbnailUrl(widget.chapterId, page)
-            : client.readerImageUrl(widget.chapterId, page),
+        url,
+        // Without a key of its own the auth key in the URL files this page
+        // under the profile that fetched it, and the next person on the
+        // tablet downloads the same scan again (`imageCacheKey`).
+        cacheKey: imageCacheKey(url),
         headers: client.imageHeaders,
       );
       // [cacheWidth] belongs to the *decoder*, not to the cache manager.

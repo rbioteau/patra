@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../settings/profile_preferences.dart';
 import '../settings/reading_settings.dart';
 import '../theme.dart';
 import 'direction_icon.dart';

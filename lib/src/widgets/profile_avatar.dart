@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../api/kavita_client.dart';
 import '../auth/session.dart';
 import '../theme.dart';
 
@@ -48,6 +49,7 @@ class ProfileAvatar extends StatelessWidget {
               ? _Initial(profile: profile, size: size, on: color)
               : CachedNetworkImage(
                   imageUrl: url,
+                  cacheKey: imageCacheKey(url),
                   fit: BoxFit.cover,
                   fadeInDuration: const Duration(milliseconds: 150),
                   // Both fall back to the initial rather than to a spinner or

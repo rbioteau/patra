@@ -14,7 +14,7 @@ import 'features/reader/reader_screen.dart';
 import 'features/series/series_detail_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'routes.dart';
-import 'settings/locale_settings.dart';
+import 'settings/profile_preferences.dart';
 import 'theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {

@@ -1,4 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../l10n/generated/app_localizations.dart';
@@ -25,6 +24,13 @@ enum ReadingDirection {
   };
 }
 
+/// The **device's** reading defaults, under the flat keys they have always
+/// been written to.
+///
+/// What a person chooses is theirs and lives in `profile_preferences.dart`;
+/// this is what a profile that has never chosen starts from — which is what
+/// makes a device set before it held profiles keep its settings for
+/// everybody on it.
 class ReadingSettingsStore {
   static const _storage = FlutterSecureStorage();
   static const _key = 'readingDirection';
@@ -44,13 +50,24 @@ class ReadingSettingsStore {
   /// nothing. `save` writes the current name, so the old string dies out.
   static const _legacyNames = {'webtoon': ReadingDirection.verticalScroll};
 
+  /// The direction [name] stands for, reading the legacy names too, or null
+  /// where it stands for none.
+  ///
+  /// Null rather than a default, because the two callers want different
+  /// things from an unrecognised string: the device's own setting falls back
+  /// to left-to-right, while a *profile's* falls back to the device's — and a
+  /// lookup that had already chosen for them could not tell the difference.
+  static ReadingDirection? directionNamed(String? name) {
+    for (final direction in ReadingDirection.values) {
+      if (direction.name == name) return direction;
+    }
+    return _legacyNames[name];
+  }
+
   static Future<ReadingDirection> load() async {
     try {
-      final raw = await _storage.read(key: _key);
-      return ReadingDirection.values.firstWhere(
-        (d) => d.name == raw,
-        orElse: () => _legacyNames[raw] ?? ReadingDirection.leftToRight,
-      );
+      return directionNamed(await _storage.read(key: _key)) ??
+          ReadingDirection.leftToRight;
     } on Exception {
       return ReadingDirection.leftToRight;
     }
@@ -83,46 +100,3 @@ class ReadingSettingsStore {
     }
   }
 }
-
-/// Preference restored before the app started; injected in main().
-final initialReadingDirectionProvider = Provider<ReadingDirection>(
-  (ref) => ReadingDirection.leftToRight,
-);
-
-/// The direction a newly opened chapter starts in. The reader can override it
-/// for the current chapter without changing this.
-class DefaultReadingDirectionNotifier extends Notifier<ReadingDirection> {
-  @override
-  ReadingDirection build() => ref.read(initialReadingDirectionProvider);
-
-  Future<void> set(ReadingDirection direction) async {
-    state = direction;
-    await ReadingSettingsStore.save(direction);
-  }
-}
-
-final defaultReadingDirectionProvider =
-    NotifierProvider<DefaultReadingDirectionNotifier, ReadingDirection>(
-      DefaultReadingDirectionNotifier.new,
-    );
-
-/// Preference restored before the app started; injected in main().
-final initialMagnifyProvider = Provider<bool>((ref) => false);
-
-/// Whether a one-finger drag magnifies the page instead of turning it.
-///
-/// Unlike the reading direction there is no per-chapter override: the
-/// direction is a property of the book, this is a property of the hand.
-class MagnifyNotifier extends Notifier<bool> {
-  @override
-  bool build() => ref.read(initialMagnifyProvider);
-
-  Future<void> set(bool enabled) async {
-    state = enabled;
-    await ReadingSettingsStore.saveMagnify(enabled);
-  }
-}
-
-final magnifyProvider = NotifierProvider<MagnifyNotifier, bool>(
-  MagnifyNotifier.new,
-);

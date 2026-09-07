@@ -1,11 +1,16 @@
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../l10n/generated/app_localizations.dart';
 
-/// The language the app is shown in, when the user would rather not be shown
-/// the one the device is set to.
+/// The **device's** language, under the flat key it has always been written
+/// to — and the one the *gate* is drawn in, since the picker and the sign-in
+/// form stand in front of every session and have nobody to ask.
+///
+/// What a person chooses is theirs and lives in `profile_preferences.dart`;
+/// choosing one moves this too, because there is no screen on which to set
+/// the gate's language and the last choice made here is the only evidence of
+/// what this household reads in.
 ///
 /// `null` means the device decides, which is both the default and a real
 /// choice a person can come back to — not merely the absence of a stored one.
@@ -15,20 +20,9 @@ class LocaleSettingsStore {
   static const _storage = FlutterSecureStorage();
   static const _key = 'appLocale';
 
-  /// Only a language this build actually ships is accepted back. A code stored
-  /// by an older version whose locale has since been dropped resolves to the
-  /// system rather than to a language with no translations behind it.
-  static Locale? _supported(String? code) {
-    if (code == null || code.isEmpty) return null;
-    for (final locale in AppLocalizations.supportedLocales) {
-      if (locale.languageCode == code) return locale;
-    }
-    return null;
-  }
-
   static Future<Locale?> load() async {
     try {
-      return _supported(await _storage.read(key: _key));
+      return supportedLocale(await _storage.read(key: _key));
     } on Exception {
       return null;
     }
@@ -47,23 +41,19 @@ class LocaleSettingsStore {
   }
 }
 
-/// Preference restored before the app started; injected in main().
-final initialLocaleProvider = Provider<Locale?>((ref) => null);
-
-/// The language the app is shown in. Null follows the device.
-class LocaleNotifier extends Notifier<Locale?> {
-  @override
-  Locale? build() => ref.read(initialLocaleProvider);
-
-  Future<void> set(Locale? locale) async {
-    state = locale;
-    await LocaleSettingsStore.save(locale);
+/// The shipped [Locale] [code] names, or null where the build ships none.
+///
+/// Only a language this build actually has is accepted back: a code stored by
+/// an older version whose locale has since been dropped resolves to the
+/// device rather than to a language with no translations behind it. An empty
+/// code is the same answer, which is what "follow the device" is stored as.
+Locale? supportedLocale(String? code) {
+  if (code == null || code.isEmpty) return null;
+  for (final locale in AppLocalizations.supportedLocales) {
+    if (locale.languageCode == code) return locale;
   }
+  return null;
 }
-
-final localeProvider = NotifierProvider<LocaleNotifier, Locale?>(
-  LocaleNotifier.new,
-);
 
 /// What each language calls itself.
 ///
