@@ -196,81 +196,59 @@ void main() {
     expect(dashed, isNotEmpty);
   });
 
-  group('removing a profile', () {
-    /// Long-presses [name] and returns with the confirmation up.
-    Future<void> longPress(WidgetTester tester, String name) async {
-      await tester.longPress(find.text(name));
-      await tester.pumpAndSettle();
-    }
+  testWidgets('removes nothing: entering a profile is all it does', (
+    tester,
+  ) async {
+    // A long press used to remove a profile from here, and that is now in
+    // Settings. The move is the guard: this screen stands in front of every
+    // session and asks for nothing, so a press here could remove anybody's
+    // profile — where Settings can only be reached by somebody holding a
+    // credential on this device.
+    await _pump(tester, [
+      _profile(username: 'romain'),
+      _profile(accountId: 2, username: 'lea'),
+    ]);
 
-    testWidgets('is a long press, and says who it is about', (tester) async {
-      mockSecureStorage();
-      await _pump(tester, [
-        _profile(username: 'romain'),
-        _profile(accountId: 2, username: 'lea'),
-      ]);
+    await tester.longPress(find.text('lea'));
+    await tester.pumpAndSettle();
 
-      await longPress(tester, 'lea');
-      // Both halves: a server holds several profiles, so it is one of them
-      // being removed rather than the address.
-      expect(find.text('Forget lea on kavita.example?'), findsOneWidget);
+    expect(find.textContaining('Forget'), findsNothing);
+    expect(find.text('lea'), findsOneWidget);
+    expect(find.text('romain'), findsOneWidget);
+  });
 
-      await tester.tap(find.text('Forget'));
-      await tester.pumpAndSettle();
+  testWidgets('a sign-in in flight owns the screen', (tester) async {
+    // One face is being entered, and it is the only one the screen answers
+    // for: a second tap must not start a second sign-in, here or on the face
+    // already busy.
+    final entered = <String>[];
+    await _pump(
+      tester,
+      [_profile(username: 'romain'), _profile(accountId: 2, username: 'lea')],
+      // A sign-in that never answers, which is the window being tested: a
+      // real one would either resolve or fail on DNS, and neither is a thing
+      // to hang a test on.
+      signIn:
+          ({
+            required String baseUrl,
+            required String username,
+            required Credential credential,
+            ClientIdentity identity = const ClientIdentity.unknown(),
+          }) {
+            entered.add(username);
+            return Completer<LoginResult>().future;
+          },
+    );
 
-      expect(find.text('lea'), findsNothing);
-      expect(
-        find.text('romain'),
-        findsOneWidget,
-        reason: 'the others on that server stay',
-      );
-    });
+    await tester.tap(find.text('romain'));
+    // Not `pumpAndSettle`: the face being entered wears a spinner, which is
+    // an animation that never settles while the request is in flight.
+    await tester.pump();
+    await tester.tap(find.text('lea'));
+    await tester.tap(find.text('romain'));
+    await tester.pump();
 
-    testWidgets('does nothing until it is confirmed', (tester) async {
-      mockSecureStorage();
-      await _pump(tester, [
-        _profile(username: 'romain'),
-        _profile(accountId: 2, username: 'lea'),
-      ]);
-
-      await longPress(tester, 'lea');
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('lea'), findsOneWidget);
-      expect(find.text('romain'), findsOneWidget);
-    });
-
-    testWidgets('is refused while a face is being entered', (tester) async {
-      // The one guard there is: a sign-in in flight owns the screen, so a
-      // press cannot remove the profile the app is halfway into.
-      mockSecureStorage();
-      await _pump(
-        tester,
-        [_profile(username: 'romain'), _profile(accountId: 2, username: 'lea')],
-        // A sign-in that never answers, which is the window being tested: a
-        // real one would either resolve or fail on DNS, and neither is a
-        // thing to hang a test on.
-        signIn:
-            ({
-              required String baseUrl,
-              required String username,
-              required Credential credential,
-              ClientIdentity identity = const ClientIdentity.unknown(),
-            }) => Completer<LoginResult>().future,
-      );
-
-      await tester.tap(find.text('romain'));
-      await tester.pump();
-
-      // Not `pumpAndSettle`: the face being entered wears a spinner, which
-      // is an animation that never settles while the request is in flight.
-      await tester.longPress(find.text('romain'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.textContaining('Forget romain'), findsNothing);
-    });
+    expect(entered, ['romain']);
   });
 
   testWidgets('offers the launch animation its lockup', (tester) async {

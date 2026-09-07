@@ -28,6 +28,10 @@ import '../../widgets/profile_avatar.dart';
 ///
 /// A device holding one profile never sees this screen; [signedOutLocation]
 /// is where that is decided.
+///
+/// **Entering a profile is all it does.** Removing one is in Settings, which
+/// asks for a credential this screen cannot — see `_confirmForget` there for
+/// why the press that used to be here had to go.
 class ProfilePickerScreen extends ConsumerStatefulWidget {
   const ProfilePickerScreen({super.key});
 
@@ -80,51 +84,6 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
       // Guarded: the router tears this route down on success, and login's 10s
       // connect timeout gives it every chance to do so first.
       if (mounted) setState(() => _entering = null);
-    }
-  }
-
-  /// Removing a profile, from the one screen that lists them all.
-  ///
-  /// Behind a long press rather than a control on the face: a picker is for
-  /// entering profiles, and a delete sitting under everybody's thumb is the
-  /// wrong thing to make easy.
-  ///
-  /// It is **unguarded** all the same, and knowingly so until #12 moves it
-  /// into Settings: this screen is in front of every session, so anyone
-  /// holding the device can remove anyone's profile without a credential.
-  /// Removal from Settings has the property this does not — you have to be
-  /// able to enter a profile before you can remove it. The confirmation is
-  /// the whole of what stands in the way here, so it names the person and
-  /// the server rather than asking "are you sure".
-  Future<void> _forget(Profile profile) async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: patraSurface,
-        title: Text(
-          // Both halves: a server can hold several profiles, and it is one of
-          // them being removed rather than the address.
-          l10n.forgetProfileConfirm(profile.displayName, profile.host),
-          style: PatraText.body(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              l10n.forgetProfile,
-              style: PatraText.body(color: patraDanger),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed ?? false) {
-      await ref.read(authProvider.notifier).forget(profile.id);
     }
   }
 
@@ -190,7 +149,6 @@ class _ProfilePickerScreenState extends ConsumerState<ProfilePickerScreen> {
                               showHost: showHost,
                               busy: profile.id == _entering,
                               onTap: () => _enter(profile),
-                              onLongPress: () => _forget(profile),
                             ),
                           _AddFace(onTap: () => context.push(loginLocation())),
                         ],
@@ -222,7 +180,6 @@ class _Face extends StatelessWidget {
     required this.showHost,
     required this.busy,
     required this.onTap,
-    required this.onLongPress,
   });
 
   final Profile profile;
@@ -235,7 +192,6 @@ class _Face extends StatelessWidget {
   final bool busy;
 
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +212,6 @@ class _Face extends StatelessWidget {
       excludeSemantics: true,
       child: InkWell(
         onTap: busy ? null : onTap,
-        onLongPress: busy ? null : onLongPress,
         borderRadius: BorderRadius.circular(radiusCard),
         child: SizedBox(
           width: _faceWidth,

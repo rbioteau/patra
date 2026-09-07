@@ -114,6 +114,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get forgetProfile => 'Oublier';
 
   @override
+  String get forgetThisProfile => 'Oublier ce profil';
+
+  @override
   String forgetProfileConfirm(String name, String host) {
     return 'Oublier $name sur $host ?';
   }
@@ -163,9 +166,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get scanRequested =>
       'Analyse demandée. Kavita peut prendre un moment — tirez pour rafraîchir.';
-
-  @override
-  String get signOut => 'Se déconnecter';
 
   @override
   String get retry => 'Réessayer';
@@ -415,6 +415,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get serverSectionLabel => 'Serveur';
+
+  @override
+  String get otherProfilesSectionLabel => 'Autres profils sur cet appareil';
 
   @override
   String get switchProfile => 'Changer de profil';

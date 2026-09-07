@@ -10,16 +10,6 @@ import 'package:patra/src/auth/session.dart';
 
 import 'test_support.dart';
 
-/// A JWT for Kavita account [accountId] — three base64url segments, of which
-/// only the middle one is ever read (see `api/account_id.dart`). This is how a
-/// profile learns which account it is: the id is in the token every sign-in
-/// answers with, and nothing has to ask for it.
-String _tokenFor(int accountId, {String signature = 'signature'}) {
-  String seg(Object o) =>
-      base64Url.encode(utf8.encode(jsonEncode(o))).replaceAll('=', '');
-  return '${seg({'alg': 'HS512'})}.${seg({'nameid': '$accountId'})}.$signature';
-}
-
 /// Two people on one server, and one of them again on a second server: the
 /// three profiles it takes to tell an address apart from an account.
 final _romain = Profile(
@@ -27,21 +17,21 @@ final _romain = Profile(
   accountId: 1,
   username: 'romain',
   apiKey: 'key-romain',
-  token: _tokenFor(1),
+  token: signedToken(1),
 );
 final _lea = Profile(
   baseUrl: 'https://a.example',
   accountId: 2,
   username: 'lea',
   apiKey: 'key-lea',
-  token: _tokenFor(2),
+  token: signedToken(2),
 );
 final _romainElsewhere = Profile(
   baseUrl: 'https://b.example',
   accountId: 1,
   username: 'romain',
   apiKey: 'key-b',
-  token: _tokenFor(1),
+  token: signedToken(1),
 );
 
 /// A stand-in for `/api/Account/login` that records what it was asked with.
@@ -96,7 +86,7 @@ class _FakeSignIn {
     if (fails != null) throw fails!;
     return LoginResult(
       username: this.username ?? username,
-      token: token ?? _tokenFor(accountId),
+      token: token ?? signedToken(accountId),
       apiKey: apiKey,
       roles: const ['Login'],
       hasAvatar: hasAvatar,
@@ -295,6 +285,34 @@ void main() {
         isTrue,
         reason: 'every key is kept, so entering any of them is one tap',
       );
+    });
+
+    test('a handover keeps every key and only the reader\'s token', () {
+      // What a rebuilt container is seeded with when the tablet is handed
+      // over (`SessionScope`). Every credential is kept — coming back to a
+      // profile is a tap, never a password — but a JWT belongs to the
+      // session that spent it, and this is the only place one could outlive
+      // it: a resume mints a fresh one from the key, so nothing would ever
+      // spend the one left behind.
+      final handedOver = AuthState(
+        profiles: [_romain, _lea],
+        activeId: _lea.id,
+      ).handedOver;
+
+      expect(handedOver.activeId, _lea.id);
+      expect(handedOver.active?.token, _lea.token);
+      final left = handedOver.profiles.firstWhere((p) => p.id == _romain.id);
+      expect(left.token, isEmpty);
+      expect(left.apiKey, _romain.apiKey);
+    });
+
+    test('a handover to nobody leaves no token at all', () {
+      // The shape a switch really makes: the picker is up, so nobody is
+      // active and there is no session for a token to belong to.
+      final handedOver = AuthState(profiles: [_romain, _lea]).handedOver;
+
+      expect(handedOver.profiles.every((p) => p.token.isEmpty), isTrue);
+      expect(handedOver.profiles.every((p) => p.hasCredential), isTrue);
     });
 
     test('leaves what storage read alone', () {
@@ -572,7 +590,7 @@ void main() {
           password: 'hunter2',
         );
 
-    expect(container.read(sessionProvider)?.token, _tokenFor(1));
+    expect(container.read(sessionProvider)?.token, signedToken(1));
     final written = jsonDecode(storage['profiles']!) as List;
     expect(written.single, {
       'baseUrl': 'https://a.example',

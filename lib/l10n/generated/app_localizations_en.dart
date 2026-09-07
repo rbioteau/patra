@@ -113,6 +113,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get forgetProfile => 'Forget';
 
   @override
+  String get forgetThisProfile => 'Forget this profile';
+
+  @override
   String forgetProfileConfirm(String name, String host) {
     return 'Forget $name on $host?';
   }
@@ -162,9 +165,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get scanRequested =>
       'Scan requested. Kavita may take a while — pull down to refresh.';
-
-  @override
-  String get signOut => 'Sign out';
 
   @override
   String get retry => 'Retry';
@@ -414,6 +414,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverSectionLabel => 'Server';
+
+  @override
+  String get otherProfilesSectionLabel => 'Other profiles on this device';
 
   @override
   String get switchProfile => 'Switch profile';

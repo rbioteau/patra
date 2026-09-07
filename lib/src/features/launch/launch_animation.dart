@@ -1,11 +1,21 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme.dart';
 import '../../widgets/patra_frond.dart';
 import '../../widgets/patra_wordmark.dart';
 import 'launch_composition.dart';
+
+/// Whether the app being built is the one this process launched in, which is
+/// the whole of whether the splash plays.
+///
+/// Overridden to false by `SessionScope` on every container after the first:
+/// entering another profile builds the whole app again, and a handover is not
+/// a launch — without this the frond would unfurl itself for eight seconds
+/// every time somebody was handed the tablet.
+final isLaunchProvider = Provider<bool>((ref) => true);
 
 /// The app's launch animation, from the design handoff's `patra-launch.jsx`.
 ///
@@ -17,11 +27,18 @@ import 'launch_composition.dart';
 /// fade up are the real ones rather than skeletons.
 ///
 /// The splash never returns: it is created once, at app start, and takes
-/// itself out of the tree when it is done. A resume is not a launch.
+/// itself out of the tree when it is done. A resume is not a launch, and
+/// neither is a handover — which builds the whole app again and would
+/// otherwise unfurl the frond a second time ([isLaunchProvider]).
 class LaunchAnimation extends StatefulWidget {
-  const LaunchAnimation({super.key, required this.child});
+  const LaunchAnimation({super.key, required this.child, this.play = true});
 
   final Widget child;
+
+  /// Whether there is a launch to animate. False where the app is being
+  /// built again rather than opened — see [isLaunchProvider] — and the app
+  /// is then handed over bare, with no frame of ink in front of it.
+  final bool play;
 
   @override
   State<LaunchAnimation> createState() => _LaunchAnimationState();
@@ -71,9 +88,22 @@ class _LaunchAnimationState extends State<LaunchAnimation>
   bool _done = false;
   bool _checkedMotion = false;
 
+  /// Whether the controller was ever created. Not `widget.play` read back:
+  /// dispose has to know what this state actually did, not what it was last
+  /// asked to do.
+  bool _played = false;
+
   @override
   void initState() {
     super.initState();
+    if (!widget.play) {
+      // Not `_finish`: there is no frame to set state in yet, and nothing
+      // has started that would need stopping.
+      _done = true;
+      _logoReveal.value = 1;
+      return;
+    }
+    _played = true;
     _controller.addListener(_tick);
     _controller.forward();
   }
@@ -158,7 +188,11 @@ class _LaunchAnimationState extends State<LaunchAnimation>
 
   @override
   void dispose() {
-    _controller.dispose();
+    // Only where there was something to play: a `late final` runs its
+    // initialiser at the first *read*, and an AnimationController asks its
+    // vsync for a ticker — which asks the element for its TickerMode, and
+    // this one is on its way out of the tree.
+    if (_played) _controller.dispose();
     _logoReveal.dispose();
     super.dispose();
   }

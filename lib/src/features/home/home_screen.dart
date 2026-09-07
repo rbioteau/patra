@@ -12,6 +12,7 @@ import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/patra_frond.dart';
 import '../../widgets/patra_wordmark.dart';
+import '../../widgets/profile_avatar.dart';
 import '../launch/launch_animation.dart';
 import '../library/library_screen.dart';
 import '../series/series_detail_screen.dart';
@@ -124,7 +125,10 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const _Wordmark(),
-        actions: const [OfflineIndicator()],
+        // The face last, on the very edge: being offline is a passing
+        // status, and this is the one piece of furniture that says whose
+        // app this is.
+        actions: const [OfflineIndicator(), _ProfileFace()],
       ),
       body: SafeArea(
         top: false,
@@ -192,6 +196,46 @@ class _Wordmark extends StatelessWidget {
         SizedBox(width: _gap),
         PatraWordmark(size: _size),
       ],
+    );
+  }
+}
+
+/// Whoever is reading, and the way to hand the app over.
+///
+/// It does exactly one thing: it opens the picker. Switching keeps every
+/// credential, so what it costs the person leaving is a tap to come back and
+/// never a password; the other verb, removing a profile, is in Settings.
+///
+/// **It is drawn on a device holding one profile too**, and that is not the
+/// tap `AuthState.atLaunch` exists to spare — that rule is about a cold
+/// start, about being asked a question with one answer rather than about
+/// answering one deliberately. With no sign-out button left, this face is
+/// the *only* way a one-profile device ever becomes a two-profile device:
+/// the add slot lives on the picker, and this is the door to it.
+/// `signedOutLocation` is where a lone profile landing on the picker is
+/// already reasoned about.
+class _ProfileFace extends ConsumerWidget {
+  const _ProfileFace();
+
+  /// Small enough to sit in a 56pt bar beside the wordmark, big enough for a
+  /// letter to be read at arm's length. An IconButton's own 48pt box is what
+  /// makes it a target.
+  static const _size = 30.0;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final session = ref.watch(sessionProvider);
+    // Nothing to draw with no session: this bar is behind the redirect, but
+    // it can be built once more on the way out of one.
+    if (session == null) return const SizedBox.shrink();
+
+    return IconButton(
+      // The tooltip is the semantics label too, which is what a face on its
+      // own says to nobody.
+      tooltip: l10n.switchProfile,
+      icon: ProfileAvatar(profile: session, size: _size),
+      onPressed: () => ref.read(authProvider.notifier).switchProfile(),
     );
   }
 }
