@@ -157,10 +157,52 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    // A blank form: the address is asked for, and the name went with it —
-    // a username from another server names nobody.
+    // The field appears holding what was assumed, and the name stays: the
+    // way out takes nothing away, so there is nothing to go back from. A
+    // mistyped tap must not cost the one address this device remembers.
     expect(find.text('SERVER ADDRESS'), findsOneWidget);
-    expect(find.text('lea'), findsNothing);
+    expect(find.text('https://a.example'), findsOneWidget);
+    expect(find.text('lea'), findsOneWidget);
+  });
+
+  testWidgets('and the way out really reaches another server', (tester) async {
+    String? signedInTo;
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(
+          profiles: [Profile(baseUrl: 'https://a.example', username: 'lea')],
+        ),
+        signIn:
+            ({
+              required String baseUrl,
+              required String username,
+              required Credential credential,
+              ClientIdentity identity = const ClientIdentity.unknown(),
+            }) async {
+              signedInTo = '$username@$baseUrl';
+              throw DioException(
+                requestOptions: RequestOptions(path: '/api/Account/login'),
+                type: DioExceptionType.connectionError,
+              );
+            },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Use another server'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'https://mine.example');
+    await tester.enterText(fields.at(1), 'romain');
+    await tester.enterText(fields.at(2), 'hunter2');
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+
+    // Not the assumed address, and not somebody else's name: the whole point
+    // of the door is that it leads somewhere.
+    expect(signedInTo, 'romain@https://mine.example');
   });
 
   testWidgets('a device with several profiles opens on the picker', (

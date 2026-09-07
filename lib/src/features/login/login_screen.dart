@@ -45,6 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _serverController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _serverFocus = FocusNode();
   final _usernameFocus = FocusNode();
   final _passwordFocus = FocusNode();
 
@@ -116,32 +117,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _serverController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _serverFocus.dispose();
     _usernameFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
   }
 
-  /// Empties the form of everything it assumed, address field included.
+  /// Hands the assumed address back to the person, to keep or to overwrite.
   ///
-  /// Small, and the only way out of a dead end. This screen assumes a server
-  /// whenever it can, and on the path that assumes the most — the last
-  /// remaining profile, signed out, which lands here prefilled — the device
-  /// would otherwise be that person's for good: no address to change, no
-  /// picker behind it to go back to, and no slot to add anybody. The list
-  /// this screen replaced always carried one.
+  /// The only way out of a dead end. This screen assumes a server whenever it
+  /// can, and on the path that assumes the most — the last remaining profile,
+  /// signed out, which lands here prefilled — the device would otherwise be
+  /// that person's for good: no address to change, no picker behind it to go
+  /// back to, and no slot to add anybody. The list this screen replaced
+  /// always carried one.
   ///
-  /// The name goes with the address rather than staying behind it: a
-  /// username belongs to the server that issued it, so keeping one while
-  /// changing the other names nobody.
+  /// It **takes nothing away**, which is what makes it a door rather than a
+  /// one-way one: the field appears holding the address that was assumed, and
+  /// the name beside it stays. There is no going back from here because there
+  /// is nothing to go back to — leave the fields alone and this is the form
+  /// it was a moment ago, with one more of it visible. Clearing them instead
+  /// would have made a mistyped tap cost the very address the device was
+  /// remembering *for* the person, which on this path is the only one it has.
+  ///
+  /// The text is selected rather than merely focused, so typing replaces the
+  /// address that is there — the person asked for another server, and should
+  /// not have to clear this one first.
   void _askForServer() {
-    _serverController.clear();
-    _usernameController.clear();
     setState(() {
       _serverIsKnown = false;
       _error = null;
     });
+    _serverController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _serverController.text.length,
+    );
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _usernameFocus.unfocus(),
+      (_) => _serverFocus.requestFocus(),
     );
   }
 
@@ -251,6 +263,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               label: l10n.serverAddress,
               child: TextFormField(
                 controller: _serverController,
+                focusNode: _serverFocus,
                 decoration: InputDecoration(hintText: l10n.serverAddressHint),
                 keyboardType: TextInputType.url,
                 autocorrect: false,
@@ -326,7 +339,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           // wrong one. Offered wherever anything was assumed — including
           // while signing a remembered profile back in, which is the one
           // path with no picker behind it and so the one that would strand a
-          // device on somebody else's server.
+          // device on somebody else's server. It only ever reveals the
+          // field, so there is nothing to offer the way back from.
           if (_serverIsKnown) ...[
             const SizedBox(height: 6),
             Center(
