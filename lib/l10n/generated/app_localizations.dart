@@ -662,6 +662,24 @@ abstract class AppLocalizations {
   /// **'Server unreachable — offline mode. Saved chapters remain readable.'**
   String get offlineBanner;
 
+  /// Home's empty state offline, when the device holds saved chapters. Deliberately NOT the offlineBanner sentence: that one belongs to the indicator in the app bar and must not reappear over content (test/offline_indicator_test.dart). This is an empty state — Home has nothing to draw at all — pointing at the one tab that does.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is out of reach. What you saved is still here.'**
+  String get homeOfflineWithSaved;
+
+  /// Home's empty state offline when there is nothing saved either, so there is nowhere to send the reader
+  ///
+  /// In en, this message translates to:
+  /// **'The server is out of reach, and nothing is saved on this device yet.'**
+  String get homeOfflineNothingSaved;
+
+  /// Button on Home's offline empty state, opening the Downloads tab
+  ///
+  /// In en, this message translates to:
+  /// **'See your downloads'**
+  String get seeDownloads;
+
   /// No description provided for @storageSectionLabel.
   ///
   /// In en, this message translates to:

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../downloads/downloads_provider.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
 import '../../theme.dart';
@@ -122,6 +123,25 @@ class HomeScreen extends ConsumerWidget {
         (onDeck.value?.isEmpty ?? false) &&
         (libraries.value?.isEmpty ?? false);
 
+    // Nothing arrived and nothing is still coming: every shelf has resolved,
+    // and resolved into a failure. Offline that is the ordinary state of a
+    // device on a train rather than a fault — but a screen with nothing
+    // whatever on it explains nothing, so it says so and names the one tab
+    // that still has something.
+    //
+    // This is **not** the banner this app removed. That one said the
+    // indicator's own sentence across the top of content that existed, on
+    // three screens at once; this is an empty state, drawn only when there is
+    // no content at all, in words of its own — which is what keeps the
+    // indicator's sentence unique to the indicator
+    // (`test/offline_indicator_test.dart`).
+    final offline = ref.watch(offlineProvider);
+    final nothingCameBack =
+        hero == null &&
+        started.isResolvedFailure &&
+        onDeck.isResolvedFailure &&
+        libraries.isResolvedFailure;
+
     return Scaffold(
       appBar: AppBar(
         title: const _Wordmark(),
@@ -146,6 +166,7 @@ class HomeScreen extends ConsumerWidget {
                     style: PatraText.body(color: patraTextMuted),
                   ),
                 ),
+              if (nothingCameBack && offline) const _OfflineHome(),
               if (hero != null)
                 ContinueHero(data: hero, onReturn: () => _refresh(ref)),
               // On deck is the only list. `currently-reading` still runs, but
@@ -161,6 +182,75 @@ class HomeScreen extends ConsumerWidget {
               _LibrariesSection(libraries: libraries),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What Home says when the server is out of reach and there is nothing to
+/// draw.
+///
+/// The way out is drawn in `patraOffline`, because that is what teal means
+/// in this app: downloads and offline. Never the accent, which is reading progress and
+/// identity.
+///
+/// The way out is offered **only where it leads somewhere** — a device with
+/// nothing saved is told plainly that there is nothing saved, rather than
+/// handed a button onto an empty tab. That is the whole reason this reads
+/// the downloads at all.
+class _OfflineHome extends ConsumerWidget {
+  const _OfflineHome();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final saved = ref.watch(downloadsProvider).value?.saved.isNotEmpty ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: gutter,
+        vertical: sectionGap * 1.5,
+      ),
+      // One stop for a screen reader: the sentence and the way out are one
+      // thing to hear, not two.
+      child: MergeSemantics(
+        child: Column(
+          children: [
+            // No icon. The bar already carries the struck-through cloud, and
+            // a second one under it is the same status said twice; Home's
+            // other empty state is words alone for the same reason. The
+            // button below keeps a glyph because it is about where it goes,
+            // not about what has happened.
+            Text(
+              saved ? l10n.homeOfflineWithSaved : l10n.homeOfflineNothingSaved,
+              textAlign: TextAlign.center,
+              style: PatraText.body(color: patraTextMuted),
+            ),
+            if (saved) ...[
+              const SizedBox(height: 20),
+              ConstrainedBox(
+                // A button given a whole screen to fill stops reading as a
+                // button, which is the rule the resume and sign-out buttons
+                // already follow.
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.go('/downloads'),
+                    icon: const Icon(Icons.download_outlined, size: 18),
+                    label: Text(l10n.seeDownloads),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: patraOffline,
+                      side: BorderSide(
+                        color: patraOffline.withValues(alpha: .45),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

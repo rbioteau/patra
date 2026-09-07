@@ -389,6 +389,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Server unreachable — offline mode. Saved chapters remain readable.';
 
   @override
+  String get homeOfflineWithSaved =>
+      'The server is out of reach. What you saved is still here.';
+
+  @override
+  String get homeOfflineNothingSaved =>
+      'The server is out of reach, and nothing is saved on this device yet.';
+
+  @override
+  String get seeDownloads => 'See your downloads';
+
+  @override
   String get storageSectionLabel => 'Storage';
 
   @override

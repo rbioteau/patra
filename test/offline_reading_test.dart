@@ -201,13 +201,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(Skeleton), findsNothing);
-    // And what says so is the bar, not the content. A paragraph over the
-    // shelves is what this app deliberately stopped doing: it pushed them
-    // down, said the same sentence on three screens at once, and was as loud
-    // on the twentieth glance as on the first. `offline_indicator_test.dart`
-    // is where that rule lives.
+    // Still the bar that carries the *status*: the indicator's own sentence
+    // must not reappear over the content, which is the rule
+    // `offline_indicator_test.dart` keeps.
     expect(find.byType(OfflineIndicator), findsOneWidget);
     expect(find.text(_offlineSentence), findsNothing);
+    // But a screen with nothing on it explains nothing, and this device has
+    // nothing saved either — so it says that, and offers no way out it
+    // cannot honour.
+    expect(
+      find.text(
+        'The server is out of reach, and nothing is saved on this device yet.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('See your downloads'), findsNothing);
+  });
+
+  testWidgets('an empty home offline points at what is still readable', (
+    tester,
+  ) async {
+    // The empty state is not the banner this app removed. That one said the
+    // same sentence over content that existed, on every screen at once; this
+    // is Home having nothing whatever to draw, naming the one tab that does
+    // — and it is only offered because there is really something there.
+    final root = _room(tester);
+    await saveChapterFixture(
+      root,
+      _romain.id,
+      chapterId: 42,
+      seriesName: 'Blame!',
+      title: 'Volume 1',
+      pages: 3,
+    );
+    await tester.pumpWidget(_app(root, _UnreachableAdapter()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('The server is out of reach. What you saved is still here.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('See your downloads'));
+    await tester.pumpAndSettle();
+
+    // And it really is the Downloads tab, with the chapter on it.
+    expect(find.text('Blame!'), findsOneWidget);
+    expect(find.text('Volume 1'), findsOneWidget);
   });
 
   testWidgets('the library says it is offline instead of failing', (
