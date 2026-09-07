@@ -35,6 +35,7 @@ class LoginResult {
     required this.token,
     required this.apiKey,
     this.roles = const [],
+    this.ageRestricted = false,
     this.hasAvatar = false,
     this.color = '',
   });
@@ -53,6 +54,20 @@ class LoginResult {
 
   /// Kavita's roles for this account, as `/api/Account/login` returns them.
   final List<String> roles;
+
+  /// Whether the server limits what this account may open.
+  ///
+  /// Kavita keeps an `AgeRestrictionDto` per account, and `NotApplicable`
+  /// (-1) is what it means by no restriction at all — its own filters return
+  /// the query untouched on that value. Anything else is a rating this
+  /// account is held below.
+  ///
+  /// Read because it decides who the app offers a **lock** to: the protection
+  /// a restricted account has is the server's, and it does nothing once that
+  /// person is reading inside somebody else's session (ADR-0003). A response
+  /// that carries no restriction at all reads as unrestricted, which is the
+  /// safe direction — it costs a suggestion nobody has to take.
+  final bool ageRestricted;
 
   /// Whether Kavita holds an avatar for this account.
   ///
@@ -88,9 +103,20 @@ class LoginResult {
       for (final role in json['roles'] as List<dynamic>? ?? const [])
         if (role is String) role,
     ],
+    ageRestricted: _isRestricted(json['ageRestriction']),
     hasAvatar: (json['coverImage'] as String? ?? '').isNotEmpty,
     color: json['primaryColor'] as String? ?? '',
   );
+
+  /// Kavita's `AgeRating.NotApplicable`, the value that means "no
+  /// restriction". Every other member of that enum is a ceiling.
+  static const _noAgeRestriction = -1;
+
+  static bool _isRestricted(Object? restriction) {
+    if (restriction is! Map) return false;
+    final rating = restriction['ageRating'];
+    return rating is int && rating != _noAgeRestriction;
+  }
 }
 
 /// Kavita's `LibraryType`. The values are the wire format, so they are pinned.

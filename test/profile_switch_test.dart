@@ -100,7 +100,7 @@ Future<LoginResult> _signIn({
 /// thing under test: these are about what a switch leaves behind.
 Widget _app({required List<Profile> profiles, required Directory root}) {
   return SessionScope(
-    auth: AuthState(profiles: profiles).atLaunch,
+    auth: AuthState(profiles: profiles).atLaunch(),
     overrides: [
       signInProvider.overrideWithValue(_signIn),
       downloadsRootProvider.overrideWithValue(root),

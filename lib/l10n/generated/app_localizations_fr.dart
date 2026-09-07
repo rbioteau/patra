@@ -445,6 +445,51 @@ class AppLocalizationsFr extends AppLocalizations {
   String get switchProfile => 'Changer de profil';
 
   @override
+  String get profileLock => 'Verrouiller ce profil';
+
+  @override
+  String get profileLockExplained =>
+      'Un code empêche les personnes avec qui vous partagez cet appareil d\'entrer dans votre profil. Ce n\'est pas une protection en cas de perte ou de vol : ce qui est enregistré ici reste lisible sur un appareil perdu.';
+
+  @override
+  String get profileLockSuggested =>
+      'Utile sur un appareil partagé : rien sur le serveur ne limite ce profil.';
+
+  @override
+  String get profileLockChange => 'Changer le code';
+
+  @override
+  String get profileLockChoose => 'Choisissez un code';
+
+  @override
+  String get profileLockRepeat => 'Saisissez-le à nouveau';
+
+  @override
+  String get profileLockMismatch => 'Les deux codes sont différents.';
+
+  @override
+  String profileLockEnterFor(String name) {
+    return 'Saisissez le code de $name';
+  }
+
+  @override
+  String get profileLockWrong => 'Code incorrect.';
+
+  @override
+  String get profileLockUseBiometrics => 'Déverrouiller sans le code';
+
+  @override
+  String profileLockBiometricReason(String name) {
+    return 'Déverrouiller le profil de $name';
+  }
+
+  @override
+  String get profileLockBackspace => 'Effacer';
+
+  @override
+  String get profileLockedBadge => 'Verrouillé';
+
+  @override
   String get serverOnline => 'Connecté';
 
   @override

@@ -8,6 +8,14 @@
          asserts it is in the bundle instead. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- The prompt in front of a locked profile. Declared rather than left to
+         the plugin's own manifest merge so it is readable here beside the one
+         other permission this app asks for; it is granted at install and is
+         never prompted for. Without a sensor or an enrolment the API simply
+         reports that it cannot be used, which is the ordinary case and not an
+         error — the PIN is what a profile is really locked with. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+
     <application
         android:label="Patra"
         android:name="${applicationName}"

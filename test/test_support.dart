@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/lock/biometrics.dart';
+import 'package:patra/src/lock/profile_lock.dart';
 
 /// Points path_provider at a temp directory for the duration of a test.
 ///
@@ -115,4 +117,64 @@ Future<SavedChapter> saveChapterFixture(
   }
   File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(chapter.toJson()));
   return chapter;
+}
+
+/// The lock module's platform dependency, standing in for the keychain: one
+/// value in, one value out, and a test can read back exactly what was
+/// written. This is the seam the module is designed around — its rules are
+/// exercised through it rather than through a plugin that has nothing behind
+/// it on a test binding.
+class MemoryLockVault implements LockVault {
+  MemoryLockVault([this.value]);
+
+  String? value;
+  int writes = 0;
+  int clears = 0;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String value) async {
+    writes++;
+    this.value = value;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    value = null;
+  }
+}
+
+/// A loaded store holding a lock per entry of [pins], on a vault of its own.
+Future<ProfileLockStore> lockStore([Map<String, String> pins = const {}]) async {
+  final store = ProfileLockStore(vault: MemoryLockVault());
+  for (final entry in pins.entries) {
+    await store.set(entry.key, entry.value);
+  }
+  return store;
+}
+
+/// A device that offers biometrics, or does not, and recognises whoever asks,
+/// or does not — the four cases the unlock surface has to answer for, none of
+/// which a test binding can produce for itself.
+class FakeBiometrics implements Biometrics {
+  FakeBiometrics({this.offered = false, this.recognises = false});
+
+  final bool offered;
+  final bool recognises;
+
+  /// How many times the OS prompt was asked for, so a test can tell "the
+  /// prompt was never shown" from "it was shown and refused".
+  int prompts = 0;
+
+  @override
+  Future<bool> available() async => offered;
+
+  @override
+  Future<bool> prompt(String reason) async {
+    prompts++;
+    return recognises;
+  }
 }

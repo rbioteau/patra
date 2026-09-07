@@ -28,6 +28,13 @@
 	     HTTP, which is no encryption at all. Without this key App Store
 	     Connect holds every single build for a manual export-compliance
 	     answer before it can reach a tester. -->
+	<!-- Shown by iOS the first time Patra asks Face ID to unlock a profile.
+	     Required: without it the system kills the app rather than refusing
+	     the prompt. It says what the recognition is for and claims nothing
+	     more — a profile lock keeps the people who share this device apart,
+	     and is not protection for a device that has been lost. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID unlocks your profile, so the people you share this device with stay out of it.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<!-- A self-hosted Kavita is usually a bare IP on the LAN with no

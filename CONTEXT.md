@@ -62,6 +62,14 @@ _Avoid_: sign out, log out, change user
 Forgetting a profile: the device drops it and its key, and the others on its server stay. The other of the two verbs, and it lives in Settings — where somebody has had to enter *a* profile before they can remove *any* of them, which is the credential the [[Picker]] cannot ask for.
 _Avoid_: delete, sign out, forget the server
 
+**Lock**:
+A PIN in front of a profile, asked before it is entered — on this device, so it is asked offline too. What it keeps out is the other people who share the device; it is not protection for a device that has been lost, and no copy about it may suggest it is. A profile has one or it does not, and the app suggests one to a profile the server restricts nothing about — an administrator among them whatever rating is set on it, since an admin can lift their own — and never to a restricted one.
+_Avoid_: passcode, parental control, kids mode, password (that is the server's)
+
+**PIN**:
+The four digits a lock is made of, and the only thing that opens one. Where the device offers to recognise its owner that is asked first, and the PIN is what it falls back to — never the other way round, and never the device's own lock-screen code, which on a shared tablet everybody already knows.
+_Avoid_: code (unqualified), passcode, password
+
 **Handover**:
 What a switch followed by somebody else's arrival amounts to: the app is built again on a container of its own, so nothing a provider was holding for the previous person can reach the next one. It is not a launch — the splash does not play — and it is not a resume either.
 _Avoid_: restart, reload, refresh
@@ -178,11 +186,13 @@ The French vocabulary is fixed, and it is not a translator's choice: it matches 
 | specials  | hors-série   |
 | storyline | arc narratif |
 
-Two more are fixed by choice rather than by that test, because they name the app's own furniture rather than a part of a series:
+Four more are fixed by choice rather than by that test, because they name the app's own furniture rather than a part of a series:
 
 | English | French   |
 | ------- | -------- |
 | profile | profil   |
 | server  | serveur  |
+| lock    | verrou   |
+| PIN     | code     |
 
-*Profil* over *compte*, for the same reason the English term avoids "account": on a picker showing faces, the word has to name a person and not a credential.
+*Profil* over *compte*, for the same reason the English term avoids "account": on a picker showing faces, the word has to name a person and not a credential. *Code* over *code PIN*, which is a pleonasm French does not need — and never *mot de passe*, which is what a server asks for and what this deliberately is not.

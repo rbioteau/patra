@@ -6,12 +6,14 @@ import '../../auth/session.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../format.dart';
+import '../../lock/profile_lock.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/locale_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
 import '../../widgets/profile_avatar.dart';
+import '../../widgets/profile_lock_sheet.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import '../../widgets/patra_wordmark.dart';
 
@@ -41,6 +43,7 @@ class SettingsScreen extends ConsumerWidget {
                 actionLabel: l10n.switchProfile,
                 onTap: () => ref.read(authProvider.notifier).switchProfile(),
               ),
+            if (session != null) _ProfileLockRow(profile: session),
             const _OtherProfiles(),
 
             _Section(label: l10n.generalSectionLabel),
@@ -252,6 +255,11 @@ Future<void> _confirmForget(
     ),
   );
   if (confirmed ?? false) {
+    // The lock goes with the profile, before the profile does. One that
+    // outlived it would sit in the keychain pointing at nobody — and would
+    // lock this same person out on the day they sign back in, behind a PIN
+    // nothing remembers asking them to choose.
+    await ref.read(profileLocksProvider.notifier).clear(profile.id);
     // The files first: forgetting the profile being read as ends the session
     // that owns the store, and a deletion asked for after that would be
     // asking a container on its way out. This is the only path to `forget`,
@@ -399,6 +407,115 @@ class _ForgetProfile extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The PIN in front of the profile being read as.
+///
+/// A switch rather than a row that opens a menu, because there are two states
+/// and the third thing a person might want — a different PIN — is a line of
+/// its own underneath rather than a mode of the same control.
+///
+/// It lives here and not on the picker for the same reason removing a profile
+/// does: the picker stands in front of every session and asks for nothing, so
+/// a lock that could be set or taken off from there would be one anybody
+/// holding the device could take off. Reaching Settings means having got
+/// past this lock already, which is also why changing or clearing it does not
+/// ask for the current PIN a second time.
+///
+/// **Only the profile being read as**, which is the one place Settings does
+/// *not* manage every remembered face — and the asymmetry is the whole point.
+/// A lock is chosen by the person it stands in front of: setting one on
+/// somebody else's face would shut them out behind a PIN nobody told them,
+/// and clearing one would be taking their lock off for them. Removing a
+/// profile stays the household-wide verb it was, and takes that person's
+/// lock with it.
+class _ProfileLockRow extends ConsumerWidget {
+  const _ProfileLockRow({required this.profile});
+
+  final Profile profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final locked = ref.watch(profileLocksProvider).containsKey(profile.id);
+
+    Future<void> change(bool on) async {
+      if (!on) {
+        await ref.read(profileLocksProvider.notifier).clear(profile.id);
+        return;
+      }
+      // Nothing is read back: the switch draws the lock itself, watched
+      // above, so a PIN sheet backed out of leaves the profile unlocked and
+      // the switch where it was.
+      await chooseProfilePin(context, profile);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SwitchRow(
+          icon: Icon(
+            locked ? Icons.lock_outline : Icons.lock_open_outlined,
+            size: 18,
+            color: patraAccent,
+          ),
+          title: l10n.profileLock,
+          // Says what it does *and* what it is not. The auth key this device
+          // keeps for the profile is a whole Kavita account and only its
+          // owner can rotate one (ADR-0004), so a lock that let anybody read
+          // it as protection for a lost device would be a lie the app told.
+          subtitle: l10n.profileLockExplained,
+          value: locked,
+          onChanged: change,
+        ),
+        if (locked)
+          _UnderRow(
+            child: InkWell(
+              onTap: () => chooseProfilePin(context, profile),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  l10n.profileLockChange,
+                  style: PatraText.metadata(color: patraAccent),
+                ),
+              ),
+            ),
+          )
+        // Suggested to a profile the server holds back from nothing — an
+        // administrator counted among them whatever rating is set on it,
+        // since an admin can edit any account's restriction including their
+        // own. **Never** to a restricted one: that account is already
+        // limited by the server, and what its restriction cannot do is
+        // anything at all once its owner is reading inside somebody else's
+        // session (ADR-0003).
+        else if (suggestsLock(profile))
+          _UnderRow(
+            child: Text(
+              l10n.profileLockSuggested,
+              style: PatraText.metadata(color: patraAccent),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A line that belongs to the row above it: indented past that row's icon so
+/// it reads as part of it rather than as a row of its own.
+class _UnderRow extends StatelessWidget {
+  const _UnderRow({required this.child});
+
+  final Widget child;
+
+  /// The gutter plus the width a [_SwitchRow] gives its icon and the gap
+  /// after it, so this line starts where that row's text does.
+  static const _indent = gutter + 36;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(_indent, 0, gutter, 10),
+    child: child,
+  );
 }
 
 /// A setting that is simply on or off, with a line saying what turning it on

@@ -64,7 +64,7 @@ Future<LoginResult> _signIn({
 );
 
 Widget _app(Directory root, _UnreachableAdapter adapter) => SessionScope(
-  auth: AuthState(profiles: _profiles).atLaunch,
+  auth: AuthState(profiles: _profiles).atLaunch(),
   overrides: [
     signInProvider.overrideWithValue(_signIn),
     downloadsRootProvider.overrideWithValue(root),

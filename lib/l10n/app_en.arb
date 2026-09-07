@@ -410,6 +410,52 @@
     "description": "Settings section heading over the remembered profiles that are not the one being read as; each can be removed without being signed into"
   },
   "switchProfile": "Switch profile",
+  "profileLock": "Lock this profile",
+  "@profileLock": {
+    "description": "Title of the settings row that gives the active profile a PIN"
+  },
+  "profileLockExplained": "A PIN keeps the people you share this device with out of your profile. It is not protection for a lost or stolen device: what is stored here can still be read off one.",
+  "@profileLockExplained": {
+    "description": "What turning the profile lock on does, and the one thing it must never be taken to mean. The auth key each profile keeps is a whole Kavita account and only its owner can rotate it (ADR-0004), so the second sentence is not modesty \u2014 it is the fact"
+  },
+  "profileLockSuggested": "Worth doing on a shared device: nothing on the server holds this profile back from anything.",
+  "@profileLockSuggested": {
+    "description": "Shown under the lock row only for a profile the server puts no age restriction on, or an administrator. A restricted profile is never told this: the server already holds it back, and a lock on it would protect nothing (ADR-0003)"
+  },
+  "profileLockChange": "Change the PIN",
+  "profileLockChoose": "Choose a PIN",
+  "@profileLockChoose": {
+    "description": "Heading of the sheet that sets a profile's PIN"
+  },
+  "profileLockRepeat": "Enter it again",
+  "@profileLockRepeat": {
+    "description": "Heading of the second step of setting a PIN"
+  },
+  "profileLockMismatch": "Those two PINs are different.",
+  "profileLockEnterFor": "Enter the PIN for {name}",
+  "@profileLockEnterFor": {
+    "description": "Heading of the sheet asking for a locked profile's PIN before it is entered",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "profileLockWrong": "Wrong PIN.",
+  "profileLockUseBiometrics": "Unlock without the PIN",
+  "@profileLockUseBiometrics": {
+    "description": "Button that asks the device to recognise its owner instead. Worded for neither a face nor a fingerprint: which one the device offers is not knowable from here"
+  },
+  "profileLockBiometricReason": "Unlock {name}'s profile",
+  "@profileLockBiometricReason": {
+    "description": "What the operating system's own biometric prompt says it is for",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "profileLockBackspace": "Delete",
+  "profileLockedBadge": "Locked",
+  "@profileLockedBadge": {
+    "description": "Said under a face on the picker, so the cost of tapping it is known before it is tapped"
+  },
   "serverOnline": "Connected",
   "@serverOnline": {
     "description": "Accessible label for the reachability dot on the settings server card"

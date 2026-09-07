@@ -746,6 +746,84 @@ abstract class AppLocalizations {
   /// **'Switch profile'**
   String get switchProfile;
 
+  /// Title of the settings row that gives the active profile a PIN
+  ///
+  /// In en, this message translates to:
+  /// **'Lock this profile'**
+  String get profileLock;
+
+  /// What turning the profile lock on does, and the one thing it must never be taken to mean. The auth key each profile keeps is a whole Kavita account and only its owner can rotate it (ADR-0004), so the second sentence is not modesty — it is the fact
+  ///
+  /// In en, this message translates to:
+  /// **'A PIN keeps the people you share this device with out of your profile. It is not protection for a lost or stolen device: what is stored here can still be read off one.'**
+  String get profileLockExplained;
+
+  /// Shown under the lock row only for a profile the server puts no age restriction on, or an administrator. A restricted profile is never told this: the server already holds it back, and a lock on it would protect nothing (ADR-0003)
+  ///
+  /// In en, this message translates to:
+  /// **'Worth doing on a shared device: nothing on the server holds this profile back from anything.'**
+  String get profileLockSuggested;
+
+  /// No description provided for @profileLockChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the PIN'**
+  String get profileLockChange;
+
+  /// Heading of the sheet that sets a profile's PIN
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a PIN'**
+  String get profileLockChoose;
+
+  /// Heading of the second step of setting a PIN
+  ///
+  /// In en, this message translates to:
+  /// **'Enter it again'**
+  String get profileLockRepeat;
+
+  /// No description provided for @profileLockMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Those two PINs are different.'**
+  String get profileLockMismatch;
+
+  /// Heading of the sheet asking for a locked profile's PIN before it is entered
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the PIN for {name}'**
+  String profileLockEnterFor(String name);
+
+  /// No description provided for @profileLockWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN.'**
+  String get profileLockWrong;
+
+  /// Button that asks the device to recognise its owner instead. Worded for neither a face nor a fingerprint: which one the device offers is not knowable from here
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock without the PIN'**
+  String get profileLockUseBiometrics;
+
+  /// What the operating system's own biometric prompt says it is for
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock {name}\'s profile'**
+  String profileLockBiometricReason(String name);
+
+  /// No description provided for @profileLockBackspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get profileLockBackspace;
+
+  /// Said under a face on the picker, so the cost of tapping it is known before it is tapped
+  ///
+  /// In en, this message translates to:
+  /// **'Locked'**
+  String get profileLockedBadge;
+
   /// Accessible label for the reachability dot on the settings server card
   ///
   /// In en, this message translates to:

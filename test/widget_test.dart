@@ -79,7 +79,7 @@ Widget _app({
     overrides: [
       // Through `atLaunch`, as main() does: these tests say what the device
       // remembered, and the app answers with the screen that opens on it.
-      initialAuthStateProvider.overrideWithValue(auth.atLaunch),
+      initialAuthStateProvider.overrideWithValue(auth.atLaunch()),
       kavitaClientProvider.overrideWithValue(client),
       if (signIn != null) signInProvider.overrideWithValue(signIn),
       if (downloadsRoot != null)

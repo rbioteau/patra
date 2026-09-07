@@ -41,6 +41,7 @@ class Profile {
     this.apiKey = '',
     this.token = '',
     this.isAdmin = false,
+    this.ageRestricted = false,
     this.hasAvatar = false,
     this.color = '',
   });
@@ -85,6 +86,16 @@ class Profile {
   /// false until the next one — which costs an admin a button, and never
   /// offers a non-admin one that could only fail.
   final bool isAdmin;
+
+  /// Whether the server limits what this account may open, as the last
+  /// sign-in reported it.
+  ///
+  /// Persisted for the same reason [isAdmin] is, and as old as the last
+  /// sign-in for the same reason. What reads it is the **lock** suggestion
+  /// (`suggestsLock`), and both ways of being out of date cost only that: a
+  /// suggestion made to somebody who no longer needs one, or not made to
+  /// somebody who now does. Neither locks or unlocks anything by itself.
+  final bool ageRestricted;
 
   /// Whether Kavita holds an avatar for this account, as the last sign-in
   /// reported it. Kept on the profile rather than asked for, because the
@@ -152,6 +163,7 @@ class Profile {
     String? apiKey,
     String? token,
     bool? isAdmin,
+    bool? ageRestricted,
     bool? hasAvatar,
     String? color,
   }) => Profile(
@@ -161,6 +173,7 @@ class Profile {
     apiKey: apiKey ?? this.apiKey,
     token: token ?? this.token,
     isAdmin: isAdmin ?? this.isAdmin,
+    ageRestricted: ageRestricted ?? this.ageRestricted,
     hasAvatar: hasAvatar ?? this.hasAvatar,
     color: color ?? this.color,
   );
@@ -175,6 +188,7 @@ class Profile {
     'username': username,
     'apiKey': apiKey,
     'isAdmin': isAdmin,
+    'ageRestricted': ageRestricted,
     'hasAvatar': hasAvatar,
     'color': color,
   };
@@ -196,6 +210,7 @@ class Profile {
       username: json['username'] is String ? json['username'] as String : '',
       apiKey: json['apiKey'] is String ? json['apiKey'] as String : '',
       isAdmin: json['isAdmin'] == true,
+      ageRestricted: json['ageRestricted'] == true,
       hasAvatar: json['hasAvatar'] == true,
       color: json['color'] is String ? json['color'] as String : '',
     );
@@ -237,14 +252,28 @@ class AuthState {
   /// with one answer, permanently. There is nobody to choose between, so
   /// nobody is asked.
   ///
+  /// A **locked** profile is not opened into either, however few of them
+  /// there are. That is what makes the lock a lock rather than a screen: a
+  /// device holding one locked profile would otherwise open straight into it
+  /// and never ask, since the picker is the only thing that asks and such a
+  /// device never sees one. Landing signed out sends it to the picker
+  /// (`signedOutLocation`), which is where the PIN is asked for — one face
+  /// and one lock, which is no longer a question with one answer.
+  ///
+  /// [locked] is the set of [Profile.id]s the device holds a lock for,
+  /// handed in from `main()` because that is where the locks are read. This
+  /// takes the ids rather than the store so the rule stays a fact about
+  /// state.
+  ///
   /// Applied where the app starts rather than where storage is read: which
   /// profile was last active is a true fact worth writing down (it is what
   /// [active] means for the rest of the session), and this is a rule about
   /// opening the app, not about what the keychain holds.
-  AuthState get atLaunch {
+  AuthState atLaunch({Set<String> locked = const {}}) {
     if (profiles.length > 1) return AuthState(profiles: profiles);
     final only = profiles.length == 1 ? profiles.single : null;
     if (only == null || !only.hasCredential) return this;
+    if (locked.contains(only.id)) return AuthState(profiles: profiles);
     return AuthState(profiles: profiles, activeId: only.id);
   }
 
@@ -505,6 +534,7 @@ class AuthNotifier extends Notifier<AuthState> {
       apiKey: user.apiKey,
       token: user.token,
       isAdmin: user.isAdmin,
+      ageRestricted: user.ageRestricted,
       hasAvatar: user.hasAvatar,
       color: user.color,
     );
