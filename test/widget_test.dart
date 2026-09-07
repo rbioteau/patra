@@ -93,9 +93,7 @@ void main() {
   // Secure storage and the image cache both reach for the binding.
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('with no remembered profile, the login form is shown', (
-    tester,
-  ) async {
+  testWidgets('with no remembered profile, the login form is shown', (tester) async {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
@@ -254,10 +252,7 @@ void main() {
     // a single-profile device has nobody to switch to — so this is what its
     // every start would look like if `atLaunch` did not answer for it.
     await tester.pumpWidget(
-      _app(
-        auth: AuthState(profiles: [_profile]),
-        downloadsRoot: root,
-      ),
+      _app(auth: AuthState(profiles: [_profile]), downloadsRoot: root),
     );
     await tester.pumpAndSettle();
 

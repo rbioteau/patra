@@ -90,9 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Straight to the first empty field: the password for somebody the
       // device already knows, the name for somebody it is meeting.
       final focus = profile == null ? _usernameFocus : _passwordFocus;
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => focus.requestFocus(),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) => focus.requestFocus());
     }
   }
 
@@ -105,9 +103,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (widget.expired && profile != null) {
       // Before the first build, so no setState: the form is drawn already
       // saying why it is asking.
-      _error = AppLocalizations.of(
-        context,
-      ).connectionSignInExpired(profile.displayName, profile.host);
+      _error = AppLocalizations.of(context)
+          .connectionSignInExpired(profile.displayName, profile.host);
     }
   }
 

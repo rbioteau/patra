@@ -99,17 +99,31 @@ Directory _room(WidgetTester tester) {
   return root;
 }
 
-/// Pumps past the bounded retries `serverRetry` allows, without
-/// `pumpAndSettle`.
+/// Pumps until [until] holds, rather than for a fixed number of frames.
 ///
-/// Offline the home screen keeps a `Skeleton` running — an
-/// `AnimationController..repeat()` — for as long as a shelf has no answer,
-/// and a repeating animation is precisely what `pumpAndSettle` waits forever
-/// for.
-Future<void> _settleOffline(WidgetTester tester) async {
-  for (var i = 0; i < 12; i++) {
-    await tester.pump(const Duration(milliseconds: 200));
+/// Every other step in these tests settles, and that is deliberate: this
+/// branch's own fix is what makes the home screen stop animating offline, and
+/// the test below asserts exactly that with `pumpAndSettle`. The reader is the
+/// one place that genuinely never goes still, and it is the **fixture** rather
+/// than the product: a saved page here is a single byte, which no decoder will
+/// take, so `PageLoading`'s indicator spins over it for good. Writing a real
+/// image per page would buy nothing — what is under test is where the page
+/// count came from, not what the page looks like.
+///
+/// Waiting on a condition rather than on a frame budget because the work in
+/// front of it is **real filesystem IO** — `saveChapterFixture` and
+/// `DownloadsService.scan()` are not fake async, and a fixed number of pumps
+/// is a race that a loaded machine loses.
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  FinderBase<Element> until, {
+  int maxFrames = 60,
+}) async {
+  for (var frame = 0; frame < maxFrames; frame++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (until.evaluate().isNotEmpty) return;
   }
+  fail('gave up waiting for $until');
 }
 
 /// What the app already says about being offline, wherever it says it.
@@ -146,7 +160,7 @@ void main() {
     expect(find.text('lea'), findsOneWidget);
 
     await tester.tap(find.text('romain'));
-    await _settleOffline(tester);
+    await tester.pumpAndSettle();
 
     // Entered anyway: unreachable is not a refused credential, so the session
     // opens on the key it already holds.
@@ -154,19 +168,18 @@ void main() {
     expect(find.byType(OfflineIndicator), findsOneWidget);
 
     await tester.tap(find.text('Downloads'));
-    await _settleOffline(tester);
+    await tester.pumpAndSettle();
 
     expect(find.text('Blame!'), findsOneWidget);
     expect(find.text('Volume 1'), findsOneWidget);
 
     await tester.tap(find.text('Volume 1'));
-    await _settleOffline(tester);
+    await _pumpUntil(tester, find.byType(ReaderScreen));
 
-    expect(find.byType(ReaderScreen), findsOneWidget);
     // The page count comes off the stored `meta.json`: nothing answered, so
     // there was nowhere else it could have come from.
     await tester.tapAt(tester.getCenter(find.byType(ReaderScreen)));
-    await _settleOffline(tester);
+    await _pumpUntil(tester, find.text('1 / 3'));
     expect(find.text('1 / 3'), findsOneWidget);
   });
 
@@ -197,6 +210,34 @@ void main() {
     expect(find.text(_offlineSentence), findsNothing);
   });
 
+  testWidgets('the library says it is offline instead of failing', (
+    tester,
+  ) async {
+    // A grid of covers is the one screen here that genuinely cannot show
+    // anything offline, so it does need furniture of its own — but worded as
+    // the ordinary state it is, in the app's own offline sentence, rather
+    // than as a fault. The retry beside it is what "coming back online is the
+    // user's move" means in practice.
+    final root = _room(tester);
+    await tester.pumpWidget(_app(root, _UnreachableAdapter()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Library'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(_offlineSentence), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    // Two struck-through clouds, and they are not a repetition: the bar's is
+    // the status this app shows on every screen, and the body's belongs to
+    // the explanation standing in for a grid that cannot be drawn.
+    expect(find.byType(OfflineIndicator), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_off_outlined), findsNWidgets(2));
+    // Never the raw exception, which is what an unhandled error state shows.
+    expect(find.textContaining('DioException'), findsNothing);
+  });
+
   testWidgets('an unreachable server never costs a profile its key', (
     tester,
   ) async {
@@ -209,7 +250,7 @@ void main() {
     await tester.pumpWidget(_app(root, adapter));
     await tester.pumpAndSettle();
     await tester.tap(find.text('romain'));
-    await _settleOffline(tester);
+    await tester.pumpAndSettle();
 
     expect(adapter.attempts, greaterThan(0), reason: 'it really did try');
 

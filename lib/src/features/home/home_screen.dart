@@ -269,7 +269,7 @@ class _Shelf extends ConsumerWidget {
     if (series.hasValue && series.requireValue.isEmpty) {
       return const SizedBox.shrink();
     }
-    if (series.hasError && !series.hasValue) return const SizedBox.shrink();
+    if (series.isResolvedFailure) return const SizedBox.shrink();
 
     final client = series.hasValue ? ref.watch(kavitaClientProvider) : null;
     final items = series.value ?? const <Series>[];
@@ -349,14 +349,11 @@ class _LibrariesSection extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final items = libraries.value;
     if (items != null && items.isEmpty) return const SizedBox.shrink();
-    // A resolved failure is not a slow answer, and the difference is the
-    // whole of this line. `value == null` is true of both, so a section that
-    // asked only that drew a `Skeleton` — an `AnimationController..repeat()`
-    // — for an answer that is never coming: offline, once `serverRetry` has
-    // spent its three attempts, the shimmer was permanent and the device
-    // redrew forever over a screen saying nothing. The shelves already ask it
-    // this way; this section did not.
-    if (items == null && libraries.hasError) return const SizedBox.shrink();
+    // A resolved failure is not a slow answer, and this section used to ask
+    // only `value == null`, which is both — so offline it shimmered for an
+    // answer that was never coming. The shelves already asked the right
+    // question; this is now the same one, named once.
+    if (libraries.isResolvedFailure) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: sectionGap),

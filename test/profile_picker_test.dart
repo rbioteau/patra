@@ -68,6 +68,20 @@ Future<void> _pump(
   await tester.pump();
 }
 
+/// How dimmed the face under [name] is, asked of that one face.
+///
+/// Through the `InkWell` the face is built around, so the answer cannot be
+/// some other widget's fade.
+double _dimming(WidgetTester tester, String name) {
+  final face = find
+      .ancestor(of: find.text(name), matching: find.byType(InkWell))
+      .first;
+  final faded = tester.widgetList<Opacity>(
+    find.descendant(of: face, matching: find.byType(Opacity)),
+  );
+  return faded.isEmpty ? 1 : faded.first.opacity;
+}
+
 /// The colour a face is drawn on: the box immediately behind its initial.
 Color? _faceColor(WidgetTester tester, String initial) {
   final box = tester.widget<Container>(
@@ -185,13 +199,44 @@ void main() {
       // And marked on the face itself: the word sits under the name, where a
       // reader choosing between faces is not looking.
       expect(find.byIcon(Icons.key_off_outlined), findsOneWidget);
-      // Quieter than the faces that open on a tap, and only that one.
-      final dimmed = tester
-          .widgetList<Opacity>(find.byType(Opacity))
-          .where((o) => o.opacity < 1);
-      expect(dimmed.length, 1);
+      // Quieter than the faces that open on a tap — and asked of that face's
+      // own subtree rather than of the tree at large: counting every
+      // `Opacity` on screen breaks on any unrelated fade and never ties the
+      // dimming to the face it is about.
+      expect(_dimming(tester, 'lea'), lessThan(1));
+      expect(_dimming(tester, 'romain'), 1);
     },
   );
+
+  testWidgets('a face signing in is busy rather than stalled', (tester) async {
+    // Two marks in one circle would be a face that is working and a face
+    // that is stuck at the same time. The spinner is already saying what
+    // this one is doing, so the badge stands down while it spins.
+    final held = Completer<LoginResult>();
+    // Left hanging on purpose; completed at teardown so nothing outlives the
+    // test.
+    addTearDown(
+      () => held.complete(
+        const LoginResult(username: 'romain', token: '', apiKey: ''),
+      ),
+    );
+    await _pump(
+      tester,
+      [_profile(username: 'romain'), _profile(accountId: 2, username: 'lea')],
+      signIn: ({
+        required String baseUrl,
+        required String username,
+        required Credential credential,
+        ClientIdentity identity = const ClientIdentity.unknown(),
+      }) => held.future,
+    );
+
+    await tester.tap(find.text('romain'));
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byIcon(Icons.key_off_outlined), findsNothing);
+  });
 
   testWidgets('a profile that still holds its key is marked with nothing', (
     tester,
