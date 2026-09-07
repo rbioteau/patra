@@ -236,6 +236,15 @@ class _Face extends StatelessWidget {
                             dimension: 22,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
+                        )
+                      // Not while a sign-in is in flight: the spinner is
+                      // already saying what this face is doing, and the two
+                      // marks in one circle would be a busy face and a
+                      // stalled one at once.
+                      else if (needsPassword)
+                        const Align(
+                          alignment: Alignment.bottomRight,
+                          child: _StaleKeyBadge(),
                         ),
                     ],
                   ),
@@ -273,6 +282,42 @@ class _Face extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The mark on a face whose key the server has stopped accepting.
+///
+/// The dimming says *something* is different about this face; the badge says
+/// what, and it is on the avatar because that is where a reader choosing
+/// between faces is looking — the word under the name is read after the
+/// choice, not while making it. Both stay: the handoff's rule is that a cost
+/// is always worded and never icon-only, and a struck-through key says
+/// nothing to a screen reader, which takes the whole face as one label.
+///
+/// In [patraAccent] rather than [patraDanger]: nothing has gone wrong and
+/// nothing is being destroyed — this profile still opens, and what it costs
+/// is a password. Purple is identity here, which is exactly what is being
+/// asked for again.
+class _StaleKeyBadge extends StatelessWidget {
+  const _StaleKeyBadge();
+
+  static const _size = 24.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        color: patraSurface,
+        shape: BoxShape.circle,
+        // The ring is the page's own ground, so the badge reads as sitting in
+        // front of the face rather than as a hole punched in it — whatever
+        // colour Kavita gave the account underneath.
+        border: Border.all(color: patraBg, width: 2),
+      ),
+      child: const Icon(Icons.key_off_outlined, size: 13, color: patraAccent),
     );
   }
 }

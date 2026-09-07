@@ -169,19 +169,37 @@ void main() {
     expect(find.text('kavita.example'), findsNothing);
   });
 
-  testWidgets('a profile whose key stopped working says so before it is tapped', (
+  testWidgets(
+    'a profile whose key stopped working says so before it is tapped',
+    (tester) async {
+      await _pump(tester, [
+        _profile(username: 'romain'),
+        _profile(accountId: 2, username: 'lea', apiKey: ''),
+      ]);
+
+      expect(
+        find.text('Sign in'),
+        findsOneWidget,
+        reason: 'the cost of tapping that face is learned before tapping it',
+      );
+      // And marked on the face itself: the word sits under the name, where a
+      // reader choosing between faces is not looking.
+      expect(find.byIcon(Icons.key_off_outlined), findsOneWidget);
+      // Quieter than the faces that open on a tap, and only that one.
+      final dimmed = tester
+          .widgetList<Opacity>(find.byType(Opacity))
+          .where((o) => o.opacity < 1);
+      expect(dimmed.length, 1);
+    },
+  );
+
+  testWidgets('a profile that still holds its key is marked with nothing', (
     tester,
   ) async {
-    await _pump(tester, [
-      _profile(username: 'romain'),
-      _profile(accountId: 2, username: 'lea', apiKey: ''),
-    ]);
+    await _pump(tester, [_profile(), _profile(accountId: 2, username: 'lea')]);
 
-    expect(
-      find.text('Sign in'),
-      findsOneWidget,
-      reason: 'the cost of tapping that face is learned before tapping it',
-    );
+    expect(find.byIcon(Icons.key_off_outlined), findsNothing);
+    expect(find.text('Sign in'), findsNothing);
   });
 
   testWidgets('the add slot is a place to fill, in the handoff\'s dashes', (
