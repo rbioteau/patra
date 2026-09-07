@@ -100,6 +100,18 @@ void main() {
       expect(find.textContaining('scan it from Kavita'), findsOneWidget);
     });
 
+    testWidgets('an admin is not sent to Kavita for a button that is here', (
+      tester,
+    ) async {
+      await _pump(tester, admin: true);
+
+      // Two role-specific sentences rather than one: for a non-admin Kavita
+      // really is the only route, and for an admin the fix is two lines
+      // below.
+      expect(find.textContaining('scan it from Kavita'), findsNothing);
+      expect(find.textContaining('then ask for a scan'), findsOneWidget);
+    });
+
     testWidgets('a non-admin is not offered a button that can only 403', (
       tester,
     ) async {

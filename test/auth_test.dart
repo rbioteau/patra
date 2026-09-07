@@ -711,6 +711,38 @@ void main() {
     );
   });
 
+  group('the role, once the server has refused it', () {
+    test('a refusal clears it and leaves everything else alone', () async {
+      final admin = _romain.copyWith(isAdmin: true);
+      final container = _container(
+        AuthState(profiles: [admin, _lea], activeId: admin.id),
+      );
+      expect(container.read(sessionProvider)?.isAdmin, isTrue);
+
+      await container.read(authProvider.notifier).clearAdmin();
+
+      final state = container.read(authProvider);
+      // A 403 from an admin-only endpoint is the server's own answer, and it
+      // is fresher than a flag the last sign-in left.
+      expect(state.active?.isAdmin, isFalse);
+      // It says nothing about the credential, and nothing about anybody else.
+      expect(state.active?.apiKey, 'key-romain');
+      expect(state.profiles, hasLength(2));
+      expect(
+        state.profiles.firstWhere((p) => p.id == _lea.id).isAdmin,
+        isFalse,
+      );
+    });
+
+    test('and there is nothing to clear with nobody reading', () async {
+      final container = _container(AuthState(profiles: [_romain]));
+
+      await container.read(authProvider.notifier).clearAdmin();
+
+      expect(container.read(authProvider).profiles.single.id, _romain.id);
+    });
+  });
+
   test('leaving a profile keeps its key so returning is one tap', () async {
     final signIn = _FakeSignIn(apiKey: 'key-romain');
     final container = _container(
