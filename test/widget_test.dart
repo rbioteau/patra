@@ -297,7 +297,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Default reading direction'), findsOneWidget);
     expect(find.text('Left to right'), findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
+    // Not a sign-out: there are two verbs and that was neither. The card at
+    // the top of this screen switches profile; the button at the bottom of
+    // it removes this one.
+    expect(find.text('Sign out'), findsNothing);
   });
 
   testWidgets('the navigation bar drops its labels when they do not fit', (

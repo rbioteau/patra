@@ -260,6 +260,12 @@ abstract class AppLocalizations {
   /// **'Forget'**
   String get forgetProfile;
 
+  /// Settings button that removes the profile the app is currently read as, credential and all
+  ///
+  /// In en, this message translates to:
+  /// **'Forget this profile'**
+  String get forgetThisProfile;
+
   /// Confirmation title; name is the profile's username and host a host name. Both, because a server can hold several profiles and one of them is being removed
   ///
   /// In en, this message translates to:
@@ -349,12 +355,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scan requested. Kavita may take a while — pull down to refresh.'**
   String get scanRequested;
-
-  /// No description provided for @signOut.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign out'**
-  String get signOut;
 
   /// No description provided for @retry.
   ///
@@ -709,6 +709,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Server'**
   String get serverSectionLabel;
+
+  /// Settings section heading over the remembered profiles that are not the one being read as; each can be removed without being signed into
+  ///
+  /// In en, this message translates to:
+  /// **'Other profiles on this device'**
+  String get otherProfilesSectionLabel;
 
   /// No description provided for @switchProfile.
   ///

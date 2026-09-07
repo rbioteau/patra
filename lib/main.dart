@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/api/client_identity.dart';
 import 'src/app.dart';
 import 'src/auth/session.dart';
+import 'src/session_scope.dart';
 import 'src/downloads/image_cache_store.dart';
 import 'src/settings/cache_settings.dart';
 import 'src/settings/locale_settings.dart';
@@ -28,9 +28,14 @@ Future<void> main() async {
   final imageCache = ImageCacheStore();
   unawaited(imageCache.trimIfDue(cacheLimit.bytes));
   runApp(
-    ProviderScope(
+    // The scope rather than a bare `ProviderScope`: it owns the container,
+    // and builds the app again on a fresh one when the tablet is handed to
+    // somebody else. What is listed here is what the *device* owns, so it is
+    // what survives that; nothing a profile owns is named at all, which is
+    // what makes the teardown impossible to forget half of.
+    SessionScope(
+      auth: auth,
       overrides: [
-        initialAuthStateProvider.overrideWithValue(auth),
         clientIdentityProvider.overrideWithValue(identity),
         initialLocaleProvider.overrideWithValue(locale),
         initialReadingDirectionProvider.overrideWithValue(readingDirection),

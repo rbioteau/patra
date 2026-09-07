@@ -29,7 +29,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
   );
   ref.onDispose(refresh.dispose);
 
-  return GoRouter(
+  final router = GoRouter(
     refreshListenable: refresh,
     redirect: (context, state) {
       final auth = ref.read(authProvider);
@@ -113,6 +113,11 @@ final _routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  // A container is thrown away when the app is handed to somebody else
+  // (`SessionScope`), and the router goes with it: its navigator, its stack
+  // and the route the previous person was on are all in here.
+  ref.onDispose(router.dispose);
+  return router;
 });
 
 class _PatraShell extends StatelessWidget {
@@ -221,8 +226,11 @@ class PatraApp extends ConsumerWidget {
       // The launch animation wraps the whole app rather than being a route of
       // its own: its last beat flies the frond into the home header, which has
       // to be laid out underneath while the splash is still playing.
-      builder: (_, child) =>
-          LaunchAnimation(child: child ?? const SizedBox.shrink()),
+      builder: (_, child) => LaunchAnimation(
+        // A handover builds the whole app again, and that is not a launch.
+        play: ref.watch(isLaunchProvider),
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -50,4 +51,23 @@ Map<String, String> mockSecureStorage([Map<String, String>? initial]) {
         .setMockMethodCallHandler(channel, null),
   );
   return values;
+}
+
+/// A token Kavita could have signed for [accountId], which is what the app
+/// reads its own account id back out of (`accountIdFrom`, the `nameid`
+/// claim).
+///
+/// Shared because a stub that answers a sign-in with anything else makes a
+/// *second* profile of the person who just signed in: `Profile.id` falls back
+/// to the username when no id can be read, so the row the device already
+/// held is not the row the sign-in resolves onto.
+///
+/// Nothing verifies the signature — the app deliberately does not either —
+/// so the third segment is a word. `test/account_id_test.dart` builds its own
+/// tokens rather than using this: what it tests is the reading of odd ones.
+String signedToken(int accountId, {String signature = 'signature'}) {
+  String segment(Object claims) =>
+      base64Url.encode(utf8.encode(jsonEncode(claims))).replaceAll('=', '');
+  return '${segment({'alg': 'HS512'})}.'
+      '${segment({'nameid': '$accountId'})}.$signature';
 }

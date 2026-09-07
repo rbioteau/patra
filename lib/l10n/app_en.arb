@@ -97,6 +97,10 @@
     "description": "Leaves the sign-in form for the list of remembered profiles"
   },
   "forgetProfile": "Forget",
+  "forgetThisProfile": "Forget this profile",
+  "@forgetThisProfile": {
+    "description": "Settings button that removes the profile the app is currently read as, credential and all"
+  },
   "forgetProfileConfirm": "Forget {name} on {host}?",
   "@forgetProfileConfirm": {
     "description": "Confirmation title; name is the profile's username and host a host name. Both, because a server can hold several profiles and one of them is being removed",
@@ -136,7 +140,6 @@
   "@scanRequested": {
     "description": "Confirmation after POST /api/Library/scan; the scan itself is asynchronous"
   },
-  "signOut": "Sign out",
   "retry": "Retry",
   "volumesTitle": "Volumes",
   "@volumesTitle": {
@@ -382,6 +385,10 @@
   },
   "settingsTitle": "Settings",
   "serverSectionLabel": "Server",
+  "otherProfilesSectionLabel": "Other profiles on this device",
+  "@otherProfilesSectionLabel": {
+    "description": "Settings section heading over the remembered profiles that are not the one being read as; each can be removed without being signed into"
+  },
   "switchProfile": "Switch profile",
   "serverOnline": "Connected",
   "@serverOnline": {

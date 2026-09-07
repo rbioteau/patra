@@ -54,6 +54,18 @@ _Avoid_: API key, token, password
 The profile the app is currently reading as. Exactly one profile can be the active session, and every request the app makes is made as that one.
 _Avoid_: login
 
+**Switch**:
+Handing the app to somebody else: it returns to the [[Picker]] and the profile keeps its auth key, so coming back to it is a tap and never a password. One of the two verbs a profile has, and the only one the face on the home bar offers.
+_Avoid_: sign out, log out, change user
+
+**Remove**:
+Forgetting a profile: the device drops it and its key, and the others on its server stay. The other of the two verbs, and it lives in Settings — where somebody has had to enter *a* profile before they can remove *any* of them, which is the credential the [[Picker]] cannot ask for.
+_Avoid_: delete, sign out, forget the server
+
+**Handover**:
+What a switch followed by somebody else's arrival amounts to: the app is built again on a container of its own, so nothing a provider was holding for the previous person can reach the next one. It is not a launch — the splash does not play — and it is not a resume either.
+_Avoid_: restart, reload, refresh
+
 **Login result**:
 What a server answers a sign-in with: who you are, the auth key to keep, and a JWT to spend. It is not a session — a session is a profile the app is currently reading as, and this is only what one is built from.
 _Avoid_: user, session, credentials (those are what is sent, not what comes back)

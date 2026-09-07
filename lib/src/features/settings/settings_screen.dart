@@ -11,6 +11,7 @@ import '../../settings/locale_settings.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
+import '../../widgets/profile_avatar.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import '../../widgets/patra_wordmark.dart';
 
@@ -40,6 +41,7 @@ class SettingsScreen extends ConsumerWidget {
                 actionLabel: l10n.switchProfile,
                 onTap: () => ref.read(authProvider.notifier).switchProfile(),
               ),
+            const _OtherProfiles(),
 
             _Section(label: l10n.generalSectionLabel),
             _SettingRow(
@@ -99,30 +101,12 @@ class SettingsScreen extends ConsumerWidget {
             ),
 
             const SizedBox(height: sectionGap),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: gutter),
-              child: Align(
-                child: ConstrainedBox(
-                  // Signing out is one short phrase; a button as wide as the
-                  // screen reads as a banner rather than as something to press.
-                  constraints: const BoxConstraints(maxWidth: 280),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () =>
-                          ref.read(authProvider.notifier).signOut(),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: patraDanger,
-                        side: BorderSide(
-                          color: patraDanger.withValues(alpha: .45),
-                        ),
-                      ),
-                      child: Text(l10n.signOut),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            // No sign-out button, deliberately: there are two verbs and this
+            // was neither of them. Leaving is switching — the card above,
+            // which keeps the credential — and the signed-out state still
+            // exists for the one thing that really produces it, a key the
+            // server has stopped accepting.
+            if (session != null) _ForgetProfile(profile: session),
           ],
         ),
       ),
@@ -203,6 +187,190 @@ class SettingsScreen extends ConsumerWidget {
     if (picked != null) {
       await ref.read(defaultReadingDirectionProvider.notifier).set(picked);
     }
+  }
+}
+
+/// Removing a profile from the device, credential and all — the confirmation
+/// that stands in front of every path to it.
+///
+/// The whole of the guard lives here rather than on the picker, and the move
+/// is the point rather than a tidy-up: the picker stands in front of every
+/// session and asks for nothing, so the press that used to be there let
+/// anybody holding the device remove anybody. Reaching Settings means having
+/// entered a profile, which means holding a credential on this device.
+///
+/// It names the person *and* the server, because one server holds several
+/// profiles and it is one of them being removed rather than the address.
+Future<void> _confirmForget(
+  BuildContext context,
+  WidgetRef ref,
+  Profile profile,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: patraSurface,
+      title: Text(
+        l10n.forgetProfileConfirm(profile.displayName, profile.host),
+        style: PatraText.body(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(l10n.cancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(
+            l10n.forgetProfile,
+            style: PatraText.body(color: patraDanger),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmed ?? false) {
+    // That person alone: the others on their server stay, because somebody
+    // leaving the household is not the server being forgotten. Removing the
+    // profile being read as ends the session, and the redirect then lands on
+    // whichever gate the device now belongs at.
+    await ref.read(authProvider.notifier).forget(profile.id);
+  }
+}
+
+/// Everybody else this device remembers, so that a profile can be removed
+/// without being signed into first.
+///
+/// This is what makes "profile management lives in Settings" true rather than
+/// half true. Removing only the *active* profile would mean a household of
+/// four signing into each in turn to tidy up — and a profile nothing can sign
+/// into any more (an account deleted on the server) could never be removed at
+/// all, which is a face stuck on the picker for good.
+///
+/// Renders nothing on a device holding one profile: an empty section under a
+/// heading says less than no section.
+class _OtherProfiles extends ConsumerWidget {
+  const _OtherProfiles();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final auth = ref.watch(authProvider);
+    final others = [
+      for (final profile in auth.profiles)
+        if (profile.id != auth.activeId) profile,
+    ];
+    if (others.isEmpty) return const SizedBox.shrink();
+    // The same rule the picker follows: the host tells two faces apart, and
+    // with one server remembered it is the same word under every one.
+    final showHost = auth.servers.length > 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Section(label: l10n.otherProfilesSectionLabel),
+        for (final profile in others)
+          _OtherProfileRow(profile: profile, showHost: showHost),
+      ],
+    );
+  }
+}
+
+class _OtherProfileRow extends ConsumerWidget {
+  const _OtherProfileRow({required this.profile, required this.showHost});
+
+  final Profile profile;
+  final bool showHost;
+
+  /// Big enough to recognise a face by, small enough to read as a row rather
+  /// than as the picker's own faces, which are what a person taps to enter.
+  static const _avatarSize = 32.0;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 6),
+      // One stop for a screen reader, announced whole: the name, the server
+      // where there is one worth saying, and the one thing that can be done
+      // about it.
+      child: MergeSemantics(
+        child: Row(
+          children: [
+            ProfileAvatar(profile: profile, size: _avatarSize),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    profile.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: PatraText.rowTitle(),
+                  ),
+                  if (showHost) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      profile.host,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: PatraText.metadata(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // No tap on the row itself: entering a profile is the picker's
+            // job, and a row that both opened and removed a person would be
+            // one gesture away from the wrong one.
+            IconButton(
+              tooltip: l10n.forgetProfile,
+              icon: const Icon(
+                Icons.person_remove_outlined,
+                size: 20,
+                color: patraDanger,
+              ),
+              onPressed: () => _confirmForget(context, ref, profile),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Removing the profile the app is being read as, which ends the session.
+class _ForgetProfile extends ConsumerWidget {
+  const _ForgetProfile({required this.profile});
+
+  final Profile profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: gutter),
+      child: Align(
+        child: ConstrainedBox(
+          // One short phrase; a button as wide as the screen reads as a
+          // banner rather than as something to press.
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => _confirmForget(context, ref, profile),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: patraDanger,
+                side: BorderSide(color: patraDanger.withValues(alpha: .45)),
+              ),
+              child: Text(l10n.forgetThisProfile),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

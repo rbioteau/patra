@@ -51,7 +51,7 @@ class _Adapter implements HttpClientAdapter {
 Future<void> _settings(WidgetTester tester, ClientIdentity identity) async {
   mockPathProvider();
   // Tall enough for the whole screen: the body is a lazy list, and the
-  // sign-out button at the bottom of it is not built until there is room.
+  // button at the bottom of it is not built until there is room.
   tester.view.physicalSize = const Size(1200, 2800);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
@@ -104,7 +104,7 @@ void main() {
     expect(find.text('Version 0.0.0'), findsOneWidget);
   });
 
-  testWidgets('signing out is offered in the middle, not against the edge', (
+  testWidgets('forgetting a profile is offered in the middle, not at the edge', (
     tester,
   ) async {
     await _settings(
@@ -114,7 +114,7 @@ void main() {
 
     // By its own text: the storage section has an outlined button too.
     final button = tester.getRect(
-      find.widgetWithText(OutlinedButton, 'Sign out'),
+      find.widgetWithText(OutlinedButton, 'Forget this profile'),
     );
     final screen = tester.getRect(find.byType(Scaffold));
     expect(button.center.dx, closeTo(screen.center.dx, 1));

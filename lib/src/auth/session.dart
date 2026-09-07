@@ -249,6 +249,24 @@ class AuthState {
     return AuthState(profiles: profiles, activeId: only.id);
   }
 
+  /// What the app is handed when it is built again for somebody else
+  /// (`SessionScope`): these profiles, with the JWT dropped from everybody
+  /// who is not the one now reading.
+  ///
+  /// A token is session state and belongs to the session that minted it. It
+  /// is never written down, so a cold start has none — and carrying a
+  /// switched-away profile's into the next person's app would be the only
+  /// place one outlived the session it was spent in. Nothing would ever
+  /// spend it (re-entering a profile mints a fresh one from its key), which
+  /// is exactly why there is no reason to keep it.
+  AuthState get handedOver => AuthState(
+    profiles: [
+      for (final profile in profiles)
+        if (profile.id == activeId) profile else profile.copyWith(token: ''),
+    ],
+    activeId: activeId,
+  );
+
   /// Null while signed out, which is what the router redirect keys off.
   Session? get active {
     for (final profile in profiles) {
@@ -687,17 +705,33 @@ final serverVersionProvider = FutureProvider.autoDispose<String?>(
   },
 );
 
-/// Kept across rebuilds so screens still unmounting after a logout get a
-/// usable (if doomed) client instead of a build-time crash, and so a
-/// replaced client can be closed.
-KavitaClient? _lastClient;
-
-/// The API client for the current session. Screens behind the login redirect
-/// can assume a session exists.
+/// The client the container it belongs to has built, kept so that screens
+/// still unmounting after a session ends get a usable (if doomed) one instead
+/// of a build-time crash.
 ///
-/// Watches only the session's identity (server + user), NOT its tokens: the
-/// client patches its own tokens on refresh, and rebuilding here would
-/// invalidate every data provider mid-use for a routine refresh.
+/// That window is real and not theoretical: Riverpod flushes a dirty provider
+/// that has listeners at the end of the frame, so a session going null
+/// recomputes [kavitaClientProvider] while the shell is still on screen and
+/// still reading through it.
+///
+/// It used to be a top-level variable, and being per **container** is the
+/// whole of the change. A static one outlived the container it was built in,
+/// so the fresh container a handover builds (`SessionScope`) would hand the
+/// *previous* profile's client to anything that asked before a session had
+/// been entered — a window onto the wrong session, which is exactly what a
+/// device with two profiles must not have. Scoped here it cannot outlive the
+/// profile it was built for.
+class _ClientHolder {
+  KavitaClient? client;
+}
+
+final _clientHolderProvider = Provider<_ClientHolder>((ref) {
+  final holder = _ClientHolder();
+  // The container is being thrown away, and the client's connections with it.
+  ref.onDispose(() => holder.client?.close());
+  return holder;
+});
+
 final kavitaClientProvider = Provider<KavitaClient>(
   // The no-session StateError is control flow, not a transient failure:
   // opt out of Riverpod 3's automatic retry with backoff.
@@ -706,10 +740,11 @@ final kavitaClientProvider = Provider<KavitaClient>(
     final identity = ref.watch(
       sessionProvider.select((s) => s == null ? null : (s.id, s.apiKey)),
     );
+    final holder = ref.read(_clientHolderProvider);
     if (identity == null) {
-      // Logout in progress: the router is redirecting, but watching screens
-      // may rebuild once more before unmounting.
-      final previous = _lastClient;
+      // The session has ended: the router is redirecting, but this
+      // container's own screens may be rebuilt once more on the way out.
+      final previous = holder.client;
       if (previous != null) return previous;
       throw StateError('No active session');
     }
@@ -726,8 +761,8 @@ final kavitaClientProvider = Provider<KavitaClient>(
       onReachabilityChanged: (reachable) =>
           ref.read(offlineProvider.notifier).set(!reachable),
     );
-    _lastClient?.close();
-    _lastClient = client;
+    holder.client?.close();
+    holder.client = client;
     // Once per session, not per request: naming the device is cosmetic and the
     // server has better things to do than field an identity reminder behind
     // every cover.
