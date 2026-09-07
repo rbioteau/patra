@@ -13,6 +13,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/features/reader/thumb_strip.dart';
+import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
 import 'package:patra/src/theme.dart';
 
@@ -138,8 +139,15 @@ Future<List<int>> _pumpReader(
       overrides: [
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
-        initialReadingDirectionProvider.overrideWithValue(direction),
-        initialMagnifyProvider.overrideWithValue(magnify),
+        // No session here, so these are the device's own defaults — which is
+        // what a profile that has never chosen reads in.
+        profilePreferencesStoreProvider.overrideWithValue(
+          ProfilePreferencesStore(
+            vault: MemoryPreferencesVault(),
+            deviceDirection: direction,
+            deviceMagnify: magnify,
+          ),
+        ),
       ],
       child: MaterialApp(
         theme: patraTheme(),

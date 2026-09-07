@@ -618,3 +618,53 @@ class KavitaClient {
       '$baseUrl/api/Reader/thumbnail?chapterId=$chapterId&pageNum=$page'
       '&apiKey=$apiKey';
 }
+
+/// What the image cache files [url] under: the URL with the auth key taken
+/// out of it.
+///
+/// **Every image URL carries a credential as a query parameter**, because
+/// an image request cannot always send a header — and the cache keys on the
+/// URL. So without this a household of four downloads the same cover four
+/// times and stores it four times under the one disk budget they share,
+/// while a person switching profile watches a library they were looking at
+/// a moment ago load again from the server.
+///
+/// **The invariant this rests on**, written here because it is what makes
+/// the shared key safe rather than merely cheap: *the app only ever builds
+/// an image URL for content the server has already listed for the profile
+/// asking*. Covers come from the series, volume and chapter DTOs a request
+/// answered with, and pages from a chapter that request opened; Kavita
+/// applies the account's library access and age restriction when it builds
+/// those lists (ADR-0003), so a restricted cover is never asked for and
+/// therefore never cached — there is nothing in the store for the shared
+/// key to hand to somebody who could not have fetched it themselves. A
+/// screen that ever guessed an id — walked a range, or kept one across a
+/// handover — would break that, and would be the thing to fix rather than
+/// this key.
+///
+/// What stays in the key is everything that chooses an *image*: the server,
+/// the endpoint and the ids. Only the credential goes, and it identifies
+/// the asker rather than the answer.
+///
+/// A top-level function rather than a method, because the widgets that draw
+/// an image have a URL and no reason to have a client: a cover is handed one
+/// already built, and the picker draws faces before there is a session at
+/// all.
+String imageCacheKey(String url) {
+  final uri = Uri.tryParse(url);
+  // Nothing builds one, but a key that threw would take a cover down with it
+  // — and a URL that cannot be parsed was never going to be fetched anyway.
+  if (uri == null || !uri.hasScheme) return url;
+  final rest = {...uri.queryParameters}..remove('apiKey');
+  // Rebuilt rather than `replace`d: `Uri.replace` keeps the query it is not
+  // given one for, and an empty one asked for by hand leaves a bare `?` (or
+  // a `#`) hanging off the key.
+  return Uri(
+    scheme: uri.scheme,
+    userInfo: uri.userInfo,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+    path: uri.path,
+    queryParameters: rest.isEmpty ? null : rest,
+  ).toString();
+}

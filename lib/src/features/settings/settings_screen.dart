@@ -9,6 +9,7 @@ import '../../format.dart';
 import '../../lock/profile_lock.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/locale_settings.dart';
+import '../../settings/profile_preferences.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/direction_icon.dart';
@@ -260,6 +261,10 @@ Future<void> _confirmForget(
     // lock this same person out on the day they sign back in, behind a PIN
     // nothing remembers asking them to choose.
     await ref.read(profileLocksProvider.notifier).clear(profile.id);
+    // And what they had chosen for themselves, for the same reason: a row
+    // left behind points at nobody, and would come back to whoever next signs
+    // in under that id as a device they have never used.
+    await ref.read(profilePreferencesStoreProvider).forget(profile.id);
     // The files first: forgetting the profile being read as ends the session
     // that owns the store, and a deletion asked for after that would be
     // asking a container on its way out. This is the only path to `forget`,
@@ -441,6 +446,8 @@ class _ProfileLockRow extends ConsumerWidget {
 
     Future<void> change(bool on) async {
       if (!on) {
+        // The lock alone. Taking a PIN off is not removing the profile, and
+        // what that person has chosen for themselves is none of its business.
         await ref.read(profileLocksProvider.notifier).clear(profile.id);
         return;
       }

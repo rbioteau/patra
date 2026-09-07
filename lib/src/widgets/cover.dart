@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../api/kavita_client.dart';
 import '../theme.dart';
 
 /// A 2:3 cover with the reading-progress bar pinned to its bottom edge and an
@@ -34,6 +35,9 @@ class CoverImage extends StatelessWidget {
           borderRadius: BorderRadius.circular(radius),
           child: CachedNetworkImage(
             imageUrl: url,
+            // Derived here rather than passed in, so no call site can forget
+            // it and quietly give one profile a cache of its own.
+            cacheKey: imageCacheKey(url),
             httpHeaders: headers,
             fit: BoxFit.cover,
             memCacheWidth: memCacheWidth,

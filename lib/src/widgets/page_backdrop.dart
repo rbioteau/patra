@@ -94,6 +94,9 @@ class PageBackdrop extends ConsumerWidget {
 
   Widget _artwork(KavitaClient client, double pixelRatio) => LayoutBuilder(
     builder: (context, constraints) {
+      final url = chapterId == null
+          ? client.seriesCoverUrl(seriesId)
+          : client.readerImageUrl(chapterId!, page);
       final width = math.min(
         constraints.maxWidth,
         constraints.maxHeight * _maxAspect,
@@ -114,9 +117,8 @@ class PageBackdrop extends ConsumerWidget {
             ).createShader(bounds, textDirection: Directionality.of(context)),
             child: CachedNetworkImage(
               key: const ValueKey('heroBackdrop'),
-              imageUrl: chapterId == null
-                  ? client.seriesCoverUrl(seriesId)
-                  : client.readerImageUrl(chapterId!, page),
+              imageUrl: url,
+              cacheKey: imageCacheKey(url),
               httpHeaders: client.imageHeaders,
               fit: BoxFit.cover,
               // The top of a page is its most composed part; its middle is
@@ -147,8 +149,10 @@ class _CoverBackdrop extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final client = ref.watch(kavitaClientProvider);
+    final url = client.seriesCoverUrl(seriesId);
     return CachedNetworkImage(
-      imageUrl: client.seriesCoverUrl(seriesId),
+      imageUrl: url,
+      cacheKey: imageCacheKey(url),
       httpHeaders: client.imageHeaders,
       fit: BoxFit.cover,
       fadeInDuration: Duration.zero,

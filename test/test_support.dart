@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
+import 'package:patra/src/settings/profile_preferences.dart';
+import 'package:patra/src/settings/reading_settings.dart';
 
 /// Points path_provider at a temp directory for the duration of a test.
 ///
@@ -148,7 +151,9 @@ class MemoryLockVault implements LockVault {
 }
 
 /// A loaded store holding a lock per entry of [pins], on a vault of its own.
-Future<ProfileLockStore> lockStore([Map<String, String> pins = const {}]) async {
+Future<ProfileLockStore> lockStore([
+  Map<String, String> pins = const {},
+]) async {
   final store = ProfileLockStore(vault: MemoryLockVault());
   for (final entry in pins.entries) {
     await store.set(entry.key, entry.value);
@@ -177,4 +182,49 @@ class FakeBiometrics implements Biometrics {
     prompts++;
     return recognises;
   }
+}
+
+/// The preferences module's platform dependency, standing in for the
+/// keychain — the same shape [MemoryLockVault] has, and there for the same
+/// reason: the rules are exercised through the seam rather than through a
+/// plugin that has nothing behind it on a test binding.
+class MemoryPreferencesVault implements PreferencesVault {
+  MemoryPreferencesVault([this.value]);
+
+  String? value;
+  int writes = 0;
+  int clears = 0;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String value) async {
+    writes++;
+    this.value = value;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    value = null;
+  }
+}
+
+/// A loaded preferences store on a vault of its own, with [device] standing
+/// for what the flat keys held before anybody had a profile.
+Future<ProfilePreferencesStore> preferencesStore({
+  MemoryPreferencesVault? vault,
+  ReadingDirection deviceDirection = ReadingDirection.leftToRight,
+  bool deviceMagnify = false,
+  Locale? deviceLanguage,
+}) async {
+  final store = ProfilePreferencesStore(
+    vault: vault ?? MemoryPreferencesVault(),
+    deviceDirection: deviceDirection,
+    deviceMagnify: deviceMagnify,
+    deviceLanguage: deviceLanguage,
+  );
+  await store.load();
+  return store;
 }

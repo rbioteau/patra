@@ -170,8 +170,16 @@ A chapter whose pages are stored on the device because a profile asked for them.
 _Avoid_: download (that is the act of fetching one), cached chapter, offline chapter
 
 **Image cache**:
-The covers and pages kept on disk merely because they were looked at online. It fills on its own, is capped, and the OS may reclaim it. It is not the offline library and must never be counted as one.
+The covers and pages kept on disk merely because they were looked at online. It fills on its own, is capped, and the OS may reclaim it. It is not the offline library and must never be counted as one. It belongs to the **device** and is shared by every profile on it — one budget, and one copy of a cover however many people look at that series.
 _Avoid_: downloads, offline storage
+
+**Preference**:
+A setting somebody chose. Reading direction, magnifying and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]].
+_Avoid_: setting (that is the row it is changed on), option, config
+
+**Device default**:
+What a profile that has never chosen a preference reads in — the value under the flat key this device held before it had profiles. For the language it is also what the [[Gate]] is drawn in, since the picker stands in front of every session and has nobody to ask; choosing a language moves it, and that is the only preference it is true of.
+_Avoid_: fallback, global setting, system default (that is the device's own language, which is a separate answer)
 
 **Offline**:
 The state of not being able to reach the server. A property of the app's last attempt, not of the device's radio.

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/settings/locale_settings.dart';
@@ -7,6 +6,8 @@ import 'package:patra/src/settings/locale_settings.dart';
 import 'test_support.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('a language is listed under its own name', () {
     // Never translated: someone who has landed in a language they cannot read
     // has to be able to find their way out of it.
@@ -26,67 +27,26 @@ void main() {
     }
   });
 
-  test('following the device is the default, and it is a value', () {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    expect(container.read(localeProvider), isNull);
+  test('a language this build does not ship resolves to the device', () {
+    // Rather than to a language with no translations behind it.
+    expect(supportedLocale('xh'), isNull);
+    expect(supportedLocale(''), isNull);
+    expect(supportedLocale('fr'), const Locale('fr'));
   });
 
-  test('a preference restored at startup is what the app opens in', () {
-    final container = ProviderContainer(
-      overrides: [initialLocaleProvider.overrideWithValue(const Locale('fr'))],
-    );
-    addTearDown(container.dispose);
-    expect(container.read(localeProvider), const Locale('fr'));
-  });
-
-  testWidgets('the chosen language is the one the app is shown in', (
-    tester,
-  ) async {
+  test("the device's own language round-trips, and null clears it", () async {
     final stored = mockSecureStorage();
-    final container = ProviderContainer(
-      overrides: [initialLocaleProvider.overrideWithValue(const Locale('fr'))],
-    );
-    addTearDown(container.dispose);
+    expect(await LocaleSettingsStore.load(), isNull);
 
-    late AppLocalizations l10n;
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: Consumer(
-          builder: (_, ref, _) => MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: ref.watch(localeProvider),
-            home: Builder(
-              builder: (context) {
-                l10n = AppLocalizations.of(context);
-                return Text(l10n.appLanguage);
-              },
-            ),
-          ),
-        ),
-      ),
-    );
+    await LocaleSettingsStore.save(const Locale('fr'));
+    expect(stored['appLocale'], 'fr');
+    expect(await LocaleSettingsStore.load(), const Locale('fr'));
 
-    // Set against a device whose own language is English.
-    expect(find.text('Langue'), findsOneWidget);
-
-    await container.read(localeProvider.notifier).set(null);
-    await tester.pump();
-    expect(
-      find.text('Language'),
-      findsOneWidget,
-      reason: 'null hands the choice back to the device, it does not clear it',
-    );
+    await LocaleSettingsStore.save(null);
     expect(
       stored.containsKey('appLocale'),
       isFalse,
       reason: 'following the device is stored as no preference at all',
     );
-
-    await container.read(localeProvider.notifier).set(const Locale('fr'));
-    await tester.pump();
-    expect(stored['appLocale'], 'fr');
   });
 }
