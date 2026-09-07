@@ -254,6 +254,14 @@ class PatraApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
       title: 'Patra',
+      // Off because the top-right corner is not free: that is where an app
+      // bar's trailing action sits — the profile face on Home, the scan menu
+      // on the Library tab — and the ribbon is painted over it, which reads
+      // as a control coloured red rather than as a debug build. It says
+      // nothing a person running `flutter run` does not already know, and it
+      // is absent from a release build anyway, so what it costs is only a
+      // wrong first impression of the corner it covers.
+      debugShowCheckedModeBanner: false,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // Null is not "unset": it is what MaterialApp takes to mean "resolve
