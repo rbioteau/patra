@@ -1,0 +1,223 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/api/client_identity.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
+import 'package:patra/src/app.dart';
+import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/features/profiles/profile_picker_screen.dart';
+import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/session_scope.dart';
+import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/offline_indicator.dart';
+
+import 'test_support.dart';
+
+/// A server that is simply not there: every request fails at the connection,
+/// which is what dio reports for a LAN address nothing answers on.
+///
+/// Not a 500 and not a refusal — those are servers. This is the train.
+class _UnreachableAdapter implements HttpClientAdapter {
+  int attempts = 0;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    attempts++;
+    throw DioException.connectionError(
+      requestOptions: options,
+      reason: 'no route to host',
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+Profile _profile(String username, int accountId) => Profile(
+  baseUrl: 'https://kavita.example',
+  accountId: accountId,
+  username: username,
+  apiKey: 'key-$username',
+);
+
+final _romain = _profile('romain', 1);
+final _lea = _profile('lea', 2);
+
+/// Two faces, so the device opens on the picker: that is the screen this is
+/// about, and `AuthState.atLaunch` sends a one-profile device straight past
+/// it.
+final _profiles = [_romain, _lea];
+
+Future<LoginResult> _signIn({
+  required String baseUrl,
+  required String username,
+  required Credential credential,
+  ClientIdentity identity = const ClientIdentity.unknown(),
+}) async => throw DioException.connectionError(
+  requestOptions: RequestOptions(path: '/api/Account/login'),
+  reason: 'no route to host',
+);
+
+Widget _app(Directory root, _UnreachableAdapter adapter) => SessionScope(
+  auth: AuthState(profiles: _profiles).atLaunch,
+  overrides: [
+    signInProvider.overrideWithValue(_signIn),
+    downloadsRootProvider.overrideWithValue(root),
+    kavitaClientProvider.overrideWith((ref) {
+      final session = ref.watch(sessionProvider);
+      final client = KavitaClient(
+        baseUrl: session?.baseUrl ?? 'https://kavita.example',
+        token: session?.token ?? '',
+        username: session?.username ?? '',
+        apiKey: session?.apiKey ?? '',
+        onReachabilityChanged: (reachable) =>
+            ref.read(offlineProvider.notifier).set(!reachable),
+      );
+      client.httpClient.httpClientAdapter = adapter;
+      client.bareHttpClient.httpClientAdapter = adapter;
+      return client;
+    }),
+  ],
+  child: const PatraApp(),
+);
+
+Directory _room(WidgetTester tester) {
+  mockPathProvider();
+  mockSecureStorage();
+  final root = Directory.systemTemp.createTempSync('patra-offline-reading');
+  addTearDown(() {
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+  tester.view.physicalSize = const Size(1200, 2200);
+  tester.view.devicePixelRatio = 2;
+  addTearDown(tester.view.reset);
+  return root;
+}
+
+/// Pumps past the bounded retries `serverRetry` allows, without
+/// `pumpAndSettle`.
+///
+/// Offline the home screen keeps a `Skeleton` running — an
+/// `AnimationController..repeat()` — for as long as a shelf has no answer,
+/// and a repeating animation is precisely what `pumpAndSettle` waits forever
+/// for.
+Future<void> _settleOffline(WidgetTester tester) async {
+  for (var i = 0; i < 12; i++) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+}
+
+/// What the app already says about being offline, wherever it says it.
+const _offlineSentence =
+    'Server unreachable — offline mode. Saved chapters remain readable.';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('someone on a train reads what they saved for it', (
+    tester,
+  ) async {
+    // The whole point of the feature, end to end and with nothing answering:
+    // the picker draws, a face opens, and the chapter that was saved for the
+    // journey is listed and readable.
+    final root = _room(tester);
+    await saveChapterFixture(
+      root,
+      _romain.id,
+      chapterId: 42,
+      seriesName: 'Blame!',
+      title: 'Volume 1',
+      pages: 3,
+    );
+    final adapter = _UnreachableAdapter();
+
+    await tester.pumpWidget(_app(root, adapter));
+    await tester.pumpAndSettle();
+
+    // Drawn from what the device remembers, before anything was asked of a
+    // server — and it is about to be shown that nothing could have answered.
+    expect(find.byType(ProfilePickerScreen), findsOneWidget);
+    expect(find.text('romain'), findsOneWidget);
+    expect(find.text('lea'), findsOneWidget);
+
+    await tester.tap(find.text('romain'));
+    await _settleOffline(tester);
+
+    // Entered anyway: unreachable is not a refused credential, so the session
+    // opens on the key it already holds.
+    expect(find.byType(ProfilePickerScreen), findsNothing);
+    expect(find.byType(OfflineIndicator), findsOneWidget);
+
+    await tester.tap(find.text('Downloads'));
+    await _settleOffline(tester);
+
+    expect(find.text('Blame!'), findsOneWidget);
+    expect(find.text('Volume 1'), findsOneWidget);
+
+    await tester.tap(find.text('Volume 1'));
+    await _settleOffline(tester);
+
+    expect(find.byType(ReaderScreen), findsOneWidget);
+    // The page count comes off the stored `meta.json`: nothing answered, so
+    // there was nowhere else it could have come from.
+    await tester.tapAt(tester.getCenter(find.byType(ReaderScreen)));
+    await _settleOffline(tester);
+    expect(find.text('1 / 3'), findsOneWidget);
+  });
+
+  testWidgets('the home screen stops asking rather than shimmering forever', (
+    tester,
+  ) async {
+    // A `Skeleton` is an `AnimationController..repeat()`, and a section that
+    // draws one whenever it has no value draws it for a value that is never
+    // coming: offline, once `serverRetry` has spent its three attempts, the
+    // provider is in error and the shimmer is permanent — a device redrawing
+    // forever over a screen that says nothing.
+    //
+    // `pumpAndSettle` is the assertion: it waits for every animation to
+    // finish, so it can only return if nothing is still shimmering.
+    final root = _room(tester);
+    await tester.pumpWidget(_app(root, _UnreachableAdapter()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Skeleton), findsNothing);
+    // And what says so is the bar, not the content. A paragraph over the
+    // shelves is what this app deliberately stopped doing: it pushed them
+    // down, said the same sentence on three screens at once, and was as loud
+    // on the twentieth glance as on the first. `offline_indicator_test.dart`
+    // is where that rule lives.
+    expect(find.byType(OfflineIndicator), findsOneWidget);
+    expect(find.text(_offlineSentence), findsNothing);
+  });
+
+  testWidgets('an unreachable server never costs a profile its key', (
+    tester,
+  ) async {
+    // Throwing a working credential away over a fault that fixes itself is
+    // what would make the next journey start with a password. Only a bare
+    // 401 means the key itself is refused.
+    final root = _room(tester);
+    final adapter = _UnreachableAdapter();
+
+    await tester.pumpWidget(_app(root, adapter));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('romain'));
+    await _settleOffline(tester);
+
+    expect(adapter.attempts, greaterThan(0), reason: 'it really did try');
+
+    final kept = tester
+        .container()
+        .read(authProvider)
+        .profiles
+        .firstWhere((p) => p.id == _romain.id);
+    expect(kept.hasCredential, isTrue);
+  });
+}
