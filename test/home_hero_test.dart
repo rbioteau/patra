@@ -141,7 +141,10 @@ Future<void> _pumpHome(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [kavitaClientProvider.overrideWithValue(client)],
+      overrides: [
+        kavitaClientProvider.overrideWithValue(client),
+        testCatalogue(),
+      ],
       child: MaterialApp(
         theme: patraTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -190,7 +193,10 @@ Future<void> _pumpRouted(WidgetTester tester, _HomeAdapter adapter) async {
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [kavitaClientProvider.overrideWithValue(client)],
+      overrides: [
+        kavitaClientProvider.overrideWithValue(client),
+        testCatalogue(),
+      ],
       child: MaterialApp.router(
         theme: patraTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -203,9 +209,7 @@ Future<void> _pumpRouted(WidgetTester tester, _HomeAdapter adapter) async {
 }
 
 _HomeAdapter _oneInProgress() => _HomeAdapter(
-  onDeck: [
-    _json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00'),
-  ],
+  onDeck: [_json(5, name: 'Vinland Saga', lastRead: '2026-09-05T10:00:00')],
   volumes: [
     {
       'id': 1,
@@ -547,7 +551,10 @@ void main() {
       client.bareHttpClient.httpClientAdapter = adapter;
 
       final container = ProviderContainer(
-        overrides: [kavitaClientProvider.overrideWithValue(client)],
+        overrides: [
+          kavitaClientProvider.overrideWithValue(client),
+          testCatalogue(),
+        ],
       );
       addTearDown(container.dispose);
       container.read(offlineProvider.notifier).state = true;

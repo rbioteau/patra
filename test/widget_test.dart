@@ -10,6 +10,7 @@ import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/features/login/login_screen.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
@@ -81,8 +82,17 @@ Widget _app({
       initialAuthStateProvider.overrideWithValue(auth.atLaunch()),
       kavitaClientProvider.overrideWithValue(client),
       if (signIn != null) signInProvider.overrideWithValue(signIn),
-      if (downloadsRoot != null)
+      if (downloadsRoot != null) ...[
         downloadsRootProvider.overrideWithValue(downloadsRoot),
+        // The catalogue is filed beside the saved chapters and needs a root
+        // of its own: unrooted it asks path_provider, which on a test binding
+        // never answers at all rather than failing. Beside and not inside —
+        // the two stores both file by profile, and sharing a root would put
+        // a spine where `DownloadsService.scan` sweeps.
+        catalogueRootProvider.overrideWithValue(
+          Directory('${downloadsRoot.path}/catalogue'),
+        ),
+      ],
     ],
     child: const PatraApp(),
   );
@@ -453,6 +463,10 @@ void main() {
       // it earns is a *replacement* key rather than a one-off session — the
       // next launch must not ask again.
       mockSecureStorage();
+      // This one really enters a session, so the shelves fetch and the
+      // catalogue is written: without a documents directory that write asks
+      // a channel nothing answers, and the test hangs rather than failing.
+      mockPathProvider();
       // Refuses the stored key, accepts a typed password. Two profiles, so
       // the device opens on the picker and the refusal is earned by a tap
       // rather than by the launch.

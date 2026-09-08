@@ -7,7 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/settings/settings_screen.dart';
@@ -53,6 +56,24 @@ Future<void> _save(Directory root, Profile profile, int chapterId) =>
       bytes: 2 * 1024 * 1024,
     );
 
+/// Where the catalogue goes under a test's one temp directory.
+Directory _catalogueRoot(Directory root) => Directory('${root.path}/catalogue');
+
+/// A library and a series list in [profile]'s catalogue, written **through**
+/// the store — a file dropped into the layout by hand is one the store's own
+/// version stamp would have to be guessed at, which makes reading it back
+/// vacuous.
+Future<CatalogueStore> _remember(Directory root, Profile profile) async {
+  final store = CatalogueStore(
+    root: _catalogueRoot(root),
+    profileId: profile.id,
+  );
+  await store.putLibraries([
+    const Library(id: 1, name: 'Mangas', type: LibraryType.manga),
+  ]);
+  return store;
+}
+
 Future<Directory> _pump(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
@@ -86,6 +107,9 @@ Future<Directory> _pump(
         // The real service provider, so what it files under is what the
         // session says — which is the whole of this feature.
         downloadsRootProvider.overrideWithValue(root),
+        // Beside the saved chapters, never inside them: both stores file by
+        // profile, and one root would put a spine where `scan` sweeps.
+        catalogueRootProvider.overrideWithValue(_catalogueRoot(root)),
         kavitaClientProvider.overrideWithValue(client),
       ],
       child: MaterialApp(
@@ -147,6 +171,27 @@ void main() {
     final hers = DownloadsService(root: root, profileId: _lea.id);
     expect((await mine.scan()).keys, [101]);
     expect((await hers.profileRoot()).existsSync(), isFalse);
+  });
+
+  testWidgets('confirming deletes that profile\'s catalogue too', (
+    tester,
+  ) async {
+    final root = await _pump(tester);
+    final mine = await _remember(root, _romain);
+    final hers = await _remember(root, _lea);
+
+    // Léa's, from the row Settings draws for every other profile this device
+    // remembers. Her catalogue is not named in the confirmation — that copy
+    // lists what a person chose to keep and what losing it costs them, and
+    // every byte of a catalogue is one refresh away from coming back.
+    await tester.tap(find.byIcon(Icons.person_remove_outlined));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('catalogue'), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, 'Forget'));
+    await tester.pumpAndSettle();
+
+    expect((await hers.profileRoot()).existsSync(), isFalse);
+    expect((await mine.profileRoot()).existsSync(), isTrue);
   });
 
   test('the store survives the session it belonged to ending', () {

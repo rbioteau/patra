@@ -3,7 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
@@ -227,4 +230,24 @@ Future<ProfilePreferencesStore> preferencesStore({
   );
   await store.load();
   return store;
+}
+
+/// A catalogue on a temp directory, for a screen test that hands the tree a
+/// client rather than signing one in.
+///
+/// Every fetch provider now writes what it fetched into the catalogue, and
+/// the real store is keyed on the session — which these harnesses do not
+/// have, exactly as they have no real client. Overriding the store is the
+/// same move as overriding [kavitaClientProvider], and for the same reason:
+/// what is under test is the screen, not the scoping. A test *about* the
+/// scoping overrides [catalogueRootProvider] and lets the real provider key
+/// the store.
+Override testCatalogue({String profileId = 'test'}) {
+  final root = Directory.systemTemp.createTempSync('patra-catalogue-test');
+  addTearDown(() {
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+  return catalogueStoreProvider.overrideWithValue(
+    CatalogueStore(root: root, profileId: profileId),
+  );
 }

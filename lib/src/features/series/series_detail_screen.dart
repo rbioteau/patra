@@ -7,6 +7,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/kavita_client.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
@@ -19,10 +20,22 @@ import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
 import '../library/library_screen.dart';
 
+/// A series' volumes and their chapters, and the catalogue's copy of them.
+///
+/// Volumes stay a **trace of what was actually opened**: nothing prefetches
+/// them, because a device that browsed a 2000-series library would otherwise
+/// hold every chapter of all of it. See `librariesProvider` for why the write
+/// is in the body.
 final volumesProvider = FutureProvider.autoDispose.family<List<Volume>, int>(
   retry: serverRetry,
-  (ref, seriesId) {
-    return ref.watch(kavitaClientProvider).volumes(seriesId);
+  (ref, seriesId) async {
+    final client = ref.watch(kavitaClientProvider);
+    // In hand before the request: leaving the screen disposes this provider
+    // while its fetch is in flight, and a `ref` read after that throws.
+    final store = ref.read(catalogueStoreProvider);
+    final volumes = await client.volumes(seriesId);
+    await store.putVolumes(seriesId, volumes);
+    return volumes;
   },
 );
 
@@ -72,15 +85,23 @@ final seriesVolumesProvider = Provider.autoDispose
 
 final seriesProvider = FutureProvider.autoDispose.family<Series, int>(
   retry: serverRetry,
-  (ref, seriesId) => ref.watch(kavitaClientProvider).series(seriesId),
+  (ref, seriesId) async {
+    final client = ref.watch(kavitaClientProvider);
+    final store = ref.read(catalogueStoreProvider);
+    final series = await client.series(seriesId);
+    await store.putSeries(series);
+    return series;
+  },
 );
 
 final seriesMetadataProvider = FutureProvider.autoDispose
-    .family<SeriesMetadata, int>(
-      retry: serverRetry,
-      (ref, seriesId) =>
-          ref.watch(kavitaClientProvider).seriesMetadata(seriesId),
-    );
+    .family<SeriesMetadata, int>(retry: serverRetry, (ref, seriesId) async {
+      final client = ref.watch(kavitaClientProvider);
+      final store = ref.read(catalogueStoreProvider);
+      final metadata = await client.seriesMetadata(seriesId);
+      await store.putSeriesMetadata(seriesId, metadata);
+      return metadata;
+    });
 
 /// The three buckets Kavita splits a series into, from the one call we make.
 ///

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../format.dart';
@@ -271,6 +272,12 @@ Future<void> _confirmForget(
     // and has to stay so — a profile removed anywhere else would leave its
     // chapters on disk with nothing left that could reach or explain them.
     await downloads.removeAll();
+    // And what the device remembered of their shelves, which is theirs alone
+    // for the same reason. Deliberately **not** named in the confirmation
+    // above: that copy lists what a person chose to keep and what losing it
+    // costs them, and a catalogue is neither — every byte of it is one
+    // refresh away from coming back.
+    await ref.read(profileCatalogueProvider(profile.id)).removeAll();
     // That person alone: the others on their server stay, because somebody
     // leaving the household is not the server being forgotten. Removing the
     // profile being read as ends the session, and the redirect then lands on

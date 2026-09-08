@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../api/kavita_client.dart';
+import '../profile_files.dart';
 
 /// A chapter whose pages are stored on the device.
 class SavedChapter {
@@ -124,15 +125,9 @@ class DownloadsService {
   Future<Directory> profileRoot() async =>
       Directory('${(await _downloadsRoot()).path}/${dirNameFor(profileId)}');
 
-  /// A directory name for [profileId], which is an address with an account
-  /// id on the end of it (`https://kavita.example#3`) and so carries `:`,
-  /// `/` and `#`.
-  ///
-  /// Percent-encoded rather than hashed: it is reversible by eye when
-  /// somebody is looking at a device's files, and — unlike a hash — two
-  /// profiles cannot possibly land on one directory, which is the whole bug
-  /// this layout exists to prevent.
-  static String dirNameFor(String profileId) => Uri.encodeComponent(profileId);
+  /// A directory name for [profileId]. See [profileDirName], which the
+  /// catalogue files by too.
+  static String dirNameFor(String profileId) => profileDirName(profileId);
 
   Future<Directory> chapterDir(int chapterId) async =>
       Directory('${(await profileRoot()).path}/$chapterId');

@@ -114,6 +114,7 @@ Future<_Adapter> _pump(
           AuthState(profiles: [profile], activeId: profile.id),
         ),
         kavitaClientProvider.overrideWithValue(client),
+        testCatalogue(),
       ],
       child: MaterialApp(
         theme: patraTheme(),
@@ -173,7 +174,9 @@ void main() {
     ) async {
       final adapter = await _pump(tester, admin: true);
       await tester.pumpAndSettle();
-      expect(adapter.seriesRequests, 1);
+      // Whatever the catalogue's eager fill has asked for by now: what is
+      // under test is the *delta* across the tap, not the total.
+      final before = adapter.seriesRequests;
 
       await tester.tap(_menu);
       await tester.pumpAndSettle();
@@ -183,7 +186,7 @@ void main() {
       // Invalidating here would drop a populated grid to its skeleton for a
       // background job that has produced nothing yet. The confirmation says
       // to pull down instead.
-      expect(adapter.seriesRequests, 1);
+      expect(adapter.seriesRequests, before);
       expect(find.text('Vinland Saga'), findsOneWidget);
       expect(find.byType(Skeleton), findsNothing);
     });
@@ -193,7 +196,7 @@ void main() {
     ) async {
       final adapter = await _pump(tester, admin: true, empty: true);
       await tester.pumpAndSettle();
-      expect(adapter.seriesRequests, 1);
+      final before = adapter.seriesRequests;
 
       // Two entry points, both drawn: the empty state explains why there is
       // nothing and offers the fix in place, the menu is for content that
@@ -205,7 +208,7 @@ void main() {
       expect(adapter.scans, hasLength(1));
       // Here there is nothing on screen to lose and every reason to look
       // again.
-      expect(adapter.seriesRequests, 2);
+      expect(adapter.seriesRequests, before + 1);
     });
   });
 
@@ -301,7 +304,10 @@ void main() {
       );
       client.httpClient.httpClientAdapter = adapter;
       final container = ProviderContainer.test(
-        overrides: [kavitaClientProvider.overrideWithValue(client)],
+        overrides: [
+          kavitaClientProvider.overrideWithValue(client),
+          testCatalogue(),
+        ],
       );
       final notifier = container.read(libraryScanProvider(7).notifier);
 

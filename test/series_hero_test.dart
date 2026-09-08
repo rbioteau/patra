@@ -159,6 +159,7 @@ Future<void> _pumpSeries(
         downloadsServiceProvider.overrideWithValue(
           DownloadsService(root: cacheDir, profileId: 'https://kavita.test#1'),
         ),
+        testCatalogue(profileId: 'https://kavita.test#1'),
       ],
       child: MaterialApp(
         theme: patraTheme(),
