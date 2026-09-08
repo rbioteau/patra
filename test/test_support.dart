@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -250,4 +251,27 @@ Override testCatalogue({String profileId = 'test'}) {
   return catalogueStoreProvider.overrideWithValue(
     CatalogueStore(root: root, profileId: profileId),
   );
+}
+
+/// A server that is not there: every request fails to *reach* it.
+///
+/// Shared because more than one suite needs the state rather than the
+/// response — a `DioException.connectionError` is what flips
+/// `offlineProvider`, what `serverRetry` bounds, and what a resolved failure
+/// is made of. [requests] is there so a test can tell "the catalogue
+/// answered instead" from "nothing was ever asked".
+class UnreachableServer implements HttpClientAdapter {
+  var requests = 0;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    requests++;
+    throw DioException.connectionError(
+      requestOptions: options,
+      reason: 'offline',
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

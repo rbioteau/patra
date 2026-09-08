@@ -24,8 +24,8 @@ import '../library/library_screen.dart';
 ///
 /// Volumes stay a **trace of what was actually opened**: nothing prefetches
 /// them, because a device that browsed a 2000-series library would otherwise
-/// hold every chapter of all of it. See `librariesProvider` for why the write
-/// is in the body.
+/// hold every chapter of all of it. See `librariesFetchProvider` for why the
+/// write is in the body.
 final volumesProvider = FutureProvider.autoDispose.family<List<Volume>, int>(
   retry: serverRetry,
   (ref, seriesId) async {

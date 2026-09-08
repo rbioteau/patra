@@ -39,7 +39,7 @@ final onDeckProvider = FutureProvider.autoDispose<List<Series>>(
   retry: serverRetry,
   (ref) async {
     final client = ref.watch(kavitaClientProvider);
-    // In hand before the request: see `librariesProvider`.
+    // In hand before the request: see `librariesFetchProvider`.
     final store = ref.read(catalogueStoreProvider);
     final series = await client.onDeck();
     await store.putOnDeck(series);
@@ -108,10 +108,10 @@ class HomeScreen extends ConsumerWidget {
     final featured = ref.read(continueHeroProvider)?.series.id;
     if (featured != null) ref.invalidate(volumesProvider(featured));
     ref.invalidate(onDeckProvider);
-    ref.invalidate(librariesProvider);
+    ref.invalidate(librariesFetchProvider);
     await Future.wait([
       ref.read(onDeckProvider.future),
-      ref.read(librariesProvider.future),
+      ref.read(librariesFetchProvider.future),
     ]).catchError((Object _) => const <List<Object>>[]);
     // The shelves have moved, so the promoted series may not be the one whose
     // chapter was invalidated above.
