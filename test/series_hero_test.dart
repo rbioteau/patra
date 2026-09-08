@@ -312,4 +312,72 @@ void main() {
       expect(find.byKey(const ValueKey('heroBackdrop')), findsNothing);
     });
   });
+
+  // The cover follows the backdrop: where the hero is standing inside a
+  // chapter, the picture is that chapter's rather than the series'. A series
+  // cover over a page of the chapter you are in names the wrong thing.
+  group('the cover on the series hero', () {
+    CoverImage hero(WidgetTester tester) =>
+        tester.widget<CoverImage>(find.byType(CoverImage).first);
+
+    testWidgets('is the cover of the chapter under way', (tester) async {
+      await _pumpSeries(tester, _volumesWithChapters);
+      expect(
+        hero(tester).url,
+        allOf(contains('/api/Image/chapter-cover'), contains('chapterId=103')),
+      );
+    });
+
+    // The bar under a cover always means "how far through the thing pictured",
+    // which is the rule every chapter row and series tile already follows.
+    testWidgets('and carries that chapter\'s progress', (tester) async {
+      await _pumpSeries(tester, _volumesWithChapters);
+      // Chapter 3 is 40 of 100; the series is 140 of 300.
+      expect(hero(tester).progress, closeTo(0.4, 0.001));
+    });
+
+    // A volume with no chapter breakdown is the reading unit, so it is drawn
+    // by its own cover — the same choice the rows below make, which is also
+    // what keeps the two on one cached image rather than two.
+    testWidgets('is the volume cover where the volume is the unit', (
+      tester,
+    ) async {
+      await _pumpSeries(tester, _volumesWithoutChapters);
+      expect(
+        hero(tester).url,
+        allOf(contains('/api/Image/volume-cover'), contains('volumeId=20')),
+      );
+    });
+
+    testWidgets('stays the series cover when nothing is under way', (
+      tester,
+    ) async {
+      await _pumpSeries(tester, [
+        {
+          'id': 10,
+          'name': '1',
+          'minNumber': 1,
+          'chapters': [_chapter(101, '1', 100, 0)],
+        },
+      ]);
+      expect(
+        hero(tester).url,
+        allOf(contains('/api/Image/series-cover'), contains('seriesId=5')),
+      );
+    });
+
+    testWidgets('and is the series cover again once everything is read', (
+      tester,
+    ) async {
+      await _pumpSeries(tester, [
+        {
+          'id': 10,
+          'name': '1',
+          'minNumber': 1,
+          'chapters': [_chapter(101, '1', 100, 100)],
+        },
+      ]);
+      expect(hero(tester).url, contains('/api/Image/series-cover'));
+    });
+  });
 }

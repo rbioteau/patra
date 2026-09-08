@@ -12,6 +12,7 @@
 /// coincidence.
 library;
 
+import 'api/kavita_client.dart';
 import 'api/models.dart';
 
 /// A chapter together with the volume it belongs to, which is what names a
@@ -23,6 +24,36 @@ typedef ResumeEntry = ({Volume volume, Chapter chapter});
 /// next one untouched. [allRead] means there was nothing left, so [entry] is
 /// the beginning again.
 typedef ResumePoint = ({ResumeEntry entry, bool started, bool allRead});
+
+/// The entry a hero is genuinely standing *inside*, or null where there is no
+/// page you are on — the button starts the series, or offers it again.
+///
+/// Both heroes ask this of the same [ResumePoint], which is what keeps the
+/// page they draw behind themselves and the cover they draw in front of it
+/// naming one and the same chapter. `started` is a fact about the series and
+/// is implied here by the chapter's own progress; it is asked anyway, because
+/// the two are only equivalent by accident of what `resumePoint` returns.
+ResumeEntry? entryUnderWay(ResumePoint? point) => switch (point) {
+  (:final entry, started: true, allRead: false)
+      when entry.chapter.pagesRead > 0 =>
+    entry,
+  _ => null,
+};
+
+/// The cover that pictures a resume entry.
+///
+/// A volume with no chapter breakdown is the reading unit — that is what its
+/// placeholder chapter means — so it is drawn by the volume's own cover, the
+/// same choice the series screen's rows make. Following them is not only
+/// tidiness: the shared image cache keys on the URL, so a hero that asked for
+/// the placeholder chapter's cover instead would fetch and store a second
+/// copy of the picture already on the row it opens.
+String entryCoverUrl(KavitaClient client, ResumeEntry entry) =>
+    entry.chapter.isVolumePlaceholder &&
+        !entry.volume.isLooseLeaf &&
+        !entry.volume.isSpecials
+    ? client.volumeCoverUrl(entry.volume.id)
+    : client.chapterCoverUrl(entry.chapter.id);
 
 int bySortOrder(Chapter a, Chapter b) => a.sortOrder.compareTo(b.sortOrder);
 

@@ -110,6 +110,20 @@ class ContinueHero extends ConsumerWidget {
     final tablet = isTabletLayout(context);
     final coverWidth = tablet ? _coverWidthTablet : _coverWidth;
 
+    // The card is about one chapter — it names it, counts what is left of it
+    // and opens it — so the picture beside all that is the chapter's. The
+    // series cover stands in for the frame where the chapter is not known
+    // yet, and wherever the button would open something untouched: there is
+    // no chapter you are inside, and a cover is a poor way to say so.
+    //
+    // The backdrop below keeps its own, looser rule — it draws the resume
+    // point's chapter as soon as there is one, page 0 included — so on a
+    // series whose next chapter is untouched the cover says "series" over a
+    // page. That predates this and is Home's own bargain: unlike the series
+    // screen, this card exists only to be resumed from, and a card with no
+    // artwork at all is what refusing that page would cost.
+    final underWay = entryUnderWay(data.point);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, sectionGap),
       child: ClipRRect(
@@ -142,7 +156,9 @@ class ContinueHero extends ConsumerWidget {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(radiusCover),
                               child: CoverImage(
-                                url: client.seriesCoverUrl(series.id),
+                                url: underWay == null
+                                    ? client.seriesCoverUrl(series.id)
+                                    : entryCoverUrl(client, underWay),
                                 headers: client.imageHeaders,
                               ),
                             ),

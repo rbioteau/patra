@@ -845,4 +845,68 @@ void main() {
       expect(art.width, closeTo(card.width - gutter * 2, 0.5));
     });
   });
+
+  // The card is about one chapter — it names it, counts the pages left in it
+  // and opens it — so the picture beside all that is the chapter's, not the
+  // series'. The series cover is what stands in until the chapter is known.
+  group('the cover on the Continue hero', () {
+    CoverImage cover(WidgetTester tester) => tester.widget<CoverImage>(
+      find.descendant(
+        of: find.byType(ContinueHero),
+        matching: find.byType(CoverImage),
+      ),
+    );
+
+    testWidgets('is the cover of the chapter it resumes', (tester) async {
+      await _pumpHome(tester, _oneInProgress());
+      expect(
+        cover(tester).url,
+        allOf(contains('/api/Image/chapter-cover'), contains('chapterId=101')),
+      );
+    });
+
+    // There is a real frame where the series is known and the chapter is not:
+    // the card is drawn straight away rather than held back for it.
+    testWidgets('is the series cover while the chapter is in flight', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final adapter = _oneInProgress()..volumesGate = gate;
+      await _pumpHome(tester, adapter, settle: false);
+
+      expect(
+        cover(tester).url,
+        allOf(contains('/api/Image/series-cover'), contains('seriesId=5')),
+      );
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(cover(tester).url, contains('/api/Image/chapter-cover'));
+    });
+
+    // A series under way whose next chapter has not been opened: there is no
+    // chapter you are inside, so the series is what the card pictures.
+    testWidgets('is the series cover when the next chapter is untouched', (
+      tester,
+    ) async {
+      await _pumpHome(
+        tester,
+        _HomeAdapter(
+          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
+          volumes: [
+            {
+              'id': 1,
+              'name': '1',
+              'minNumber': 1,
+              'chapters': [
+                _chapter(101, 1, pages: 30, read: 30),
+                _chapter(102, 2, pages: 30, read: 0),
+              ],
+            },
+          ],
+        ),
+      );
+      expect(cover(tester).url, contains('/api/Image/series-cover'));
+    });
+  });
 }

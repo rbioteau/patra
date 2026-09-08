@@ -423,17 +423,29 @@ class _SeriesHero extends ConsumerWidget {
 
     // Only when a chapter is genuinely under way. Where the button starts the
     // series, or offers it again, there is no page you are on — and the first
-    // page of something unread is a spoiler with nothing behind it.
-    final onPage = switch (target) {
-      (:final entry, started: true, allRead: false)
-          when entry.chapter.pagesRead > 0 =>
-        entry.chapter,
-      _ => null,
-    };
+    // page of something unread is a spoiler with nothing behind it. The rule
+    // is `resume_point.dart`'s, so the page behind the hero, the cover in
+    // front of it and the home screen's own card all name one chapter.
+    final underWay = entryUnderWay(target);
+    final onPage = underWay?.chapter;
 
     // Muted grey is tuned against a flat panel; over a page it is the first
     // thing to go.
     final onArt = onPage == null ? null : patraTextOnArt;
+
+    // A cover's bar always means "how far through the thing pictured" — the
+    // rule every chapter row and library tile follows — so it belongs to
+    // whichever of the two this cover turned out to be, and must never fall
+    // back across that line: a series' progress under a chapter's picture is
+    // a number about something else.
+    final coverProgress = switch (underWay) {
+      final entry? => entry.chapter.pages == 0
+          ? 0.0
+          : entry.chapter.pagesRead / entry.chapter.pages,
+      null => series == null || series.pages == 0
+          ? 0.0
+          : series.pagesRead / series.pages,
+    };
 
     return Stack(
       children: [
@@ -454,11 +466,11 @@ class _SeriesHero extends ConsumerWidget {
                 width: coverWidth,
                 height: coverHeight,
                 child: CoverImage(
-                  url: client.seriesCoverUrl(seriesId),
+                  url: underWay == null
+                      ? client.seriesCoverUrl(seriesId)
+                      : entryCoverUrl(client, underWay),
                   headers: client.imageHeaders,
-                  progress: series == null || series.pages == 0
-                      ? 0
-                      : series.pagesRead / series.pages,
+                  progress: coverProgress,
                 ),
               ),
               const SizedBox(width: 16),
