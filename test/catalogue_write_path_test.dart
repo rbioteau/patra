@@ -256,6 +256,53 @@ void main() {
     });
   });
 
+  group('the tab and the eager fill are one filling, not two', () {
+    test('a library the tab has paged is not paged again', () async {
+      // The bookkeeping between them had no test at all: nothing could tell
+      // "the tab's own fetch stored this library" from "the eager fill did",
+      // so `markStored` could have been dropped in silence. What it costs is
+      // not correctness but a household's 2000-series library paged twice on
+      // the one visit that opens the tab.
+      final root = _root();
+      final adapter = _Adapter(
+        libraries: [1, 2],
+        seriesPages: {
+          1: [
+            [_seriesJson(5)],
+          ],
+          2: [
+            [_seriesJson(9, name: 'Berserk')],
+          ],
+        },
+      );
+      final container = _container(root: root, adapter: adapter);
+
+      // The order the Library tab produces: it asks for the selected
+      // library and for the list at once, and the selected one lands first.
+      await container.read(catalogue.seriesForLibrary(1).refreshable);
+      await container.read(catalogue.libraries.refreshable);
+      await pumpEventQueue();
+
+      expect(
+        adapter.asked[1],
+        1,
+        reason: 'the fill must skip the library the tab has just stored',
+      );
+      expect(
+        adapter.asked[2],
+        1,
+        reason: 'and still page the one nothing has opened',
+      );
+      // Both are in the spine either way: what is under test is who paged
+      // them, not whether they are there.
+      final spine = await CatalogueStore(
+        root: root,
+        profileId: _romain.id,
+      ).loadSpine();
+      expect(spine.series.keys, containsAll(<int>[1, 2]));
+    });
+  });
+
   group('only a complete answer replaces', () {
     test('a run that reaches the end of the paging does', () async {
       final root = _root();
