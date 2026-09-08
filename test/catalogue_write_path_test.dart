@@ -230,8 +230,8 @@ void main() {
 
       await container.read(seriesForLibraryFetchProvider(1).future);
       await container.read(volumesFetchProvider(5).future);
-      await container.read(seriesProvider(5).future);
-      await container.read(seriesMetadataProvider(5).future);
+      await container.read(seriesFetchProvider(5).future);
+      await container.read(seriesMetadataFetchProvider(5).future);
 
       final store = CatalogueStore(root: root, profileId: _romain.id);
       expect((await store.loadSpine()).series[1]!.single.id, 5);

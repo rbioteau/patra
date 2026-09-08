@@ -38,6 +38,21 @@ final volumesFetchProvider = FutureProvider.autoDispose
       return volumes;
     });
 
+/// The volumes and where they came from — one provider, because a screen
+/// that asked those two questions separately could get them out of step.
+///
+/// It exists at all because [seriesVolumesProvider] needs the second fact:
+/// what is laid over a row depends on whether the server answered for it.
+final _volumesOverlayProvider = Provider.autoDispose
+    .family<Overlaid<List<Volume>>, int>(
+      (ref, seriesId) => storedSeriesOverlay(
+        ref,
+        seriesId,
+        volumesFetchProvider(seriesId),
+        (stored) => stored.volumes,
+      ),
+    );
+
 /// The volumes as anything that draws them sees them: the server's answer
 /// where there is one, and otherwise what the device remembers of the series.
 ///
@@ -54,12 +69,7 @@ final volumesFetchProvider = FutureProvider.autoDispose
 /// `continueHeroProvider`'s existing rule does the rest.
 final volumesProvider = Provider.autoDispose
     .family<AsyncValue<List<Volume>>, int>(
-      (ref, seriesId) => storedSeriesOverlay(
-        ref,
-        seriesId,
-        volumesFetchProvider(seriesId),
-        (stored) => stored.volumes,
-      ),
+      (ref, seriesId) => ref.watch(_volumesOverlayProvider(seriesId)).value,
     );
 
 /// Progress the user has just set by hand, before the server has confirmed it.
@@ -86,27 +96,68 @@ final readOverridesProvider =
       ReadOverridesNotifier.new,
     );
 
-/// The volumes as the screen shows them: what the server last said, with any
-/// unconfirmed mark-read applied on top.
+/// The volumes as the screen shows them — three deep, and the order is the
+/// whole of it: **what the device remembers, under what the server last
+/// said, under any unconfirmed mark-read.**
+///
+/// The mark-read is on top because it is the newest word about a row and the
+/// entire point of it is that the row redraws on the gesture rather than on
+/// the round trip.
+///
+/// Between the two: **where the rows are the device's memory, the saved
+/// copy's progress is laid over them.** There the saved copy is the newer
+/// word — it is where offline reading writes, and the catalogue deliberately
+/// never absorbs that (ADR-0005), so the stored volumes carry the server's
+/// last word about a chapter somebody has since read on a train. Where the
+/// server has answered, it is left alone: the server is the authority and
+/// the saved copy is what gets corrected from it, which is the mirror in
+/// [_ChapterRow]. Laying it here rather than in the row is what keeps the
+/// hero's resume point and the row's own progress naming one number.
 final seriesVolumesProvider = Provider.autoDispose
     .family<AsyncValue<List<Volume>>, int>((ref, seriesId) {
+      final answer = ref.watch(_volumesOverlayProvider(seriesId));
+      // Only where it applies: watching the saved chapters unconditionally
+      // would rebuild every row of a live list on each tick of a download.
+      final saved = answer.fromCatalogue
+          ? ref.watch(downloadsProvider.select((s) => s.value?.saved))
+          : null;
       final overrides = ref.watch(readOverridesProvider);
-      final volumes = ref.watch(volumesProvider(seriesId));
-      if (overrides.isEmpty) return volumes;
-      return volumes.whenData(
+      if ((saved == null || saved.isEmpty) && overrides.isEmpty) {
+        return answer.value;
+      }
+      return answer.value.whenData(
         (volumes) => [
           for (final volume in volumes)
             volume.withChapters([
               for (final chapter in volume.chapters)
-                overrides.containsKey(chapter.id)
-                    ? chapter.copyWith(pagesRead: overrides[chapter.id])
-                    : chapter,
+                _withNewestProgress(chapter, saved, overrides),
             ]),
         ],
       );
     });
 
-final seriesProvider = FutureProvider.autoDispose.family<Series, int>(
+/// One chapter, carrying whichever of the three has the newest word about how
+/// far through it is — see [seriesVolumesProvider] for why that order.
+///
+/// The saved copy wins over the stored volumes **unconditionally**: there is
+/// no clock on either, and inventing one (or taking the larger number) would
+/// get a mark-unread the server really did make exactly wrong. What keeps
+/// that from walking a row backwards is `_ChapterRow`'s mirror, which in the
+/// ordinary case has already carried the server's word into `meta.json` on
+/// the same visit that wrote the catalogue.
+Chapter _withNewestProgress(
+  Chapter chapter,
+  Map<int, SavedChapter>? saved,
+  Map<int, int> overrides,
+) {
+  final override = overrides[chapter.id];
+  if (override != null) return chapter.copyWith(pagesRead: override);
+  final copy = saved?[chapter.id];
+  if (copy == null) return chapter;
+  return chapter.copyWith(pagesRead: copy.pagesRead);
+}
+
+final seriesFetchProvider = FutureProvider.autoDispose.family<Series, int>(
   retry: serverRetry,
   (ref, seriesId) async {
     final client = ref.watch(kavitaClientProvider);
@@ -117,7 +168,18 @@ final seriesProvider = FutureProvider.autoDispose.family<Series, int>(
   },
 );
 
-final seriesMetadataProvider = FutureProvider.autoDispose
+/// The series' own row — its library name, and the series-level tally the
+/// hero's ring is drawn from. See [volumesProvider] for the naming.
+final seriesProvider = Provider.autoDispose.family<AsyncValue<Series>, int>(
+  (ref, seriesId) => storedSeriesOverlay(
+    ref,
+    seriesId,
+    seriesFetchProvider(seriesId),
+    (stored) => stored.series,
+  ).value,
+);
+
+final seriesMetadataFetchProvider = FutureProvider.autoDispose
     .family<SeriesMetadata, int>(retry: serverRetry, (ref, seriesId) async {
       final client = ref.watch(kavitaClientProvider);
       final store = ref.read(catalogueStoreProvider);
@@ -125,6 +187,18 @@ final seriesMetadataProvider = FutureProvider.autoDispose
       await store.putSeriesMetadata(seriesId, metadata);
       return metadata;
     });
+
+/// Who made the series and what it is about. See [volumesProvider] for the
+/// naming.
+final seriesMetadataProvider = Provider.autoDispose
+    .family<AsyncValue<SeriesMetadata>, int>(
+      (ref, seriesId) => storedSeriesOverlay(
+        ref,
+        seriesId,
+        seriesMetadataFetchProvider(seriesId),
+        (stored) => stored.metadata,
+      ).value,
+    );
 
 /// The three buckets Kavita splits a series into, from the one call we make.
 ///
@@ -275,7 +349,7 @@ class SeriesDetailScreen extends ConsumerWidget {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(readerLocation(chapter, started: started));
     ref.invalidate(volumesFetchProvider(seriesId));
-    ref.invalidate(seriesProvider(seriesId));
+    ref.invalidate(seriesFetchProvider(seriesId));
   }
 
   List<Widget> _buildSections(
@@ -455,6 +529,17 @@ class _SeriesHero extends ConsumerWidget {
       if (series != null && series.libraryName.isNotEmpty) series.libraryName,
     ].join(' · ');
 
+    // Offline the button follows the same rule as the row it opens: a chapter
+    // that is not on the device cannot be read, and a hero offering what the
+    // dimmed row below it refuses is the screen disagreeing with itself. The
+    // *format* is deliberately not asked about here, as it never has been:
+    // the reader refuses an EPUB outright, because a deep link and a resume
+    // do not pass through this screen either.
+    final openable =
+        target != null &&
+        (!ref.watch(offlineProvider) ||
+            ref.watch(savedChapterProvider(target.entry.chapter.id)) != null);
+
     final label = switch (target) {
       null => null,
       (:final entry, started: true, allRead: false) => _resumeLabel(
@@ -483,12 +568,14 @@ class _SeriesHero extends ConsumerWidget {
     // back across that line: a series' progress under a chapter's picture is
     // a number about something else.
     final coverProgress = switch (underWay) {
-      final entry? => entry.chapter.pages == 0
-          ? 0.0
-          : entry.chapter.pagesRead / entry.chapter.pages,
-      null => series == null || series.pages == 0
-          ? 0.0
-          : series.pagesRead / series.pages,
+      final entry? =>
+        entry.chapter.pages == 0
+            ? 0.0
+            : entry.chapter.pagesRead / entry.chapter.pages,
+      null =>
+        series == null || series.pages == 0
+            ? 0.0
+            : series.pagesRead / series.pages,
     };
 
     return Stack(
@@ -571,9 +658,9 @@ class _SeriesHero extends ConsumerWidget {
                                 horizontal: 12,
                               ),
                             ),
-                            onPressed: target == null
-                                ? null
-                                : () => onRead(target.entry.chapter),
+                            onPressed: openable
+                                ? () => onRead(target.entry.chapter)
+                                : null,
                             child: Text(
                               label ?? l10n.seriesStartReading,
                               maxLines: 1,
@@ -654,6 +741,13 @@ class _ChapterRow extends ConsumerWidget {
     // The server is the authority on progress; mirror it into the stored copy
     // so the Downloads tab knows it too, including for chapters saved before
     // this screen was ever opened.
+    //
+    // It is **inert on a row drawn from the catalogue**, and that is the same
+    // fact stated twice rather than luck: [seriesVolumesProvider] has already
+    // laid the saved copy's progress over such a row, so the two numbers
+    // agree and there is nothing to carry. Which is what has to happen — the
+    // catalogue holds the server's *last* word, and writing that back over a
+    // chapter somebody has since read on a train would undo the reading.
     if (savedCopy != null && savedCopy.pagesRead != chapter.pagesRead) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref
@@ -795,7 +889,11 @@ class _ChapterRow extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          if (readable)
+          // The same rule as the tap: offline the pill could only offer what
+          // it cannot do, since a chapter that is not already on the device
+          // cannot be fetched. A copy already here keeps its pill, because
+          // removing one is local.
+          if (openable)
             SavePill(
               request: SavedChapter(
                 chapterId: chapter.id,
@@ -929,7 +1027,7 @@ class _ChapterRow extends ConsumerWidget {
     // The cover's progress ring is series-wide and cannot be guessed from one
     // chapter. Re-fetching it is flash-free — the hero reads the value, which
     // survives a refresh — so it catches up on its own.
-    if (ref.context.mounted) ref.invalidate(seriesProvider(seriesId));
+    if (ref.context.mounted) ref.invalidate(seriesFetchProvider(seriesId));
   }
 
   /// An open row closes on tap; only a closed one opens the reader.
@@ -982,7 +1080,7 @@ class _ChapterRow extends ConsumerWidget {
     await context.push(readerLocation(chapter, started: started));
     // Progress changed while reading: the rows and the hero both show it.
     ref.invalidate(volumesFetchProvider(seriesId));
-    ref.invalidate(seriesProvider(seriesId));
+    ref.invalidate(seriesFetchProvider(seriesId));
   }
 }
 
