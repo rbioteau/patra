@@ -5,8 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
-import '../../catalogue/catalogue_overlay.dart';
-import '../../catalogue/catalogue_provider.dart';
+import '../../catalogue/catalogue_reads.dart' as catalogue;
 import '../../downloads/downloads_provider.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
@@ -18,52 +17,7 @@ import '../../widgets/patra_wordmark.dart';
 import '../../widgets/profile_avatar.dart';
 import '../launch/launch_animation.dart';
 import '../library/library_screen.dart';
-import '../series/series_detail_screen.dart';
 import 'continue_hero.dart';
-
-/// The next thing to read in each series — the "On deck" shelf, and the
-/// candidates the Continue hero is promoted from.
-///
-/// **One request answers both, because it is one question.** Kavita builds
-/// this from `PagesRead > 0 && PagesRead < Pages` plus a recency clause
-/// (`LatestReadDate >= now - OnDeckProgressDays`, or a chapter added inside
-/// `OnDeckUpdateDays`), which is exactly "started, unfinished, and still
-/// live". The hero used to come from `/api/Series/currently-reading`
-/// instead, on the reading that its name is the question — and it is not:
-/// Kavita builds *that* from `ReadLast GreaterThan OnDeckProgressDays`, a
-/// comparison `SeriesFilter.HasReadLast` deliberately inverts into
-/// `MaxDate < now - N`. It is the pile you started and have not touched in
-/// over a month, the **complement** of this one, so anybody reading
-/// regularly had no hero at all while this very shelf listed what they were
-/// reading.
-final onDeckFetchProvider = FutureProvider.autoDispose<List<Series>>(
-  retry: serverRetry,
-  (ref) async {
-    final client = ref.watch(kavitaClientProvider);
-    // In hand before the request: see `librariesFetchProvider`.
-    final store = ref.read(catalogueStoreProvider);
-    final series = await client.onDeck();
-    await store.putOnDeck(series);
-    return series;
-  },
-);
-
-/// The shelf as Home draws it: the server's ranking where there is one, and
-/// otherwise the last one the device was given.
-///
-/// This is the provider to watch — see `librariesProvider` for the whole of
-/// why, and `onDeckOverlay` for what a stored ranking is and is not. It is
-/// **not decorated**: the app bar's struck-through cloud already says the
-/// answer may be old, and per ADR-0005 an individual row never carries a
-/// mark of its own.
-///
-/// An offline Home that says "nothing here, try Downloads" while the device
-/// knows perfectly well what was being read is the inconsistency the
-/// catalogue exists to remove — so `_OfflineHome` below now stands only
-/// where the catalogue is empty too.
-final onDeckProvider = Provider.autoDispose<AsyncValue<List<Series>>>(
-  (ref) => onDeckOverlay(ref, onDeckFetchProvider),
-);
 
 /// Whether there is a hero at all, and what it says.
 ///
@@ -82,7 +36,7 @@ final onDeckProvider = Provider.autoDispose<AsyncValue<List<Series>>>(
 /// overlay resolves into its fetch's failure, `hasError` is what it always
 /// was, and the series stays in the shelf below.
 final continueHeroProvider = Provider.autoDispose<ContinueHeroData?>((ref) {
-  final started = ref.watch(onDeckProvider).value;
+  final started = ref.watch(catalogue.onDeck.provider).value;
   final featured = featuredSeries(started ?? const []);
   if (featured == null) return null;
   // Deliberately one layer down from `seriesVolumesProvider`, which lays the
@@ -91,7 +45,7 @@ final continueHeroProvider = Provider.autoDispose<ContinueHeroData?>((ref) {
   // server's word again, and a home screen watching it would keep it alive
   // for the life of the app. What keeps this honest instead is that every
   // path back from reading re-fetches — see `_refresh`.
-  final volumes = ref.watch(volumesProvider(featured.id));
+  final volumes = ref.watch(catalogue.volumes(featured.id).provider);
   if (volumes.hasError) return null;
   final point = volumes.value == null ? null : resumePoint(volumes.value!);
   if (volumes.hasValue && point == null) return null;
@@ -131,18 +85,20 @@ class HomeScreen extends ConsumerWidget {
     // promoted. A pull has to reach it too, or the card would keep naming the
     // chapter the shelf has just stopped agreeing with.
     final featured = ref.read(continueHeroProvider)?.series.id;
-    if (featured != null) ref.invalidate(volumesFetchProvider(featured));
-    ref.invalidate(onDeckFetchProvider);
-    ref.invalidate(librariesFetchProvider);
+    if (featured != null) {
+      ref.invalidate(catalogue.volumes(featured).invalidatable);
+    }
+    ref.invalidate(catalogue.onDeck.invalidatable);
+    ref.invalidate(catalogue.libraries.invalidatable);
     await Future.wait([
-      ref.read(onDeckFetchProvider.future),
-      ref.read(librariesFetchProvider.future),
+      ref.read(catalogue.onDeck.refreshable),
+      ref.read(catalogue.libraries.refreshable),
     ]).catchError((Object _) => const <List<Object>>[]);
     // The shelves have moved, so the promoted series may not be the one whose
     // chapter was invalidated above.
     final promoted = ref.read(continueHeroProvider)?.series.id;
     if (promoted != null && promoted != featured) {
-      ref.invalidate(volumesFetchProvider(promoted));
+      ref.invalidate(catalogue.volumes(promoted).invalidatable);
     }
   }
 
@@ -150,8 +106,11 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final hero = ref.watch(continueHeroProvider);
-    final onDeck = _without(ref.watch(onDeckProvider), hero?.series.id);
-    final libraries = ref.watch(librariesProvider);
+    final onDeck = _without(
+      ref.watch(catalogue.onDeck.provider),
+      hero?.series.id,
+    );
+    final libraries = ref.watch(catalogue.libraries.provider);
 
     // Every clause has to be a *resolved* emptiness. `hero == null` alone is
     // also true while the promotion is merely unknown — in flight, or offline
@@ -208,7 +167,7 @@ class HomeScreen extends ConsumerWidget {
               if (hero != null)
                 ContinueHero(data: hero, onReturn: () => _refresh(ref)),
               // On deck is the only list, and the hero is drawn from the very
-              // same answer — see `onDeckProvider`. Nothing else is fetched
+              // same answer — see `catalogue.onDeck`. Nothing else is fetched
               // for the promotion, so the card and the shelf under it can
               // never disagree about what is being read.
               _Shelf(

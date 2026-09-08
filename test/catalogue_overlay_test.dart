@@ -11,10 +11,9 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/catalogue/catalogue_overlay.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_reads.dart' as catalogue;
 import 'package:patra/src/catalogue/catalogue_store.dart';
-import 'package:patra/src/features/home/home_screen.dart';
 import 'package:patra/src/features/library/library_screen.dart';
-import 'package:patra/src/features/series/series_detail_screen.dart';
 
 import 'test_support.dart';
 
@@ -183,15 +182,15 @@ void main() {
       await store.putLibraries(const [_library]);
       final container = _container(_AnswersThenHangs(), store);
       final subscription = container.listen<AsyncValue<List<Library>>>(
-        librariesProvider,
+        catalogue.libraries.provider,
         (_, _) {},
       );
       addTearDown(subscription.close);
 
-      await container.read(librariesFetchProvider.future);
+      await container.read(catalogue.libraries.refreshable);
       expect(subscription.read().value!.single.name, 'Server');
 
-      container.invalidate(librariesFetchProvider);
+      container.invalidate(catalogue.libraries.invalidatable);
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -260,8 +259,8 @@ void main() {
       // resolved failure, not for one still being retried.
       final overlay = await resolved(
         container,
-        librariesProvider,
-        container.read(librariesFetchProvider.future),
+        catalogue.libraries.provider,
+        container.read(catalogue.libraries.refreshable),
       );
       expect(overlay.value, isNotNull);
       expect(overlay.value!.single.name, 'Mangas');
@@ -277,8 +276,8 @@ void main() {
       final (container: container, adapter: _) = _offline(store);
       final overlay = await resolved(
         container,
-        librariesProvider,
-        container.read(librariesFetchProvider.future),
+        catalogue.libraries.provider,
+        container.read(catalogue.libraries.refreshable),
       );
       expect(overlay.isResolvedFailure, isTrue);
     });
@@ -293,11 +292,14 @@ void main() {
       final (container: container, adapter: _) = _offline(store);
       await resolved(
         container,
-        librariesProvider,
-        container.read(librariesFetchProvider.future),
+        catalogue.libraries.provider,
+        container.read(catalogue.libraries.refreshable),
       );
 
-      expect(container.read(libraryTypeProvider(7)), LibraryType.comic);
+      expect(
+        container.read(catalogue.libraryTypeProvider(7)),
+        LibraryType.comic,
+      );
       expect(container.read(currentLibraryProvider), 7);
     });
   });
@@ -310,8 +312,8 @@ void main() {
 
       final overlay = await resolved(
         container,
-        seriesForLibraryProvider(7),
-        container.read(seriesForLibraryFetchProvider(7).future),
+        catalogue.seriesForLibrary(7).provider,
+        container.read(catalogue.seriesForLibrary(7).refreshable),
       );
       expect(overlay.value, hasLength(2));
       expect(overlay.hasError, isFalse);
@@ -324,8 +326,8 @@ void main() {
 
       final overlay = await resolved(
         container,
-        seriesForLibraryProvider(9),
-        container.read(seriesForLibraryFetchProvider(9).future),
+        catalogue.seriesForLibrary(9).provider,
+        container.read(catalogue.seriesForLibrary(9).refreshable),
       );
       expect(overlay.isResolvedFailure, isTrue);
     });
@@ -339,8 +341,8 @@ void main() {
 
       final overlay = await resolved(
         container,
-        seriesForLibraryProvider(7),
-        container.read(seriesForLibraryFetchProvider(7).future),
+        catalogue.seriesForLibrary(7).provider,
+        container.read(catalogue.seriesForLibrary(7).refreshable),
       );
       expect(overlay.hasValue, isTrue);
       expect(overlay.value, isEmpty);
@@ -358,8 +360,8 @@ void main() {
 
     final before = await resolved(
       container,
-      seriesForLibraryProvider(7),
-      container.read(seriesForLibraryFetchProvider(7).future),
+      catalogue.seriesForLibrary(7).provider,
+      container.read(catalogue.seriesForLibrary(7).refreshable),
     );
     expect(before.isResolvedFailure, isTrue, reason: 'nothing stored yet');
 
@@ -367,11 +369,11 @@ void main() {
     await store.putSeriesList(7, [_series(1)]);
 
     // And what tapping the pill does once the connection has gone.
-    container.invalidate(seriesForLibraryFetchProvider(7));
+    container.invalidate(catalogue.seriesForLibrary(7).invalidatable);
     final after = await resolved(
       container,
-      seriesForLibraryProvider(7),
-      container.read(seriesForLibraryFetchProvider(7).future),
+      catalogue.seriesForLibrary(7).provider,
+      container.read(catalogue.seriesForLibrary(7).refreshable),
     );
     expect(
       after.value,
@@ -382,7 +384,7 @@ void main() {
 
   test('a populated catalogue is not a resolved failure, which is what '
       'Home\'s offline gate reads', () async {
-    // `librariesProvider` is one question both tabs ask, deliberately, so
+    // `catalogue.libraries.provider` is one question both tabs ask, deliberately, so
     // that they cannot disagree about which libraries exist — which means
     // Home's `nothingCameBack` gate (`hero == null && onDeck.isResolvedFailure
     // && libraries.isResolvedFailure`) consults the catalogue from the moment
@@ -393,8 +395,8 @@ void main() {
     final (container: container, adapter: _) = _offline(store);
     final overlay = await resolved(
       container,
-      librariesProvider,
-      container.read(librariesFetchProvider.future),
+      catalogue.libraries.provider,
+      container.read(catalogue.libraries.refreshable),
     );
     expect(overlay.isResolvedFailure, isFalse);
   });
@@ -407,8 +409,8 @@ void main() {
 
       final overlay = await resolved(
         container,
-        onDeckProvider,
-        container.read(onDeckFetchProvider.future),
+        catalogue.onDeck.provider,
+        container.read(catalogue.onDeck.refreshable),
       );
       expect(overlay.value, hasLength(2));
       expect(overlay.hasError, isFalse);
@@ -426,8 +428,8 @@ void main() {
 
       final overlay = await resolved(
         container,
-        onDeckProvider,
-        container.read(onDeckFetchProvider.future),
+        catalogue.onDeck.provider,
+        container.read(catalogue.onDeck.refreshable),
       );
       expect(overlay.isResolvedFailure, isTrue);
     });
@@ -445,19 +447,19 @@ void main() {
 
         final before = await resolved(
           container,
-          onDeckProvider,
-          container.read(onDeckFetchProvider.future),
+          catalogue.onDeck.provider,
+          container.read(catalogue.onDeck.refreshable),
         );
         expect(before.value, hasLength(1));
 
         // What a successful fetch does, before the connection goes.
         await store.putOnDeck([_series(1), _series(2)]);
 
-        container.invalidate(onDeckFetchProvider);
+        container.invalidate(catalogue.onDeck.invalidatable);
         final after = await resolved(
           container,
-          onDeckProvider,
-          container.read(onDeckFetchProvider.future),
+          catalogue.onDeck.provider,
+          container.read(catalogue.onDeck.refreshable),
         );
         expect(after.value, hasLength(2));
       },
@@ -474,8 +476,8 @@ void main() {
 
       final overlay = await resolved(
         container,
-        volumesProvider(5),
-        container.read(volumesFetchProvider(5).future),
+        catalogue.volumes(5).provider,
+        container.read(catalogue.volumes(5).refreshable),
       );
       expect(overlay.value!.single.chapters.single.id, 101);
       expect(overlay.hasError, isFalse);
@@ -492,19 +494,19 @@ void main() {
       final adapter = _AnswersThenFails();
       final container = _container(adapter, store);
       final subscription = container.listen<AsyncValue<List<Volume>>>(
-        volumesProvider(5),
+        catalogue.volumes(5).provider,
         (_, _) {},
       );
       addTearDown(subscription.close);
 
-      await container.read(volumesFetchProvider(5).future);
+      await container.read(catalogue.volumes(5).refreshable);
       expect(subscription.read().value, isNotNull);
 
       // The connection goes, and something asks again: a pull, or coming back
       // from the reader.
-      container.invalidate(volumesFetchProvider(5));
+      container.invalidate(catalogue.volumes(5).invalidatable);
       await expectLater(
-        container.read(volumesFetchProvider(5).future),
+        container.read(catalogue.volumes(5).refreshable),
         throwsA(isA<DioException>()),
       );
 
@@ -525,41 +527,44 @@ void main() {
 
       final overlay = await resolved(
         container,
-        volumesProvider(9),
-        container.read(volumesFetchProvider(9).future),
+        catalogue.volumes(9).provider,
+        container.read(catalogue.volumes(9).refreshable),
       );
       expect(overlay.isResolvedFailure, isTrue);
     });
   });
 
-  test('nothing in lib watches a fetch provider', () {
-    // The regression this exists to catch is a screen reading the raw fetch
-    // and so losing the catalogue for itself alone — silently, one screen at
-    // a time, and looking exactly like working code.
+  test('no fetch provider is declared outside the catalogue', () {
+    // What this asks changed when the reads moved into `catalogue/`. It used
+    // to look for a *consumer* — a screen watching the raw fetch, and so
+    // losing the catalogue for itself alone, silently and one screen at a
+    // time. That mistake is now the compiler's to catch: every fetch is
+    // private to `catalogue_reads.dart`, and what a screen can reach is a
+    // [CatalogueRead]'s three handles.
     //
-    // **No exceptions**, which is the whole reason `spineOverlay` takes the
-    // fetch as an argument: the one legitimate watch happens inside
-    // `catalogue_overlay.dart`, on a provider it was handed, so there is no
-    // file to whitelist. An earlier version of this test exempted the
-    // declaring file — which is `library_screen.dart`, the file holding
-    // every consumer it was meant to police.
+    // The mistake still available is the one before that: declaring a fetch
+    // somewhere else, which is how the six came to live in three screens in
+    // the first place. A read belongs where the write path and the overlay
+    // rule are, so a `…FetchProvider` outside this folder is a seventh read
+    // growing where nothing can police it.
     //
-    // `invalidate`, `refresh` and `read(...future)` are deliberately not
-    // matched: pull-to-refresh has to reach the fetch, since an overlay has
-    // no future to await.
+    // Still a source scan rather than a type, because there is no type that
+    // says "declared here": what makes a fetch safe is being unreachable, and
+    // that is a fact about which file it is in.
     final offenders = <String>[];
     for (final file in Directory('lib').listSync(recursive: true)) {
       if (file is! File || !file.path.endsWith('.dart')) continue;
+      if (file.path.startsWith('lib/src/catalogue/')) continue;
       for (final match in RegExp(
-        r'(watch|listen)\(\s*(\w+FetchProvider)',
+        r'(?:final|var)\s+(\w*[Ff]etchProvider)\s*=',
       ).allMatches(file.readAsStringSync())) {
-        offenders.add('${file.path}: ${match.group(1)}(${match.group(2)})');
+        offenders.add('${file.path}: ${match.group(1)}');
       }
     }
     expect(
       offenders,
       isEmpty,
-      reason: 'watch the overlay, not the fetch behind it',
+      reason: 'a read belongs in lib/src/catalogue/, beside the write path',
     );
   });
 }

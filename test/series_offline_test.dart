@@ -9,6 +9,7 @@ import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_reads.dart' as catalogue;
 import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
@@ -351,7 +352,7 @@ void main() {
       );
       addTearDown(subscription.close);
       await expectLater(
-        container.read(volumesFetchProvider(5).future),
+        container.read(catalogue.volumes(5).refreshable),
         throwsA(isA<DioException>()),
       );
       await container.read(downloadsProvider.future);

@@ -10,7 +10,7 @@ import '../../entity_naming.dart';
 import '../../resume_point.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
-import '../library/library_screen.dart';
+import '../../catalogue/catalogue_reads.dart' as catalogue;
 import '../../widgets/page_backdrop.dart';
 import '../../routes.dart';
 
@@ -27,7 +27,7 @@ import '../../routes.dart';
 /// It is deliberately **not** `/api/Series/currently-reading`, whose name is
 /// the trap — that one is `ReadLast GreaterThan OnDeckProgressDays`, which
 /// the server inverts into "last read more than a month ago". See
-/// `onDeckProvider`.
+/// `catalogue.onDeck`.
 ///
 /// What is left to decide here is only what the endpoint does not know: that
 /// this app cannot open an EPUB at all — the reader refuses one outright, so
@@ -225,7 +225,7 @@ class _Details extends ConsumerWidget {
     final series = data.series;
     final entry = data.point?.entry;
     final chapter = entry?.chapter;
-    final type = ref.watch(libraryTypeProvider(series.libraryId));
+    final type = ref.watch(catalogue.libraryTypeProvider(series.libraryId));
     final resumeName = entry == null
         ? null
         : type.resumeTitle(l10n, entry.volume, chapter!);

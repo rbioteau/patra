@@ -11,10 +11,8 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_reads.dart' as catalogue;
 import 'package:patra/src/catalogue/catalogue_store.dart';
-import 'package:patra/src/features/home/home_screen.dart';
-import 'package:patra/src/features/library/library_screen.dart';
-import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/session_scope.dart';
 
 import 'test_support.dart';
@@ -201,7 +199,7 @@ void main() {
       );
       final container = _container(root: root, adapter: adapter);
 
-      await container.read(librariesFetchProvider.future);
+      await container.read(catalogue.libraries.refreshable);
       // The eager fill is fire-and-forget behind the answer, and sequential:
       // a library never opened has to be navigable offline all the same.
       await pumpEventQueue();
@@ -228,10 +226,10 @@ void main() {
         ),
       );
 
-      await container.read(seriesForLibraryFetchProvider(1).future);
-      await container.read(volumesFetchProvider(5).future);
-      await container.read(seriesFetchProvider(5).future);
-      await container.read(seriesMetadataFetchProvider(5).future);
+      await container.read(catalogue.seriesForLibrary(1).refreshable);
+      await container.read(catalogue.volumes(5).refreshable);
+      await container.read(catalogue.series(5).refreshable);
+      await container.read(catalogue.seriesMetadata(5).refreshable);
 
       final store = CatalogueStore(root: root, profileId: _romain.id);
       expect((await store.loadSpine()).series[1]!.single.id, 5);
@@ -248,7 +246,7 @@ void main() {
         adapter: _Adapter(onDeck: [_seriesJson(5)]),
       );
 
-      await container.read(onDeckFetchProvider.future);
+      await container.read(catalogue.onDeck.refreshable);
 
       final stored = await CatalogueStore(
         root: root,
@@ -273,7 +271,7 @@ void main() {
       );
       final container = _container(root: root, adapter: adapter);
 
-      await container.read(seriesForLibraryFetchProvider(1).future);
+      await container.read(catalogue.seriesForLibrary(1).refreshable);
 
       final spine = await CatalogueStore(
         root: root,
@@ -306,7 +304,7 @@ void main() {
       );
 
       await expectLater(
-        container.read(seriesForLibraryFetchProvider(1).future),
+        container.read(catalogue.seriesForLibrary(1).refreshable),
         throwsA(isA<DioException>()),
       );
 
@@ -335,7 +333,7 @@ void main() {
         );
         final container = _container(root: root, adapter: adapter);
 
-        await container.read(librariesFetchProvider.future);
+        await container.read(catalogue.libraries.refreshable);
         await pumpEventQueue();
 
         final spine = await CatalogueStore(
@@ -474,7 +472,7 @@ void main() {
           },
         ),
       );
-      await mine.read(seriesForLibraryFetchProvider(1).future);
+      await mine.read(catalogue.seriesForLibrary(1).refreshable);
 
       // What `SessionScope` builds when the tablet is handed over: a fresh
       // container on the same device-owned overrides.
