@@ -160,6 +160,8 @@ class ContinueHero extends ConsumerWidget {
                                     ? client.seriesCoverUrl(series.id)
                                     : entryCoverUrl(client, underWay),
                                 headers: client.imageHeaders,
+                                seriesId: series.id,
+                                seriesName: series.name,
                               ),
                             ),
                           ),

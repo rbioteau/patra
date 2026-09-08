@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../api/kavita_client.dart';
 import '../theme.dart';
+import 'cover_placeholder.dart';
 
 /// A 2:3 cover with the reading-progress bar pinned to its bottom edge and an
 /// optional read badge in the top-right corner.
@@ -11,6 +12,8 @@ class CoverImage extends StatelessWidget {
     super.key,
     required this.url,
     required this.headers,
+    required this.seriesId,
+    required this.seriesName,
     this.progress = 0,
     this.read = false,
     this.radius = radiusCover,
@@ -20,6 +23,13 @@ class CoverImage extends StatelessWidget {
   final String url;
   final Map<String, String> headers;
 
+  /// The series this cover belongs to, whether the picture itself is the
+  /// series', a volume's or a chapter's. Required rather than optional for
+  /// the same reason [imageCacheKey] is derived here: what is drawn where
+  /// there is no picture is the series, so no call site may leave it out.
+  final int seriesId;
+  final String seriesName;
+
   /// 0..1 reading progress; the bar only shows strictly between the two.
   final double progress;
   final bool read;
@@ -28,6 +38,14 @@ class CoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // One drawing for both states, and literally the one object. A tile
+    // showing its initial while the cover loads says strictly more than a
+    // grey rectangle, and a grid cannot flicker between two placeholders as
+    // its covers resolve at different times.
+    final placeholder = CoverPlaceholder(
+      seriesId: seriesId,
+      seriesName: seriesName,
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -42,15 +60,8 @@ class CoverImage extends StatelessWidget {
             fit: BoxFit.cover,
             memCacheWidth: memCacheWidth,
             fadeInDuration: const Duration(milliseconds: 150),
-            placeholder: (_, _) => const ColoredBox(color: patraSurface),
-            errorWidget: (_, _, _) => ColoredBox(
-              color: patraSurface,
-              child: Icon(
-                Icons.menu_book_outlined,
-                color: patraTextMuted,
-                size: 20,
-              ),
-            ),
+            placeholder: (_, _) => placeholder,
+            errorWidget: (_, _, _) => placeholder,
           ),
         ),
         if (read)
@@ -86,6 +97,7 @@ class CoverTile extends StatelessWidget {
     super.key,
     required this.url,
     required this.headers,
+    required this.seriesId,
     required this.title,
     required this.onTap,
     this.progress = 0,
@@ -95,6 +107,10 @@ class CoverTile extends StatelessWidget {
 
   final String url;
   final Map<String, String> headers;
+
+  /// The series pictured. Its caption is the series' name, which is also
+  /// what the cover falls back to drawing where there is no picture.
+  final int seriesId;
   final String title;
   final VoidCallback onTap;
   final double progress;
@@ -114,6 +130,8 @@ class CoverTile extends StatelessWidget {
             child: CoverImage(
               url: url,
               headers: headers,
+              seriesId: seriesId,
+              seriesName: title,
               progress: progress,
               read: read,
             ),

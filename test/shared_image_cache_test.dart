@@ -108,6 +108,8 @@ void main() {
             child: CoverImage(
               url: client.seriesCoverUrl(5),
               headers: client.imageHeaders,
+              seriesId: 5,
+              seriesName: 'Dungeon Meshi',
             ),
           ),
         ),
