@@ -588,9 +588,21 @@ class _EmptyLibrary extends ConsumerWidget {
           const SizedBox(height: 18),
           ConstrainedBox(
             // A button given the width of the screen stops reading as a
-            // button — the same 280-cap reasoning as the resume button, at
-            // the size the handoff draws this one.
-            constraints: const BoxConstraints(maxWidth: 200),
+            // button, so it is held to [controlMaxWidth] like every other one
+            // here. It was 200 — the size the handoff draws this one — and
+            // that is a number drifting away from the token for the reason
+            // the token exists.
+            //
+            // A **maximum** and not a width: the button is as wide as its
+            // label needs, so English still renders at the drawn size and
+            // only a longer language takes the extra room. 200 left the label
+            // 146pt after the padding, the icon and its gap, and "Demander
+            // une analyse" is 146pt at 14pt semibold — so French wrapped onto
+            // two lines while "Ask server to scan" had 27pt to spare. The
+            // wording is not the thing to shorten: this button says *ask*
+            // because a scan is requested here and never finished here, and
+            // "lancer" would be the lie the copy is careful to avoid.
+            constraints: const BoxConstraints(maxWidth: controlMaxWidth),
             child: OutlinedButton.icon(
               onPressed: scanning
                   ? null
