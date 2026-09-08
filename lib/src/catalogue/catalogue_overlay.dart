@@ -144,7 +144,17 @@ final _seriesReadProvider = FutureProvider.autoDispose
 /// The [spineOverlay] of the level below it, and the same rules apply — the
 /// fetch is passed in rather than named here, so nothing outside this file
 /// ever watches one.
-AsyncValue<T> storedSeriesOverlay<T>(
+///
+/// It answers with **two facts rather than one**, because a screen sometimes
+/// has to know which of them it got. **Progress is that case**: a row drawn
+/// from memory has a *newer* word about itself sitting in the saved copy
+/// beside it — offline reading mirrors into `meta.json` and posts on a queue
+/// whose failure is swallowed, so the server never learns what was read on a
+/// train, and the catalogue deliberately never absorbs it (ADR-0005). A row
+/// the server has just answered for is the other way round: there the server
+/// is the authority and the saved copy is what gets corrected from it. See
+/// `seriesVolumesProvider`, the only caller that asks.
+Overlaid<T> storedSeriesOverlay<T>(
   Ref ref,
   int seriesId,
   ProviderListenable<AsyncValue<T>> fetch,
@@ -152,11 +162,23 @@ AsyncValue<T> storedSeriesOverlay<T>(
 ) {
   final live = ref.watch(fetch);
   final read = ref.watch(_seriesReadProvider(seriesId));
-  return overlaid(
+  final value = overlaid(
     live,
     read.whenData((stored) => stored == null ? null : held(stored)),
   );
+  return (
+    value: value,
+    // `!live.hasValue` alone is not it: a fetch still in flight has answered
+    // with nothing either way, and a screen drawing a skeleton must not be
+    // told the device's memory is what it is drawing.
+    fromCatalogue: !live.hasValue && value.hasValue,
+  );
 }
+
+/// What an overlay answered with, and whether the device's memory is what
+/// answered — see [storedSeriesOverlay], which is the one seam that needs
+/// to say so.
+typedef Overlaid<T> = ({AsyncValue<T> value, bool fromCatalogue});
 
 /// The one rule for how a stored answer and a live fetch coexist.
 ///
