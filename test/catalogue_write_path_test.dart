@@ -201,7 +201,7 @@ void main() {
       );
       final container = _container(root: root, adapter: adapter);
 
-      await container.read(librariesProvider.future);
+      await container.read(librariesFetchProvider.future);
       // The eager fill is fire-and-forget behind the answer, and sequential:
       // a library never opened has to be navigable offline all the same.
       await pumpEventQueue();
@@ -228,7 +228,7 @@ void main() {
         ),
       );
 
-      await container.read(seriesForLibraryProvider(1).future);
+      await container.read(seriesForLibraryFetchProvider(1).future);
       await container.read(volumesProvider(5).future);
       await container.read(seriesProvider(5).future);
       await container.read(seriesMetadataProvider(5).future);
@@ -273,7 +273,7 @@ void main() {
       );
       final container = _container(root: root, adapter: adapter);
 
-      await container.read(seriesForLibraryProvider(1).future);
+      await container.read(seriesForLibraryFetchProvider(1).future);
 
       final spine = await CatalogueStore(
         root: root,
@@ -306,7 +306,7 @@ void main() {
       );
 
       await expectLater(
-        container.read(seriesForLibraryProvider(1).future),
+        container.read(seriesForLibraryFetchProvider(1).future),
         throwsA(isA<DioException>()),
       );
 
@@ -335,7 +335,7 @@ void main() {
         );
         final container = _container(root: root, adapter: adapter);
 
-        await container.read(librariesProvider.future);
+        await container.read(librariesFetchProvider.future);
         await pumpEventQueue();
 
         final spine = await CatalogueStore(
@@ -474,7 +474,7 @@ void main() {
           },
         ),
       );
-      await mine.read(seriesForLibraryProvider(1).future);
+      await mine.read(seriesForLibraryFetchProvider(1).future);
 
       // What `SessionScope` builds when the tablet is handed over: a fresh
       // container on the same device-owned overrides.

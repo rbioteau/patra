@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_overlay.dart';
 import '../../catalogue/catalogue_provider.dart';
 import '../../routes.dart';
 import '../../theme.dart';
@@ -23,7 +24,7 @@ import '../../widgets/offline_indicator.dart';
 /// a family's live keys cannot be enumerated. Writing here also means the
 /// write cannot be skipped — the only way to get a fetched list is through
 /// the body that stores it.
-final librariesProvider = FutureProvider.autoDispose<List<Library>>(
+final librariesFetchProvider = FutureProvider.autoDispose<List<Library>>(
   retry: serverRetry,
   (ref) async {
     final client = ref.watch(kavitaClientProvider);
@@ -43,6 +44,28 @@ final librariesProvider = FutureProvider.autoDispose<List<Library>>(
     unawaited(prefetch.run(client: client, store: store, libraries: libraries));
     return libraries;
   },
+);
+
+/// The libraries as the Library tab and Home draw them: the server's answer
+/// where there is one, and otherwise what the device remembers.
+///
+/// This is the provider a screen watches. `librariesFetchProvider` above is
+/// the request, and it stays public because pull-to-refresh has to reach it
+/// (an overlay has no future to await) and because that is where the
+/// catalogue is written — but nothing may *watch* it, which
+/// `test/catalogue_overlay_test.dart` enforces by reading all of `lib/`.
+/// [spineOverlay] taking the fetch as an argument is what leaves that rule
+/// no exceptions to carve out.
+///
+/// An empty stored library list counts as nothing stored rather than as an
+/// answer: a profile with no libraries at all has nothing to navigate
+/// offline, and the screen it lands on is the same one either way.
+final librariesProvider = Provider.autoDispose<AsyncValue<List<Library>>>(
+  (ref) => spineOverlay(
+    ref,
+    librariesFetchProvider,
+    (spine) => spine.libraries.isEmpty ? null : spine.libraries,
+  ),
 );
 
 /// The type of one library, which decides what its series are made of and what
@@ -66,10 +89,11 @@ final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
 /// `allSeriesForLibrary` returns only once a short page has ended the run,
 /// and rejects otherwise — so a run that dies on page 3 never reaches this
 /// body at all, and cannot replace 250 stored series with 200.
-final seriesForLibraryProvider = FutureProvider.autoDispose
+final seriesForLibraryFetchProvider = FutureProvider.autoDispose
     .family<List<Series>, int>(retry: serverRetry, (ref, libraryId) async {
       final client = ref.watch(kavitaClientProvider);
-      // See `librariesProvider` for why these are in hand before the request.
+      // See `librariesFetchProvider` for why these are in hand before
+      // the request.
       final store = ref.read(catalogueStoreProvider);
       final prefetch = ref.read(cataloguePrefetchProvider);
       final series = await client.allSeriesForLibrary(libraryId);
@@ -79,6 +103,21 @@ final seriesForLibraryProvider = FutureProvider.autoDispose
       prefetch.markStored(libraryId);
       return series;
     });
+
+/// One library's series as the grid draws them — see [librariesProvider] for
+/// why a screen watches this and not the fetch behind it.
+///
+/// A library stored as **empty** is an answer here and not an absence: an
+/// empty library is a state this screen has copy for, and falling through to
+/// the failure would replace that copy with a retry button.
+final seriesForLibraryProvider = Provider.autoDispose
+    .family<AsyncValue<List<Series>>, int>(
+      (ref, libraryId) => spineOverlay(
+        ref,
+        seriesForLibraryFetchProvider(libraryId),
+        (spine) => spine.series[libraryId],
+      ),
+    );
 
 /// Which library the Library tab is showing. Null means "the first one",
 /// resolved once the library list arrives.
@@ -255,7 +294,7 @@ Future<void> _askForScan(
 
   // Last, because it can take the widget that asked out of the tree.
   if (refreshGrid && failure == null) {
-    ref.invalidate(seriesForLibraryProvider(libraryId));
+    ref.invalidate(seriesForLibraryFetchProvider(libraryId));
   }
 }
 
@@ -276,8 +315,9 @@ class LibraryScreen extends ConsumerWidget {
         top: false,
         child: libraries.when(
           loading: () => const _LibraryGridSkeleton(),
-          error: (error, _) =>
-              _ErrorState(onRetry: () => ref.invalidate(librariesProvider)),
+          error: (error, _) => _ErrorState(
+            onRetry: () => ref.invalidate(librariesFetchProvider),
+          ),
           data: (items) {
             if (items.isEmpty) {
               return Center(
@@ -475,7 +515,7 @@ class _SeriesGrid extends ConsumerWidget {
     return series.when(
       loading: () => const _LibraryGridSkeleton(),
       error: (error, _) => _ErrorState(
-        onRetry: () => ref.invalidate(seriesForLibraryProvider(libraryId)),
+        onRetry: () => ref.invalidate(seriesForLibraryFetchProvider(libraryId)),
       ),
       data: (items) {
         if (items.isEmpty) {
@@ -483,7 +523,7 @@ class _SeriesGrid extends ConsumerWidget {
           // there has to be a way to look again, and a bare Center has none.
           return RefreshIndicator(
             onRefresh: () => ref
-                .refresh(seriesForLibraryProvider(libraryId).future)
+                .refresh(seriesForLibraryFetchProvider(libraryId).future)
                 .catchError((Object _) => const <Series>[]),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -500,7 +540,7 @@ class _SeriesGrid extends ConsumerWidget {
           // a pull with the server down would raise an unhandled zone error.
           // The screen already shows the failure through the provider.
           onRefresh: () => ref
-              .refresh(seriesForLibraryProvider(libraryId).future)
+              .refresh(seriesForLibraryFetchProvider(libraryId).future)
               .catchError((Object _) => const <Series>[]),
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, gutter),
@@ -519,7 +559,7 @@ class _SeriesGrid extends ConsumerWidget {
                 onTap: () async {
                   await context.push(seriesLocation(s));
                   // Progress may have changed while reading.
-                  ref.invalidate(seriesForLibraryProvider(libraryId));
+                  ref.invalidate(seriesForLibraryFetchProvider(libraryId));
                 },
               );
             },
