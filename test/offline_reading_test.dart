@@ -66,6 +66,7 @@ Future<LoginResult> _signIn({
 Widget _app(Directory root, _UnreachableAdapter adapter) => SessionScope(
   auth: AuthState(profiles: _profiles).atLaunch(),
   overrides: [
+    testKeychain(),
     signInProvider.overrideWithValue(_signIn),
     downloadsRootProvider.overrideWithValue(root),
     kavitaClientProvider.overrideWith((ref) {
@@ -88,7 +89,6 @@ Widget _app(Directory root, _UnreachableAdapter adapter) => SessionScope(
 
 Directory _room(WidgetTester tester) {
   mockPathProvider();
-  mockSecureStorage();
   final root = Directory.systemTemp.createTempSync('patra-offline-reading');
   addTearDown(() {
     if (root.existsSync()) root.deleteSync(recursive: true);

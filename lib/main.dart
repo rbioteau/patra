@@ -7,6 +7,7 @@ import 'src/app.dart';
 import 'src/auth/session.dart';
 import 'src/catalogue/catalogue_provider.dart';
 import 'src/catalogue/catalogue_store.dart';
+import 'src/keychain.dart';
 import 'src/session_scope.dart';
 import 'src/downloads/image_cache_store.dart';
 import 'src/lock/profile_lock.dart';
@@ -17,6 +18,12 @@ import 'src/settings/reading_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // One keychain, handed to every store that keeps a row in it. It is
+  // overridden into the tree below as well, so `main()` and the app can never
+  // disagree about which keychain that is — the provider's own default is the
+  // same object today, and an override is what keeps that from being a thing
+  // to notice if it ever stops being.
+  const keychain = SecureKeychain();
   // Read before the auth state is put through `atLaunch`, because which
   // profiles are locked is half of that rule: a device holding one locked
   // profile has to open signed out, or the lock would never be asked for at
@@ -26,18 +33,21 @@ Future<void> main() async {
   await locks.load();
   // `atLaunch`, not the stored state itself: a device holding more than one
   // profile opens on the picker rather than in whoever read last.
-  final auth = (await SessionStorage.load()).atLaunch(locked: locks.lockedIds);
+  final auth = (await const SessionStorage(
+    keychain,
+  ).load()).atLaunch(locked: locks.lockedIds);
   // Resolved before runApp so the very first request — a resumed session's —
   // already identifies itself to the server.
-  final identity = await ClientIdentity.resolve();
+  final identity = await ClientIdentity.resolve(keychain: keychain);
   // The device's own defaults, under the flat keys they have always lived in,
   // and behind them what each person has chosen for themselves. Read here for
   // the reason the locks are: a preference has to be in hand before the first
   // screen is drawn, and the gate is drawn before anybody has been chosen.
+  const readingSettings = ReadingSettingsStore(keychain);
   final preferences = ProfilePreferencesStore(
-    deviceDirection: await ReadingSettingsStore.load(),
-    deviceMagnify: await ReadingSettingsStore.loadMagnify(),
-    deviceLanguage: await LocaleSettingsStore.load(),
+    deviceDirection: await readingSettings.load(),
+    deviceMagnify: await readingSettings.loadMagnify(),
+    deviceLanguage: await const LocaleSettingsStore(keychain).load(),
   );
   await preferences.load();
   // What the device remembers of the active profile's shelves, read whole
@@ -49,7 +59,7 @@ Future<void> main() async {
       ? null
       : CatalogueStore(profileId: launchingInto);
   await catalogue?.loadSpine();
-  final cacheLimit = await ImageCacheSettingsStore.load();
+  final cacheLimit = await const ImageCacheSettingsStore(keychain).load();
   // One sweep on the way in, so a cache left over the budget by the previous
   // session — or by a limit lowered on the last one — is back inside it.
   final imageCache = ImageCacheStore();
@@ -63,6 +73,7 @@ Future<void> main() async {
     SessionScope(
       auth: auth,
       overrides: [
+        keychainProvider.overrideWithValue(keychain),
         clientIdentityProvider.overrideWithValue(identity),
         // The store instance and not three values, for the reason the lock
         // store is one: what a person chooses during a session has to survive
@@ -89,9 +100,8 @@ Future<void> main() async {
         // above. Which catalogue is in force is not decided here; it is a
         // function of who is reading.
         if (catalogue != null)
-          profileCatalogueProvider(
-            catalogue.profileId,
-          ).overrideWithValue(catalogue),
+          profileCatalogueProvider(catalogue.profileId)
+              .overrideWithValue(catalogue),
       ],
       child: const PatraApp(),
     ),

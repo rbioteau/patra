@@ -4,34 +4,28 @@ import 'package:patra/src/settings/reading_settings.dart';
 import 'test_support.dart';
 
 void main() {
-  // Reaching the mocked storage channel needs a binding; these are plain
-  // tests, not testWidgets, so nothing has made one.
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   test('the direction saved before the rename is still the one restored', () {
     // The enum name *is* the stored value, and an unrecognised string falls
     // back to left-to-right without a word — so dropping the legacy name is
     // how a reader who chose vertical scrolling gets left-to-right on the
     // next launch and nothing says why.
-    mockSecureStorage({'readingDirection': 'webtoon'});
-    expect(
-      ReadingSettingsStore.load(),
-      completion(ReadingDirection.verticalScroll),
+    final store = ReadingSettingsStore(
+      MemoryKeychain({'readingDirection': 'webtoon'}),
     );
+    expect(store.load(), completion(ReadingDirection.verticalScroll));
   });
 
   test('a preference is written under the name the enum carries now', () async {
-    final stored = mockSecureStorage({'readingDirection': 'webtoon'});
-    await ReadingSettingsStore.save(ReadingDirection.verticalScroll);
-    expect(stored['readingDirection'], 'verticalScroll');
+    final keychain = MemoryKeychain({'readingDirection': 'webtoon'});
+    await ReadingSettingsStore(keychain).save(ReadingDirection.verticalScroll);
+    expect(keychain.values['readingDirection'], 'verticalScroll');
   });
 
   test('a value from no version at all is left-to-right', () {
-    mockSecureStorage({'readingDirection': 'sideways'});
-    expect(
-      ReadingSettingsStore.load(),
-      completion(ReadingDirection.leftToRight),
+    final store = ReadingSettingsStore(
+      MemoryKeychain({'readingDirection': 'sideways'}),
     );
+    expect(store.load(), completion(ReadingDirection.leftToRight));
   });
 
   group('the magnify preference', () {
@@ -41,10 +35,10 @@ void main() {
     test(
       'is stored under its original key, whatever the code calls it',
       () async {
-        final stored = mockSecureStorage();
-        await ReadingSettingsStore.saveMagnify(true);
+        final keychain = MemoryKeychain();
+        await ReadingSettingsStore(keychain).saveMagnify(true);
         expect(
-          stored.keys.where((k) => k.endsWith('loupeGesture')),
+          keychain.values.keys.where((k) => k.endsWith('loupeGesture')),
           isNotEmpty,
           reason:
               'renaming this key would silently reset the setting on every '
@@ -54,20 +48,22 @@ void main() {
     );
 
     test('round-trips, and is off when nothing was ever stored', () async {
-      mockSecureStorage();
-      expect(await ReadingSettingsStore.loadMagnify(), isFalse);
-      await ReadingSettingsStore.saveMagnify(true);
-      expect(await ReadingSettingsStore.loadMagnify(), isTrue);
-      await ReadingSettingsStore.saveMagnify(false);
-      expect(await ReadingSettingsStore.loadMagnify(), isFalse);
+      final store = ReadingSettingsStore(MemoryKeychain());
+      expect(await store.loadMagnify(), isFalse);
+      await store.saveMagnify(true);
+      expect(await store.loadMagnify(), isTrue);
+      await store.saveMagnify(false);
+      expect(await store.loadMagnify(), isFalse);
     });
 
     test('a value written before the rename still reads back on', () async {
       // The exact string a device that turned it on already holds. (Android
       // prefixes it natively, below the method channel, so what the Dart side
       // reads is the bare key.)
-      mockSecureStorage({'loupeGesture': 'true'});
-      expect(await ReadingSettingsStore.loadMagnify(), isTrue);
+      final store = ReadingSettingsStore(
+        MemoryKeychain({'loupeGesture': 'true'}),
+      );
+      expect(await store.loadMagnify(), isTrue);
     });
   });
 }

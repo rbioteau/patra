@@ -71,19 +71,17 @@ Future<_RecordingSignIn> _picker(
   // A sign-in that succeeds writes the profile back to the keychain, which
   // on a test binding never answers and hangs the pump rather than failing
   // it. Every test here lets one succeed.
-  mockSecureStorage();
   final signIn = _RecordingSignIn();
   await tester.pumpWidget(
     ProviderScope(
       key: UniqueKey(),
       overrides: [
+        testKeychain(),
         initialAuthStateProvider.overrideWithValue(
           AuthState(profiles: profiles ?? [_profile()]),
         ),
         profileLockStoreProvider.overrideWithValue(locks),
-        biometricsProvider.overrideWithValue(
-          biometrics ?? FakeBiometrics(),
-        ),
+        biometricsProvider.overrideWithValue(biometrics ?? FakeBiometrics()),
         signInProvider.overrideWithValue(signIn.call),
       ],
       child: MaterialApp(
@@ -120,7 +118,6 @@ Future<void> _settings(
   required ProfileLockStore locks,
 }) async {
   final root = mockPathProvider();
-  mockSecureStorage();
   tester.view.physicalSize = const Size(1200, 2800);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
@@ -136,6 +133,7 @@ Future<void> _settings(
     ProviderScope(
       key: UniqueKey(),
       overrides: [
+        testKeychain(),
         initialAuthStateProvider.overrideWithValue(
           AuthState(profiles: [profile], activeId: profile.id),
         ),
@@ -314,11 +312,7 @@ void main() {
     testWidgets('says what it does and never claims to protect a lost device', (
       tester,
     ) async {
-      await _settings(
-        tester,
-        profile: _profile(),
-        locks: await lockStore(),
-      );
+      await _settings(tester, profile: _profile(), locks: await lockStore());
 
       expect(find.text('Lock this profile'), findsOneWidget);
       final explained = tester
@@ -329,13 +323,14 @@ void main() {
       expect(explained, contains('not protection for a lost or stolen device'));
     });
 
-    testWidgets('is suggested to a profile the server holds back from nothing', (
-      tester,
-    ) async {
-      await _settings(tester, profile: _profile(), locks: await lockStore());
+    testWidgets(
+      'is suggested to a profile the server holds back from nothing',
+      (tester) async {
+        await _settings(tester, profile: _profile(), locks: await lockStore());
 
-      expect(find.textContaining('Worth doing on a shared device'), findsOne);
-    });
+        expect(find.textContaining('Worth doing on a shared device'), findsOne);
+      },
+    );
 
     testWidgets('is suggested to an administrator', (tester) async {
       await _settings(

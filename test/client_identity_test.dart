@@ -7,6 +7,9 @@ import 'package:patra/src/api/client_device.dart';
 import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
+import 'package:patra/src/keychain.dart';
+
+import 'test_support.dart';
 
 ScreenMetrics _phone() => const ScreenMetrics(412, 915);
 ScreenMetrics _landscape() => const ScreenMetrics(915, 412);
@@ -258,6 +261,74 @@ void main() {
       expect(adapter.listed, isFalse);
     });
   });
+
+  group('the device id', () {
+    // What this keeps apart is **installs**. Kavita's own fallback
+    // fingerprint hashes client type plus platform plus device type and
+    // nothing else, so without an id of ours every Android install collapses
+    // into one registered device on the server.
+    //
+    // It had no test at all until the keychain became a seam: the id was read
+    // and created through a `FlutterSecureStorage` built inside the method
+    // that needed it, so the only reachable path here was the `on Exception`
+    // fallback.
+    test('is created once and read back on every launch after', () async {
+      final keychain = MemoryKeychain();
+
+      final first = await ClientIdentity.resolve(keychain: keychain);
+      final second = await ClientIdentity.resolve(keychain: keychain);
+
+      expect(first.deviceId, isNotEmpty);
+      expect(
+        second.deviceId,
+        first.deviceId,
+        reason: 'a second launch must not register a second device',
+      );
+      expect(keychain.values['clientDeviceId'], first.deviceId);
+      expect(
+        keychain.writes,
+        1,
+        reason: 'the second launch reads, and does not write again',
+      );
+    });
+
+    test('is this install, so a fresh keychain is a fresh device', () async {
+      final one = await ClientIdentity.resolve(keychain: MemoryKeychain());
+      final other = await ClientIdentity.resolve(keychain: MemoryKeychain());
+
+      expect(one.deviceId, isNot(other.deviceId));
+    });
+
+    test(
+      'a keychain that cannot answer costs the id, never the session',
+      () async {
+        // An unreadable keystore only costs the server its stable device
+        // matching. The identity still resolves, and the header is simply
+        // left off.
+        final identity = await ClientIdentity.resolve(keychain: _NoKeychain());
+
+        expect(identity.deviceId, isEmpty);
+        expect(identity.headers.containsKey('X-Device-Id'), isFalse);
+      },
+    );
+  });
+}
+
+/// A keychain that refuses, which is what a restored or corrupted keystore
+/// looks like from here.
+class _NoKeychain implements Keychain {
+  @override
+  Future<String?> read(String key) async => throw Exception('no keystore');
+
+  @override
+  Future<Map<String, String>> readAll() async => throw Exception('no keystore');
+
+  @override
+  Future<void> write(String key, String value) async =>
+      throw Exception('no keystore');
+
+  @override
+  Future<void> delete(String key) async => throw Exception('no keystore');
 }
 
 KavitaClient _clientWith(ClientIdentity identity, _DeviceAdapter adapter) {

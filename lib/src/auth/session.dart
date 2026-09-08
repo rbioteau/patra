@@ -3,13 +3,13 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../api/account_id.dart';
 import '../api/client_device.dart';
 import '../api/client_identity.dart';
 import '../api/kavita_client.dart';
 import '../api/models.dart';
+import '../keychain.dart';
 
 /// Host part of a server address, for display, falling back to the raw value
 /// so a malformed one still names itself in a row or an error message.
@@ -314,7 +314,10 @@ class AuthState {
 
 /// Persists profiles in the platform keychain/keystore.
 class SessionStorage {
-  static const _storage = FlutterSecureStorage();
+  const SessionStorage(this._keychain);
+
+  final Keychain _keychain;
+
   static const _profilesKey = 'profiles';
   static const _activeKey = 'activeProfile';
 
@@ -344,10 +347,10 @@ class SessionStorage {
     'refreshToken',
   ];
 
-  static Future<AuthState> load() async {
+  Future<AuthState> load() async {
     final Map<String, String> values;
     try {
-      values = await _storage.readAll();
+      values = await _keychain.readAll();
     } on Exception {
       // Unreadable keystore (device restore, keystore corruption…): fall
       // back to the login screen rather than crash-looping at startup.
@@ -376,28 +379,28 @@ class SessionStorage {
   /// that finds any of it. A keychain we cannot write to is not worth failing
   /// a startup over — the keys are dead either way, and the next load tries
   /// again.
-  static Future<void> _forgetRetired(Map<String, String> values) async {
+  Future<void> _forgetRetired(Map<String, String> values) async {
     for (final key in _retiredKeys) {
       if (!values.containsKey(key)) continue;
       try {
-        await _storage.delete(key: key);
+        await _keychain.delete(key);
       } on Exception {
         // Nothing reads them; leaving one behind changes nothing this run.
       }
     }
   }
 
-  static Future<void> save(AuthState state) async {
+  Future<void> save(AuthState state) async {
     try {
-      await _storage.write(
-        key: _profilesKey,
-        value: jsonEncode([for (final p in state.profiles) p.toJson()]),
+      await _keychain.write(
+        _profilesKey,
+        jsonEncode([for (final p in state.profiles) p.toJson()]),
       );
       final active = state.activeId;
       if (active == null) {
-        await _storage.delete(key: _activeKey);
+        await _keychain.delete(_activeKey);
       } else {
-        await _storage.write(key: _activeKey, value: active);
+        await _keychain.write(_activeKey, active);
       }
     } on Exception {
       // A write we cannot make is not worth losing the running session over.
@@ -654,9 +657,19 @@ class AuthNotifier extends Notifier<AuthState> {
 
   Future<void> _commit(AuthState next) async {
     state = next;
-    await SessionStorage.save(next);
+    await ref.read(sessionStorageProvider).save(next);
   }
 }
+
+/// What the device remembers of who has signed in, on its own keychain.
+///
+/// Stateless — `AuthState` lives in [authProvider], not here — so it is
+/// derived and a test stands in for [keychainProvider] alone. That is what
+/// lets `AuthNotifier`'s own rules be exercised without a platform channel:
+/// [_commit] used to call a static, so a test of pure state had to mock one.
+final sessionStorageProvider = Provider<SessionStorage>(
+  (ref) => SessionStorage(ref.watch(keychainProvider)),
+);
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(
   AuthNotifier.new,

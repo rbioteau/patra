@@ -1,7 +1,8 @@
 import 'package:flutter/widgets.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../keychain.dart';
 
 /// The **device's** language, under the flat key it has always been written
 /// to — and the one the *gate* is drawn in, since the picker and the sign-in
@@ -17,29 +18,38 @@ import '../../l10n/generated/app_localizations.dart';
 /// Everything downstream already reads that way: it is what `MaterialApp`'s
 /// `locale` takes to mean "resolve against the system".
 class LocaleSettingsStore {
-  static const _storage = FlutterSecureStorage();
+  const LocaleSettingsStore(this._keychain);
+
+  final Keychain _keychain;
+
   static const _key = 'appLocale';
 
-  static Future<Locale?> load() async {
+  Future<Locale?> load() async {
     try {
-      return supportedLocale(await _storage.read(key: _key));
+      return supportedLocale(await _keychain.read(_key));
     } on Exception {
       return null;
     }
   }
 
-  static Future<void> save(Locale? locale) async {
+  Future<void> save(Locale? locale) async {
     try {
       if (locale == null) {
-        await _storage.delete(key: _key);
+        await _keychain.delete(_key);
       } else {
-        await _storage.write(key: _key, value: locale.languageCode);
+        await _keychain.write(_key, locale.languageCode);
       }
     } on Exception {
       // A preference is not worth surfacing a storage failure for.
     }
   }
 }
+
+/// The device's own language, on the device's keychain — derived, like the
+/// reading defaults, because it holds nothing of its own.
+final localeSettingsProvider = Provider<LocaleSettingsStore>(
+  (ref) => LocaleSettingsStore(ref.watch(keychainProvider)),
+);
 
 /// The shipped [Locale] [code] names, or null where the build ships none.
 ///

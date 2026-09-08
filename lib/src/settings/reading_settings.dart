@@ -1,6 +1,7 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../keychain.dart';
 
 /// How pages advance in the reader. One setting, not a mode plus a direction:
 /// vertical scrolling is a direction like the other two.
@@ -32,7 +33,10 @@ enum ReadingDirection {
 /// makes a device set before it held profiles keep its settings for
 /// everybody on it.
 class ReadingSettingsStore {
-  static const _storage = FlutterSecureStorage();
+  const ReadingSettingsStore(this._keychain);
+
+  final Keychain _keychain;
+
   static const _key = 'readingDirection';
 
   /// Deliberately still `loupeGesture`. The concept was called a loupe
@@ -64,18 +68,18 @@ class ReadingSettingsStore {
     return _legacyNames[name];
   }
 
-  static Future<ReadingDirection> load() async {
+  Future<ReadingDirection> load() async {
     try {
-      return directionNamed(await _storage.read(key: _key)) ??
+      return directionNamed(await _keychain.read(_key)) ??
           ReadingDirection.leftToRight;
     } on Exception {
       return ReadingDirection.leftToRight;
     }
   }
 
-  static Future<void> save(ReadingDirection direction) async {
+  Future<void> save(ReadingDirection direction) async {
     try {
-      await _storage.write(key: _key, value: direction.name);
+      await _keychain.write(_key, direction.name);
     } on Exception {
       // A preference is not worth surfacing a storage failure for.
     }
@@ -84,19 +88,27 @@ class ReadingSettingsStore {
   /// Off unless it was deliberately turned on: the gesture replaces the swipe
   /// that turns a page, and finding that out by accident is a bad first
   /// minute with the reader.
-  static Future<bool> loadMagnify() async {
+  Future<bool> loadMagnify() async {
     try {
-      return await _storage.read(key: _magnifyKey) == 'true';
+      return await _keychain.read(_magnifyKey) == 'true';
     } on Exception {
       return false;
     }
   }
 
-  static Future<void> saveMagnify(bool enabled) async {
+  Future<void> saveMagnify(bool enabled) async {
     try {
-      await _storage.write(key: _magnifyKey, value: enabled.toString());
+      await _keychain.write(_magnifyKey, enabled.toString());
     } on Exception {
       // As above.
     }
   }
 }
+
+/// The device's own reading defaults, on the device's keychain.
+///
+/// Stateless, so it is derived rather than injected: what a test stands in
+/// for is [keychainProvider] and nothing here.
+final readingSettingsProvider = Provider<ReadingSettingsStore>(
+  (ref) => ReadingSettingsStore(ref.watch(keychainProvider)),
+);

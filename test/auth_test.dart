@@ -7,6 +7,7 @@ import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/keychain.dart';
 
 import 'test_support.dart';
 
@@ -109,21 +110,22 @@ DioException get _noNetwork => DioException(
   type: DioExceptionType.connectionError,
 );
 
-ProviderContainer _container(AuthState initial, {_FakeSignIn? signIn}) =>
-    ProviderContainer.test(
-      overrides: [
-        initialAuthStateProvider.overrideWithValue(initial),
-        if (signIn != null) signInProvider.overrideWithValue(signIn.call),
-      ],
-    );
+/// [keychain] is where `AuthNotifier` writes through to. Standing in for the
+/// device's keychain is the whole of what these tests need to reach: the
+/// notifier reads its store from [keychainProvider] like everything else.
+ProviderContainer _container(
+  AuthState initial, {
+  _FakeSignIn? signIn,
+  MemoryKeychain? keychain,
+}) => ProviderContainer.test(
+  overrides: [
+    testKeychain(keychain),
+    initialAuthStateProvider.overrideWithValue(initial),
+    if (signIn != null) signInProvider.overrideWithValue(signIn.call),
+  ],
+);
 
 void main() {
-  // AuthNotifier writes through to secure storage, and one of these paths
-  // *awaits* the write before rethrowing — an unmocked keychain never answers
-  // on Linux, which reads as a stuck suite rather than a failing test.
-  TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(mockSecureStorage);
-
   group('which profile this is', () {
     test('is the server address and the Kavita account, and nothing else', () {
       // Two people on one server are two profiles…
@@ -199,26 +201,29 @@ void main() {
       expect(_romain.avatarUrl, isNull);
     });
 
-    test('is kept when a profile is signed out, not only when it is live', () async {
-      // Dropping the credential rebuilds the profile from its identity; the
-      // face is not part of what a refused key invalidates, and losing it
-      // would blank a picker that has no network to fetch it again with.
-      final signIn = _FakeSignIn(fails: _refused(401));
-      final container = _container(
-        AuthState(profiles: [withFace], activeId: withFace.id),
-        signIn: signIn,
-      );
+    test(
+      'is kept when a profile is signed out, not only when it is live',
+      () async {
+        // Dropping the credential rebuilds the profile from its identity; the
+        // face is not part of what a refused key invalidates, and losing it
+        // would blank a picker that has no network to fetch it again with.
+        final signIn = _FakeSignIn(fails: _refused(401));
+        final container = _container(
+          AuthState(profiles: [withFace], activeId: withFace.id),
+          signIn: signIn,
+        );
 
-      await expectLater(
-        container.read(authProvider.notifier).resume(withFace),
-        throwsA(isA<SignInExpired>()),
-      );
+        await expectLater(
+          container.read(authProvider.notifier).resume(withFace),
+          throwsA(isA<SignInExpired>()),
+        );
 
-      final kept = container.read(authProvider).profiles.single;
-      expect(kept.hasCredential, isFalse);
-      expect(kept.color, '#4AC694');
-      expect(kept.hasAvatar, isTrue);
-    });
+        final kept = container.read(authProvider).profiles.single;
+        expect(kept.hasCredential, isFalse);
+        expect(kept.color, '#4AC694');
+        expect(kept.hasAvatar, isTrue);
+      },
+    );
 
     test('is what the sign-in response said, kept on the profile', () async {
       final signIn = _FakeSignIn(accountId: 1, apiKey: 'key-romain')
@@ -226,11 +231,13 @@ void main() {
         ..color = '#4AC694';
       final container = _container(const AuthState(), signIn: signIn);
 
-      await container.read(authProvider.notifier).login(
-        baseUrl: 'https://a.example',
-        username: 'romain',
-        password: 'hunter2',
-      );
+      await container
+          .read(authProvider.notifier)
+          .login(
+            baseUrl: 'https://a.example',
+            username: 'romain',
+            password: 'hunter2',
+          );
 
       final profile = container.read(authProvider).profiles.single;
       expect(profile.hasAvatar, isTrue);
@@ -275,11 +282,10 @@ void main() {
       ).atLaunch();
 
       expect(opened.active, isNull, reason: 'the picker asks who is reading');
-      expect(
-        opened.profiles.map((p) => p.id),
-        [_romain.id, _lea.id],
-        reason: 'nobody is forgotten — only nobody is active yet',
-      );
+      expect(opened.profiles.map((p) => p.id), [
+        _romain.id,
+        _lea.id,
+      ], reason: 'nobody is forgotten — only nobody is active yet');
       expect(
         opened.profiles.every((p) => p.hasCredential),
         isTrue,
@@ -349,9 +355,13 @@ void main() {
 
   group('a server holding several profiles', () {
     test('remembers both, each with its own credential', () async {
-      final storage = mockSecureStorage();
+      final storage = MemoryKeychain();
       final signIn = _FakeSignIn(accountId: 1, apiKey: 'key-romain');
-      final container = _container(const AuthState(), signIn: signIn);
+      final container = _container(
+        const AuthState(),
+        signIn: signIn,
+        keychain: storage,
+      );
       final auth = container.read(authProvider.notifier);
 
       await auth.login(
@@ -378,7 +388,7 @@ void main() {
       );
       expect(state.active?.username, 'lea');
 
-      final written = jsonDecode(storage['profiles']!) as List;
+      final written = jsonDecode(storage.values['profiles']!) as List;
       expect(written, hasLength(2), reason: 'both reach the keychain');
     });
 
@@ -463,7 +473,7 @@ void main() {
       // entries cannot say which account they were. Deleting rather than
       // leaving them is the point — each carries an auth key, which is a
       // whole Kavita account (ADR-0004), and nothing will ever read it again.
-      final storage = mockSecureStorage({
+      final keychain = MemoryKeychain({
         'servers': jsonEncode([
           {'baseUrl': 'https://a.example', 'username': 'romain', 'apiKey': 'k'},
         ]),
@@ -480,18 +490,21 @@ void main() {
         'clientDeviceId': 'device-uuid',
       });
 
-      final state = await SessionStorage.load();
+      final state = await SessionStorage(keychain).load();
 
       expect(state.profiles, isEmpty);
       expect(state.active, isNull);
-      expect(storage.keys, unorderedEquals(['appLocale', 'clientDeviceId']));
+      expect(
+        keychain.values.keys,
+        unorderedEquals(['appLocale', 'clientDeviceId']),
+      );
     });
 
     test('a row it cannot read costs a profile, never the app', () async {
       // `load()` is awaited in `main()` before `runApp`, so a `TypeError` out
       // of a cast here would fail every start of the app for good — over one
       // bad row nothing would ever clear.
-      mockSecureStorage({
+      final keychain = MemoryKeychain({
         'profiles': jsonEncode([
           {'baseUrl': 'https://bad.example', 'accountId': 'not-a-number'},
           {'baseUrl': 'https://worse.example', 'username': 7, 'isAdmin': 'yes'},
@@ -500,7 +513,7 @@ void main() {
         'activeProfile': _romain.id,
       });
 
-      final state = await SessionStorage.load();
+      final state = await SessionStorage(keychain).load();
 
       expect(state.profiles, hasLength(3));
       expect(state.profiles.first.accountId, isNull);
@@ -510,13 +523,14 @@ void main() {
     });
 
     test('a profile written now is read back whole', () async {
-      final storage = mockSecureStorage();
-      await SessionStorage.save(
+      final keychain = MemoryKeychain();
+      final storage = SessionStorage(keychain);
+      await storage.save(
         AuthState(profiles: [_romain, _lea], activeId: _lea.id),
       );
 
-      expect(storage.containsKey('servers'), isFalse);
-      final state = await SessionStorage.load();
+      expect(keychain.values.containsKey('servers'), isFalse);
+      final state = await storage.load();
 
       expect(state.profiles.map((p) => p.id), [_romain.id, _lea.id]);
       expect(state.active?.username, 'lea');
@@ -578,9 +592,13 @@ void main() {
   });
 
   test('signing in stores the auth key and no other secret', () async {
-    final storage = mockSecureStorage();
+    final storage = MemoryKeychain();
     final signIn = _FakeSignIn(apiKey: 'key-romain', accountId: 1);
-    final container = _container(const AuthState(), signIn: signIn);
+    final container = _container(
+      const AuthState(),
+      signIn: signIn,
+      keychain: storage,
+    );
 
     await container
         .read(authProvider.notifier)
@@ -591,7 +609,7 @@ void main() {
         );
 
     expect(container.read(sessionProvider)?.token, signedToken(1));
-    final written = jsonDecode(storage['profiles']!) as List;
+    final written = jsonDecode(storage.values['profiles']!) as List;
     expect(written.single, {
       'baseUrl': 'https://a.example',
       'accountId': 1,

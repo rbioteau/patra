@@ -407,6 +407,7 @@ void main() {
 
       final container = ProviderContainer.test(
         overrides: [
+          testKeychain(),
           initialAuthStateProvider.overrideWithValue(
             AuthState(profiles: [_romain], activeId: _romain.id),
           ),
@@ -431,7 +432,6 @@ void main() {
       tester,
     ) async {
       mockPathProvider();
-      mockSecureStorage();
       tester.view.physicalSize = const Size(1200, 2200);
       tester.view.devicePixelRatio = 2;
       addTearDown(tester.view.reset);

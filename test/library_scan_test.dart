@@ -87,7 +87,6 @@ Future<_Adapter> _pump(
   _Adapter? adapter,
 }) async {
   mockPathProvider();
-  mockSecureStorage();
   final served = adapter ?? _Adapter(empty: empty);
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
@@ -110,6 +109,7 @@ Future<_Adapter> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        testKeychain(),
         initialAuthStateProvider.overrideWithValue(
           AuthState(profiles: [profile], activeId: profile.id),
         ),
@@ -294,7 +294,6 @@ void main() {
   test(
     'a second ask while one is in flight sends nothing, and says so',
     () async {
-      mockSecureStorage();
       final adapter = _Adapter()..scanGate = Completer<void>();
       final client = KavitaClient(
         baseUrl: 'http://kavita.test',
@@ -305,6 +304,7 @@ void main() {
       client.httpClient.httpClientAdapter = adapter;
       final container = ProviderContainer.test(
         overrides: [
+          testKeychain(),
           kavitaClientProvider.overrideWithValue(client),
           testCatalogue(),
         ],

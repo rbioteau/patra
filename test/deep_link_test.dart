@@ -145,6 +145,7 @@ Widget _app({
 
   return ProviderScope(
     overrides: [
+      testKeychain(),
       initialAuthStateProvider.overrideWithValue(auth.atLaunch()),
       kavitaClientProvider.overrideWithValue(client),
       downloadsRootProvider.overrideWithValue(downloadsRoot),
@@ -189,8 +190,14 @@ void main() {
       // A tab, a gate, or the app simply being opened: nobody linked to any
       // of these, and holding one would send somebody signing in back to
       // where the *previous* person was.
-      for (final location in ['/', '/library', '/downloads', '/settings',
-          profilesLocation, '/login?profile=x']) {
+      for (final location in [
+        '/',
+        '/library',
+        '/downloads',
+        '/settings',
+        profilesLocation,
+        '/login?profile=x',
+      ]) {
         expect(
           PendingLink(location).take(),
           isNull,
@@ -226,22 +233,21 @@ void main() {
 
     setUp(() {
       root = Directory.systemTemp.createTempSync('patra-deep-link-test');
-      mockSecureStorage();
       mockPathProvider();
     });
     tearDown(() {
       root.deleteSync(recursive: true);
-      TestWidgetsFlutterBinding
-          .instance
-          .platformDispatcher
+      TestWidgetsFlutterBinding.instance.platformDispatcher
           .clearDefaultRouteNameTestValue();
     });
 
     /// The OS hands a link to the app as the route it was started on.
-    void openedWith(String link) => TestWidgetsFlutterBinding
-        .instance
-        .platformDispatcher
-        .defaultRouteNameTestValue = link;
+    void openedWith(String link) =>
+        TestWidgetsFlutterBinding
+                .instance
+                .platformDispatcher
+                .defaultRouteNameTestValue =
+            link;
 
     /// Room for the shelves under the link, so nothing overflows.
     void room(WidgetTester tester) {
@@ -290,7 +296,10 @@ void main() {
       openedWith(_link);
 
       await tester.pumpWidget(
-        _app(auth: AuthState(profiles: [_romain]), downloadsRoot: root),
+        _app(
+          auth: AuthState(profiles: [_romain]),
+          downloadsRoot: root,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -308,7 +317,10 @@ void main() {
       openedWith('/reader/11?page=3');
 
       await tester.pumpWidget(
-        _app(auth: AuthState(profiles: [_romain]), downloadsRoot: root),
+        _app(
+          auth: AuthState(profiles: [_romain]),
+          downloadsRoot: root,
+        ),
       );
       // Not pumpAndSettle: the page placeholders spin forever behind a
       // server that serves no pages, exactly as in `reader_test.dart`.
