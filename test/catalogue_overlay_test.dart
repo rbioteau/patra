@@ -12,7 +12,9 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/catalogue/catalogue_overlay.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/catalogue/catalogue_store.dart';
+import 'package:patra/src/features/home/home_screen.dart';
 import 'package:patra/src/features/library/library_screen.dart';
+import 'package:patra/src/features/series/series_detail_screen.dart';
 
 import 'test_support.dart';
 
@@ -45,6 +47,53 @@ class _AnswersThenHangs implements HttpClientAdapter {
     return ResponseBody.fromString(
       jsonEncode([
         {'id': 7, 'name': 'Server', 'type': 0},
+      ]),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+/// Answers the volumes once and is then unreachable for good — the app going
+/// offline while somebody is using it.
+class _AnswersThenFails implements HttpClientAdapter {
+  var calls = 0;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    calls++;
+    if (calls > 1) {
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'offline',
+      );
+    }
+    return ResponseBody.fromString(
+      jsonEncode([
+        {
+          'id': 1,
+          'name': '1',
+          'minNumber': 1,
+          'pages': 30,
+          'pagesRead': 12,
+          'chapters': [
+            {
+              'id': 101,
+              'range': '12',
+              'minNumber': 12,
+              'pages': 30,
+              'pagesRead': 12,
+              'sortOrder': 12,
+              'title': '',
+              'titleName': '',
+            },
+          ],
+        },
       ]),
       200,
       headers: {
@@ -348,6 +397,139 @@ void main() {
       container.read(librariesFetchProvider.future),
     );
     expect(overlay.isResolvedFailure, isFalse);
+  });
+
+  group('the On deck shelf', () {
+    test('offline, the catalogue is what Home draws', () async {
+      final store = _store();
+      await store.putOnDeck([_series(1), _series(2)]);
+      final (container: container, adapter: adapter) = _offline(store);
+
+      final overlay = await resolved(
+        container,
+        onDeckProvider,
+        container.read(onDeckFetchProvider.future),
+      );
+      expect(overlay.value, hasLength(2));
+      expect(overlay.hasError, isFalse);
+      expect(adapter.requests, greaterThan(0));
+    });
+
+    test('an empty stored ranking is nothing stored, not an answer', () async {
+      // What keeps `_OfflineHome`: a device that really has nothing has to
+      // reach Home's offline gate, which reads a *resolved failure*. A
+      // stored empty list drawn as an answer would suppress it and leave a
+      // blank screen explaining nothing.
+      final store = _store();
+      await store.putOnDeck(const []);
+      final (container: container, adapter: _) = _offline(store);
+
+      final overlay = await resolved(
+        container,
+        onDeckProvider,
+        container.read(onDeckFetchProvider.future),
+      );
+      expect(overlay.isResolvedFailure, isTrue);
+    });
+
+    test(
+      'a ranking written mid-session is the one the overlay reads',
+      () async {
+        // The same case the spine test below is about, one file over: the
+        // ordinary "went offline while using the app" sequence. A fallback
+        // frozen at the session's first disk read would answer a failed pull
+        // with yesterday's shelf, under the person who just pulled it.
+        final store = _store();
+        await store.putOnDeck([_series(1)]);
+        final (container: container, adapter: _) = _offline(store);
+
+        final before = await resolved(
+          container,
+          onDeckProvider,
+          container.read(onDeckFetchProvider.future),
+        );
+        expect(before.value, hasLength(1));
+
+        // What a successful fetch does, before the connection goes.
+        await store.putOnDeck([_series(1), _series(2)]);
+
+        container.invalidate(onDeckFetchProvider);
+        final after = await resolved(
+          container,
+          onDeckProvider,
+          container.read(onDeckFetchProvider.future),
+        );
+        expect(after.value, hasLength(2));
+      },
+    );
+  });
+
+  group("one series' volumes", () {
+    test('offline, a series opened before opens on the catalogue', () async {
+      // Which is what makes Home's Continue card draw with no server: it is
+      // picked out of the On deck answer and resumes from these.
+      final store = _store();
+      await store.putVolumes(5, catalogueVolumesFixture);
+      final (container: container, adapter: _) = _offline(store);
+
+      final overlay = await resolved(
+        container,
+        volumesProvider(5),
+        container.read(volumesFetchProvider(5).future),
+      );
+      expect(overlay.value!.single.chapters.single.id, 101);
+      expect(overlay.hasError, isFalse);
+    });
+
+    test('the answer survives going offline mid-session', () async {
+      // Where the spine and the ranking need an in-memory copy, this level
+      // needs none — and this is the sequence that says why, rather than an
+      // argument in a comment. Each of the three parts of a series file has
+      // exactly one writer, its own fetch: a part that has been fetched has a
+      // live value, and Riverpod carries that value across a refresh that
+      // fails, which is the assumption `overlaid`'s first branch rests on.
+      final store = _store();
+      final adapter = _AnswersThenFails();
+      final container = _container(adapter, store);
+      final subscription = container.listen<AsyncValue<List<Volume>>>(
+        volumesProvider(5),
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container.read(volumesFetchProvider(5).future);
+      expect(subscription.read().value, isNotNull);
+
+      // The connection goes, and something asks again: a pull, or coming back
+      // from the reader.
+      container.invalidate(volumesFetchProvider(5));
+      await expectLater(
+        container.read(volumesFetchProvider(5).future),
+        throwsA(isA<DioException>()),
+      );
+
+      expect(
+        subscription.read().value,
+        isNotNull,
+        reason: 'the card must not vanish with the volumes sitting on disk',
+      );
+    });
+
+    test('a series the catalogue has never held keeps its failure', () async {
+      // And that is the whole of how the card degrades: the hero collapses on
+      // `hasError`, and the removal from the shelf is keyed on the card being
+      // there, so the series stays where it was.
+      final store = _store();
+      await store.putVolumes(5, catalogueVolumesFixture);
+      final (container: container, adapter: _) = _offline(store);
+
+      final overlay = await resolved(
+        container,
+        volumesProvider(9),
+        container.read(volumesFetchProvider(9).future),
+      );
+      expect(overlay.isResolvedFailure, isTrue);
+    });
   });
 
   test('nothing in lib watches a fetch provider', () {

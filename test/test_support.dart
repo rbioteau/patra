@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
@@ -233,6 +234,37 @@ Future<ProfilePreferencesStore> preferencesStore({
   return store;
 }
 
+/// One volume of one chapter, twelve pages into thirty — what a series that
+/// has actually been opened leaves behind in `series/<id>.json`, and enough
+/// for `resumePoint` to find a chapter genuinely under way.
+///
+/// Shared because more than one suite needs the same one: the catalogue's own
+/// tests read it back through the store, and Home's offline tests need the
+/// Continue card to have somewhere to resume from.
+const catalogueVolumesFixture = [
+  Volume(
+    id: 1,
+    name: '1',
+    minNumber: 1,
+    pages: 30,
+    pagesRead: 12,
+    chapters: [
+      Chapter(
+        id: 101,
+        title: '',
+        titleName: '',
+        range: '12',
+        minNumber: 12,
+        pages: 30,
+        pagesRead: 12,
+        isSpecial: false,
+        sortOrder: 12,
+        format: MangaFormat.archive,
+      ),
+    ],
+  ),
+];
+
 /// A catalogue on a temp directory, for a screen test that hands the tree a
 /// client rather than signing one in.
 ///
@@ -259,13 +291,19 @@ Override testCatalogue({String profileId = 'test'}) {
 /// response — a `DioException.connectionError` is what flips
 /// `offlineProvider`, what `serverRetry` bounds, and what a resolved failure
 /// is made of. [requests] is there so a test can tell "the catalogue
-/// answered instead" from "nothing was ever asked".
+/// answered instead" from "nothing was ever asked", and [paths] so it can
+/// tell what was *not* asked for — which is the only way to pin an endpoint
+/// this app must never call.
 class UnreachableServer implements HttpClientAdapter {
-  var requests = 0;
+  final paths = <String>[];
+
+  /// Derived rather than counted: two fields that can never legitimately
+  /// disagree are one field and a bug waiting to be written.
+  int get requests => paths.length;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
-    requests++;
+    paths.add(options.path);
     throw DioException.connectionError(
       requestOptions: options,
       reason: 'offline',

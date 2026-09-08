@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_overlay.dart';
 import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../resume_point.dart';
@@ -35,7 +36,7 @@ import 'continue_hero.dart';
 /// over a month, the **complement** of this one, so anybody reading
 /// regularly had no hero at all while this very shelf listed what they were
 /// reading.
-final onDeckProvider = FutureProvider.autoDispose<List<Series>>(
+final onDeckFetchProvider = FutureProvider.autoDispose<List<Series>>(
   retry: serverRetry,
   (ref) async {
     final client = ref.watch(kavitaClientProvider);
@@ -47,21 +48,45 @@ final onDeckProvider = FutureProvider.autoDispose<List<Series>>(
   },
 );
 
+/// The shelf as Home draws it: the server's ranking where there is one, and
+/// otherwise the last one the device was given.
+///
+/// This is the provider to watch — see `librariesProvider` for the whole of
+/// why, and `onDeckOverlay` for what a stored ranking is and is not. It is
+/// **not decorated**: the app bar's struck-through cloud already says the
+/// answer may be old, and per ADR-0005 an individual row never carries a
+/// mark of its own.
+///
+/// An offline Home that says "nothing here, try Downloads" while the device
+/// knows perfectly well what was being read is the inconsistency the
+/// catalogue exists to remove — so `_OfflineHome` below now stands only
+/// where the catalogue is empty too.
+final onDeckProvider = Provider.autoDispose<AsyncValue<List<Series>>>(
+  (ref) => onDeckOverlay(ref, onDeckFetchProvider),
+);
+
 /// Whether there is a hero at all, and what it says.
 ///
 /// Null means the hero is not drawn *and* the On deck shelf keeps its series
 /// — the two are one decision, or a series that failed to be promoted would
 /// vanish from the home screen entirely. It is null when nothing is in
-/// progress, when the app is offline, and when the chapter fetch fails; it is
-/// non-null with a null `point` while that fetch is still in flight, so the
+/// progress and when the volumes can be neither fetched nor remembered; it is
+/// non-null with a null `point` while they are still being looked for, so the
 /// card can show its cover and title without waiting.
+///
+/// **Being offline is no longer one of those cases.** It used to short-circuit
+/// on `offlineProvider`, which was the honest answer while the volumes could
+/// only come from a server; now the card comes along for free with the
+/// catalogue, drawing wherever the featured series' volumes happen to have
+/// been stored. Where they have not, nothing new is needed — the volumes
+/// overlay resolves into its fetch's failure, `hasError` is what it always
+/// was, and the series stays in the shelf below.
 final continueHeroProvider = Provider.autoDispose<ContinueHeroData?>((ref) {
-  if (ref.watch(offlineProvider)) return null;
   final started = ref.watch(onDeckProvider).value;
   final featured = featuredSeries(started ?? const []);
   if (featured == null) return null;
-  // Deliberately the raw fetch and not `seriesVolumesProvider`, which lays
-  // the series screen's optimistic mark-read over it: that override map is
+  // Deliberately one layer down from `seriesVolumesProvider`, which lays the
+  // series screen's optimistic mark-read on top of this: that override map is
   // autoDispose so that it dies with that screen and the next visit is the
   // server's word again, and a home screen watching it would keep it alive
   // for the life of the app. What keeps this honest instead is that every
@@ -106,18 +131,18 @@ class HomeScreen extends ConsumerWidget {
     // promoted. A pull has to reach it too, or the card would keep naming the
     // chapter the shelf has just stopped agreeing with.
     final featured = ref.read(continueHeroProvider)?.series.id;
-    if (featured != null) ref.invalidate(volumesProvider(featured));
-    ref.invalidate(onDeckProvider);
+    if (featured != null) ref.invalidate(volumesFetchProvider(featured));
+    ref.invalidate(onDeckFetchProvider);
     ref.invalidate(librariesFetchProvider);
     await Future.wait([
-      ref.read(onDeckProvider.future),
+      ref.read(onDeckFetchProvider.future),
       ref.read(librariesFetchProvider.future),
     ]).catchError((Object _) => const <List<Object>>[]);
     // The shelves have moved, so the promoted series may not be the one whose
     // chapter was invalidated above.
     final promoted = ref.read(continueHeroProvider)?.series.id;
     if (promoted != null && promoted != featured) {
-      ref.invalidate(volumesProvider(promoted));
+      ref.invalidate(volumesFetchProvider(promoted));
     }
   }
 

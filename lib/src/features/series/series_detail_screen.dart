@@ -7,6 +7,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/kavita_client.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_overlay.dart';
 import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
@@ -26,18 +27,40 @@ import '../library/library_screen.dart';
 /// them, because a device that browsed a 2000-series library would otherwise
 /// hold every chapter of all of it. See `librariesFetchProvider` for why the
 /// write is in the body.
-final volumesProvider = FutureProvider.autoDispose.family<List<Volume>, int>(
-  retry: serverRetry,
-  (ref, seriesId) async {
-    final client = ref.watch(kavitaClientProvider);
-    // In hand before the request: leaving the screen disposes this provider
-    // while its fetch is in flight, and a `ref` read after that throws.
-    final store = ref.read(catalogueStoreProvider);
-    final volumes = await client.volumes(seriesId);
-    await store.putVolumes(seriesId, volumes);
-    return volumes;
-  },
-);
+final volumesFetchProvider = FutureProvider.autoDispose
+    .family<List<Volume>, int>(retry: serverRetry, (ref, seriesId) async {
+      final client = ref.watch(kavitaClientProvider);
+      // In hand before the request: leaving the screen disposes this provider
+      // while its fetch is in flight, and a `ref` read after that throws.
+      final store = ref.read(catalogueStoreProvider);
+      final volumes = await client.volumes(seriesId);
+      await store.putVolumes(seriesId, volumes);
+      return volumes;
+    });
+
+/// The volumes as anything that draws them sees them: the server's answer
+/// where there is one, and otherwise what the device remembers of the series.
+///
+/// This is the provider to watch — `volumesFetchProvider` above is the
+/// request, and `test/catalogue_overlay_test.dart` reads all of `lib/` to
+/// keep it from being watched anywhere. See `librariesProvider`, which says
+/// the whole of why.
+///
+/// Home's Continue card is the reason this exists already: it is picked out
+/// of the On deck answer and resumes from these volumes, so a card offline
+/// draws exactly where the featured series happens to have been opened
+/// before. Where it has not, the shelf keeps its series and no card is
+/// drawn — the overlay resolves into the fetch's failure and
+/// `continueHeroProvider`'s existing rule does the rest.
+final volumesProvider = Provider.autoDispose
+    .family<AsyncValue<List<Volume>>, int>(
+      (ref, seriesId) => storedSeriesOverlay(
+        ref,
+        seriesId,
+        volumesFetchProvider(seriesId),
+        (stored) => stored.volumes,
+      ),
+    );
 
 /// Progress the user has just set by hand, before the server has confirmed it.
 ///
@@ -227,7 +250,7 @@ class SeriesDetailScreen extends ConsumerWidget {
                         const SizedBox(height: 16),
                         OutlinedButton(
                           onPressed: () =>
-                              ref.invalidate(volumesProvider(seriesId)),
+                              ref.invalidate(volumesFetchProvider(seriesId)),
                           child: Text(l10n.retry),
                         ),
                       ],
@@ -251,7 +274,7 @@ class SeriesDetailScreen extends ConsumerWidget {
   ) async {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(readerLocation(chapter, started: started));
-    ref.invalidate(volumesProvider(seriesId));
+    ref.invalidate(volumesFetchProvider(seriesId));
     ref.invalidate(seriesProvider(seriesId));
   }
 
@@ -958,7 +981,7 @@ class _ChapterRow extends ConsumerWidget {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(readerLocation(chapter, started: started));
     // Progress changed while reading: the rows and the hero both show it.
-    ref.invalidate(volumesProvider(seriesId));
+    ref.invalidate(volumesFetchProvider(seriesId));
     ref.invalidate(seriesProvider(seriesId));
   }
 }
