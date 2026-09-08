@@ -46,7 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
-/.claude/
+/.claude/*
+# …except the skills, which the root CLAUDE.md points at and a fresh clone needs.
+!/.claude/skills/
 
 # CI artifacts downloaded for sideloading
 /patra-debug-apk/
