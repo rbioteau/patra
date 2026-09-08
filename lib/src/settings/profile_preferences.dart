@@ -27,9 +27,9 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../auth/session.dart';
+import '../keychain.dart';
 import 'locale_settings.dart';
 import 'reading_settings.dart';
 
@@ -93,57 +93,6 @@ class ProfilePreferences {
   }
 }
 
-/// Where the per-profile preferences are kept — the module's platform
-/// dependency, injected the way [LockVault] is and for the same reason: on a
-/// test binding the keychain plugin has nothing behind it, and a rule that
-/// had to go through the real one could not be tested at all.
-///
-/// One value rather than a key per profile, because the whole map is read at
-/// once before the app starts and written whole on every change.
-abstract class PreferencesVault {
-  Future<String?> read();
-  Future<void> write(String value);
-  Future<void> clear();
-}
-
-/// The real one: the same keychain the profiles themselves live in.
-class SecurePreferencesVault implements PreferencesVault {
-  const SecurePreferencesVault();
-
-  static const _storage = FlutterSecureStorage();
-  static const _key = 'profilePreferences';
-
-  @override
-  Future<String?> read() async {
-    try {
-      return await _storage.read(key: _key);
-    } on Exception {
-      // A keychain that cannot be read is a device on its defaults, not a
-      // device that cannot start — same rule as `SessionStorage.load`.
-      return null;
-    }
-  }
-
-  @override
-  Future<void> write(String value) async {
-    try {
-      await _storage.write(key: _key, value: value);
-    } on Exception {
-      // Nothing to surface: the choice is still in memory for this run, and
-      // the next change tries again.
-    }
-  }
-
-  @override
-  Future<void> clear() async {
-    try {
-      await _storage.delete(key: _key);
-    } on Exception {
-      // As above.
-    }
-  }
-}
-
 /// Every preference this device holds for a person, keyed by [Profile.id],
 /// plus the device's own defaults behind them.
 ///
@@ -155,7 +104,7 @@ class SecurePreferencesVault implements PreferencesVault {
 /// they chose last time.
 class ProfilePreferencesStore {
   ProfilePreferencesStore({
-    PreferencesVault? vault,
+    Keychain? keychain,
     this.deviceDirection = ReadingDirection.leftToRight,
     this.deviceMagnify = false,
     Locale? deviceLanguage,
@@ -163,9 +112,13 @@ class ProfilePreferencesStore {
     // is not available here.
     // ignore: prefer_initializing_formals
   }) : _deviceLanguage = deviceLanguage,
-       _vault = vault ?? const SecurePreferencesVault();
+       _keychain = keychain ?? const SecureKeychain();
 
-  final PreferencesVault _vault;
+  final Keychain _keychain;
+
+  /// One row rather than a key per profile, because the whole map is read at
+  /// once before the app starts and written whole on every change.
+  static const _key = 'profilePreferences';
 
   /// What a profile that has never chosen reads in, and what the reader opens
   /// in for them. Read from the flat keys before `runApp` and handed in
@@ -208,7 +161,14 @@ class ProfilePreferencesStore {
   Map<String, ProfilePreferences> get byProfile => Map.unmodifiable(_byProfile);
 
   Future<Map<String, ProfilePreferences>> load() async {
-    final raw = await _vault.read();
+    final String? raw;
+    try {
+      raw = await _keychain.read(_key);
+    } on Exception {
+      // A keychain that cannot be read is a device on its defaults, not a
+      // device that cannot start — same rule as `SessionStorage.load`.
+      return byProfile;
+    }
     if (raw == null) return byProfile;
     try {
       final decoded = jsonDecode(raw);
@@ -281,16 +241,27 @@ class ProfilePreferencesStore {
     await _flush();
   }
 
+  /// An empty map is **no row**, not a row holding `{}`.
+  ///
+  /// Failures are swallowed here rather than in the keychain, which is where
+  /// that decision belongs: the choice is still in memory for this run and
+  /// the next change tries again.
   Future<void> _flush() async {
-    if (_byProfile.isEmpty) {
-      await _vault.clear();
-      return;
+    try {
+      if (_byProfile.isEmpty) {
+        await _keychain.delete(_key);
+        return;
+      }
+      await _keychain.write(
+        _key,
+        jsonEncode({
+          for (final entry in _byProfile.entries)
+            entry.key: entry.value.toJson(),
+        }),
+      );
+    } on Exception {
+      // As above.
     }
-    await _vault.write(
-      jsonEncode({
-        for (final entry in _byProfile.entries) entry.key: entry.value.toJson(),
-      }),
-    );
   }
 }
 

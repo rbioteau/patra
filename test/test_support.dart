@@ -142,39 +142,12 @@ Future<SavedChapter> saveChapterFixture(
   return chapter;
 }
 
-/// The lock module's platform dependency, standing in for the keychain: one
-/// value in, one value out, and a test can read back exactly what was
-/// written. This is the seam the module is designed around — its rules are
-/// exercised through it rather than through a plugin that has nothing behind
-/// it on a test binding.
-class MemoryLockVault implements LockVault {
-  MemoryLockVault([this.value]);
-
-  String? value;
-  int writes = 0;
-  int clears = 0;
-
-  @override
-  Future<String?> read() async => value;
-
-  @override
-  Future<void> write(String value) async {
-    writes++;
-    this.value = value;
-  }
-
-  @override
-  Future<void> clear() async {
-    clears++;
-    value = null;
-  }
-}
-
-/// A loaded store holding a lock per entry of [pins], on a vault of its own.
+/// A loaded store holding a lock per entry of [pins], on a keychain of its
+/// own.
 Future<ProfileLockStore> lockStore([
   Map<String, String> pins = const {},
 ]) async {
-  final store = ProfileLockStore(vault: MemoryLockVault());
+  final store = ProfileLockStore(keychain: MemoryKeychain());
   for (final entry in pins.entries) {
     await store.set(entry.key, entry.value);
   }
@@ -204,43 +177,16 @@ class FakeBiometrics implements Biometrics {
   }
 }
 
-/// The preferences module's platform dependency, standing in for the
-/// keychain — the same shape [MemoryLockVault] has, and there for the same
-/// reason: the rules are exercised through the seam rather than through a
-/// plugin that has nothing behind it on a test binding.
-class MemoryPreferencesVault implements PreferencesVault {
-  MemoryPreferencesVault([this.value]);
-
-  String? value;
-  int writes = 0;
-  int clears = 0;
-
-  @override
-  Future<String?> read() async => value;
-
-  @override
-  Future<void> write(String value) async {
-    writes++;
-    this.value = value;
-  }
-
-  @override
-  Future<void> clear() async {
-    clears++;
-    value = null;
-  }
-}
-
-/// A loaded preferences store on a vault of its own, with [device] standing
-/// for what the flat keys held before anybody had a profile.
+/// A loaded preferences store on a keychain of its own, with [device]
+/// standing for what the flat keys held before anybody had a profile.
 Future<ProfilePreferencesStore> preferencesStore({
-  MemoryPreferencesVault? vault,
+  MemoryKeychain? keychain,
   ReadingDirection deviceDirection = ReadingDirection.leftToRight,
   bool deviceMagnify = false,
   Locale? deviceLanguage,
 }) async {
   final store = ProfilePreferencesStore(
-    vault: vault ?? MemoryPreferencesVault(),
+    keychain: keychain ?? MemoryKeychain(),
     deviceDirection: deviceDirection,
     deviceMagnify: deviceMagnify,
     deviceLanguage: deviceLanguage,

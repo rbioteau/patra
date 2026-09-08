@@ -100,14 +100,14 @@ void main() {
     });
 
     test('what is chosen is written down and reads back', () async {
-      final vault = MemoryPreferencesVault();
-      final store = await preferencesStore(vault: vault);
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setMagnify(_romain.id, true);
       await store.setLanguage(_lea.id, const Locale('fr'));
 
       final reopened = await preferencesStore(
-        vault: MemoryPreferencesVault(vault.value),
+        keychain: MemoryKeychain({...keychain.values}),
       );
       expect(reopened.of(_romain.id).direction, ReadingDirection.rightToLeft);
       expect(reopened.of(_romain.id).magnify, isTrue);
@@ -121,13 +121,15 @@ void main() {
         // Loaded before `runApp`, so the safe direction is the device's default
         // — the person is then on it and can choose again.
         final store = await preferencesStore(
-          vault: MemoryPreferencesVault('{"${_romain.id}": {"direction": 7}}'),
+          keychain: MemoryKeychain({
+            'profilePreferences': '{"${_romain.id}": {"direction": 7}}',
+          }),
           deviceDirection: ReadingDirection.rightToLeft,
         );
         expect(store.directionFor(_romain.id), ReadingDirection.rightToLeft);
 
         final broken = await preferencesStore(
-          vault: MemoryPreferencesVault('not json at all'),
+          keychain: MemoryKeychain({'profilePreferences': 'not json at all'}),
         );
         expect(broken.byProfile, isEmpty);
       },
@@ -137,32 +139,37 @@ void main() {
       // Rather than as a language with no translations behind it, which is
       // the same answer the device's own setting gets.
       final store = await preferencesStore(
-        vault: MemoryPreferencesVault('{"${_romain.id}": {"language": "xh"}}'),
+        keychain: MemoryKeychain({
+          'profilePreferences': '{"${_romain.id}": {"language": "xh"}}',
+        }),
         deviceLanguage: const Locale('fr'),
       );
       expect(store.languageFor(_romain.id), const Locale('fr'));
     });
 
     test('forgetting a profile takes its preferences with it', () async {
-      final vault = MemoryPreferencesVault();
-      final store = await preferencesStore(vault: vault);
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setDirection(_lea.id, ReadingDirection.verticalScroll);
 
       await store.forget(_romain.id);
       expect(store.of(_romain.id).direction, isNull);
       expect(store.of(_lea.id).direction, ReadingDirection.verticalScroll);
-      expect(vault.value, isNot(contains(_romain.id)));
+      expect(
+        keychain.values['profilePreferences'],
+        isNot(contains(_romain.id)),
+      );
     });
 
     test('the last profile forgotten leaves nothing in the keychain', () async {
-      final vault = MemoryPreferencesVault();
-      final store = await preferencesStore(vault: vault);
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
       await store.setMagnify(_romain.id, true);
 
       await store.forget(_romain.id);
-      expect(vault.value, isNull);
-      expect(vault.clears, 1);
+      // An empty map is no row, not a row holding `{}`.
+      expect(keychain.values.containsKey('profilePreferences'), isFalse);
     });
   });
 
@@ -371,7 +378,7 @@ void main() {
 /// A store that says how often it was asked, which is the only way to see a
 /// rebuild that changes no value.
 class _CountingStore extends ProfilePreferencesStore {
-  _CountingStore() : super(vault: MemoryPreferencesVault());
+  _CountingStore() : super(keychain: MemoryKeychain());
 
   int reads = 0;
 

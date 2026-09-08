@@ -29,7 +29,7 @@ Future<void> main() async {
   // profile has to open signed out, or the lock would never be asked for at
   // all — the picker is the only thing that asks, and such a device would
   // never see one.
-  final locks = ProfileLockStore();
+  final locks = ProfileLockStore(keychain: keychain);
   await locks.load();
   // `atLaunch`, not the stored state itself: a device holding more than one
   // profile opens on the picker rather than in whoever read last.
@@ -45,6 +45,7 @@ Future<void> main() async {
   // screen is drawn, and the gate is drawn before anybody has been chosen.
   const readingSettings = ReadingSettingsStore(keychain);
   final preferences = ProfilePreferencesStore(
+    keychain: keychain,
     deviceDirection: await readingSettings.load(),
     deviceMagnify: await readingSettings.loadMagnify(),
     deviceLanguage: await const LocaleSettingsStore(keychain).load(),
