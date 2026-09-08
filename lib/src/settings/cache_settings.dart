@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../keychain.dart';
 
 /// How much disk the image cache may hold before the oldest files roll out.
 ///
@@ -20,13 +21,16 @@ enum ImageCacheLimit {
 }
 
 class ImageCacheSettingsStore {
-  static const _storage = FlutterSecureStorage();
+  const ImageCacheSettingsStore(this._keychain);
+
+  final Keychain _keychain;
+
   static const _key = 'imageCacheLimit';
   static const defaultLimit = ImageCacheLimit.mb512;
 
-  static Future<ImageCacheLimit> load() async {
+  Future<ImageCacheLimit> load() async {
     try {
-      final raw = await _storage.read(key: _key);
+      final raw = await _keychain.read(_key);
       return ImageCacheLimit.values.firstWhere(
         (limit) => limit.name == raw,
         orElse: () => defaultLimit,
@@ -36,14 +40,20 @@ class ImageCacheSettingsStore {
     }
   }
 
-  static Future<void> save(ImageCacheLimit limit) async {
+  Future<void> save(ImageCacheLimit limit) async {
     try {
-      await _storage.write(key: _key, value: limit.name);
+      await _keychain.write(_key, limit.name);
     } on Exception {
       // A preference is not worth surfacing a storage failure for.
     }
   }
 }
+
+/// The budget's store, on the device's keychain — derived, holding nothing
+/// of its own.
+final imageCacheSettingsProvider = Provider<ImageCacheSettingsStore>(
+  (ref) => ImageCacheSettingsStore(ref.watch(keychainProvider)),
+);
 
 /// Preference restored before the app started; injected in main().
 final initialImageCacheLimitProvider = Provider<ImageCacheLimit>(
@@ -56,7 +66,7 @@ class ImageCacheLimitNotifier extends Notifier<ImageCacheLimit> {
 
   Future<void> set(ImageCacheLimit limit) async {
     state = limit;
-    await ImageCacheSettingsStore.save(limit);
+    await ref.read(imageCacheSettingsProvider).save(limit);
   }
 }
 

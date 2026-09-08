@@ -79,7 +79,6 @@ Future<Directory> _pump(
   Locale locale = const Locale('en'),
 }) async {
   mockPathProvider();
-  mockSecureStorage();
   tester.view.physicalSize = const Size(1100, 2600);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
@@ -101,6 +100,7 @@ Future<Directory> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        testKeychain(),
         initialAuthStateProvider.overrideWithValue(
           AuthState(profiles: [_romain, _lea], activeId: _romain.id),
         ),
@@ -199,9 +199,9 @@ void main() {
     // flushes a dirty provider that has listeners at the end of the frame —
     // so this is recomputed with no session by screens that are still reading
     // through it. Same keep-alive as `kavitaClientProvider`'s client.
-    mockSecureStorage();
     final container = ProviderContainer.test(
       overrides: [
+        testKeychain(),
         initialAuthStateProvider.overrideWithValue(
           AuthState(profiles: [_romain], activeId: _romain.id),
         ),

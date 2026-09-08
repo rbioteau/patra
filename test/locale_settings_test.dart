@@ -35,16 +35,17 @@ void main() {
   });
 
   test("the device's own language round-trips, and null clears it", () async {
-    final stored = mockSecureStorage();
-    expect(await LocaleSettingsStore.load(), isNull);
+    final keychain = MemoryKeychain();
+    final store = LocaleSettingsStore(keychain);
+    expect(await store.load(), isNull);
 
-    await LocaleSettingsStore.save(const Locale('fr'));
-    expect(stored['appLocale'], 'fr');
-    expect(await LocaleSettingsStore.load(), const Locale('fr'));
+    await store.save(const Locale('fr'));
+    expect(keychain.values['appLocale'], 'fr');
+    expect(await store.load(), const Locale('fr'));
 
-    await LocaleSettingsStore.save(null);
+    await store.save(null);
     expect(
-      stored.containsKey('appLocale'),
+      keychain.values.containsKey('appLocale'),
       isFalse,
       reason: 'following the device is stored as no preference at all',
     );

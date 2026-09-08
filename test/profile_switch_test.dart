@@ -102,6 +102,7 @@ Widget _app({required List<Profile> profiles, required Directory root}) {
   return SessionScope(
     auth: AuthState(profiles: profiles).atLaunch(),
     overrides: [
+      testKeychain(),
       signInProvider.overrideWithValue(_signIn),
       downloadsRootProvider.overrideWithValue(root),
       // Built from the session, as the real provider is: a stub client handed
@@ -133,7 +134,6 @@ Widget _app({required List<Profile> profiles, required Directory root}) {
 /// A screen with room for the shelves, so nothing overflows mid-test.
 Directory _room(WidgetTester tester, String name) {
   mockPathProvider();
-  mockSecureStorage();
   final root = Directory.systemTemp.createTempSync(name);
   addTearDown(() => root.deleteSync(recursive: true));
   tester.view.physicalSize = const Size(1200, 2200);

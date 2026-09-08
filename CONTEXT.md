@@ -181,6 +181,10 @@ _Avoid_: download (that is the act of fetching one), cached chapter, offline cha
 The covers and pages kept on disk merely because they were looked at online. It fills on its own, is capped, and the OS may reclaim it. It is not the offline library and must never be counted as one. It belongs to the **device** and is shared by every profile on it — one budget, and one copy of a cover however many people look at that series.
 _Avoid_: downloads, offline storage
 
+**Keychain**:
+Where the device keeps what it must not keep in the open: one row per name, and every row the device's own rather than the server's. It holds each [[Profile]]'s [[Auth key]], the [[Lock]]s, what each person has chosen, the [[Device default]]s and the id that tells this installation apart from every other. Never a store of content — a page is a file and a shelf is the [[Catalogue]] — and never somewhere a thing is kept merely because it was convenient: an auth key is a whole Kavita account (ADR-0004), so what goes in here is worth naming.
+_Avoid_: secure storage, keystore (that is Android's own, and one of two implementations), vault, preferences (those are one thing it holds)
+
 **Catalogue**:
 What the device remembers of a profile's shelves: its libraries, the series in them, and the parts of the series it has looked inside. It names what exists and never holds a page — that is the whole line between it and a [[Saved chapter]], which is content. It fills as a profile browses, and it belongs to that profile, because what a person may see is the server's answer to them alone. Every entry is refetchable, so a catalogue is discardable by design: the worst a wrong one costs is one refresh, which is why it is never migrated and never repaired.
 _Avoid_: cache (that is the [[Image cache]], and the word is spoken for), offline library, index, snapshot, mirror

@@ -3,8 +3,9 @@ import 'dart:math';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+import '../keychain.dart';
 
 /// The platforms Kavita can tell apart, and the token its user-agent parser
 /// looks for to do it.
@@ -221,8 +222,8 @@ class ClientIdentity {
   /// Reads the device id (creating it on first run) and the device
   /// description. Never throws: an unidentified client still works, it just
   /// shows up in Kavita as one more anonymous device.
-  static Future<ClientIdentity> resolve() async {
-    final deviceId = await _loadOrCreateDeviceId();
+  static Future<ClientIdentity> resolve({required Keychain keychain}) async {
+    final deviceId = await _loadOrCreateDeviceId(keychain);
     final appVersion = await _loadAppVersion();
     try {
       return await _describeDevice(deviceId, appVersion);
@@ -327,13 +328,12 @@ class ClientIdentity {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
-  static Future<String> _loadOrCreateDeviceId() async {
-    const storage = FlutterSecureStorage();
+  static Future<String> _loadOrCreateDeviceId(Keychain keychain) async {
     try {
-      final stored = await storage.read(key: _deviceIdKey);
+      final stored = await keychain.read(_deviceIdKey);
       if (stored != null && stored.isNotEmpty) return stored;
       final created = _uuidV4();
-      await storage.write(key: _deviceIdKey, value: created);
+      await keychain.write(_deviceIdKey, created);
       return created;
     } on Exception {
       // An unreadable keystore only costs the server its stable device

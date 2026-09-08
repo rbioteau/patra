@@ -137,6 +137,7 @@ Future<List<int>> _pumpReader(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        testKeychain(),
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
         // No session here, so these are the device's own defaults — which is
@@ -671,7 +672,6 @@ void main() {
       // A direction row closes the sheet because picking one is the whole
       // errand. A switch must not: closing the surface it lives on would
       // leave no way to turn it back off without reopening it.
-      mockSecureStorage();
       await _pumpReader(
         tester,
         initialPage: 10,
@@ -695,7 +695,6 @@ void main() {
 
     testWidgets('turning magnifying on takes effect without leaving the '
         'chapter', (tester) async {
-      mockSecureStorage();
       await _pumpReader(
         tester,
         initialPage: 10,

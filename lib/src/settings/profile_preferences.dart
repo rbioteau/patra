@@ -189,9 +189,16 @@ class ProfilePreferencesStore {
 
   /// Makes [locale] what this device falls back to, in memory and in the
   /// keychain, which are the same decision and so are one call.
-  Future<void> rememberDeviceLanguage(Locale? locale) async {
+  /// [device] is handed in rather than held: this store is built in `main()`
+  /// before there is a container, and the row it writes here is the
+  /// *device's* own — so the caller, which is a notifier and has a keychain
+  /// in reach, is where that store comes from.
+  Future<void> rememberDeviceLanguage(
+    Locale? locale,
+    LocaleSettingsStore device,
+  ) async {
     _deviceLanguage = locale;
-    await LocaleSettingsStore.save(locale);
+    await device.save(locale);
   }
 
   Map<String, ProfilePreferences> _byProfile = const {};
@@ -326,7 +333,7 @@ class DefaultReadingDirectionNotifier extends Notifier<ReadingDirection> {
       // device. No screen reaches it — Settings is inside a session — and it
       // is written down all the same, because the alternative is a `set` that
       // silently keeps nothing.
-      await ReadingSettingsStore.save(direction);
+      await ref.read(readingSettingsProvider).save(direction);
       return;
     }
     await ref.read(profilePreferencesStoreProvider).setDirection(id, direction);
@@ -352,7 +359,7 @@ class MagnifyNotifier extends Notifier<bool> {
     state = enabled;
     final id = ref.read(sessionProvider)?.id;
     if (id == null) {
-      await ReadingSettingsStore.saveMagnify(enabled);
+      await ref.read(readingSettingsProvider).saveMagnify(enabled);
       return;
     }
     await ref.read(profilePreferencesStoreProvider).setMagnify(id, enabled);
@@ -382,7 +389,10 @@ class LocaleNotifier extends Notifier<Locale?> {
   Future<void> set(Locale? locale) async {
     state = locale;
     final store = ref.read(profilePreferencesStoreProvider);
-    await store.rememberDeviceLanguage(locale);
+    await store.rememberDeviceLanguage(
+      locale,
+      ref.read(localeSettingsProvider),
+    );
     final id = ref.read(sessionProvider)?.id;
     if (id != null) await store.setLanguage(id, locale);
   }

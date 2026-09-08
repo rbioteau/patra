@@ -10,6 +10,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/keychain.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
@@ -34,35 +35,49 @@ Directory mockPathProvider() {
   return dir;
 }
 
-/// Backs flutter_secure_storage with a plain map for the duration of a test.
+/// The device's keychain, standing in for the real one: one map, and a test
+/// can read back exactly what was written.
 ///
-/// On a test binding the plugin has no platform behind it: on Linux it reaches
-/// for libsecret through the desktop implementation and simply never answers,
-/// so a `write` or a `delete` hangs the test rather than failing it. Any test
-/// that *sets* a stored preference — rather than only reading one back through
-/// a provider override — needs this.
-Map<String, String> mockSecureStorage([Map<String, String>? initial]) {
-  final values = {...?initial};
-  const channel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(channel, (call) async {
-        final key = call.arguments['key'] as String?;
-        return switch (call.method) {
-          'read' => values[key],
-          'readAll' => values,
-          'write' => values[key!] = call.arguments['value'] as String,
-          'delete' => values.remove(key),
-          'deleteAll' => values.clear(),
-          'containsKey' => values.containsKey(key),
-          _ => null,
-        };
-      });
-  addTearDown(
-    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, null),
-  );
-  return values;
+/// This replaces a mock of `flutter_secure_storage`'s **method channel**,
+/// which fourteen suites used to carry. On a test binding that plugin has no
+/// platform behind it — on Linux it reaches for libsecret through the desktop
+/// implementation and simply never answers, so a `write` **hung** the test
+/// rather than failing it, which reads as a stuck suite rather than a missing
+/// stand-in. Nothing reaches the channel now: every store here takes a
+/// [Keychain].
+class MemoryKeychain implements Keychain {
+  MemoryKeychain([Map<String, String>? initial]) : values = {...?initial};
+
+  final Map<String, String> values;
+
+  /// So a test can tell "written once" from "written on every build".
+  int writes = 0;
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<Map<String, String>> readAll() async => {...values};
+
+  @override
+  Future<void> write(String key, String value) async {
+    writes++;
+    values[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
 }
+
+/// A keychain in the tree, for a test that reaches one through a provider
+/// rather than building a store itself.
+///
+/// The same move as [testCatalogue], and the only override needed: the four
+/// stateless stores are derived from [keychainProvider], so standing in for
+/// it stands in for all of them. Pass a [MemoryKeychain] where the test wants
+/// to seed a row or read one back.
+Override testKeychain([MemoryKeychain? keychain]) =>
+    keychainProvider.overrideWithValue(keychain ?? MemoryKeychain());
 
 /// A token Kavita could have signed for [accountId], which is what the app
 /// reads its own account id back out of (`accountIdFrom`, the `nameid`

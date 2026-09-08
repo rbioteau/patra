@@ -28,12 +28,18 @@ final _lea = Profile(
 );
 
 /// A container reading as [active], on [store].
+/// [keychain] is the **device's** side of these settings: what a `set` with
+/// nobody reading falls back to writing, and where a chosen language also
+/// lands. A person's own choices go to [store]; these are two stores because
+/// they answer two different questions.
 ProviderContainer _container({
   required ProfilePreferencesStore store,
   Profile? active,
+  MemoryKeychain? keychain,
 }) {
   final container = ProviderContainer(
     overrides: [
+      testKeychain(keychain),
       profilePreferencesStoreProvider.overrideWithValue(store),
       initialAuthStateProvider.overrideWithValue(
         AuthState(profiles: [_romain, _lea], activeId: active?.id),
@@ -192,7 +198,6 @@ void main() {
       // The one way into a session that does *not* rebuild the app: the first
       // profile entered in a container. Preferences are a function of who is
       // reading, so this needs no wiring of its own.
-      mockSecureStorage();
       final store = await preferencesStore();
       await store.setDirection(_lea.id, ReadingDirection.verticalScroll);
 
@@ -230,7 +235,6 @@ void main() {
     });
 
     test('are what a choice changes, for that person alone', () async {
-      mockSecureStorage();
       final store = await preferencesStore();
       final his = _container(store: store, active: _romain);
 
@@ -255,7 +259,6 @@ void main() {
       // because the store answers with the same value; counting is therefore
       // the only way to pin it, and `kavitaClientProvider` documents the same
       // care for the same reason.
-      mockSecureStorage();
       final store = _CountingStore();
       final his = _container(store: store, active: _romain);
       his.listen(
@@ -274,7 +277,6 @@ void main() {
       // Removing a profile takes its preferences, its lock and its saved
       // chapters together. Clearing a *PIN* is none of those: the person is
       // still there, and what they read in is no business of the lock's.
-      mockSecureStorage();
       final locks = await lockStore();
       final store = await preferencesStore();
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
@@ -288,17 +290,17 @@ void main() {
       // No screen reaches this — Settings is inside a session — but a `set`
       // that silently kept nothing would be worse than one that writes the
       // only thing such a choice could belong to.
-      final stored = mockSecureStorage();
+      final device = MemoryKeychain();
       final store = await preferencesStore();
-      final gate = _container(store: store);
+      final gate = _container(store: store, keychain: device);
 
       await gate
           .read(defaultReadingDirectionProvider.notifier)
           .set(ReadingDirection.rightToLeft);
       await gate.read(magnifyProvider.notifier).set(true);
 
-      expect(stored['readingDirection'], 'rightToLeft');
-      expect(stored['loupeGesture'], 'true');
+      expect(device.values['readingDirection'], 'rightToLeft');
+      expect(device.values['loupeGesture'], 'true');
       expect(store.byProfile, isEmpty);
     });
 
@@ -308,13 +310,13 @@ void main() {
         // There is no screen on which to set the gate's language, and there
         // should not be one: the last language anybody chose on this device is
         // the only evidence there is of what this household reads in.
-        final stored = mockSecureStorage();
+        final device = MemoryKeychain();
         final store = await preferencesStore();
-        final his = _container(store: store, active: _romain);
+        final his = _container(store: store, active: _romain, keychain: device);
 
         await his.read(localeProvider.notifier).set(const Locale('fr'));
 
-        expect(stored['appLocale'], 'fr');
+        expect(device.values['appLocale'], 'fr');
         expect(
           _container(store: store).read(localeProvider),
           const Locale('fr'),

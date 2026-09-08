@@ -77,6 +77,7 @@ Widget _app({
 
   return ProviderScope(
     overrides: [
+      testKeychain(),
       // Through `atLaunch`, as main() does: these tests say what the device
       // remembered, and the app answers with the screen that opens on it.
       initialAuthStateProvider.overrideWithValue(auth.atLaunch()),
@@ -102,7 +103,9 @@ void main() {
   // Secure storage and the image cache both reach for the binding.
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('with no remembered profile, the login form is shown', (tester) async {
+  testWidgets('with no remembered profile, the login form is shown', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
@@ -261,7 +264,10 @@ void main() {
     // a single-profile device has nobody to switch to — so this is what its
     // every start would look like if `atLaunch` did not answer for it.
     await tester.pumpWidget(
-      _app(auth: AuthState(profiles: [_profile]), downloadsRoot: root),
+      _app(
+        auth: AuthState(profiles: [_profile]),
+        downloadsRoot: root,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -409,7 +415,6 @@ void main() {
       // This is the one path here that *awaits* a write: dropping the
       // credential is what the rethrow waits on, and an unmocked keychain
       // never answers on Linux.
-      mockSecureStorage();
       await tester.pumpWidget(
         _app(
           auth: AuthState(profiles: [remembered, other]),
@@ -462,7 +467,6 @@ void main() {
       // The other half of the refusal: the form is not a dead end, and what
       // it earns is a *replacement* key rather than a one-off session — the
       // next launch must not ask again.
-      mockSecureStorage();
       // This one really enters a session, so the shelves fetch and the
       // catalogue is written: without a documents directory that write asks
       // a channel nothing answers, and the test hangs rather than failing.
