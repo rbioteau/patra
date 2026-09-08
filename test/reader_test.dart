@@ -144,7 +144,7 @@ Future<List<int>> _pumpReader(
         // what a profile that has never chosen reads in.
         profilePreferencesStoreProvider.overrideWithValue(
           ProfilePreferencesStore(
-            vault: MemoryPreferencesVault(),
+            keychain: MemoryKeychain(),
             deviceDirection: direction,
             deviceMagnify: magnify,
           ),

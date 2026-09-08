@@ -56,12 +56,12 @@ void main() {
   });
 
   group('the store', () {
-    test('remembers a lock through the vault it was given', () async {
-      final vault = MemoryLockVault();
-      await ProfileLockStore(vault: vault).set(romain, '1234');
+    test('remembers a lock through the keychain it was given', () async {
+      final keychain = MemoryKeychain();
+      await ProfileLockStore(keychain: keychain).set(romain, '1234');
 
-      // A second store on the same vault is what the next launch is.
-      final reopened = ProfileLockStore(vault: vault);
+      // A second store on the same keychain is what the next launch is.
+      final reopened = ProfileLockStore(keychain: keychain);
       await reopened.load();
 
       expect(reopened.lockedIds, contains(romain));
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('locks one profile without locking the others', () async {
-      final store = ProfileLockStore(vault: MemoryLockVault());
+      final store = ProfileLockStore(keychain: MemoryKeychain());
       await store.set(romain, '1234');
 
       expect(store.lockedIds, isNot(contains(lea)));
@@ -81,7 +81,7 @@ void main() {
     });
 
     test('changing the PIN replaces the lock rather than adding one', () async {
-      final store = ProfileLockStore(vault: MemoryLockVault());
+      final store = ProfileLockStore(keychain: MemoryKeychain());
       await store.set(romain, '1234');
       await store.set(romain, '5678');
 
@@ -90,44 +90,51 @@ void main() {
       expect(store.locks, hasLength(1));
     });
 
-    test('clearing the last lock empties the vault rather than storing {}', () async {
-      final vault = MemoryLockVault();
-      final store = ProfileLockStore(vault: vault);
-      await store.set(romain, '1234');
-      await store.clear(romain);
+    test(
+      'clearing the last lock empties the row rather than storing {}',
+      () async {
+        final keychain = MemoryKeychain();
+        final store = ProfileLockStore(keychain: keychain);
+        await store.set(romain, '1234');
+        await store.clear(romain);
 
-      expect(store.lockedIds, isNot(contains(romain)));
-      expect(vault.value, isNull);
-      expect(vault.clears, 1);
-    });
+        expect(store.lockedIds, isNot(contains(romain)));
+        // An empty map is **no row**, not a row holding `{}`: the key being
+        // gone is what says the clear went through rather than a write of
+        // nothing.
+        expect(keychain.values.containsKey('profileLocks'), isFalse);
+      },
+    );
 
     test('refuses a PIN nothing could type back, and says so', () async {
-      final vault = MemoryLockVault();
-      final store = ProfileLockStore(vault: vault);
+      final keychain = MemoryKeychain();
+      final store = ProfileLockStore(keychain: keychain);
 
       // Out loud rather than silently: a caller that could not tell a lock
       // set from a lock declined would close its sheet on a profile it had
       // left open.
       expect(await store.set(romain, '12'), isFalse);
       expect(store.lockedIds, isNot(contains(romain)));
-      expect(vault.writes, 0);
+      expect(keychain.writes, 0);
       expect(await store.set(romain, '1234'), isTrue);
     });
 
-    test('a vault holding nonsense is a device with no locks', () async {
-      final store = ProfileLockStore(vault: MemoryLockVault('not json at all'));
+    test('a row holding nonsense is a device with no locks', () async {
+      final store = ProfileLockStore(
+        keychain: MemoryKeychain({'profileLocks': 'not json at all'}),
+      );
 
       expect(await store.load(), isEmpty);
     });
 
     test('a row of the wrong shape costs its own lock and no other', () async {
       final store = ProfileLockStore(
-        vault: MemoryLockVault(
-          jsonEncode({
+        keychain: MemoryKeychain({
+          'profileLocks': jsonEncode({
             romain: {'salt': 'a', 'hash': 'b'},
             lea: {'salt': 7},
           }),
-        ),
+        }),
       );
 
       expect((await store.load()).keys, [romain]);
@@ -145,7 +152,10 @@ void main() {
     });
 
     test('an administrator', () {
-      expect(suggestsLock(_profile(isAdmin: true, ageRestricted: true)), isTrue);
+      expect(
+        suggestsLock(_profile(isAdmin: true, ageRestricted: true)),
+        isTrue,
+      );
     });
 
     test('never a restricted profile', () {

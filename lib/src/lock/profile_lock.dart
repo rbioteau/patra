@@ -8,9 +8,8 @@
 /// profile has saved are ordinary files. Nothing here changes any of that, so
 /// nothing here — in code or in copy — may imply otherwise.
 ///
-/// The store takes its platform dependency the way the two other stores on
-/// this device take their root: a [LockVault] with a real one as the default,
-/// so the rules below can be exercised without a keychain.
+/// The store takes the device's [Keychain], with the real one as its default,
+/// so the rules below can be exercised without one.
 library;
 
 import 'dart:convert';
@@ -18,9 +17,9 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../auth/session.dart';
+import '../keychain.dart';
 
 /// One profile's lock: a salt and what the PIN hashes to under it.
 ///
@@ -90,50 +89,6 @@ class ProfileLock {
 /// once before the app starts and written whole on every change: a lock is a
 /// fact about the device, not about a session, and there is never a reason to
 /// read one profile's without the others'.
-abstract class LockVault {
-  Future<String?> read();
-  Future<void> write(String value);
-  Future<void> clear();
-}
-
-/// The real one: the same keychain the profiles themselves live in.
-class SecureLockVault implements LockVault {
-  const SecureLockVault();
-
-  static const _storage = FlutterSecureStorage();
-  static const _key = 'profileLocks';
-
-  @override
-  Future<String?> read() async {
-    try {
-      return await _storage.read(key: _key);
-    } on Exception {
-      // A keychain that cannot be read is a device with no locks, not a
-      // device that cannot start — same rule as `SessionStorage.load`.
-      return null;
-    }
-  }
-
-  @override
-  Future<void> write(String value) async {
-    try {
-      await _storage.write(key: _key, value: value);
-    } on Exception {
-      // Nothing to surface: the lock is still in memory for this run, and
-      // the next change tries again.
-    }
-  }
-
-  @override
-  Future<void> clear() async {
-    try {
-      await _storage.delete(key: _key);
-    } on Exception {
-      // As above.
-    }
-  }
-}
-
 /// Every lock this device holds, keyed by [Profile.id].
 ///
 /// Loaded once, before `runApp` — the app has to know which profiles are
@@ -143,10 +98,17 @@ class SecureLockVault implements LockVault {
 /// belongs to the **device**, so it has to survive a handover building the
 /// app again on a container of its own.
 class ProfileLockStore {
-  ProfileLockStore({LockVault? vault})
-    : _vault = vault ?? const SecureLockVault();
+  ProfileLockStore({Keychain? keychain})
+    : _keychain = keychain ?? const SecureKeychain();
 
-  final LockVault _vault;
+  final Keychain _keychain;
+
+  /// One row rather than a key per profile, because the whole map is read at
+  /// once before the app starts and written whole on every change: a lock is
+  /// a fact about the device, not about a session, and there is never a
+  /// reason to read one profile's without the others'.
+  static const _key = 'profileLocks';
+
   Map<String, ProfileLock> _locks = const {};
 
   /// What is locked right now. Empty until [load], which is what a test that
@@ -156,7 +118,14 @@ class ProfileLockStore {
   Set<String> get lockedIds => _locks.keys.toSet();
 
   Future<Map<String, ProfileLock>> load() async {
-    final raw = await _vault.read();
+    final String? raw;
+    try {
+      raw = await _keychain.read(_key);
+    } on Exception {
+      // A keychain that cannot be read is a device with no locks, not a
+      // device that cannot start — same rule as `SessionStorage.load`.
+      return locks;
+    }
     if (raw == null) return locks;
     try {
       final decoded = jsonDecode(raw);
@@ -203,16 +172,26 @@ class ProfileLockStore {
   bool unlocks(String profileId, String pin) =>
       _locks[profileId]?.accepts(pin) ?? true;
 
+  /// An empty map is **no row**, not a row holding `{}`.
+  ///
+  /// Failures are swallowed here rather than in the keychain, which is where
+  /// that decision belongs: the lock is still in memory for this run and the
+  /// next change tries again, so there is nothing to surface.
   Future<void> _flush() async {
-    if (_locks.isEmpty) {
-      await _vault.clear();
-      return;
+    try {
+      if (_locks.isEmpty) {
+        await _keychain.delete(_key);
+        return;
+      }
+      await _keychain.write(
+        _key,
+        jsonEncode({
+          for (final entry in _locks.entries) entry.key: entry.value.toJson(),
+        }),
+      );
+    } on Exception {
+      // As above.
     }
-    await _vault.write(
-      jsonEncode({
-        for (final entry in _locks.entries) entry.key: entry.value.toJson(),
-      }),
-    );
   }
 }
 
