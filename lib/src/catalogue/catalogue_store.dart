@@ -46,6 +46,7 @@ class CatalogueStore {
 
   static const _versionKey = 'version';
   static const _spineFile = 'spine.json';
+  static const _onDeckFile = 'ondeck.json';
 
   final Directory? _rootOverride;
   Directory? _root;
@@ -173,13 +174,42 @@ class CatalogueStore {
 
   // --------------------------------------------------------------- on deck
 
-  Future<List<Series>> loadOnDeck() async =>
-      await _readAs('ondeck.json', (json) => _seriesList(json['series'])) ??
-      const [];
+  /// The On deck answer as it stands, in memory: what was read off the device
+  /// plus every fetch written since.
+  ///
+  /// Held for the reason [_spine] is, and it is what keeps the overlay's
+  /// fallback the freshest ranking the device has rather than the one the
+  /// session opened with — see `onDeckOverlay`.
+  List<Series>? _onDeck;
 
-  Future<void> putOnDeck(List<Series> series) => _write('ondeck.json', {
-    'series': [for (final one in series) one.toJson()],
-  });
+  /// The On deck answer without touching the device — null until
+  /// [loadOnDeck] has been awaited or a fetch has written one.
+  List<Series>? get onDeck => _onDeck;
+
+  Future<List<Series>> loadOnDeck() async {
+    final held = _onDeck;
+    if (held != null) return held;
+    // Through the queue, and `??=` on top of it, for the reason [loadSpine]
+    // is: two readers arriving before the file has been read must not both
+    // read it, or the second would hand back the device's answer over the
+    // fetch already written on top of it.
+    await _oneAtATime(_onDeckFile, () async {
+      _onDeck ??=
+          await _readAs(_onDeckFile, (json) => _seriesList(json['series'])) ??
+          const [];
+    });
+    return _onDeck!;
+  }
+
+  Future<void> putOnDeck(List<Series> series) {
+    _onDeck = series;
+    return _oneAtATime(
+      _onDeckFile,
+      () => _write(_onDeckFile, {
+        'series': [for (final one in series) one.toJson()],
+      }),
+    );
+  }
 
   // ---------------------------------------------------------------- series
 
@@ -253,6 +283,7 @@ class CatalogueStore {
   /// costs them.
   Future<void> removeAll() async {
     _spine = null;
+    _onDeck = null;
     final root = await profileRoot();
     try {
       if (root.existsSync()) root.deleteSync(recursive: true);

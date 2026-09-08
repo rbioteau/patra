@@ -229,7 +229,7 @@ void main() {
       );
 
       await container.read(seriesForLibraryFetchProvider(1).future);
-      await container.read(volumesProvider(5).future);
+      await container.read(volumesFetchProvider(5).future);
       await container.read(seriesProvider(5).future);
       await container.read(seriesMetadataProvider(5).future);
 
@@ -248,7 +248,7 @@ void main() {
         adapter: _Adapter(onDeck: [_seriesJson(5)]),
       );
 
-      await container.read(onDeckProvider.future);
+      await container.read(onDeckFetchProvider.future);
 
       final stored = await CatalogueStore(
         root: root,

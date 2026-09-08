@@ -537,8 +537,17 @@ void main() {
       expect(find.text('reader 101'), findsOneWidget);
     });
 
-    // The hero is a promotion, and offline there is nothing to promote into.
-    testWidgets('is not drawn offline', (tester) async {
+    // **Being offline is not the question any more.** The hero used to
+    // short-circuit on `offlineProvider`, which was honest while its chapter
+    // could only come from a server; with the catalogue behind
+    // `volumesProvider` the card draws wherever the volumes happen to have
+    // been stored, and collapses only where they can be neither fetched nor
+    // remembered — which is the test above this one. The flag is asserted
+    // *inert* here, and what a real offline Home draws is
+    // `test/home_offline_test.dart`.
+    testWidgets('is drawn on the answers it has, offline flag or not', (
+      tester,
+    ) async {
       mockPathProvider();
       final adapter = _oneInProgress();
       final client = KavitaClient(
@@ -572,7 +581,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(ContinueHero), findsNothing);
+      expect(find.byType(ContinueHero), findsOne);
     });
 
     // The hero's chapter is a fourth request, and a pull has to reach it too.
