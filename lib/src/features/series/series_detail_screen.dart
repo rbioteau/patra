@@ -601,6 +601,8 @@ class _SeriesHero extends ConsumerWidget {
                       ? client.seriesCoverUrl(seriesId)
                       : entryCoverUrl(client, underWay),
                   headers: client.imageHeaders,
+                  seriesId: seriesId,
+                  seriesName: seriesName,
                   progress: coverProgress,
                 ),
               ),
@@ -780,6 +782,8 @@ class _ChapterRow extends ConsumerWidget {
                 CoverImage(
                   url: coverUrl,
                   headers: ref.watch(kavitaClientProvider).imageHeaders,
+                  seriesId: seriesId,
+                  seriesName: seriesName,
                   radius: radiusThumb,
                   // Derived from the width actually drawn, never a constant:
                   // 138 was the phone's number (46pt at 3x) and left a tablet

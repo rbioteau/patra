@@ -552,6 +552,7 @@ class _SeriesGrid extends ConsumerWidget {
               return CoverTile(
                 url: client.seriesCoverUrl(s.id),
                 headers: client.imageHeaders,
+                seriesId: s.id,
                 title: s.name,
                 serifTitle: true,
                 progress: progress,
