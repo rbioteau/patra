@@ -181,6 +181,14 @@ _Avoid_: download (that is the act of fetching one), cached chapter, offline cha
 The covers and pages kept on disk merely because they were looked at online. It fills on its own, is capped, and the OS may reclaim it. It is not the offline library and must never be counted as one. It belongs to the **device** and is shared by every profile on it — one budget, and one copy of a cover however many people look at that series.
 _Avoid_: downloads, offline storage
 
+**Catalogue**:
+What the device remembers of a profile's shelves: its libraries, the series in them, and the parts of the series it has looked inside. It names what exists and never holds a page — that is the whole line between it and a [[Saved chapter]], which is content. It fills as a profile browses, and it belongs to that profile, because what a person may see is the server's answer to them alone. Every entry is refetchable, so a catalogue is discardable by design: the worst a wrong one costs is one refresh, which is why it is never migrated and never repaired.
+_Avoid_: cache (that is the [[Image cache]], and the word is spoken for), offline library, index, snapshot, mirror
+
+**Spine**:
+The part of the [[Catalogue]] loaded whole: the libraries, and the series in each of them. Everything under it — a series' volumes, its chapters, its description — is loaded per series, when that series is opened. Ours to name rather than Kavita's, because the distinction is about this device's memory and the server has no word for it.
+_Avoid_: index, manifest, tree, root
+
 **Preference**:
 A setting somebody chose. Reading direction, magnifying and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]].
 _Avoid_: setting (that is the row it is changed on), option, config
