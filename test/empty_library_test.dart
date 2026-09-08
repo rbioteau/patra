@@ -142,5 +142,30 @@ void main() {
       // here, and the copy has to say so.
       expect(find.textContaining('Scan requested'), findsOneWidget);
     });
+
+    testWidgets('the button is allowed the app\'s whole control width', (
+      tester,
+    ) async {
+      await _pump(tester, admin: true);
+
+      // It had a 200 of its own, which left the label 146pt once the padding,
+      // the icon and its gap were taken — and "Demander une analyse" is 146pt
+      // at 14pt semibold, so French wrapped onto two lines where the English
+      // label had 27pt to spare. The cap is a maximum rather than a width, so
+      // raising it to the shared token costs English nothing and only lets a
+      // longer language have the room.
+      //
+      // What this can actually assert is the **cap**, not the wrapping: the
+      // test font draws every glyph as a square of the font size, so both
+      // labels are wider than any cap here and the button renders at exactly
+      // its maximum. That makes the number observable and a tighter bespoke
+      // one impossible to reintroduce quietly; it says nothing about Space
+      // Grotesk, where the French label is 146pt against the 214pt this
+      // leaves it.
+      expect(
+        tester.getSize(find.byType(OutlinedButton)).width,
+        controlMaxWidth,
+      );
+    });
   });
 }
