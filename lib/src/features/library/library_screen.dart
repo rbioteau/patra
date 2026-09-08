@@ -7,117 +7,13 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
-import '../../catalogue/catalogue_overlay.dart';
-import '../../catalogue/catalogue_provider.dart';
+import '../../catalogue/catalogue_reads.dart' as catalogue;
 import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../api/connection_failure.dart';
 import '../../widgets/dashed_border.dart';
 import '../../widgets/offline_indicator.dart';
-
-/// The libraries this profile can see.
-///
-/// The catalogue is written **in this body** rather than by a listener beside
-/// it: a listener would keep the fetch pure, but it cannot be built for the
-/// `.family` providers below without every screen registering its own, since
-/// a family's live keys cannot be enumerated. Writing here also means the
-/// write cannot be skipped — the only way to get a fetched list is through
-/// the body that stores it.
-final librariesFetchProvider = FutureProvider.autoDispose<List<Library>>(
-  retry: serverRetry,
-  (ref) async {
-    final client = ref.watch(kavitaClientProvider);
-    // Both resolved **before** the request: this provider is autoDispose, so
-    // a screen left while its fetch is in flight disposes it mid-body, and a
-    // `ref` read after that throws rather than answering.
-    final store = ref.read(catalogueStoreProvider);
-    final prefetch = ref.read(cataloguePrefetchProvider);
-    final libraries = await client.libraries();
-    // Replaces: a library this profile has lost access to has to disappear,
-    // and merging would keep it for good.
-    await store.putLibraries(libraries);
-    // And the series of every one of them, so a library never opened is
-    // still navigable offline. Hung off the answer rather than off a tab,
-    // because Home asks for this list too and one trigger is what keeps the
-    // two from being two rules.
-    unawaited(prefetch.run(client: client, store: store, libraries: libraries));
-    return libraries;
-  },
-);
-
-/// The libraries as the Library tab and Home draw them: the server's answer
-/// where there is one, and otherwise what the device remembers.
-///
-/// This is the provider a screen watches. `librariesFetchProvider` above is
-/// the request, and it stays public because pull-to-refresh has to reach it
-/// (an overlay has no future to await) and because that is where the
-/// catalogue is written — but nothing may *watch* it, which
-/// `test/catalogue_overlay_test.dart` enforces by reading all of `lib/`.
-/// [spineOverlay] taking the fetch as an argument is what leaves that rule
-/// no exceptions to carve out.
-///
-/// An empty stored library list counts as nothing stored rather than as an
-/// answer: a profile with no libraries at all has nothing to navigate
-/// offline, and the screen it lands on is the same one either way.
-final librariesProvider = Provider.autoDispose<AsyncValue<List<Library>>>(
-  (ref) => spineOverlay(
-    ref,
-    librariesFetchProvider,
-    (spine) => spine.libraries.isEmpty ? null : spine.libraries,
-  ),
-);
-
-/// The type of one library, which decides what its series are made of and what
-/// those parts are called. Falls back to manga while the list is in flight —
-/// the wording settles as soon as it lands, and no screen has to wait on it.
-final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
-  ref,
-  libraryId,
-) {
-  final libraries = ref.watch(librariesProvider).value;
-  if (libraries == null) return LibraryType.manga;
-  for (final library in libraries) {
-    if (library.id == libraryId) return library.type;
-  }
-  return LibraryType.manga;
-});
-
-/// Every series in one library, and the catalogue's copy of that list.
-///
-/// **Only a complete answer replaces**, and the paging loop is what says so:
-/// `allSeriesForLibrary` returns only once a short page has ended the run,
-/// and rejects otherwise — so a run that dies on page 3 never reaches this
-/// body at all, and cannot replace 250 stored series with 200.
-final seriesForLibraryFetchProvider = FutureProvider.autoDispose
-    .family<List<Series>, int>(retry: serverRetry, (ref, libraryId) async {
-      final client = ref.watch(kavitaClientProvider);
-      // See `librariesFetchProvider` for why these are in hand before
-      // the request.
-      final store = ref.read(catalogueStoreProvider);
-      final prefetch = ref.read(cataloguePrefetchProvider);
-      final series = await client.allSeriesForLibrary(libraryId);
-      await store.putSeriesList(libraryId, series);
-      // The eager fill has no reason to page this library again: opening the
-      // tab asks for the library list and for the selected library at once.
-      prefetch.markStored(libraryId);
-      return series;
-    });
-
-/// One library's series as the grid draws them — see [librariesProvider] for
-/// why a screen watches this and not the fetch behind it.
-///
-/// A library stored as **empty** is an answer here and not an absence: an
-/// empty library is a state this screen has copy for, and falling through to
-/// the failure would replace that copy with a retry button.
-final seriesForLibraryProvider = Provider.autoDispose
-    .family<AsyncValue<List<Series>>, int>(
-      (ref, libraryId) => spineOverlay(
-        ref,
-        seriesForLibraryFetchProvider(libraryId),
-        (spine) => spine.series[libraryId],
-      ),
-    );
 
 /// Which library the Library tab is showing. Null means "the first one",
 /// resolved once the library list arrives.
@@ -142,7 +38,7 @@ final selectedLibraryProvider = NotifierProvider<SelectedLibraryNotifier, int?>(
 /// failed, or came back empty, which is the same reason: there is no current
 /// library to act on.
 final currentLibraryProvider = Provider.autoDispose<int?>((ref) {
-  final libraries = ref.watch(librariesProvider).value;
+  final libraries = ref.watch(catalogue.libraries.provider).value;
   if (libraries == null || libraries.isEmpty) return null;
   final selected = ref.watch(selectedLibraryProvider);
   return libraries.any((library) => library.id == selected)
@@ -294,7 +190,7 @@ Future<void> _askForScan(
 
   // Last, because it can take the widget that asked out of the tree.
   if (refreshGrid && failure == null) {
-    ref.invalidate(seriesForLibraryFetchProvider(libraryId));
+    ref.invalidate(catalogue.seriesForLibrary(libraryId).invalidatable);
   }
 }
 
@@ -304,7 +200,7 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final libraries = ref.watch(librariesProvider);
+    final libraries = ref.watch(catalogue.libraries.provider);
 
     return Scaffold(
       appBar: AppBar(
@@ -316,7 +212,7 @@ class LibraryScreen extends ConsumerWidget {
         child: libraries.when(
           loading: () => const _LibraryGridSkeleton(),
           error: (error, _) => _ErrorState(
-            onRetry: () => ref.invalidate(librariesFetchProvider),
+            onRetry: () => ref.invalidate(catalogue.libraries.invalidatable),
           ),
           data: (items) {
             if (items.isEmpty) {
@@ -510,12 +406,13 @@ class _SeriesGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final client = ref.watch(kavitaClientProvider);
-    final series = ref.watch(seriesForLibraryProvider(libraryId));
+    final series = ref.watch(catalogue.seriesForLibrary(libraryId).provider);
 
     return series.when(
       loading: () => const _LibraryGridSkeleton(),
       error: (error, _) => _ErrorState(
-        onRetry: () => ref.invalidate(seriesForLibraryFetchProvider(libraryId)),
+        onRetry: () =>
+            ref.invalidate(catalogue.seriesForLibrary(libraryId).invalidatable),
       ),
       data: (items) {
         if (items.isEmpty) {
@@ -523,7 +420,7 @@ class _SeriesGrid extends ConsumerWidget {
           // there has to be a way to look again, and a bare Center has none.
           return RefreshIndicator(
             onRefresh: () => ref
-                .refresh(seriesForLibraryFetchProvider(libraryId).future)
+                .refresh(catalogue.seriesForLibrary(libraryId).refreshable)
                 .catchError((Object _) => const <Series>[]),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -540,7 +437,7 @@ class _SeriesGrid extends ConsumerWidget {
           // a pull with the server down would raise an unhandled zone error.
           // The screen already shows the failure through the provider.
           onRefresh: () => ref
-              .refresh(seriesForLibraryFetchProvider(libraryId).future)
+              .refresh(catalogue.seriesForLibrary(libraryId).refreshable)
               .catchError((Object _) => const <Series>[]),
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, gutter),
@@ -560,7 +457,9 @@ class _SeriesGrid extends ConsumerWidget {
                 onTap: () async {
                   await context.push(seriesLocation(s));
                   // Progress may have changed while reading.
-                  ref.invalidate(seriesForLibraryFetchProvider(libraryId));
+                  ref.invalidate(
+                    catalogue.seriesForLibrary(libraryId).invalidatable,
+                  );
                 },
               );
             },

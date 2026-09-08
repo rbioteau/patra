@@ -189,6 +189,10 @@ _Avoid_: cache (that is the [[Image cache]], and the word is spoken for), offlin
 The part of the [[Catalogue]] loaded whole: the libraries, and the series in each of them. Everything under it — a series' volumes, its chapters, its description — is loaded per series, when that series is opened. Ours to name rather than Kavita's, because the distinction is about this device's memory and the server has no word for it.
 _Avoid_: index, manifest, tree, root
 
+**Read**:
+One question the [[Catalogue]] answers, with the request behind it: the device's memory laid under the server's word, and the only way to ask for either again. There are six — the libraries, one library's series, the [[On deck]] ranking, and a [[Series]]' volumes, its own row and its description. A screen can reach a read's answer and never the request behind it, which is what stops a screen stepping around the catalogue for itself alone; asking again is a read's own verb, so there is one way to do it and one place it is written down. Ours to name, as [[Spine]] is, because it is about this device's memory and the server has no word for it.
+_Avoid_: fetch (that is the request, which is half of one), query, provider, answer (that is what a read carries, not what it is)
+
 **Preference**:
 A setting somebody chose. Reading direction, magnifying and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]].
 _Avoid_: setting (that is the row it is changed on), option, config

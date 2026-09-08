@@ -7,8 +7,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/kavita_client.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
-import '../../catalogue/catalogue_overlay.dart';
-import '../../catalogue/catalogue_provider.dart';
+import '../../catalogue/catalogue_reads.dart' as catalogue;
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
@@ -19,58 +18,6 @@ import '../../widgets/cover.dart';
 import '../../widgets/page_backdrop.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
-import '../library/library_screen.dart';
-
-/// A series' volumes and their chapters, and the catalogue's copy of them.
-///
-/// Volumes stay a **trace of what was actually opened**: nothing prefetches
-/// them, because a device that browsed a 2000-series library would otherwise
-/// hold every chapter of all of it. See `librariesFetchProvider` for why the
-/// write is in the body.
-final volumesFetchProvider = FutureProvider.autoDispose
-    .family<List<Volume>, int>(retry: serverRetry, (ref, seriesId) async {
-      final client = ref.watch(kavitaClientProvider);
-      // In hand before the request: leaving the screen disposes this provider
-      // while its fetch is in flight, and a `ref` read after that throws.
-      final store = ref.read(catalogueStoreProvider);
-      final volumes = await client.volumes(seriesId);
-      await store.putVolumes(seriesId, volumes);
-      return volumes;
-    });
-
-/// The volumes and where they came from — one provider, because a screen
-/// that asked those two questions separately could get them out of step.
-///
-/// It exists at all because [seriesVolumesProvider] needs the second fact:
-/// what is laid over a row depends on whether the server answered for it.
-final _volumesOverlayProvider = Provider.autoDispose
-    .family<Overlaid<List<Volume>>, int>(
-      (ref, seriesId) => storedSeriesOverlay(
-        ref,
-        seriesId,
-        volumesFetchProvider(seriesId),
-        (stored) => stored.volumes,
-      ),
-    );
-
-/// The volumes as anything that draws them sees them: the server's answer
-/// where there is one, and otherwise what the device remembers of the series.
-///
-/// This is the provider to watch — `volumesFetchProvider` above is the
-/// request, and `test/catalogue_overlay_test.dart` reads all of `lib/` to
-/// keep it from being watched anywhere. See `librariesProvider`, which says
-/// the whole of why.
-///
-/// Home's Continue card is the reason this exists already: it is picked out
-/// of the On deck answer and resumes from these volumes, so a card offline
-/// draws exactly where the featured series happens to have been opened
-/// before. Where it has not, the shelf keeps its series and no card is
-/// drawn — the overlay resolves into the fetch's failure and
-/// `continueHeroProvider`'s existing rule does the rest.
-final volumesProvider = Provider.autoDispose
-    .family<AsyncValue<List<Volume>>, int>(
-      (ref, seriesId) => ref.watch(_volumesOverlayProvider(seriesId)).value,
-    );
 
 /// Progress the user has just set by hand, before the server has confirmed it.
 ///
@@ -115,7 +62,7 @@ final readOverridesProvider =
 /// hero's resume point and the row's own progress naming one number.
 final seriesVolumesProvider = Provider.autoDispose
     .family<AsyncValue<List<Volume>>, int>((ref, seriesId) {
-      final answer = ref.watch(_volumesOverlayProvider(seriesId));
+      final answer = ref.watch(catalogue.volumes(seriesId).overlaid);
       // Only where it applies: watching the saved chapters unconditionally
       // would rebuild every row of a live list on each tick of a download.
       final saved = answer.fromCatalogue
@@ -156,49 +103,6 @@ Chapter _withNewestProgress(
   if (copy == null) return chapter;
   return chapter.copyWith(pagesRead: copy.pagesRead);
 }
-
-final seriesFetchProvider = FutureProvider.autoDispose.family<Series, int>(
-  retry: serverRetry,
-  (ref, seriesId) async {
-    final client = ref.watch(kavitaClientProvider);
-    final store = ref.read(catalogueStoreProvider);
-    final series = await client.series(seriesId);
-    await store.putSeries(series);
-    return series;
-  },
-);
-
-/// The series' own row — its library name, and the series-level tally the
-/// hero's ring is drawn from. See [volumesProvider] for the naming.
-final seriesProvider = Provider.autoDispose.family<AsyncValue<Series>, int>(
-  (ref, seriesId) => storedSeriesOverlay(
-    ref,
-    seriesId,
-    seriesFetchProvider(seriesId),
-    (stored) => stored.series,
-  ).value,
-);
-
-final seriesMetadataFetchProvider = FutureProvider.autoDispose
-    .family<SeriesMetadata, int>(retry: serverRetry, (ref, seriesId) async {
-      final client = ref.watch(kavitaClientProvider);
-      final store = ref.read(catalogueStoreProvider);
-      final metadata = await client.seriesMetadata(seriesId);
-      await store.putSeriesMetadata(seriesId, metadata);
-      return metadata;
-    });
-
-/// Who made the series and what it is about. See [volumesProvider] for the
-/// naming.
-final seriesMetadataProvider = Provider.autoDispose
-    .family<AsyncValue<SeriesMetadata>, int>(
-      (ref, seriesId) => storedSeriesOverlay(
-        ref,
-        seriesId,
-        seriesMetadataFetchProvider(seriesId),
-        (stored) => stored.metadata,
-      ).value,
-    );
 
 /// The three buckets Kavita splits a series into, from the one call we make.
 ///
@@ -267,7 +171,7 @@ class SeriesDetailScreen extends ConsumerWidget {
     final client = ref.watch(kavitaClientProvider);
     final volumes = ref.watch(seriesVolumesProvider(seriesId));
     // What the parts of this series are called comes from the library type.
-    final type = ref.watch(libraryTypeProvider(libraryId));
+    final type = ref.watch(catalogue.libraryTypeProvider(libraryId));
 
     return Scaffold(
       appBar: AppBar(
@@ -323,8 +227,9 @@ class SeriesDetailScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 16),
                         OutlinedButton(
-                          onPressed: () =>
-                              ref.invalidate(volumesFetchProvider(seriesId)),
+                          onPressed: () => ref.invalidate(
+                            catalogue.volumes(seriesId).invalidatable,
+                          ),
                           child: Text(l10n.retry),
                         ),
                       ],
@@ -348,8 +253,8 @@ class SeriesDetailScreen extends ConsumerWidget {
   ) async {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(readerLocation(chapter, started: started));
-    ref.invalidate(volumesFetchProvider(seriesId));
-    ref.invalidate(seriesFetchProvider(seriesId));
+    ref.invalidate(catalogue.volumes(seriesId).invalidatable);
+    ref.invalidate(catalogue.series(seriesId).invalidatable);
   }
 
   List<Widget> _buildSections(
@@ -502,8 +407,10 @@ class _SeriesHero extends ConsumerWidget {
     final coverWidth = tablet ? _tabletCoverWidth : _coverWidth;
     final coverHeight = tablet ? _tabletCoverHeight : _coverHeight;
     final client = ref.watch(kavitaClientProvider);
-    final series = ref.watch(seriesProvider(seriesId)).value;
-    final metadataAsync = ref.watch(seriesMetadataProvider(seriesId));
+    final series = ref.watch(catalogue.series(seriesId).provider).value;
+    final metadataAsync = ref.watch(
+      catalogue.seriesMetadata(seriesId).provider,
+    );
     final metadata = metadataAsync.value;
     final target = _target();
 
@@ -1031,7 +938,9 @@ class _ChapterRow extends ConsumerWidget {
     // The cover's progress ring is series-wide and cannot be guessed from one
     // chapter. Re-fetching it is flash-free — the hero reads the value, which
     // survives a refresh — so it catches up on its own.
-    if (ref.context.mounted) ref.invalidate(seriesFetchProvider(seriesId));
+    if (ref.context.mounted) {
+      ref.invalidate(catalogue.series(seriesId).invalidatable);
+    }
   }
 
   /// An open row closes on tap; only a closed one opens the reader.
@@ -1083,8 +992,8 @@ class _ChapterRow extends ConsumerWidget {
     final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
     await context.push(readerLocation(chapter, started: started));
     // Progress changed while reading: the rows and the hero both show it.
-    ref.invalidate(volumesFetchProvider(seriesId));
-    ref.invalidate(seriesFetchProvider(seriesId));
+    ref.invalidate(catalogue.volumes(seriesId).invalidatable);
+    ref.invalidate(catalogue.series(seriesId).invalidatable);
   }
 }
 
