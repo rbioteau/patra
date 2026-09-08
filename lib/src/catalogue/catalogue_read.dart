@@ -19,6 +19,12 @@
 /// two `@internal` bases, so no one parameter type could serve a provider, a
 /// screen and a test. `refresh` and `invalidate` are already methods on all
 /// three; what they were missing is something safe to be handed.
+///
+/// **The request is a lambda, not a provider.** Each of the six used to spell
+/// out the same four steps — watch the client, resolve the store, make the
+/// request, write what came back — which is four chances to get the order
+/// wrong six times over, and the order is load-bearing (see [_buildFetch]). A
+/// declaration now says only what it asks for and what it writes.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,9 +35,72 @@ import 'package:flutter_riverpod/misc.dart'
         ProviderOrFamily,
         Refreshable;
 
+import '../api/kavita_client.dart';
 import '../api/models.dart';
+import '../auth/session.dart';
 import 'catalogue_overlay.dart';
+import 'catalogue_provider.dart';
 import 'catalogue_store.dart';
+
+/// What a read's write step can reach.
+///
+/// The store, because that is what a read writes into. The **prefetch**,
+/// because two of the six have bookkeeping with the eager fill — one starts
+/// it, one tells it a library is already filled — and handing both to every
+/// write is what keeps those two from being special cases. And the **client**,
+/// because the eager fill is itself a run of requests.
+typedef CatalogueDeps = ({
+  KavitaClient client,
+  CatalogueStore store,
+  CataloguePrefetch prefetch,
+});
+
+/// The request, then the write. Every read in this folder is built from this.
+///
+/// Two rules live here rather than in six bodies:
+///
+/// **Everything is resolved before the request.** These providers are
+/// `autoDispose`, so a screen left while its fetch is in flight disposes the
+/// provider mid-body — and a `ref` read after that throws rather than
+/// answering, which would turn a background cache write into a failed fetch.
+/// Nothing but statement order enforced it, and two of the six carried no
+/// comment saying so.
+///
+/// **Only a complete answer replaces.** [write] runs after [request] has
+/// returned and never otherwise, so a request that fails part-way cannot
+/// replace what the device holds with less than it holds. That is what the
+/// paging run in `allSeriesForLibrary` rests on: it rejects until a short page
+/// has ended the run, so a run that dies on page 3 never reaches a write.
+FutureProvider<T> _buildFetch<T>(
+  Future<T> Function(KavitaClient client) request,
+  Future<void> Function(CatalogueDeps into, T value) write,
+) => FutureProvider.autoDispose<T>(retry: serverRetry, (ref) async {
+  final into = _deps(ref);
+  final value = await request(into.client);
+  await write(into, value);
+  return value;
+});
+
+/// The same, per key.
+FutureProviderFamily<T, K> _buildFetchPerKey<T, K>(
+  Future<T> Function(KavitaClient client, K key) request,
+  Future<void> Function(CatalogueDeps into, K key, T value) write,
+) => FutureProvider.autoDispose.family<T, K>(retry: serverRetry, (
+  ref,
+  key,
+) async {
+  final into = _deps(ref);
+  final value = await request(into.client, key);
+  await write(into, key, value);
+  return value;
+});
+
+/// In hand before any request goes out — see [_buildFetch].
+CatalogueDeps _deps(Ref ref) => (
+  client: ref.watch(kavitaClientProvider),
+  store: ref.read(catalogueStoreProvider),
+  prefetch: ref.read(cataloguePrefetchProvider),
+);
 
 /// A read for one key, or for none.
 ///
@@ -61,20 +130,26 @@ class CatalogueRead<T> {
 
   /// A read of the [Spine]: the libraries, and the series in each of them.
   static CatalogueRead<T> spine<T>({
-    required FutureProvider<T> fetch,
+    required Future<T> Function(KavitaClient client) request,
+    required Future<void> Function(CatalogueDeps into, T value) write,
     required T? Function(Spine spine) held,
-  }) => CatalogueRead._(
-    Provider.autoDispose<AsyncValue<T>>(
-      (ref) => spineOverlay(ref, fetch, held),
-    ),
-    fetch,
-  );
+  }) {
+    final fetch = _buildFetch(request, write);
+    return CatalogueRead._(
+      Provider.autoDispose<AsyncValue<T>>(
+        (ref) => spineOverlay(ref, fetch, held),
+      ),
+      fetch,
+    );
+  }
 
   /// A read of one part of the [Spine], per key.
   static KeyedRead<T, K> spinePerKey<T, K>({
-    required FutureProviderFamily<T, K> fetch,
+    required Future<T> Function(KavitaClient client, K key) request,
+    required Future<void> Function(CatalogueDeps into, K key, T value) write,
     required T? Function(Spine spine, K key) held,
   }) {
+    final fetch = _buildFetchPerKey(request, write);
     final overlay = Provider.autoDispose.family<AsyncValue<T>, K>(
       (ref, key) => spineOverlay(ref, fetch(key), (spine) => held(spine, key)),
     );
@@ -87,21 +162,29 @@ class CatalogueRead<T> {
   /// Not generic, because there is one of these and its picker is a rule
   /// rather than a parameter: an empty stored ranking is nothing stored.
   static CatalogueRead<List<Series>> onDeck({
-    required FutureProvider<List<Series>> fetch,
-  }) => CatalogueRead._(
-    Provider.autoDispose<AsyncValue<List<Series>>>(
-      (ref) => onDeckOverlay(ref, fetch),
-    ),
-    fetch,
-  );
+    required Future<List<Series>> Function(KavitaClient client) request,
+    required Future<void> Function(CatalogueDeps into, List<Series> value)
+    write,
+  }) {
+    final fetch = _buildFetch(request, write);
+    return CatalogueRead._(
+      Provider.autoDispose<AsyncValue<List<Series>>>(
+        (ref) => onDeckOverlay(ref, fetch),
+      ),
+      fetch,
+    );
+  }
 
   /// A read of one part of one series' own file, per series.
   ///
   /// These are the reads that answer with **two facts** — see [StoredRead].
   static StoredKeyedRead<T> storedPerSeries<T>({
-    required FutureProviderFamily<T, int> fetch,
+    required Future<T> Function(KavitaClient client, int seriesId) request,
+    required Future<void> Function(CatalogueDeps into, int seriesId, T value)
+    write,
     required T? Function(StoredSeries stored) held,
   }) {
+    final fetch = _buildFetchPerKey(request, write);
     final overlaid = Provider.autoDispose.family<Overlaid<T>, int>(
       (ref, seriesId) =>
           storedSeriesOverlay(ref, seriesId, fetch(seriesId), held),
