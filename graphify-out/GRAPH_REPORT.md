@@ -1,7 +1,7 @@
 # Graph Report - patra  (2026-09-08)
 
 ## Corpus Check
-- 139 files · ~252,464 words
+- 139 files · ~252,786 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3b2f8859`
+- Built from commit: `f9c9e6bd`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -508,7 +508,7 @@ Nodes (7): package:patra/l10n/generated/app_localizations_en.dart, package:patra
 
 ### Community 75 - "../auth/session.dart"
 Cohesion: 0.14
-Nodes (13): ../auth/session.dart, Profile, Session, build, dimmed, hex, _Initial, on (+5 more)
+Nodes (13): ../../auth/session.dart, Profile, Session, build, dimmed, hex, _Initial, on (+5 more)
 
 ### Community 76 - "entity_naming.dart"
 Cohesion: 0.18
@@ -560,7 +560,7 @@ Nodes (11): accountIdFrom(token) — the key is derivable offline, Local profile
 
 ### Community 88 - "../../api/models.dart"
 Cohesion: 0.18
-Nodes (10): ../api/models.dart, firstOf, indexOf, length, of, _slotOfPage, slots, spanOf (+2 more)
+Nodes (10): ../../api/models.dart, firstOf, indexOf, length, of, _slotOfPage, slots, spanOf (+2 more)
 
 ### Community 89 - "saved_chapters_per_profile_test.dart"
 Cohesion: 0.11
@@ -711,7 +711,7 @@ Nodes (5): CustomPainter, _UnfurlPainter, DashedBorderPainter, _DirectionPainter
   .github/dependabot.yml · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **2194 isolated node(s):** `CatalogueDeps`, `into`, `value`, `key`, `provider` (+2189 more)
+- **2194 isolated node(s):** `ScanOutcome`, `_LibraryAction`, `libraries`, `selected`, `asked` (+2189 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2405 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **11 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -721,12 +721,12 @@ _Questions this graph is uniquely positioned to answer:_
 - **What is the exact relationship between `Dependabot github-actions ecosystem (weekly)` and `Upload to the internal test track`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **Why does `Profile lock (lib/src/lock/profile_lock.dart)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `KavitaClient (lib/src/api/kavita_client.dart)`, `DownloadsService (<documents>/downloads/<profile>/<chapterId>/)`, `ProfilePreferencesStore (profile_preferences.dart)`, `profile_lock_sheet.dart`?**
-  _High betweenness centrality (0.098) - this node is a cross-community bridge._
-- **Why does `_` connect `_` to `../../../l10n/generated/app_localizations.dart`, `downloads_screen.dart`, `static const`, `downloads_service_test.dart`, `package:flutter/material.dart`, `StatelessWidget`, `../auth/session.dart`, `package:flutter_riverpod/flutter_riverpod.dart`, `app.dart`, `../../theme.dart`, `cover.dart`, `continue_hero.dart`, `home_screen.dart`, `main.dart`, `profile_picker_screen.dart`, `../../api/models.dart`, `ConsumerWidget`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+  _High betweenness centrality (0.114) - this node is a cross-community bridge._
 - **Why does `suggestsLock (the suggestion goes to the unrestricted profile)` connect `KavitaClient (lib/src/api/kavita_client.dart)` to `UserDto.isAdmin (role read from the login response)`, `Profile lock (lib/src/lock/profile_lock.dart)`?**
   _High betweenness centrality (0.034) - this node is a cross-community bridge._
-- **What connects `CatalogueDeps`, `into`, `value` to the rest of the system?**
+- **Why does `The profile picker (/profiles)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `DownloadsService (<documents>/downloads/<profile>/<chapterId>/)`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
+- **What connects `ScanOutcome`, `_LibraryAction`, `libraries` to the rest of the system?**
   _2194 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Generated Localization Bundle` be split into smaller, more focused modules?**
   _Cohesion score 0.013071895424836602 - nodes in this community are weakly interconnected._

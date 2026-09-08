@@ -28591,12 +28591,12 @@
     },
     {
       "id": "auth_session_dart",
-      "label": "../auth/session.dart",
+      "label": "../../auth/session.dart",
       "_origin": "ast",
       "community": 75,
       "community_name": "../auth/session.dart",
       "file_type": "code",
-      "norm_label": "../auth/session.dart",
+      "norm_label": "../../auth/session.dart",
       "source_file": null,
       "source_location": null
     },
@@ -30323,12 +30323,12 @@
     },
     {
       "id": "api_models_dart",
-      "label": "../api/models.dart",
+      "label": "../../api/models.dart",
       "_origin": "ast",
       "community": 88,
       "community_name": "../../api/models.dart",
       "file_type": "code",
-      "norm_label": "../api/models.dart",
+      "norm_label": "../../api/models.dart",
       "source_file": null,
       "source_location": null
     },
@@ -88089,5 +88089,5 @@
       "_origin": "semantic"
     }
   ],
-  "built_at_commit": "3b2f88590b791f95d6d0847e0d9eae303e75e44d"
+  "built_at_commit": "f9c9e6bd9f66a9b05cc160ebd670e9b872b81a5c"
 }
