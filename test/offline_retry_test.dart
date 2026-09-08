@@ -41,7 +41,10 @@ Future<_Unreachable> _pumpHome(WidgetTester tester) async {
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [kavitaClientProvider.overrideWithValue(client)],
+      overrides: [
+        kavitaClientProvider.overrideWithValue(client),
+        testCatalogue(),
+      ],
       child: MaterialApp(
         theme: patraTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

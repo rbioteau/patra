@@ -184,6 +184,17 @@ class Library {
   final String name;
   final LibraryType type;
 
+  /// What the catalogue stores, which is the wire's own shape.
+  ///
+  /// Every `toJson` here writes exactly the keys the `fromJson` beside it
+  /// reads, so a stored file round-trips through one parser rather than a
+  /// second one written to match it — and the contract oracle, which governs
+  /// which keys those are, governs the store as well. It is deliberately not
+  /// Kavita's payload verbatim: this class maps 3 of `LibraryDto`'s fields,
+  /// and storing the rest would be bytes paid for on every device to use
+  /// none of them.
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'type': type.id};
+
   factory Library.fromJson(Map<String, dynamic> json) => Library(
     id: json['id'] as int,
     name: json['name'] as String? ?? '',
@@ -225,6 +236,21 @@ class Series {
   /// Every page read. Kavita reports progress as a count rather than a flag,
   /// and `pages == 0` is a series it has not measured — not a finished one.
   bool get isRead => pages > 0 && pagesRead >= pages;
+
+  /// See [Library.toJson]. `latestReadDate` goes back the way it came, and
+  /// a series nobody has opened simply has no key — never Kavita's year-1
+  /// stand-in, which is exactly what [_readDate] exists to refuse.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'libraryId': libraryId,
+    'libraryName': libraryName,
+    'pages': pages,
+    'pagesRead': pagesRead,
+    'format': format.id,
+    if (latestReadDate != null)
+      'latestReadDate': latestReadDate!.toIso8601String(),
+  };
 
   factory Series.fromJson(Map<String, dynamic> json) => Series(
     id: json['id'] as int,
@@ -268,6 +294,21 @@ class SeriesMetadata {
           (entry[key] as String).isNotEmpty)
         entry[key] as String,
   ];
+
+  /// See [Library.toJson]. The two name lists go back into the nested shape
+  /// [_names] flattened them out of, because that is what round-tripping
+  /// through one parser costs — and it is a handful of keys against a second
+  /// parser nothing would keep in step with this one.
+  Map<String, dynamic> toJson() => {
+    'summary': summary,
+    'writers': [
+      for (final writer in writers) {'name': writer},
+    ],
+    'genres': [
+      for (final genre in genres) {'title': genre},
+    ],
+    'releaseYear': releaseYear,
+  };
 
   factory SeriesMetadata.fromJson(Map<String, dynamic> json) => SeriesMetadata(
     summary: json['summary'] as String? ?? '',
@@ -313,6 +354,16 @@ class Volume {
 
   bool get isLooseLeaf => minNumber == looseLeafNumber;
   bool get isSpecials => minNumber == specialsNumber;
+
+  /// See [Library.toJson].
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'minNumber': minNumber,
+    'pages': pages,
+    'pagesRead': pagesRead,
+    'chapters': [for (final chapter in chapters) chapter.toJson()],
+  };
 
   factory Volume.fromJson(Map<String, dynamic> json) => Volume(
     id: json['id'] as int,
@@ -383,6 +434,20 @@ class Chapter {
   /// True for the placeholder chapter Kavita creates inside a volume with no
   /// chapter breakdown.
   bool get isVolumePlaceholder => minNumber == defaultNumber && !isSpecial;
+
+  /// See [Library.toJson].
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'titleName': titleName,
+    'range': range,
+    'minNumber': minNumber,
+    'pages': pages,
+    'pagesRead': pagesRead,
+    'isSpecial': isSpecial,
+    'sortOrder': sortOrder,
+    'format': format.id,
+  };
 
   factory Chapter.fromJson(Map<String, dynamic> json) => Chapter(
     id: json['id'] as int,

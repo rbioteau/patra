@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // `Override` is not among what the main library exports, and this is the one
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
 import 'auth/session.dart';
+import 'catalogue/catalogue_provider.dart';
 import 'features/launch/launch_animation.dart';
 
 /// The app, on a container that lasts exactly as long as the profile it is
@@ -89,7 +92,28 @@ class _SessionScopeState extends State<SessionScope> {
     );
     _served = auth.active?.id;
     _watching = container.listen(authProvider, (_, next) => _entered(next));
+    // A handover arrives with somebody already active, so this is where that
+    // person's catalogue is read. The launch container is the exception:
+    // `main()` awaited its spine before `runApp`, and the store it warmed is
+    // the one this container resolves.
+    if (!launching) _loadCatalogue(container, auth.active?.id);
     return container;
+  }
+
+  /// Reads [profileId]'s spine off the device, so what it remembers of their
+  /// shelves is in hand for the screens about to be built.
+  ///
+  /// Fire and forget, unlike the launch path: getting here was a tap on a
+  /// face, which is already a request, so there is no first frame to protect.
+  ///
+  /// Asked of the profile **by id** rather than through the session's own
+  /// store: this is called from inside `authProvider`'s notification, and the
+  /// session is derived from that state — so the store keyed on it has not
+  /// been recomputed yet and would still answer with the container's cached
+  /// "nobody is reading".
+  void _loadCatalogue(ProviderContainer container, String? profileId) {
+    if (profileId == null) return;
+    unawaited(container.read(profileCatalogueProvider(profileId)).loadSpine());
   }
 
   /// Called on every move the auth state makes, and interested in exactly
@@ -105,6 +129,7 @@ class _SessionScopeState extends State<SessionScope> {
       // tearing down anyway would restart the splash the app is still
       // playing.
       _served = entering;
+      _loadCatalogue(_container, entering);
       return;
     }
     _restart(next);

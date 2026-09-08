@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'src/api/client_identity.dart';
 import 'src/app.dart';
 import 'src/auth/session.dart';
+import 'src/catalogue/catalogue_provider.dart';
+import 'src/catalogue/catalogue_store.dart';
 import 'src/session_scope.dart';
 import 'src/downloads/image_cache_store.dart';
 import 'src/lock/profile_lock.dart';
@@ -38,6 +40,15 @@ Future<void> main() async {
     deviceLanguage: await LocaleSettingsStore.load(),
   );
   await preferences.load();
+  // What the device remembers of the active profile's shelves, read whole
+  // before the first frame — but only where `atLaunch` produced a session to
+  // read one for. A device landing on the picker has nobody to read for yet,
+  // and `SessionScope` takes that path.
+  final launchingInto = auth.active?.id;
+  final catalogue = launchingInto == null
+      ? null
+      : CatalogueStore(profileId: launchingInto);
+  await catalogue?.loadSpine();
   final cacheLimit = await ImageCacheSettingsStore.load();
   // One sweep on the way in, so a cache left over the budget by the previous
   // session — or by a limit lowered on the last one — is back inside it.
@@ -70,6 +81,17 @@ Future<void> main() async {
         // survive it too, which an initial value read once before `runApp`
         // could not.
         profileLockStoreProvider.overrideWithValue(locks),
+        // The store rather than the spine it just read, and for the third
+        // time the same reason: a catalogue fills all session long, so what
+        // has to survive is the thing holding it. One key of the family and
+        // not the family itself — this is the profile the app opened in, and
+        // anybody else entered later gets a store of their own from the root
+        // above. Which catalogue is in force is not decided here; it is a
+        // function of who is reading.
+        if (catalogue != null)
+          profileCatalogueProvider(
+            catalogue.profileId,
+          ).overrideWithValue(catalogue),
       ],
       child: const PatraApp(),
     ),

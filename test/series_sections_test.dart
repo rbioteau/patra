@@ -197,6 +197,7 @@ Future<void> _pump(
             profileId: _profileId,
           ),
         ),
+        testCatalogue(profileId: _profileId),
       ],
       child: MaterialApp(
         theme: patraTheme(),

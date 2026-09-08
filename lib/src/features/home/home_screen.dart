@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
@@ -36,7 +37,14 @@ import 'continue_hero.dart';
 /// reading.
 final onDeckProvider = FutureProvider.autoDispose<List<Series>>(
   retry: serverRetry,
-  (ref) => ref.watch(kavitaClientProvider).onDeck(),
+  (ref) async {
+    final client = ref.watch(kavitaClientProvider);
+    // In hand before the request: see `librariesProvider`.
+    final store = ref.read(catalogueStoreProvider);
+    final series = await client.onDeck();
+    await store.putOnDeck(series);
+    return series;
+  },
 );
 
 /// Whether there is a hero at all, and what it says.

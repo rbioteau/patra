@@ -65,6 +65,7 @@ Future<void> _pumpHome(WidgetTester tester, {bool reachable = true}) async {
           );
           return client;
         }),
+        testCatalogue(),
       ],
       child: MaterialApp(
         theme: patraTheme(),

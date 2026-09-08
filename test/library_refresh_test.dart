@@ -67,7 +67,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [kavitaClientProvider.overrideWithValue(client)],
+        overrides: [
+          kavitaClientProvider.overrideWithValue(client),
+          testCatalogue(),
+        ],
         child: MaterialApp(
           theme: patraTheme(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,

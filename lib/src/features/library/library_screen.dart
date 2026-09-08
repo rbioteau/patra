@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_provider.dart';
 import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
@@ -12,9 +15,34 @@ import '../../api/connection_failure.dart';
 import '../../widgets/dashed_border.dart';
 import '../../widgets/offline_indicator.dart';
 
+/// The libraries this profile can see.
+///
+/// The catalogue is written **in this body** rather than by a listener beside
+/// it: a listener would keep the fetch pure, but it cannot be built for the
+/// `.family` providers below without every screen registering its own, since
+/// a family's live keys cannot be enumerated. Writing here also means the
+/// write cannot be skipped — the only way to get a fetched list is through
+/// the body that stores it.
 final librariesProvider = FutureProvider.autoDispose<List<Library>>(
   retry: serverRetry,
-  (ref) => ref.watch(kavitaClientProvider).libraries(),
+  (ref) async {
+    final client = ref.watch(kavitaClientProvider);
+    // Both resolved **before** the request: this provider is autoDispose, so
+    // a screen left while its fetch is in flight disposes it mid-body, and a
+    // `ref` read after that throws rather than answering.
+    final store = ref.read(catalogueStoreProvider);
+    final prefetch = ref.read(cataloguePrefetchProvider);
+    final libraries = await client.libraries();
+    // Replaces: a library this profile has lost access to has to disappear,
+    // and merging would keep it for good.
+    await store.putLibraries(libraries);
+    // And the series of every one of them, so a library never opened is
+    // still navigable offline. Hung off the answer rather than off a tab,
+    // because Home asks for this list too and one trigger is what keeps the
+    // two from being two rules.
+    unawaited(prefetch.run(client: client, store: store, libraries: libraries));
+    return libraries;
+  },
 );
 
 /// The type of one library, which decides what its series are made of and what
@@ -32,9 +60,24 @@ final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
   return LibraryType.manga;
 });
 
+/// Every series in one library, and the catalogue's copy of that list.
+///
+/// **Only a complete answer replaces**, and the paging loop is what says so:
+/// `allSeriesForLibrary` returns only once a short page has ended the run,
+/// and rejects otherwise — so a run that dies on page 3 never reaches this
+/// body at all, and cannot replace 250 stored series with 200.
 final seriesForLibraryProvider = FutureProvider.autoDispose
-    .family<List<Series>, int>(retry: serverRetry, (ref, libraryId) {
-      return ref.watch(kavitaClientProvider).allSeriesForLibrary(libraryId);
+    .family<List<Series>, int>(retry: serverRetry, (ref, libraryId) async {
+      final client = ref.watch(kavitaClientProvider);
+      // See `librariesProvider` for why these are in hand before the request.
+      final store = ref.read(catalogueStoreProvider);
+      final prefetch = ref.read(cataloguePrefetchProvider);
+      final series = await client.allSeriesForLibrary(libraryId);
+      await store.putSeriesList(libraryId, series);
+      // The eager fill has no reason to page this library again: opening the
+      // tab asks for the library list and for the selected library at once.
+      prefetch.markStored(libraryId);
+      return series;
     });
 
 /// Which library the Library tab is showing. Null means "the first one",
