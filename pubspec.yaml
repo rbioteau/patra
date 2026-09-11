@@ -13,7 +13,7 @@ dependencies:
   cached_network_image: ^4.0.0
   crypto: ^3.0.6
   device_info_plus: ^13.2.0
-  dio: ^5.11.0
+  dio: ^5.11.1
   flutter:
     sdk: flutter
   flutter_cache_manager: ^3.4.2
