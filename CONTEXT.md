@@ -159,9 +159,17 @@ _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
 The reading direction in which the pages run as one continuous strip and are scrolled rather than turned. Kavita calls it *webtoon*, after the genre it was built for, and separately offers a **paged** vertical direction we do not — which is why the word here is "scrolling" and not merely "vertical". On screen the one word "Vertical" is enough, since it is the only vertical direction in the picker.
 _Avoid_: webtoon, vertical mode, continuous mode, long strip
 
+**Strip**:
+The pages of a chapter laid end to end as one continuous column, which is what the [[Vertical scrolling]] direction scrolls. It has no gaps and no page turns, so a boundary between two pages can fall anywhere on the screen and several pages are in view at once — which page one is "on" is a convention, the one under the upper third of the screen, and not an observation.
+_Avoid_: webtoon, long strip, column, feed, list (that is the widget that draws it)
+
 **Magnifying**:
 The reading gesture in which a one-finger drag enlarges the page around the point pressed, as an alternative to pinching, which needs a second hand. Held rather than switched on: the page returns when the finger lifts. Off unless asked for, because it takes the swipe that turns a page.
 _Avoid_: loupe (a loupe is a lens over one region; this scales the whole page — the word named a rejected alternative and stuck to the accepted one), zoom mode, pinch, magnifier
+
+**Width factor**:
+How wide the [[Strip]] is drawn, as a multiple of the screen's width: 1.0 is the whole width, which is where a chapter opens. Below it the strip is narrower than the screen, above it wider and pannable. It is a width the layout is built at rather than a scale painted over a finished one, which is why a page's height follows it and the scroll stays truthful; and it is set rather than held, unlike [[Magnifying]]. Belongs to the [[Profile]].
+_Avoid_: zoom, scale, échelle (a scale is a transform over a page already laid out, and naming it that makes the rejected implementation sound right), magnification (that is [[Magnifying]])
 
 **Spread**:
 Two pages shown on one screen, in landscape. Which pages share a screen is a question about the pages, not arithmetic on the page number.
