@@ -212,7 +212,7 @@ void main() {
 
       // The strip starts at offset 0 until it is placed. A scroll before that
       // reports page 0 and posts it back, wiping the reader's place.
-      await tester.drag(find.byType(ListView), const Offset(0, -40));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -40));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(posted, isNot(contains(0)));
