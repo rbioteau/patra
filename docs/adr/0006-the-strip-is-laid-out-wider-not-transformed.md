@@ -93,10 +93,16 @@ says the page counts or the geometry need it.
   of scale and scroll, so a coordinator is written and tested against the
   transitions that actually break: first finger moving before the second
   lands, pinch during a fling, lifting one of two fingers, and returning to
-  one-finger scrolling without a stuck recognizer.
-- **Live relayout on every pinch update.** The alternative — paint preview
-  while two fingers are down, one anchored commit on release — is held in
-  reserve and chosen from profile measurements, not by intuition.
+  one-finger scrolling without a stuck recognizer. The prototype confirmed
+  this is not optional — the stock composition fails the first of those
+  outright.
+- **Live relayout on every pinch update.** The alternative — a paint preview
+  while two fingers are down, then one anchored commit on release — was
+  measured against it and rejected: it saves about 0.6 ms of a ~1.2 ms pinch
+  cost, which nothing can feel, and in the same run it was the *slower* of
+  the two once its extra composited layer is counted. Neither dropped a frame.
+  The conclusion is carried no further than `0.5–1.0`: it has to be
+  re-measured above `1×`, on a device, with real pages.
 - **Two enlargement mechanisms in one app** (the paged `InteractiveViewer` at
   5×, the strip's width factor at 3×). Assumed rather than unified: they are
   different objects, one a page under the finger and one a strip's width.
@@ -107,12 +113,30 @@ says the page counts or the geometry need it.
 ## Consequences
 
 - **The decode width must follow the factor.** A page is currently decoded at
-  its intrinsic size — only thumbnails are capped. At `0.5×` roughly four
-  times as many pages are live in the same 250pt cache extent, so without a
-  `cacheWidth` tied to the factor, zooming out multiplies decoded memory. With
-  it, the two effects cancel and memory is near invariant. Since zooming out
-  is the expected common case, this is on the critical path and not an
-  optimisation to defer.
+  its intrinsic size — only thumbnails are capped. At `0.5×` more pages are
+  live in the same 250pt cache extent — measured at ~3 → ~5, because at these
+  page heights the cache extent and not the viewport is what decides how many
+  are built — so without a `cacheWidth` tied to the factor, zooming out
+  multiplies decoded memory. With it the two effects pull against each other
+  and memory stays near invariant. Since zooming out is the expected common
+  case, this is on the critical path and not an optimisation to defer.
+- **The strip cannot stay a `ListView.builder`.** `RenderSliverList` remembers
+  where its first child was, in the old scale: change every height at once and
+  the content shifts by roughly `offset × (1 − new/old)` — measured at ~58
+  pages when zooming to `0.5×` at page 100 — and its `maxScrollExtent` is an
+  average-based estimate, so the last page stops being reachable. That is the
+  flutter#86531 failure arrived at without a transform. What works is
+  `SliverVariedExtentList`, which is told every extent and derives offsets
+  from them, so a change of every height is exact; it needs a
+  `SliverChildDelegate` stating its own `estimateMaxScrollOffset`, which is
+  what the thumbnail strip's `_StripDelegate` already does. The cost is a
+  layout that is O(pages) — nothing at 200, worth watching at 2000.
+- **At a document edge the anchor cannot be held** — there is no content left
+  to put under the finger. It clamps and reports that it clamped (up to 189px
+  at the last page) instead of quietly missing.
+- **A rotation's correction is one frame late.** The new width is not known
+  until layout, so the frame right after the resize is still drawn at the old
+  offset.
 - **The anchor is `(page, fraction within the page)`,** not a raw pixel
   offset: it survives heterogeneous page heights, a missing dimension, and a
   rotation. It is applied as one gagged transaction after the new heights
@@ -127,6 +151,18 @@ says the page counts or the geometry need it.
 - **Order of work:** prototype the gesture and the anchor alone, then the
   layout, then the chrome. Zoom correctness is thereby independent of the
   navigation redesign, and every stage leaves something usable behind.
+
+## Prototype
+
+Both halves of the question were settled by a throwaway prototype kept on the
+branch `prototype/reader-strip-width` (commit `838ffa4`), primary source
+`lib/src/features/reader/prototype/strip_width/PROTOTYPE.md`: four variants
+over a 200-page chapter, driven by synthetic pointers on the Linux desktop,
+with the geometry read off the render tree rather than off the arithmetic that
+asked for it. It chose live relayout over the paint preview, and it found the
+sliver requirement above, which this ADR did not anticipate. Its frame times
+are one run on one machine — the comparison *within* a run is the part that
+carries, not the absolute numbers.
 
 ## Sources
 
