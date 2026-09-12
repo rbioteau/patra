@@ -74,11 +74,13 @@ void main() {
         final store = await preferencesStore(
           deviceDirection: ReadingDirection.verticalScroll,
           deviceMagnify: true,
+          deviceWidthFactor: 0.6,
           deviceLanguage: const Locale('fr'),
         );
 
         expect(store.directionFor(_lea.id), ReadingDirection.verticalScroll);
         expect(store.magnifyFor(_lea.id), isTrue);
+        expect(store.widthFactorFor(_lea.id), 0.6);
         expect(store.languageFor(_lea.id), const Locale('fr'));
       },
     );
@@ -104,6 +106,7 @@ void main() {
       final store = await preferencesStore(keychain: keychain);
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setMagnify(_romain.id, true);
+      await store.setWidthFactor(_romain.id, 0.6);
       await store.setLanguage(_lea.id, const Locale('fr'));
 
       final reopened = await preferencesStore(
@@ -111,6 +114,7 @@ void main() {
       );
       expect(reopened.of(_romain.id).direction, ReadingDirection.rightToLeft);
       expect(reopened.of(_romain.id).magnify, isTrue);
+      expect(reopened.widthFactorFor(_romain.id), 0.6);
       expect(reopened.languageFor(_lea.id), const Locale('fr'));
       expect(reopened.of(_lea.id).direction, isNull);
     });
@@ -147,6 +151,22 @@ void main() {
       expect(store.languageFor(_romain.id), const Locale('fr'));
     });
 
+    test('changing one preference keeps the others', () async {
+      // `setLanguage` cannot go through `copyWith` — null is a choice — so it
+      // builds the record by hand, and a field it forgets to carry is a
+      // preference that quietly resets itself on the next launch.
+      final store = await preferencesStore();
+      await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
+      await store.setMagnify(_romain.id, true);
+      await store.setWidthFactor(_romain.id, 0.6);
+      await store.setLanguage(_romain.id, const Locale('fr'));
+
+      expect(store.of(_romain.id).direction, ReadingDirection.rightToLeft);
+      expect(store.of(_romain.id).magnify, isTrue);
+      expect(store.widthFactorFor(_romain.id), 0.6);
+      expect(store.languageFor(_romain.id), const Locale('fr'));
+    });
+
     test('forgetting a profile takes its preferences with it', () async {
       final keychain = MemoryKeychain();
       final store = await preferencesStore(keychain: keychain);
@@ -180,6 +200,7 @@ void main() {
       );
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setMagnify(_romain.id, true);
+      await store.setWidthFactor(_romain.id, 0.6);
       await store.setLanguage(_romain.id, const Locale('fr'));
 
       final his = _container(store: store, active: _romain);
@@ -188,6 +209,7 @@ void main() {
         ReadingDirection.rightToLeft,
       );
       expect(his.read(magnifyProvider), isTrue);
+      expect(his.read(widthFactorProvider), 0.6);
       expect(his.read(localeProvider), const Locale('fr'));
 
       // The next person to be handed the tablet, on a container of their own
@@ -198,6 +220,12 @@ void main() {
         ReadingDirection.leftToRight,
       );
       expect(hers.read(magnifyProvider), isFalse);
+      expect(
+        hers.read(widthFactorProvider),
+        1.0,
+        reason:
+            'she has not chosen, and 1.0 is how a chapter has always opened',
+      );
       expect(hers.read(localeProvider), isNull);
     });
 
@@ -249,6 +277,7 @@ void main() {
           .read(defaultReadingDirectionProvider.notifier)
           .set(ReadingDirection.rightToLeft);
       await his.read(magnifyProvider.notifier).set(true);
+      await his.read(widthFactorProvider.notifier).set(0.6);
 
       expect(
         his.read(defaultReadingDirectionProvider),
@@ -256,6 +285,7 @@ void main() {
       );
       expect(store.directionFor(_lea.id), ReadingDirection.leftToRight);
       expect(store.magnifyFor(_lea.id), isFalse);
+      expect(store.widthFactorFor(_lea.id), 1.0);
     });
 
     test('are not recomputed because a token moved', () async {
@@ -305,10 +335,15 @@ void main() {
           .read(defaultReadingDirectionProvider.notifier)
           .set(ReadingDirection.rightToLeft);
       await gate.read(magnifyProvider.notifier).set(true);
+      await gate.read(widthFactorProvider.notifier).set(0.6);
 
       expect(device.values['readingDirection'], 'rightToLeft');
       expect(device.values['loupeGesture'], 'true');
       expect(store.byProfile, isEmpty);
+      // Nothing of the width factor's: unlike the two above it is not a
+      // value this device ever held a key for, so with nobody reading there
+      // is nowhere for it to go. No screen reaches this — Settings stands
+      // inside a session, and the gate has no width to set.
     });
 
     test(

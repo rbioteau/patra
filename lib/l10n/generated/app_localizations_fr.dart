@@ -345,6 +345,22 @@ class AppLocalizationsFr extends AppLocalizations {
       'Un doigt agrandit la page autour du point touché, et la longueur du geste décide de combien. Les pages se tournent en touchant les bords.';
 
   @override
+  String get pageWidth => 'Largeur de page';
+
+  @override
+  String get pageWidthExplained =>
+      'Largeur à laquelle les pages sont dessinées en lecture verticale. 100 % est tout l\'écran.';
+
+  @override
+  String get pageWidthInPaged =>
+      'Pas en lecture page à page — la page y est ajustée à l\'écran.';
+
+  @override
+  String percent(int value) {
+    return '$value %';
+  }
+
+  @override
   String get readingDirection => 'Sens de lecture';
 
   @override

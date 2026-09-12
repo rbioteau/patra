@@ -584,6 +584,30 @@ abstract class AppLocalizations {
   /// **'One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.'**
   String get dragToMagnifyExplained;
 
+  /// Reader setting: how wide pages are drawn while reading vertically, as a percentage of the screen's width.
+  ///
+  /// In en, this message translates to:
+  /// **'Page width'**
+  String get pageWidth;
+
+  /// Explains what the page width setting changes, and says where it applies.
+  ///
+  /// In en, this message translates to:
+  /// **'How wide pages are drawn while reading vertically. 100% is the whole screen.'**
+  String get pageWidthExplained;
+
+  /// Replaces pageWidthExplained in the reader's sheet when the chapter is being paged, where no strip is laid out at a width of its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Not while paging — there a page is fitted to the screen.'**
+  String get pageWidthInPaged;
+
+  /// A value shown as a percentage of the whole.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}%'**
+  String percent(int value);
+
   /// Title of the reader menu that picks how pages advance
   ///
   /// In en, this message translates to:

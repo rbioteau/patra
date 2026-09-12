@@ -344,6 +344,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'One finger magnifies the page around the point you press, and how far you drag decides how much. Pages turn by tapping the sides.';
 
   @override
+  String get pageWidth => 'Page width';
+
+  @override
+  String get pageWidthExplained =>
+      'How wide pages are drawn while reading vertically. 100% is the whole screen.';
+
+  @override
+  String get pageWidthInPaged =>
+      'Not while paging — there a page is fitted to the screen.';
+
+  @override
+  String percent(int value) {
+    return '$value%';
+  }
+
+  @override
   String get readingDirection => 'Reading direction';
 
   @override

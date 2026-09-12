@@ -168,7 +168,7 @@ The reading gesture in which a one-finger drag enlarges the page around the poin
 _Avoid_: loupe (a loupe is a lens over one region; this scales the whole page — the word named a rejected alternative and stuck to the accepted one), zoom mode, pinch, magnifier
 
 **Width factor**:
-How wide the [[Strip]] is drawn, as a multiple of the screen's width: 1.0 is the whole width, which is where a chapter opens. Below it the strip is narrower than the screen, above it wider and pannable. It is a width the layout is built at rather than a scale painted over a finished one, which is why a page's height follows it and the scroll stays truthful; and it is set rather than held, unlike [[Magnifying]]. Belongs to the [[Profile]].
+How wide the [[Strip]] is drawn, as a multiple of the screen's width: 1.0 is the whole width, which is where a chapter opens. Below it the strip is narrower than the screen, above it wider and pannable. It is a width the layout is built at rather than a scale painted over a finished one, which is why a page's height follows it and the scroll stays truthful; and it is set rather than held, unlike [[Magnifying]]. A [[Preference]]: it belongs to the [[Profile]], and the server is never told. The range is the strip's to hold, since a pinch moves the same number and the two must not clamp it differently.
 _Avoid_: zoom, scale, échelle (a scale is a transform over a page already laid out, and naming it that makes the rejected implementation sound right), magnification (that is [[Magnifying]])
 
 **Spread**:
@@ -206,7 +206,7 @@ One question the [[Catalogue]] answers, with the request behind it: the device's
 _Avoid_: fetch (that is the request, which is half of one), query, provider, answer (that is what a read carries, not what it is)
 
 **Preference**:
-A setting somebody chose. Reading direction, magnifying and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]].
+A setting somebody chose. Reading direction, magnifying, the width a chapter opens at and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]].
 _Avoid_: setting (that is the row it is changed on), option, config
 
 **Device default**:

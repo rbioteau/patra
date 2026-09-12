@@ -72,6 +72,11 @@ class SettingsScreen extends ConsumerWidget {
               value: magnify,
               onChanged: (on) => ref.read(magnifyProvider.notifier).set(on),
             ),
+            // The same row the reader's own sheet draws, so the two cannot
+            // drift into wording the width differently. It never says the
+            // width does not apply here: this screen has no chapter in hand,
+            // and the next one may well be read vertically.
+            const WidthFactorRow(),
 
             _Section(label: l10n.storageSectionLabel),
             const _StorageRows(),
