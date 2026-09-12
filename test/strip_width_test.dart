@@ -718,6 +718,72 @@ void main() {
     });
   });
 
+  group('the width a chapter opens at', () {
+    testWidgets('moves the strip, and the place goes with it in the same turn', (
+      tester,
+    ) async {
+      final harness = await _pump(tester);
+      await _seek(tester, harness, 100);
+      final before = _under(tester, 1);
+      expect(before.page, 100, reason: 'the reader is on page 100');
+
+      // The preference moved — the width slider, or a chapter reopened at the
+      // width that was chosen — and the strip is narrower in the same breath,
+      // with the page the reader is on still at the top of the screen.
+      harness.width.openingWidthFactor = 0.5;
+      expect(harness.width.widthFactor, 0.5);
+      final corrected = harness.scroll.offset;
+
+      // Nothing left to correct in the frame that draws it: a correction that
+      // waited for the frame after painted one frame at the old offset, which
+      // for the slider is a jump on every one of its dozens of steps.
+      await tester.pump();
+      expect(
+        harness.scroll.offset,
+        moreOrLessEquals(corrected, epsilon: 0.01),
+        reason: 'the offset moved with the width, and not a frame later',
+      );
+      final painted = _painted(tester)
+          .where((page) => page.page == before.page)
+          .singleOrNull;
+      expect(painted, isNotNull, reason: 'the page it was on is still drawn');
+      expect(painted!.top, moreOrLessEquals(0, epsilon: 0.5));
+      expect(
+        _rectOf(tester, before.page).width,
+        moreOrLessEquals(_screenWidth / 2, epsilon: 0.5),
+        reason: 'and it is drawn at the width that was asked for',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('narrowing at the end of the chapter keeps the last page', (
+      tester,
+    ) async {
+      // The clamp is the strip's own geometry and not the scroll extent: at
+      // the end of a chapter the held place asks for an offset past the end of
+      // the new strip, and a clamp taken from `maxScrollExtent` — the last
+      // frame's, an extent the strip has not been laid out at — is the end of
+      // the chapter left hundreds of points above the bottom of the screen.
+      final harness = await _pump(tester);
+      harness.scroll.jumpTo(harness.scroll.position.maxScrollExtent);
+      await tester.pump();
+
+      harness.width.openingWidthFactor = 0.5;
+      await tester.pump();
+
+      expect(
+        harness.scroll.offset,
+        moreOrLessEquals(harness.scroll.position.maxScrollExtent, epsilon: 0.5),
+      );
+      expect(
+        tester.getBottomRight(find.byKey(const ValueKey(199))).dy,
+        moreOrLessEquals(_viewportHeight, epsilon: 0.5),
+        reason: 'the last page is at the bottom of the screen',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('what a pinch writes', () {
     testWidgets('nothing: the chapter opens at the width that was chosen', (
       tester,

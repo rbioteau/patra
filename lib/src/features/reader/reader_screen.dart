@@ -556,15 +556,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       thumbnail: thumbnail,
     );
     if (provider == null) return const SizedBox.shrink();
-    return Image(
+    // A page that keeps the picture it has: the width it is decoded at is part
+    // of the picture's cache key, so a width change asks for a new one, and a
+    // page that blanked while it arrived blinked through the whole gesture.
+    return PageImage(
       image: provider,
       fit: fit,
       alignment: alignment,
-      gaplessPlayback: true,
-      errorBuilder: (_, _, _) =>
-          const Center(child: Icon(Icons.broken_image, color: Colors.white24)),
-      frameBuilder: (context, child, frame, wasSync) =>
-          frame == null ? PageLoading(explain: _serverIsPreparing) : child,
+      explain: _serverIsPreparing,
     );
   }
 
@@ -959,15 +958,6 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   /// Whether the strip has been scrolled to the page it was opened at.
   var _placed = false;
 
-  /// The place to put back once the strip has been laid out at a new width.
-  ///
-  /// A width change moves every height under the offset the strip is sitting
-  /// at, so the same offset is a different page afterwards — and [_onScroll]
-  /// would report that page, and the reader would post it as progress and
-  /// lose the place the chapter was opened at. The place is therefore named
-  /// before the change and restored after it.
-  StripAnchor? _pendingAnchor;
-
   /// True while this view is moving itself rather than being scrolled.
   ///
   /// A move it asked for is not a page turn, which is the rule the paged view
@@ -978,15 +968,14 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   /// The width or the chapter changed under the strip: it is laid out again,
   /// and where it landed is a fact rather than a page turn.
   ///
-  /// A pinch moves the strip without anybody reading their way there — the
-  /// place under the fingers is held, so the top of the screen is a different
-  /// page than it was — and what it lands on is where the reader is, which is
-  /// not progress. A width the preference changed is about to be put back by
-  /// [_restore], which brings this up to date itself.
+  /// A pinch or a width change moves the strip without anybody reading their
+  /// way there — the place held is the one under the fingers, or the top of
+  /// the screen, so the rest of the screen is a different page than it was —
+  /// and what it lands on is not progress.
   void _onWidthChanged() {
     if (!mounted) return;
     setState(() {});
-    if (!_width.pinching && _pendingAnchor == null) _syncReported();
+    if (!_width.pinching) _syncReported();
   }
 
   /// Where the strip is, as a fact and not as a page turn.
@@ -1036,37 +1025,12 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     });
   }
 
-  /// The offset [anchor] sits at, inside the scrollable's own range.
-  void _jumpToAnchor(StripAnchor anchor) {
-    if (!_controller.hasClients || _width.geometry.pages == 0) return;
-    _controller.jumpTo(
-      _width.geometry
-          .offsetFor(anchor)
-          .clamp(0, _controller.position.maxScrollExtent),
-    );
-  }
-
+  /// Puts the strip on [page], at the top of it.
   void _jumpTo(int page) {
     if (page >= _width.geometry.pages) return;
-    _jumpToAnchor(StripAnchor(page, 0));
-  }
-
-  /// Puts [anchor] back at the top of the viewport, once the strip has been
-  /// laid out at the width that moved it.
-  ///
-  /// Not reported: the reader did not read its way there, and a page taken
-  /// from the new offset is a page the reader was never on. [_reported] is
-  /// brought up to the page the strip landed on all the same, because where
-  /// the reader is is a fact and not a question of how it got there.
-  void _restore(StripAnchor anchor) {
-    if (!_controller.hasClients) return;
-    _seeking = true;
-    try {
-      _jumpToAnchor(anchor);
-      _reported = _pageAt(_controller.offset);
-    } finally {
-      _seeking = false;
-    }
+    // Clamped by the strip's own geometry, which is where every other move of
+    // this strip is clamped: `maxScrollExtent` is the last frame's extent.
+    _width.jumpToAnchor(StripAnchor(page, 0));
   }
 
   @override
@@ -1075,29 +1039,17 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     final seeked = widget.page != _reported;
     if (seeked) _reported = widget.page;
     if (widget.widthFactor != old.widthFactor) {
-      // Every height is about to change, so the place is named now — off the
-      // geometry the current offset belongs to — and put back once the
-      // layout that changes them has run. A seek made in the same breath
-      // wins, and waits for that same frame rather than jumping to an offset
-      // the old heights would give it.
-      _pendingAnchor = seeked || !_placed || !_controller.hasClients
-          ? StripAnchor(_reported, 0)
-          : _width.geometry.anchorAt(_controller.offset);
+      // A seek made in the same breath wins: the strip is put on that page
+      // first, and the width that follows holds where it landed.
+      if (seeked) _jumpTo(widget.page);
+      _seeking = true;
       // The preference, which is the only width that is ever written: it
       // drops whatever the last pinch left, the way leaving the chapter and
-      // coming back does (#50).
+      // coming back does (#50). The place is put back by the width change
+      // itself, in the same turn, and not reported: a width is not the
+      // reader moving.
       _width.openingWidthFactor = widget.widthFactor;
-      // Scheduled from here and not from [build]'s `LayoutBuilder`: a
-      // post-frame callback registered *during* a layout is one this screen
-      // has already died on, and the callback does not need to be — it runs
-      // after the frame's layout either way, which is the only thing it asks
-      // for. Consumed by the callback, so a second change in the same frame
-      // cannot restore twice.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final anchor = _pendingAnchor;
-        _pendingAnchor = null;
-        if (mounted && anchor != null) _restore(anchor);
-      });
+      _seeking = false;
     } else if (seeked) {
       // A seek from the slider: jump, unless this is our own report echoing.
       _jumpTo(widget.page);
