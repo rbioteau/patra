@@ -91,7 +91,10 @@ Widget _strip(
                         key: ValueKey(page),
                         image: ResizeImage(
                           _pageImage,
-                          width: geometry.decodeWidth(_pixelRatio),
+                          width: StripGeometry.decodeWidthFor(
+                            geometry.width,
+                            _pixelRatio,
+                          ),
                         ),
                         fit: BoxFit.fitWidth,
                       )
@@ -486,10 +489,10 @@ void main() {
       // reader warms the page after this one at.
       final warmed = ResizeImage(
         _pageImage,
-        width: _geometry(
-          _screenWidth,
-          widthFactor: 0.7,
-        ).decodeWidth(_pixelRatio),
+        width: StripGeometry.decodeWidthFor(
+          _geometry(_screenWidth, widthFactor: 0.7).width,
+          _pixelRatio,
+        ),
       );
       expect(warmed, drawn);
 
@@ -500,10 +503,10 @@ void main() {
       // shown is also the larger of the two.
       final narrower = ResizeImage(
         _pageImage,
-        width: _geometry(
-          _screenWidth,
-          widthFactor: 0.5,
-        ).decodeWidth(_pixelRatio),
+        width: StripGeometry.decodeWidthFor(
+          _geometry(_screenWidth, widthFactor: 0.5).width,
+          _pixelRatio,
+        ),
       );
       expect(narrower, isNot(drawn));
     });

@@ -82,17 +82,25 @@ class StripGeometry {
   /// The height of the whole strip.
   double get total => pages == 0 ? 0 : tops.last + heights.last;
 
-  /// The width a page is asked of the decoder: the width it is drawn at, in
-  /// device pixels, and never the size the file happens to be.
+  /// The width a page is asked of the decoder for a strip laid out
+  /// [laidOutWidth] points wide, on a device [devicePixelRatio] dense: the
+  /// width it is drawn at, and never the size the file happens to be.
   ///
   /// Not an optimisation to be deferred. Narrowing the strip puts more pages
   /// in the same cache extent — about three to five between full width and
   /// half — so a decode left at the file's own size multiplies decoded
-  /// memory for a change nobody can see. It is one number for the whole
-  /// strip for a second reason: `ResizeImage` puts the width in its cache
-  /// key, so a page warmed ahead at one width and drawn at another is two
-  /// images, one of them decoded for nothing.
-  int decodeWidth(double devicePixelRatio) => (width * devicePixelRatio).ceil();
+  /// memory for a change nobody can see. It is one number for the whole strip
+  /// for a second reason: `ResizeImage` puts the width in its cache key, so a
+  /// page warmed ahead at one width and drawn at another is two images, one
+  /// of them decoded for nothing.
+  ///
+  /// Asked of a width rather than of this strip because a strip being pinched
+  /// is drawn at one width and decoded at another — the width it *settled*
+  /// at, which is not a geometry of its own (see `strip_width.dart`). The
+  /// answer has to be the same sum either way, or a page warmed at one width
+  /// and drawn at another is two images.
+  static int decodeWidthFor(double laidOutWidth, double devicePixelRatio) =>
+      (laidOutWidth * devicePixelRatio).ceil();
 
   /// The page containing [contentY], measured from the top of the strip.
   int pageAt(double contentY) {

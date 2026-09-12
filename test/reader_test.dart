@@ -438,6 +438,71 @@ void main() {
     expect(store.widthFactorFor(_reader.id), 1.0);
   });
 
+  testWidgets('a pinch narrows the strip, and writes nothing', (tester) async {
+    // Two fingers change the width a chapter is read at, for the chapter in
+    // hand and nothing else: the width a chapter *opens* at is a preference
+    // and a pinch is a live adjustment on top of it (#50).
+    final keychain = MemoryKeychain();
+    final store = ProfilePreferencesStore(
+      keychain: keychain,
+      deviceDirection: ReadingDirection.verticalScroll,
+    );
+    final posted = await _pumpReader(
+      tester,
+      initialPage: 20,
+      profile: _reader,
+      store: store,
+    );
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    final screen = tester.getSize(find.byType(Scaffold));
+    final whole = controller.position.maxScrollExtent;
+
+    // Two fingers half as far apart: half the width, and the whole strip half
+    // as long with it.
+    const y = 270.0;
+    final a = await tester.startGesture(Offset(screen.width / 2 - 60, y));
+    final b = await tester.startGesture(Offset(screen.width / 2 + 60, y));
+    await tester.pump();
+    for (var step = 1; step <= 16; step++) {
+      final span = 120 - 60 * step / 16;
+      await a.moveTo(Offset(screen.width / 2 - span / 2, y));
+      await b.moveTo(Offset(screen.width / 2 + span / 2, y));
+      await tester.pump();
+    }
+    expect(
+      controller.position.maxScrollExtent,
+      moreOrLessEquals((whole + screen.height) * 0.5 - screen.height, epsilon: 1),
+      reason: 'the strip is laid out at half the width',
+    );
+
+    // Nothing written, and nothing read: the width a chapter opens at belongs
+    // to the person, and a pinch is not the reader moving through the chapter.
+    expect(keychain.writes, 0);
+    expect(store.widthFactorFor(_reader.id), 1.0);
+    expect(posted, [20]);
+
+    // Reopened: the chapter opens at the width that was chosen, and not at
+    // the one the last one was pinched to.
+    await _pumpReader(
+      tester,
+      initialPage: 20,
+      profile: _reader,
+      store: store,
+      readerKey: const ValueKey('reopened'),
+    );
+    final asked = {
+      for (final image in tester.widgetList<Image>(find.byType(Image)))
+        (image.image as ResizeImage).width,
+    };
+    expect(
+      asked,
+      {(tester.view.physicalSize.width * StripGeometry.maxWidthFactor).ceil()},
+      reason: 'a chapter opens at the width the preference says',
+    );
+  });
+
   testWidgets('a paged chapter opens where it was left too', (tester) async {
     final posted = await _pumpReader(
       tester,
