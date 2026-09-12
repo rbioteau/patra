@@ -22,6 +22,7 @@ import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'spread_layout.dart';
 import 'strip_geometry.dart';
+import 'strip_width.dart';
 import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
@@ -941,9 +942,19 @@ class _VerticalScrollView extends StatefulWidget {
 class _VerticalScrollViewState extends State<_VerticalScrollView> {
   final _controller = ScrollController();
   late int _reported = widget.page;
-  double _width = 0;
-  double _widthFactor = 1;
   double _pixelRatio = 1;
+
+  /// The strip's width, and the two hands that change it: one owner for the
+  /// number, the geometry every offset is derived from, and every pointer
+  /// over the strip.
+  ///
+  /// It opens at the preference (#49). A pinch moves it for the chapter in
+  /// hand and writes nothing, which is why the number it holds is not the
+  /// preference's to keep.
+  late final StripWidthController _width = StripWidthController(
+    scroll: _controller,
+    widthFactor: widget.widthFactor,
+  )..addListener(_onWidthChanged);
 
   /// Whether the strip has been scrolled to the page it was opened at.
   var _placed = false;
@@ -964,53 +975,49 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   /// strip landed on as though the reader had read their way there.
   var _seeking = false;
 
-  /// The strip's geometry for the width it is laid out at: every page's
-  /// height and where every page starts, from the server's page dimensions,
-  /// so scroll offsets are exact before any image has loaded.
+  /// The width or the chapter changed under the strip: it is laid out again,
+  /// and where it landed is a fact rather than a page turn.
   ///
-  /// Measured in the layout, the only place the width is known, and only
-  /// re-derived when the width, the factor or the chapter changes, since
-  /// every height is computed and that is a walk over the whole chapter.
-  var _geometry = StripGeometry.empty();
-  ChapterInfo? _measured;
+  /// A pinch moves the strip without anybody reading their way there — the
+  /// place under the fingers is held, so the top of the screen is a different
+  /// page than it was — and what it lands on is where the reader is, which is
+  /// not progress. A width the preference changed is about to be put back by
+  /// [_restore], which brings this up to date itself.
+  void _onWidthChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (!_width.pinching && _pendingAnchor == null) _syncReported();
+  }
 
-  void _measure(double width) {
-    if (width == _width &&
-        widget.widthFactor == _widthFactor &&
-        _measured == widget.chapter) {
-      return;
-    }
-    _width = width;
-    _widthFactor = widget.widthFactor;
-    _measured = widget.chapter;
-    _geometry = StripGeometry(
-      screenWidth: width,
-      widthFactor: widget.widthFactor,
-      pages: widget.chapter.pages,
-      aspectRatioFor: widget.chapter.aspectRatioFor,
-    );
+  /// Where the strip is, as a fact and not as a page turn.
+  void _syncReported() {
+    if (!_controller.hasClients || _width.geometry.pages == 0) return;
+    _reported = _pageAt(_controller.offset);
   }
 
   int _pageAt(double offset) {
     // The page occupying the upper third of the viewport is "current".
     final probe = offset + _controller.position.viewportDimension * 0.3;
-    return _geometry.pageAt(probe);
+    return _width.geometry.pageAt(probe);
   }
 
   void _onScroll() {
     // Until the strip has been placed it is sitting at offset 0, which is not
     // where the reader is: reporting from there would post page 0 back and
-    // wipe the place the chapter was opened at.
+    // wipe the place the chapter was opened at. And while two fingers are
+    // holding the width, what the strip is showing is what they are holding,
+    // not a page the reader has read their way to.
     if (!_placed ||
         _seeking ||
+        _width.pinching ||
         !_controller.hasClients ||
-        _geometry.pages == 0) {
+        _width.geometry.pages == 0) {
       return;
     }
     final page = _pageAt(_controller.offset);
     if (page != _reported) {
       _reported = page;
-      widget.onPageChanged(page, _geometry.decodeWidth(_pixelRatio));
+      widget.onPageChanged(page, _width.decodeWidth(_pixelRatio));
     }
   }
 
@@ -1031,16 +1038,16 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
 
   /// The offset [anchor] sits at, inside the scrollable's own range.
   void _jumpToAnchor(StripAnchor anchor) {
-    if (!_controller.hasClients || _geometry.pages == 0) return;
+    if (!_controller.hasClients || _width.geometry.pages == 0) return;
     _controller.jumpTo(
-      _geometry
+      _width.geometry
           .offsetFor(anchor)
           .clamp(0, _controller.position.maxScrollExtent),
     );
   }
 
   void _jumpTo(int page) {
-    if (page >= _geometry.pages) return;
+    if (page >= _width.geometry.pages) return;
     _jumpToAnchor(StripAnchor(page, 0));
   }
 
@@ -1075,7 +1082,11 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
       // the old heights would give it.
       _pendingAnchor = seeked || !_placed || !_controller.hasClients
           ? StripAnchor(_reported, 0)
-          : _geometry.anchorAt(_controller.offset);
+          : _width.geometry.anchorAt(_controller.offset);
+      // The preference, which is the only width that is ever written: it
+      // drops whatever the last pinch left, the way leaving the chapter and
+      // coming back does (#50).
+      _width.openingWidthFactor = widget.widthFactor;
       // Scheduled from here and not from [build]'s `LayoutBuilder`: a
       // post-frame callback registered *during* a layout is one this screen
       // has already died on, and the callback does not need to be — it runs
@@ -1096,6 +1107,8 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   @override
   void dispose() {
     _controller.removeListener(_onScroll);
+    _width.removeListener(_onWidthChanged);
+    _width.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -1109,27 +1122,40 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     _pixelRatio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        _measure(constraints.maxWidth);
-        return CustomScrollView(
-          controller: _controller,
-          slivers: <Widget>[
-            // A continuous strip: no gaps and no page turns, and every
-            // page's extent known before it is built, so the offsets it is
-            // scrolled to are the offsets it is drawn at.
-            StripExtentList(
-              geometry: _geometry,
-              // Nothing in here reads an inherited widget or a provider: a
-              // lazy sliver builds its children *during* layout, and this
-              // screen has already died on both. The decode width is the
-              // width the page is drawn at, so narrowing the strip does not
-              // go on decoding pages at full size.
-              itemBuilder: (context, page) => widget.imageBuilder(
-                page,
-                fit: BoxFit.fitWidth,
-                cacheWidth: _geometry.decodeWidth(_pixelRatio),
+        // Measured in the layout, the only place the width is known. The
+        // controller decides whether the geometry is stale, because a pinch
+        // has already rebuilt it in the turn that moved it and the layout
+        // that follows must not build it twice.
+        _width.measure(
+          screenWidth: constraints.maxWidth,
+          pages: widget.chapter.pages,
+          aspectRatioFor: widget.chapter.aspectRatioFor,
+          identity: widget.chapter,
+        );
+        return StripWidthGestures(
+          controller: _width,
+          child: CustomScrollView(
+            controller: _controller,
+            slivers: <Widget>[
+              // A continuous strip: no gaps and no page turns, and every
+              // page's extent known before it is built, so the offsets it is
+              // scrolled to are the offsets it is drawn at.
+              StripExtentList(
+                geometry: _width.geometry,
+                // Nothing in here reads an inherited widget or a provider: a
+                // lazy sliver builds its children *during* layout, and this
+                // screen has already died on both. The decode width is the
+                // width the page is drawn at, so narrowing the strip does
+                // not go on decoding pages at full size — the width it
+                // settled at, which a live pinch does not move.
+                itemBuilder: (context, page) => widget.imageBuilder(
+                  page,
+                  fit: BoxFit.fitWidth,
+                  cacheWidth: _width.decodeWidth(_pixelRatio),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
