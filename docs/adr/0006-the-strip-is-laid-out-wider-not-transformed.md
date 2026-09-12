@@ -1,6 +1,6 @@
 # ADR-0006 — The strip is zoomed by laying it out wider, not by transforming it
 
-**Status:** accepted · **Date:** 2026-09-11
+**Status:** accepted · **Date:** 2026-09-11 · **Amended:** 2026-09-12
 
 ## Context
 
@@ -112,14 +112,26 @@ says the page counts or the geometry need it.
 
 ## Consequences
 
-- **The decode width must follow the factor.** A page is currently decoded at
-  its intrinsic size — only thumbnails are capped. At `0.5×` more pages are
-  live in the same 250pt cache extent — measured at ~3 → ~5, because at these
-  page heights the cache extent and not the viewport is what decides how many
-  are built — so without a `cacheWidth` tied to the factor, zooming out
-  multiplies decoded memory. With it the two effects pull against each other
-  and memory stays near invariant. Since zooming out is the expected common
-  case, this is on the critical path and not an optimisation to defer.
+- **The decode width must follow the factor — the width the strip *settled*
+  at, and not the one a pinch is passing through.** A page is currently
+  decoded at its intrinsic size — only thumbnails are capped. At `0.5×` more
+  pages are live in the same 250pt cache extent — measured at ~3 → ~5, because
+  at these page heights the cache extent and not the viewport is what decides
+  how many are built — so without a `cacheWidth` tied to the factor, zooming
+  out multiplies decoded memory. With it the two effects pull against each
+  other and memory stays near invariant. Since zooming out is the expected
+  common case, this is on the critical path and not an optimisation to defer.
+  It follows the *settled* width because `ResizeImage` puts the width it is
+  asked for in its cache key, and a pinch changes the width continuously: a
+  decode width that tracked it would ask for a new image on every pinch frame
+  and re-decode every live page throughout the gesture. So it moves once, when
+  the pinch is over — the moment the width stops moving, which is the last
+  finger but one lifting and not the last one. What is drawn in between is the
+  picture already in the cache, which is also the memory the strip was already
+  paying for. Quantising it would have been the other answer to the same
+  question, and it churns more: across `0.5`–`1.0` on a 3× phone it crosses a
+  bucket several times per pinch, and every crossing is the same re-decode
+  that settling pays for once.
 - **The strip cannot stay a `ListView.builder`.** `RenderSliverList` remembers
   where its first child was, in the old scale: change every height at once and
   the content shifts by roughly `offset × (1 − new/old)` — measured at ~58
@@ -139,8 +151,12 @@ says the page counts or the geometry need it.
   offset.
 - **The anchor is `(page, fraction within the page)`,** not a raw pixel
   offset: it survives heterogeneous page heights, a missing dimension, and a
-  rotation. It is applied as one gagged transaction after the new heights
-  exist — `jumpTo` from a layout callback is what this screen already died on.
+  rotation. It is applied as one gagged transaction in the same turn as the
+  width change — the new heights exist the moment the width does — and never
+  from a layout callback: a `jumpTo` from a layout callback is what this screen
+  already died on. A correction that waits for the frame after instead paints
+  one frame at the old offset, which over the dozens of steps of the width
+  slider is the strip jumping on every one of them.
 - **The vertical rail is proportional to page height** because these offsets
   are already ours; where dimensions are missing every page shares the default
   ratio, and proportional collapses to uniform by itself.
