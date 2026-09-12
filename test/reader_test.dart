@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
@@ -23,13 +24,30 @@ import 'test_support.dart';
 const _pages = 50;
 
 class _ReaderAdapter implements HttpClientAdapter {
-  _ReaderAdapter(this.posted, {this.wide = const {}});
+  _ReaderAdapter(
+    this.posted, {
+    this.wide = const {},
+    this.pages = _pages,
+    this.dimensions = true,
+    this.offline = false,
+  });
 
   /// Every progress post, in the order the reader made them.
   final List<int> posted;
 
   /// Pages the server reports as double-page scans.
   final Set<int> wide;
+
+  /// How long the chapter is.
+  final int pages;
+
+  /// Whether the server measured the pages at all. A server that has not
+  /// crawled a chapter yet answers with no dimensions, and so does no server
+  /// at all.
+  final bool dimensions;
+
+  /// Nothing answers: the reader is on its own, with what the device kept.
+  final bool offline;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
@@ -43,24 +61,33 @@ class _ReaderAdapter implements HttpClientAdapter {
         },
       );
     }
+    // Nothing answers but the reader itself, which is what it is like to
+    // open a chapter with no server: the stored copy is all there is.
+    if (offline) {
+      throw DioException(
+        requestOptions: options,
+        type: DioExceptionType.connectionError,
+      );
+    }
     if (options.path == '/api/Reader/chapter-info') {
       return ResponseBody.fromString(
         jsonEncode({
           'seriesId': 3,
           'volumeId': 4,
           'libraryId': 1,
-          'pages': _pages,
+          'pages': pages,
           'seriesName': 'Berserk',
           'title': 'Chapter 1',
-          'pageDimensions': [
-            for (var page = 0; page < _pages; page++)
-              {
-                'pageNumber': page,
-                'width': wide.contains(page) ? 1600 : 800,
-                'height': 1200,
-                'isWide': wide.contains(page),
-              },
-          ],
+          if (dimensions)
+            'pageDimensions': [
+              for (var page = 0; page < pages; page++)
+                {
+                  'pageNumber': page,
+                  'width': wide.contains(page) ? 1600 : 800,
+                  'height': 1200,
+                  'isWide': wide.contains(page),
+                },
+            ],
         }),
         200,
         headers: {
@@ -85,9 +112,10 @@ class _ReaderAdapter implements HttpClientAdapter {
 Future<void> _writeSavedChapter(
   DownloadsService service, {
   required int pagesRead,
+  int pages = _pages,
 }) async {
   final dir = (await service.chapterDir(7))..createSync(recursive: true);
-  for (var page = 0; page < 3; page++) {
+  for (var page = 0; page < 3 && page < pages; page++) {
     File('${dir.path}/${DownloadsService.pageFileName(page)}')
         .writeAsBytesSync(const [0]);
   }
@@ -99,7 +127,7 @@ Future<void> _writeSavedChapter(
       'libraryId': 1,
       'seriesName': 'Berserk',
       'title': 'Chapter 1',
-      'pages': _pages,
+      'pages': pages,
       'bytes': 3,
       'pagesRead': pagesRead,
     }),
@@ -129,6 +157,9 @@ Future<List<int>> _pumpReader(
   Profile? profile,
   ProfilePreferencesStore? store,
   Key? readerKey,
+  int pages = _pages,
+  bool dimensions = true,
+  bool offline = false,
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
@@ -136,7 +167,11 @@ Future<List<int>> _pumpReader(
     profileId: 'https://kavita.test#1',
   );
   if (savedPagesRead != null) {
-    await _writeSavedChapter(downloads, pagesRead: savedPagesRead);
+    await _writeSavedChapter(
+      downloads,
+      pagesRead: savedPagesRead,
+      pages: pages,
+    );
   }
 
   final posted = <int>[];
@@ -146,7 +181,13 @@ Future<List<int>> _pumpReader(
     username: 'romain',
     apiKey: 'key',
   );
-  final adapter = _ReaderAdapter(posted, wide: wide);
+  final adapter = _ReaderAdapter(
+    posted,
+    wide: wide,
+    pages: pages,
+    dimensions: dimensions,
+    offline: offline,
+  );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
 
@@ -417,6 +458,187 @@ void main() {
     expect(controller.offset, controller.position.maxScrollExtent);
     expect(tester.takeException(), isNull);
     expect(posted, [_pages], reason: 'the last page still reports the total');
+  });
+
+  testWidgets('turning the device keeps the page, and the place within it', (
+    tester,
+  ) async {
+    // Every height follows the canvas, so the offset the strip is sitting at
+    // is a different page the moment the screen is turned — and nothing
+    // scrolls, so nothing is reported. At a width other than full, which is
+    // the whole of the feature.
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    final posted = await _pumpReader(
+      tester,
+      initialPage: 20,
+      widthFactor: 0.7,
+    );
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    final before = controller.offset;
+
+    tester.view.physicalSize = const Size(2532, 1170);
+    await tester.pump();
+    await tester.pump();
+
+    // The strip is anchored on the top of page 20, and every height is
+    // proportional to the width it is laid out at — so the offset it lands
+    // on is the same place, scaled by what the canvas became: 844/390.
+    expect(controller.offset, closeTo(before * 844 / 390, 1));
+    expect(posted, [20], reason: 'a rotation is not the reader moving');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('turning the device with the chrome open keeps the place too', (
+    tester,
+  ) async {
+    // The scrubber is on screen while the canvas is turned, which is the case
+    // #46 asks the lifecycle to cover: the strip is not the only thing being
+    // laid out at the new width, and this screen has died on a layout that
+    // rebuilt under it before.
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    final posted = await _pumpReader(tester, initialPage: 20);
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ThumbStrip), findsOneWidget);
+
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    final before = controller.offset;
+
+    tester.view.physicalSize = const Size(2532, 1170);
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.offset, closeTo(before * 844 / 390, 1));
+    expect(find.byType(ThumbStrip), findsOneWidget, reason: 'the chrome stays');
+    expect(posted, [20]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a chapter of one page draws nothing to seek with', (tester) async {
+    // A lone thumbnail over a slider with one position is furniture that
+    // cannot be used. Where there is nowhere to seek to, the reader draws
+    // the counter and nothing else.
+    final posted = await _pumpReader(tester, initialPage: 0, pages: 1);
+
+    // The chrome: in vertical scrolling a tap anywhere brings it up.
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ThumbStrip), findsNothing);
+    expect(find.byType(Slider), findsNothing);
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(posted, [1], reason: 'the one page is the last page too');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('paging keeps the chrome it has for a chapter of one page', (
+    tester,
+  ) async {
+    // The rule above is the vertical strip's, where the thumbnail strip is the
+    // seek control. Paged reading is left as it was (#46).
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      pages: 1,
+      direction: ReadingDirection.leftToRight,
+    );
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ThumbStrip), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a chapter the server measured nothing about still lays out', (
+    tester,
+  ) async {
+    // A server that has not crawled a chapter answers with no dimensions, so
+    // every page shares the default ratio: a portrait comic page, half as
+    // wide again as it is tall.
+    final posted = await _pumpReader(
+      tester,
+      initialPage: _pages - 1,
+      dimensions: false,
+    );
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    final screen = tester.getSize(find.byType(Scaffold));
+
+    // The whole strip, less the screen it is seen through: exact, which is
+    // what makes the last page reachable rather than a guess away.
+    expect(
+      controller.position.maxScrollExtent,
+      moreOrLessEquals(
+        _pages * screen.width / PageDimension.defaultAspectRatio -
+            screen.height,
+        epsilon: 1,
+      ),
+    );
+    // And the end of the chapter is there to be reached: not an extent
+    // guessed at an average page and short of the truth.
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
+    expect(
+      controller.offset,
+      moreOrLessEquals(controller.position.maxScrollExtent, epsilon: 0.5),
+    );
+    expect(posted, [_pages]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a saved chapter reads the same with no server to ask', (
+    tester,
+  ) async {
+    // Offline is not a lesser reader. What the device kept has no dimensions
+    // in it either, so this is the same strip as above, read from the stored
+    // copy, and it must answer to the width the same way.
+    final posted = await _pumpReader(
+      tester,
+      initialPage: 40,
+      savedPagesRead: 5,
+      offline: true,
+    );
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    final screen = tester.getSize(find.byType(Scaffold));
+    final before = controller.offset;
+
+    expect(
+      controller.position.maxScrollExtent,
+      moreOrLessEquals(
+        _pages * screen.width / PageDimension.defaultAspectRatio -
+            screen.height,
+        epsilon: 1,
+      ),
+      reason: 'the stored page count is the strip, to its last page',
+    );
+
+    await _showChromeAndCog(tester);
+    await _narrowStrip(tester);
+
+    // Half the width, and the same page: every height halved with it, so the
+    // offset is half of what it was.
+    expect(controller.offset, closeTo(before * 0.5, 1));
+    expect(posted, [40], reason: 'a width is not the reader moving');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('reading a chapter writes no width back', (tester) async {
