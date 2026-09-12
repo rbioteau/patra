@@ -12,6 +12,7 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/features/reader/strip_geometry.dart';
 import 'package:patra/src/features/reader/thumb_strip.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
@@ -105,14 +106,29 @@ Future<void> _writeSavedChapter(
   );
 }
 
+/// Somebody reading, so that a preference set in the reader has an owner to
+/// be kept for. Every other test here reads the device's defaults, which is
+/// what a profile that has never chosen gets.
+final _reader = Profile(
+  baseUrl: 'http://kavita.test',
+  accountId: 1,
+  username: 'romain',
+  apiKey: 'key',
+  token: signedToken(1),
+);
+
 Future<List<int>> _pumpReader(
   WidgetTester tester, {
   required int initialPage,
   ReadingDirection direction = ReadingDirection.verticalScroll,
   bool magnify = false,
+  double widthFactor = 1.0,
   int? savedPagesRead,
   SliderComponentShape? sliderThumb,
   Set<int> wide = const {},
+  Profile? profile,
+  ProfilePreferencesStore? store,
+  Key? readerKey,
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
@@ -140,14 +156,21 @@ Future<List<int>> _pumpReader(
         testKeychain(),
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
-        // No session here, so these are the device's own defaults — which is
-        // what a profile that has never chosen reads in.
-        profilePreferencesStoreProvider.overrideWithValue(
-          ProfilePreferencesStore(
-            keychain: MemoryKeychain(),
-            deviceDirection: direction,
-            deviceMagnify: magnify,
+        if (profile != null)
+          initialAuthStateProvider.overrideWithValue(
+            AuthState(profiles: [profile], activeId: profile.id),
           ),
+        // No session unless [profile] says otherwise, so these are the
+        // device's own defaults — which is what a profile that has never
+        // chosen reads in.
+        profilePreferencesStoreProvider.overrideWithValue(
+          store ??
+              ProfilePreferencesStore(
+                keychain: MemoryKeychain(),
+                deviceDirection: direction,
+                deviceMagnify: magnify,
+                deviceWidthFactor: widthFactor,
+              ),
         ),
       ],
       child: MaterialApp(
@@ -155,10 +178,14 @@ Future<List<int>> _pumpReader(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: sliderThumb == null
-            ? ReaderScreen(chapterId: 7, initialPage: initialPage)
+            ? ReaderScreen(key: readerKey, chapterId: 7, initialPage: initialPage)
             : SliderTheme(
                 data: SliderThemeData(thumbShape: sliderThumb),
-                child: ReaderScreen(chapterId: 7, initialPage: initialPage),
+                child: ReaderScreen(
+                  key: readerKey,
+                  chapterId: 7,
+                  initialPage: initialPage,
+                ),
               ),
       ),
     ),
@@ -170,6 +197,45 @@ Future<List<int>> _pumpReader(
   await tester.pump(const Duration(milliseconds: 100));
   return posted;
 }
+
+/// The reader's chrome — a tap in the middle, which in vertical scrolling is
+/// the whole screen and when paging is the middle zone — and then the cog's
+/// sheet, where the width a chapter opens at is set.
+Future<void> _showChromeAndCog(WidgetTester tester) async {
+  final size = tester.getSize(find.byType(Scaffold));
+  await tester.tapAt(Offset(size.width / 2, size.height / 2));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(find.byIcon(Icons.settings));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// The width a chapter opens at, in the cog's sheet. The chrome has a slider
+/// of its own, for pages, so the two are told apart by what they slide over.
+Finder get _widthSlider => find.byWidgetPredicate(
+  (widget) => widget is Slider && widget.max == StripGeometry.maxWidthFactor,
+);
+
+/// Drags the width slider to its left end: the narrowest a strip is laid
+/// out, and the furthest a chapter can be from the width it opens at today.
+Future<void> _narrowStrip(WidgetTester tester) async {
+  // Three rows of settings do not fit the part of a short screen a sheet is
+  // given, so the sheet scrolls and the row is brought into view first.
+  await tester.ensureVisible(_widthSlider);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.drag(_widthSlider, const Offset(-2000, 0));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Where the strip is scrolled to, which is the only thing in a widget test
+/// that says what a chapter is actually showing.
+double _stripOffset(WidgetTester tester) => tester
+    .widget<CustomScrollView>(find.byType(CustomScrollView))
+    .controller!
+    .offset;
 
 /// Reports where the slider actually paints its handle, which nothing else in
 /// a widget test can see.
@@ -235,6 +301,141 @@ void main() {
         (image.image as ResizeImage).width,
     };
     expect(asked, {tester.view.physicalSize.width.round()});
+  });
+
+  testWidgets('a chapter opens at the width that was chosen', (tester) async {
+    // The same measurement as above, at the narrow end of the range: the
+    // width a page is decoded at is the width the strip is laid out at.
+    final posted = await _pumpReader(
+      tester,
+      initialPage: 20,
+      widthFactor: StripGeometry.minWidthFactor,
+    );
+
+    final asked = {
+      for (final image in tester.widgetList<Image>(find.byType(Image)))
+        (image.image as ResizeImage).width,
+    };
+    expect(asked, {
+      (tester.view.physicalSize.width * StripGeometry.minWidthFactor).ceil(),
+    });
+    expect(posted, [
+      20,
+    ], reason: 'the page it was left at is still the page it opened at');
+  });
+
+  testWidgets('a width chosen in the reader does not move the reader’s place', (
+    tester,
+  ) async {
+    // Every height changes when the width does, so the offset the strip sat
+    // at is a different page afterwards. Nothing scrolls, so nothing is
+    // reported: the strip would simply be showing page 40 to somebody the
+    // reader still believes is on page 20, and the next flick would post
+    // that page back as progress.
+    final posted = await _pumpReader(tester, initialPage: 20);
+    expect(posted, [20]);
+    final before = _stripOffset(tester);
+
+    await _showChromeAndCog(tester);
+    await _narrowStrip(tester);
+
+    expect(tester.widget<Slider>(_widthSlider).value, 0.5);
+    expect(
+      _stripOffset(tester),
+      closeTo(before * StripGeometry.minWidthFactor, 1),
+      reason:
+          'the strip was re-anchored on the page it was on, not left to '
+          'drift down the chapter',
+    );
+    expect(posted, [20], reason: 'a width is not the reader moving');
+  });
+
+  testWidgets('a width chosen in the reader is the profile’s, and outlives '
+      'the chapter', (tester) async {
+    final keychain = MemoryKeychain();
+    // Vertical, like the reader's own tests: the store carries the device's
+    // default, and a store handed in brings its own.
+    final store = ProfilePreferencesStore(
+      keychain: keychain,
+      deviceDirection: ReadingDirection.verticalScroll,
+    );
+    await _pumpReader(tester, initialPage: 0, profile: _reader, store: store);
+
+    await _showChromeAndCog(tester);
+    await _narrowStrip(tester);
+
+    expect(store.widthFactorFor(_reader.id), 0.5);
+    expect(keychain.values['profilePreferences'], contains('0.5'));
+    // Written once, at the end of the gesture, and not once per step of it:
+    // a drag is dozens of values and the keychain hears about the choice.
+    expect(keychain.writes, 1);
+
+    // Leaving the chapter and the app: a device restarted reads it back off
+    // the keychain, and the next chapter opens at it — at the page it is
+    // opened at, which is the whole of what a narrower strip must not cost.
+    final reopened = await preferencesStore(
+      keychain: MemoryKeychain({...keychain.values}),
+      deviceDirection: ReadingDirection.verticalScroll,
+    );
+    expect(reopened.widthFactorFor(_reader.id), 0.5);
+
+    // A key of its own, so this is a chapter being *opened* and not the
+    // reader's state carried over: `pumpWidget` hands the new tree the old
+    // element when the shapes match, and a reopened chapter has to save its
+    // own place from scratch.
+    final posted = await _pumpReader(
+      tester,
+      initialPage: 40,
+      profile: _reader,
+      store: reopened,
+      readerKey: const ValueKey('reopened'),
+    );
+    final asked = {
+      for (final image in tester.widgetList<Image>(find.byType(Image)))
+        (image.image as ResizeImage).width,
+    };
+    expect(
+      asked,
+      {(tester.view.physicalSize.width * StripGeometry.minWidthFactor).ceil()},
+      reason: 'the chapter opens at the width that was chosen',
+    );
+    expect(posted, [40], reason: 'and at the page it was left at');
+  });
+
+  testWidgets('a width change at the end of a chapter clamps, and keeps the '
+      'last page', (tester) async {
+    // At a document edge the anchor cannot be held — there is no content left
+    // below to put under it — so the strip clamps, which is what ADR-0006
+    // says of the pinch. What it must not do is overscroll or lose the page.
+    final posted = await _pumpReader(tester, initialPage: _pages - 1);
+    await _showChromeAndCog(tester);
+    await _narrowStrip(tester);
+
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(tester.takeException(), isNull);
+    expect(posted, [_pages], reason: 'the last page still reports the total');
+  });
+
+  testWidgets('reading a chapter writes no width back', (tester) async {
+    // The width a chapter opens at is the one thing the reading path must
+    // never touch. #50 lets a pinch narrow the strip for the chapter in hand,
+    // and a pinch is a live adjustment on top of the preference: it writes
+    // nothing. So does a scroll, for the same reason.
+    final keychain = MemoryKeychain();
+    final store = ProfilePreferencesStore(
+      keychain: keychain,
+      deviceDirection: ReadingDirection.verticalScroll,
+    );
+    await _pumpReader(tester, initialPage: 20, profile: _reader, store: store);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(keychain.writes, 0);
+    expect(store.widthFactorFor(_reader.id), 1.0);
   });
 
   testWidgets('a paged chapter opens where it was left too', (tester) async {
@@ -764,6 +965,39 @@ void main() {
       );
       // Still switchable, for the next chapter that is paged.
       expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
+    });
+
+    testWidgets('the width row says where it applies, and stays settable', (
+      tester,
+    ) async {
+      // Paged, no strip is laid out at a width of its own — a page is fitted
+      // to the screen. The row says so in place of its explanation and stays
+      // settable, which is the magnifying row's rule mirrored: the width
+      // belongs to the person, and the next chapter may well be read
+      // vertically.
+      final store = ProfilePreferencesStore(
+        keychain: MemoryKeychain(),
+        deviceDirection: ReadingDirection.leftToRight,
+      );
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+      );
+      await showChrome(tester);
+      await openSheet(tester);
+
+      expect(find.text('Page width'), findsOneWidget);
+      expect(find.textContaining('Not while paging'), findsOneWidget);
+      expect(tester.widget<Slider>(_widthSlider).onChanged, isNotNull);
+
+      // Settable, and what is set is kept: the width belongs to the person
+      // and not to the chapter in hand, and the next one may well be read
+      // vertically.
+      await _narrowStrip(tester);
+      expect(store.widthFactorFor(_reader.id), 0.5);
     });
 
     testWidgets('picking a direction closes the sheet and applies it', (

@@ -1,16 +1,17 @@
 /// Which settings follow the person and which stay with the device.
 ///
 /// A family tablet is several profiles at one address (ADR-0003), and a
-/// setting is one of two kinds. **Reading direction, magnifying and the
-/// interface language belong to a person**: they are how somebody reads, and
-/// two people sharing a tablet each get their own. **The image cache budget
-/// belongs to the device**: it is disk, and the iPad owns its disk — it lives
+/// setting is one of two kinds. **Reading direction, magnifying, the width a
+/// chapter opens at and the interface language belong to a person**: they are
+/// how somebody reads, and two people sharing a tablet each get their own.
+/// **The image cache budget belongs to the device**: it is disk, and the iPad
+/// owns its disk — it lives
 /// in `cache_settings.dart` and is handed to every container `SessionScope`
 /// builds, alongside the downloads root and the locks.
 ///
 /// Nothing here is sent to the server, deliberately. Kavita keeps preferences
 /// of its own and none of them is the reading direction — syncing would cover
-/// one setting of three and buy a conflict to resolve for something a tap
+/// one setting of four and buy a conflict to resolve for something a tap
 /// already fixes.
 ///
 /// **The device keeps a default of each all the same**, and it is not a
@@ -36,12 +37,25 @@ import 'reading_settings.dart';
 /// What one profile has chosen for itself. A null field is a choice never
 /// made, and the device's own default stands in for it.
 class ProfilePreferences {
-  const ProfilePreferences({this.direction, this.magnify, this.language});
+  const ProfilePreferences({
+    this.direction,
+    this.magnify,
+    this.widthFactor,
+    this.language,
+  });
 
   static const none = ProfilePreferences();
 
   final ReadingDirection? direction;
   final bool? magnify;
+
+  /// How wide a chapter opens, as a fraction of the screen: `1.0` is the
+  /// whole screen. Only the vertical direction lays its strip out at one.
+  ///
+  /// The range is `StripGeometry`'s to hold and not this file's — a
+  /// preference and a pinch both set it, and they must not clamp it
+  /// differently — so what is stored is whatever was asked for.
+  final double? widthFactor;
 
   /// The language chosen, as a code — or the **empty string** for "follow the
   /// device", which is a choice a person can make and come back to. It is not
@@ -54,16 +68,19 @@ class ProfilePreferences {
   ProfilePreferences copyWith({
     ReadingDirection? direction,
     bool? magnify,
+    double? widthFactor,
     String? language,
   }) => ProfilePreferences(
     direction: direction ?? this.direction,
     magnify: magnify ?? this.magnify,
+    widthFactor: widthFactor ?? this.widthFactor,
     language: language ?? this.language,
   );
 
   Map<String, dynamic> toJson() => {
     if (direction != null) 'direction': direction!.name,
     if (magnify != null) 'magnify': magnify,
+    if (widthFactor != null) 'widthFactor': widthFactor,
     if (language != null) 'language': language,
   };
 
@@ -75,12 +92,14 @@ class ProfilePreferences {
     if (json is! Map) return none;
     final direction = json['direction'];
     final magnify = json['magnify'];
+    final widthFactor = json['widthFactor'];
     final language = json['language'];
     return ProfilePreferences(
       direction: direction is String
           ? ReadingSettingsStore.directionNamed(direction)
           : null,
       magnify: magnify is bool ? magnify : null,
+      widthFactor: widthFactor is num ? widthFactor.toDouble() : null,
       // A code this build no longer ships is not a choice it can honour, so
       // it reads as never having chosen and the device's default stands —
       // the same answer `supportedLocale` gives the device's own.
@@ -107,6 +126,7 @@ class ProfilePreferencesStore {
     Keychain? keychain,
     this.deviceDirection = ReadingDirection.leftToRight,
     this.deviceMagnify = false,
+    this.deviceWidthFactor = 1.0,
     Locale? deviceLanguage,
     // A private field cannot be a named parameter, so the lint's suggestion
     // is not available here.
@@ -126,6 +146,18 @@ class ProfilePreferencesStore {
   /// default for these two — a person's choice is their own.
   final ReadingDirection deviceDirection;
   final bool deviceMagnify;
+
+  /// The width a chapter opens at for a profile that has never chosen: the
+  /// whole screen, which is how a chapter has always opened.
+  ///
+  /// Frozen for the run like the two above and for the same reason nothing
+  /// on any screen moves it — but unlike them there is **no flat key behind
+  /// it**, because this device never held one: `1.0` is not a default a
+  /// household chose once and has to keep, it is what the app did before
+  /// there was anything to choose. It is a field and not a constant so that
+  /// every preference here is answered the same way, and so a test can say
+  /// what a person who has not chosen gets.
+  final double deviceWidthFactor;
 
   /// The language of the **gate**, which is drawn before anybody has been
   /// chosen and so cannot ask a profile.
@@ -195,6 +227,11 @@ class ProfilePreferencesStore {
 
   bool magnifyFor(String? profileId) => of(profileId).magnify ?? deviceMagnify;
 
+  /// The width a chapter opens at for [profileId], falling through to the
+  /// device's default where they have never said.
+  double widthFactorFor(String? profileId) =>
+      of(profileId).widthFactor ?? deviceWidthFactor;
+
   /// The language [profileId] reads in. The empty string is a choice — follow
   /// the device — and must not fall through to [deviceLanguage]; only never
   /// having chosen does.
@@ -209,6 +246,9 @@ class ProfilePreferencesStore {
   Future<void> setMagnify(String profileId, bool enabled) =>
       _update(profileId, (was) => was.copyWith(magnify: enabled));
 
+  Future<void> setWidthFactor(String profileId, double factor) =>
+      _update(profileId, (was) => was.copyWith(widthFactor: factor));
+
   /// [locale] null is a real choice — follow the device — and is stored as
   /// one, which is why it cannot go through [ProfilePreferences.copyWith].
   Future<void> setLanguage(String profileId, Locale? locale) => _update(
@@ -216,6 +256,7 @@ class ProfilePreferencesStore {
     (was) => ProfilePreferences(
       direction: was.direction,
       magnify: was.magnify,
+      widthFactor: was.widthFactor,
       language: locale?.languageCode ?? '',
     ),
   );
@@ -281,8 +322,9 @@ final profilePreferencesStoreProvider = Provider<ProfilePreferencesStore>(
 /// The **id** and not the session, which is the same care
 /// `kavitaClientProvider` takes for the same reason: `Profile` has no `==`,
 /// so a session is a new instance on every JWT renewal — and a preference
-/// has no business being recomputed because a token moved. Measured: three
-/// notifiers rebuilt per renewal without the `select`, none with it. Nothing
+/// has no business being recomputed because a token moved. Measured: one
+/// rebuild per notifier per renewal without the `select`, none with it.
+/// Nothing
 /// is *lost* by the rebuild (the store is updated in memory before it is
 /// persisted, so it answers with the new value either way), which is exactly
 /// why this has to be pinned by counting rather than by a symptom — there
@@ -339,6 +381,51 @@ class MagnifyNotifier extends Notifier<bool> {
 
 final magnifyProvider = NotifierProvider<MagnifyNotifier, bool>(
   MagnifyNotifier.new,
+);
+
+/// How wide a chapter opens for whoever is reading: a fraction of the screen,
+/// `1.0` being the whole of it — which is how a chapter has opened all along,
+/// and so the one value that changes nothing for somebody who never chooses.
+///
+/// Only the vertical direction lays a strip out at one; where it does not
+/// apply the row says so and stays settable, for the reason magnifying's
+/// does. What writes it is a choice — the reader's own sheet or Settings —
+/// and never reading: the pinch that narrows the strip for one chapter is a
+/// live adjustment on top of this and leaves it where it was (#50).
+class WidthFactorNotifier extends Notifier<double> {
+  @override
+  double build() =>
+      ref.read(profilePreferencesStoreProvider).widthFactorFor(_readerId(ref));
+
+  /// The width while a finger is still on the slider: what the chapter in
+  /// front of the reader is drawn at, but not yet a choice.
+  ///
+  /// A slider reports every step of a drag and a drag is dozens of steps, so
+  /// persisting each one would be dozens of whole-map writes to the keychain
+  /// for values nobody has settled on. [set] is the one that writes, from the
+  /// end of the gesture. It is the same two things the pinch will keep apart
+  /// (#50): the number a chapter is being drawn at, and the number a person
+  /// has chosen.
+  void preview(double factor) => state = factor;
+
+  Future<void> set(double factor) async {
+    state = factor;
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) {
+      // Nobody is reading, so there is nobody this could belong to. Unlike
+      // the direction and magnifying there is no flat key of the device's
+      // to fall back to either, since `1.0` is not a default this device
+      // ever chose — see [ProfilePreferencesStore.deviceWidthFactor]. No
+      // screen reaches this: Settings stands inside a session, and the gate
+      // has no width to set.
+      return;
+    }
+    await ref.read(profilePreferencesStoreProvider).setWidthFactor(id, factor);
+  }
+}
+
+final widthFactorProvider = NotifierProvider<WidthFactorNotifier, double>(
+  WidthFactorNotifier.new,
 );
 
 /// The language the app is shown in. Null follows the device.

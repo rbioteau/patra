@@ -183,12 +183,14 @@ Future<ProfilePreferencesStore> preferencesStore({
   MemoryKeychain? keychain,
   ReadingDirection deviceDirection = ReadingDirection.leftToRight,
   bool deviceMagnify = false,
+  double deviceWidthFactor = 1.0,
   Locale? deviceLanguage,
 }) async {
   final store = ProfilePreferencesStore(
     keychain: keychain ?? MemoryKeychain(),
     deviceDirection: deviceDirection,
     deviceMagnify: deviceMagnify,
+    deviceWidthFactor: deviceWidthFactor,
     deviceLanguage: deviceLanguage,
   );
   await store.load();

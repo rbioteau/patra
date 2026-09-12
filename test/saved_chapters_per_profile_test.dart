@@ -125,6 +125,17 @@ Future<Directory> _pump(
   return root;
 }
 
+/// The button at the foot of Settings, brought into view: a `ListView` only
+/// builds what it shows, and this screen has a row more than it used to.
+Future<void> _reachForgetButton(WidgetTester tester, String label) async {
+  await tester.scrollUntilVisible(
+    find.text(label),
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('the confirmation names the saved reading about to go', (
     tester,
@@ -133,6 +144,7 @@ void main() {
     await _save(root, _romain, 101);
     await _save(root, _romain, 102);
 
+    await _reachForgetButton(tester, 'Forget this profile');
     await tester.tap(find.text('Forget this profile'));
     await tester.pumpAndSettle();
 
@@ -147,6 +159,7 @@ void main() {
     // Léa's, not the profile being removed.
     await _save(root, _lea, 101);
 
+    await _reachForgetButton(tester, 'Forget this profile');
     await tester.tap(find.text('Forget this profile'));
     await tester.pumpAndSettle();
 
@@ -223,6 +236,7 @@ void main() {
     final root = await _pump(tester, locale: const Locale('fr'));
     await _save(root, _romain, 101);
 
+    await _reachForgetButton(tester, 'Oublier ce profil');
     await tester.tap(find.text('Oublier ce profil'));
     await tester.pumpAndSettle();
 

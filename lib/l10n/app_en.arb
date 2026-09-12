@@ -338,6 +338,25 @@
   "@dragToMagnifyExplained": {
     "description": "Explains what turning the drag-to-magnify setting on changes, including what it costs: the swipe that turns a page."
   },
+  "pageWidth": "Page width",
+  "@pageWidth": {
+    "description": "Reader setting: how wide pages are drawn while reading vertically, as a percentage of the screen's width."
+  },
+  "pageWidthExplained": "How wide pages are drawn while reading vertically. 100% is the whole screen.",
+  "@pageWidthExplained": {
+    "description": "Explains what the page width setting changes, and says where it applies."
+  },
+  "pageWidthInPaged": "Not while paging — there a page is fitted to the screen.",
+  "@pageWidthInPaged": {
+    "description": "Replaces pageWidthExplained in the reader's sheet when the chapter is being paged, where no strip is laid out at a width of its own."
+  },
+  "percent": "{value}%",
+  "@percent": {
+    "description": "A value shown as a percentage of the whole.",
+    "placeholders": {
+      "value": {"type": "int"}
+    }
+  },
   "readingDirection": "Reading direction",
   "@readingDirection": {
     "description": "Title of the reader menu that picks how pages advance"

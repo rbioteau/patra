@@ -31,16 +31,6 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
   },
 );
 
-/// How wide a chapter opens: the whole screen, which is how a chapter opens
-/// today, and the one value that changes nothing about the way it reads.
-///
-/// It becomes a preference a person chooses (#49) and a pinch on top of it
-/// (#50); the strip's module already lays the strip out at whatever it is
-/// given, and holds the range. Deliberately not `StripGeometry`'s ceiling,
-/// though the two are the same number today: a chapter opens at the whole
-/// screen whether or not the strip can be made wider than one.
-const double _openingWidthFactor = 1.0;
-
 /// The reading surface: pure black canvas, chrome as gradient overlays, and a
 /// single reading-direction setting (vertical scrolling is a direction,
 /// not a mode).
@@ -423,6 +413,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // *is* the scroll, and a mode that took it away would leave the direction
     // with no way to advance at all.
     final magnify = ref.watch(magnifyProvider) && !direction.isVerticalScroll;
+    // How wide the chapter opens, which is how wide the strip is laid out.
+    // Watched rather than read once, because it is a preference and not a
+    // property of the chapter in hand: what somebody chooses in the cog or
+    // in Settings is theirs, and the chapter in front of them is where they
+    // will look for it.
+    final widthFactor = ref.watch(widthFactorProvider);
 
     // Read off the MediaQuery, not through an `OrientationBuilder`.
     //
@@ -457,13 +453,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             key: const ValueKey('verticalScroll'),
             chapter: chapter,
             page: _page,
-            widthFactor: _openingWidthFactor,
+            widthFactor: widthFactor,
             imageBuilder: _pageImage,
-            onPageChanged: (page, decodeWidth) => _onPageChanged(
-              page,
-              chapter,
-              precacheWidth: decodeWidth,
-            ),
+            onPageChanged: (page, decodeWidth) =>
+                _onPageChanged(page, chapter, precacheWidth: decodeWidth),
           )
         else
           _PagedView(
@@ -955,6 +948,22 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   /// Whether the strip has been scrolled to the page it was opened at.
   var _placed = false;
 
+  /// The place to put back once the strip has been laid out at a new width.
+  ///
+  /// A width change moves every height under the offset the strip is sitting
+  /// at, so the same offset is a different page afterwards — and [_onScroll]
+  /// would report that page, and the reader would post it as progress and
+  /// lose the place the chapter was opened at. The place is therefore named
+  /// before the change and restored after it.
+  StripAnchor? _pendingAnchor;
+
+  /// True while this view is moving itself rather than being scrolled.
+  ///
+  /// A move it asked for is not a page turn, which is the rule the paged view
+  /// keeps for its own seeks: [_onScroll] would otherwise report the page the
+  /// strip landed on as though the reader had read their way there.
+  var _seeking = false;
+
   /// The strip's geometry for the width it is laid out at: every page's
   /// height and where every page starts, from the server's page dimensions,
   /// so scroll offsets are exact before any image has loaded.
@@ -992,7 +1001,12 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     // Until the strip has been placed it is sitting at offset 0, which is not
     // where the reader is: reporting from there would post page 0 back and
     // wipe the place the chapter was opened at.
-    if (!_placed || !_controller.hasClients || _geometry.pages == 0) return;
+    if (!_placed ||
+        _seeking ||
+        !_controller.hasClients ||
+        _geometry.pages == 0) {
+      return;
+    }
     final page = _pageAt(_controller.offset);
     if (page != _reported) {
       _reported = page;
@@ -1015,21 +1029,66 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     });
   }
 
-  void _jumpTo(int page) {
-    if (!_controller.hasClients || page >= _geometry.pages) return;
+  /// The offset [anchor] sits at, inside the scrollable's own range.
+  void _jumpToAnchor(StripAnchor anchor) {
+    if (!_controller.hasClients || _geometry.pages == 0) return;
     _controller.jumpTo(
       _geometry
-          .offsetFor(StripAnchor(page, 0))
+          .offsetFor(anchor)
           .clamp(0, _controller.position.maxScrollExtent),
     );
+  }
+
+  void _jumpTo(int page) {
+    if (page >= _geometry.pages) return;
+    _jumpToAnchor(StripAnchor(page, 0));
+  }
+
+  /// Puts [anchor] back at the top of the viewport, once the strip has been
+  /// laid out at the width that moved it.
+  ///
+  /// Not reported: the reader did not read its way there, and a page taken
+  /// from the new offset is a page the reader was never on. [_reported] is
+  /// brought up to the page the strip landed on all the same, because where
+  /// the reader is is a fact and not a question of how it got there.
+  void _restore(StripAnchor anchor) {
+    if (!_controller.hasClients) return;
+    _seeking = true;
+    try {
+      _jumpToAnchor(anchor);
+      _reported = _pageAt(_controller.offset);
+    } finally {
+      _seeking = false;
+    }
   }
 
   @override
   void didUpdateWidget(_VerticalScrollView old) {
     super.didUpdateWidget(old);
-    // A seek from the slider: jump, unless this is our own report echoing.
-    if (widget.page != _reported) {
-      _reported = widget.page;
+    final seeked = widget.page != _reported;
+    if (seeked) _reported = widget.page;
+    if (widget.widthFactor != old.widthFactor) {
+      // Every height is about to change, so the place is named now — off the
+      // geometry the current offset belongs to — and put back once the
+      // layout that changes them has run. A seek made in the same breath
+      // wins, and waits for that same frame rather than jumping to an offset
+      // the old heights would give it.
+      _pendingAnchor = seeked || !_placed || !_controller.hasClients
+          ? StripAnchor(_reported, 0)
+          : _geometry.anchorAt(_controller.offset);
+      // Scheduled from here and not from [build]'s `LayoutBuilder`: a
+      // post-frame callback registered *during* a layout is one this screen
+      // has already died on, and the callback does not need to be — it runs
+      // after the frame's layout either way, which is the only thing it asks
+      // for. Consumed by the callback, so a second change in the same frame
+      // cannot restore twice.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final anchor = _pendingAnchor;
+        _pendingAnchor = null;
+        if (mounted && anchor != null) _restore(anchor);
+      });
+    } else if (seeked) {
+      // A seek from the slider: jump, unless this is our own report echoing.
       _jumpTo(widget.page);
     }
   }
