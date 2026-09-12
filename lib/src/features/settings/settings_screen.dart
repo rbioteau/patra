@@ -27,7 +27,6 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final session = ref.watch(sessionProvider);
     final direction = ref.watch(defaultReadingDirectionProvider);
-    final magnify = ref.watch(magnifyProvider);
     final locale = ref.watch(localeProvider);
 
     return Scaffold(
@@ -65,18 +64,12 @@ class SettingsScreen extends ConsumerWidget {
               value: direction.label(l10n),
               onTap: () => _pickDirection(context, ref, direction),
             ),
-            _SwitchRow(
-              icon: const Icon(Icons.zoom_in, size: 18, color: patraAccent),
-              title: l10n.dragToMagnify,
-              subtitle: l10n.dragToMagnifyExplained,
-              value: magnify,
-              onChanged: (on) => ref.read(magnifyProvider.notifier).set(on),
-            ),
-            // The same row the reader's own sheet draws, so the two cannot
-            // drift into wording the width differently. It never says the
-            // width does not apply here: this screen has no chapter in hand,
-            // and the next one may well be read vertically.
-            const WidthFactorRow(),
+            // Magnifying and the width a chapter opens at are not here, and
+            // that is a decision rather than an omission: both are in the
+            // reader's own sheet, which is where somebody notices they want
+            // them — magnifying takes the swipe away, the width is the page
+            // under their eyes. See #58; the direction stays until #56 gives
+            // the reader a way to set the default itself.
 
             _Section(label: l10n.storageSectionLabel),
             const _StorageRows(),

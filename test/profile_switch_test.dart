@@ -274,11 +274,6 @@ void main() {
       300,
       scrollable: settings,
     );
-    // Scrolling only until the button is *technically* visible leaves it hard
-    // against the bottom of the list, where the navigation bar is what a tap
-    // finds. Aligning it instead puts it well inside.
-    await tester.ensureVisible(find.text('Forget this profile'));
-    await tester.pumpAndSettle();
     // Signing out was neither of the two verbs, and it is gone: what used to
     // stand here is the one that removes the profile outright.
     expect(find.text('Sign out'), findsNothing);

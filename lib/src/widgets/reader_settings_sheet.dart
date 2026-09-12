@@ -23,7 +23,6 @@ import 'direction_icon.dart';
 ///
 /// A sheet rather than a `PopupMenuButton`: a [PopupMenuItem] pops its route
 /// when tapped, so a switch inside one dismisses the menu as it is flipped.
-/// It is also the shape Settings already uses for the same choice.
 Future<void> showReaderSettingsSheet(
   BuildContext context, {
   required ReadingDirection direction,
@@ -58,7 +57,7 @@ Future<void> showReaderSettingsSheet(
             // The width is inert in exactly the directions magnifying's is
             // not: a strip is laid out at one, and paging fits a page to the
             // screen instead.
-            WidthFactorRow(inert: !direction.isVerticalScroll),
+            _WidthFactorRow(inert: !direction.isVerticalScroll),
             const SizedBox(height: 8),
           ],
         ),
@@ -162,10 +161,9 @@ class _MagnifyRow extends ConsumerWidget {
 /// How wide a chapter opens, as a fraction of the screen: the whole of it at
 /// `1.0`, which is how a chapter has opened all along.
 ///
-/// Drawn in the reader's sheet and in Settings from this one widget, for the
-/// reason [ReadingDirectionRows] is shared: the two must not drift into
-/// wording the same choice differently.
-///
+/// Set here and nowhere else (#58): Settings used to carry a row for it, and
+/// the reader is where somebody notices they want one — the width is the page
+/// under their eyes, and this sheet is already open over it.
 /// A slider and not a switch, because this is a number a person picks rather
 /// than a thing that is on or off. The range it slides over is
 /// `StripGeometry`'s and not this row's — a pinch moves the same number and
@@ -178,8 +176,8 @@ class _MagnifyRow extends ConsumerWidget {
 /// chapter, and the next one may well be read vertically. A slider sitting at
 /// 70% while the screen is drawn full width, with nothing saying why, would
 /// be the worst of both.
-class WidthFactorRow extends ConsumerWidget {
-  const WidthFactorRow({super.key, this.inert = false});
+class _WidthFactorRow extends ConsumerWidget {
+  const _WidthFactorRow({required this.inert});
 
   /// Whether the width is inert where this row is drawn — the paged
   /// directions, where no strip is laid out at one.
