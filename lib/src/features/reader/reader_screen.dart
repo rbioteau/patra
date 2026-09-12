@@ -21,6 +21,7 @@ import '../../widgets/reader_settings_sheet.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'spread_layout.dart';
+import 'strip_geometry.dart';
 import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
@@ -352,6 +353,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final info = ref.watch(chapterInfoProvider(widget.chapterId));
     final saved = ref.watch(savedChapterProvider(widget.chapterId));
     _savedChapter = saved;
+    _serverIsPreparing = info.value?.seriesFormat == MangaFormat.pdf;
 
     // Offline, the stored metadata is enough to read a saved chapter.
     final chapter =
@@ -550,9 +552,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// Kavita rasterises a PDF into page images on the first request for it, so
   /// the first page of one can be slow enough that a bare spinner reads as a
   /// hang. Every later page comes from its cache.
-  bool get _serverIsPreparing =>
-      ref.read(chapterInfoProvider(widget.chapterId)).value?.seriesFormat ==
-      MangaFormat.pdf;
+  ///
+  /// Mirrored out of [build], where the chapter info is already watched, for
+  /// the same reason as [_savedChapter]: the page builder is called from a
+  /// sliver's item builder, which runs *during layout*, and a provider read
+  /// there is a read during layout.
+  var _serverIsPreparing = false;
 }
 
 class _PagedView extends StatefulWidget {
@@ -909,42 +914,38 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   /// Whether the strip has been scrolled to the page it was opened at.
   var _placed = false;
 
-  /// Page heights for the current width, from the server's page dimensions,
+  /// The strip's geometry for the width it is laid out at: every page's
+  /// height and where every page starts, from the server's page dimensions,
   /// so scroll offsets are exact before any image has loaded.
-  List<double> _heights = const [];
-  List<double> _offsets = const [];
+  ///
+  /// Measured in the layout, the only place the width is known, and only
+  /// re-derived when the width or the chapter changes, since every height is
+  /// computed and that is a walk over the whole chapter.
+  var _geometry = StripGeometry.empty();
+  ChapterInfo? _measured;
 
   void _measure(double width) {
-    if (width == _width && _heights.length == widget.chapter.pages) return;
+    if (width == _width && _measured == widget.chapter) return;
     _width = width;
-    final heights = <double>[];
-    final offsets = <double>[];
-    var total = 0.0;
-    for (var page = 0; page < widget.chapter.pages; page++) {
-      offsets.add(total);
-      final height = width / widget.chapter.aspectRatioFor(page);
-      heights.add(height);
-      total += height;
-    }
-    _heights = heights;
-    _offsets = offsets;
+    _measured = widget.chapter;
+    _geometry = StripGeometry(
+      width: width,
+      pages: widget.chapter.pages,
+      aspectRatioFor: widget.chapter.aspectRatioFor,
+    );
   }
 
   int _pageAt(double offset) {
     // The page occupying the upper third of the viewport is "current".
     final probe = offset + _controller.position.viewportDimension * 0.3;
-    var page = 0;
-    for (var i = 0; i < _offsets.length; i++) {
-      if (_offsets[i] <= probe) page = i;
-    }
-    return page;
+    return _geometry.pageAt(probe);
   }
 
   void _onScroll() {
     // Until the strip has been placed it is sitting at offset 0, which is not
     // where the reader is: reporting from there would post page 0 back and
     // wipe the place the chapter was opened at.
-    if (!_placed || !_controller.hasClients || _offsets.isEmpty) return;
+    if (!_placed || !_controller.hasClients || _geometry.pages == 0) return;
     final page = _pageAt(_controller.offset);
     if (page != _reported) {
       _reported = page;
@@ -968,9 +969,11 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   }
 
   void _jumpTo(int page) {
-    if (!_controller.hasClients || page >= _offsets.length) return;
+    if (!_controller.hasClients || page >= _geometry.pages) return;
     _controller.jumpTo(
-      _offsets[page].clamp(0, _controller.position.maxScrollExtent),
+      _geometry
+          .offsetFor(StripAnchor(page, 0))
+          .clamp(0, _controller.position.maxScrollExtent),
     );
   }
 
@@ -996,16 +999,23 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _measure(constraints.maxWidth);
-        return ListView.builder(
+        return CustomScrollView(
           controller: _controller,
-          // A continuous strip: no gaps, no page turns.
-          padding: EdgeInsets.zero,
-          itemCount: widget.chapter.pages,
-          itemBuilder: (context, page) => SizedBox(
-            height: _heights.length > page ? _heights[page] : null,
-            width: double.infinity,
-            child: widget.imageBuilder(page, fit: BoxFit.fitWidth),
-          ),
+          slivers: <Widget>[
+            // A continuous strip: no gaps and no page turns, and every
+            // page's extent known before it is built, so the offsets it is
+            // scrolled to are the offsets it is drawn at.
+            StripExtentList(
+              geometry: _geometry,
+              // Nothing in here reads an inherited widget or a provider: a
+              // lazy sliver builds its children *during* layout, and this
+              // screen has already died on both.
+              itemBuilder: (context, page) => widget.imageBuilder(
+                page,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+          ],
         );
       },
     );
