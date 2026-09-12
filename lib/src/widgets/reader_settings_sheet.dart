@@ -31,11 +31,18 @@ Future<void> showReaderSettingsSheet(
   final picked = await showModalBottomSheet<ReadingDirection>(
     context: context,
     backgroundColor: patraSurface,
+    // Everything the sheet draws is read off [sheetContext], the context of
+    // the sheet's own route — never off [context], which belongs to the cog
+    // that opened it. The chrome that cog lives in is dismissed by the very
+    // act of picking a direction, and the sheet outlives it: a sheet that
+    // kept hold of the context it was opened with looks an ancestor up on a
+    // deactivated element the next time it is asked to draw itself, which on
+    // a phone is the next change of the window's metrics.
     builder: (sheetContext) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SheetLabel(AppLocalizations.of(context).readingDirection),
+          _SheetLabel(AppLocalizations.of(sheetContext).readingDirection),
           ReadingDirectionRows(
             current: direction,
             onPicked: (option) => Navigator.of(sheetContext).pop(option),
