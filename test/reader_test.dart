@@ -219,6 +219,24 @@ void main() {
     },
   );
 
+  testWidgets('the strip asks the decoder for the width it draws at', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await _pumpReader(tester, initialPage: 0);
+
+    // A chapter opens at the whole screen, so what the decoder is asked for
+    // is the screen, in device pixels — the same width for every page, and
+    // not the size the files happen to be. Narrowing the strip changes it,
+    // and with it the memory a page costs to decode.
+    final asked = {
+      for (final image in tester.widgetList<Image>(find.byType(Image)))
+        (image.image as ResizeImage).width,
+    };
+    expect(asked, {tester.view.physicalSize.width.round()});
+  });
+
   testWidgets('a paged chapter opens where it was left too', (tester) async {
     final posted = await _pumpReader(
       tester,
