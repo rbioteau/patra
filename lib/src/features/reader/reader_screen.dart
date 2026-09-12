@@ -529,6 +529,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             page: _page,
             span: span,
             rtl: rtl,
+            vertical: direction.isVerticalScroll,
             thumbQueue: _thumbs,
             thumbProvider: (page) => _imageProvider(
               page,
@@ -999,6 +1000,11 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     if (!_placed ||
         _seeking ||
         _width.pinching ||
+        // A rotation: the strip is still sitting at the offset it had before
+        // the canvas was turned, and every height around it has changed.
+        // What is under the top of the screen in that window is not where
+        // the reader is, and posting it would move their place for them.
+        _width.resizing ||
         !_controller.hasClients ||
         _width.geometry.pages == 0) {
       return;
@@ -1222,6 +1228,7 @@ class _BottomChrome extends StatelessWidget {
     required this.page,
     required this.span,
     required this.rtl,
+    required this.vertical,
     required this.thumbQueue,
     required this.thumbProvider,
     required this.onSeek,
@@ -1231,6 +1238,10 @@ class _BottomChrome extends StatelessWidget {
   final int page;
   final int span;
   final bool rtl;
+
+  /// Reading vertically, where the thumbnail strip *is* the seek control.
+  /// Paging has chrome of its own and this work leaves it alone (#46).
+  final bool vertical;
   final ThumbLoadQueue thumbQueue;
   final ImageProvider? Function(int page) thumbProvider;
   final ValueChanged<int> onSeek;
@@ -1272,13 +1283,19 @@ class _BottomChrome extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      ThumbStrip(
-                        pages: chapter.pages,
-                        current: page,
-                        queue: thumbQueue,
-                        providerBuilder: thumbProvider,
-                        onTap: onSeek,
-                      ),
+                      // A chapter of one page has nowhere to seek to, and
+                      // reading vertically the strip *is* the seek control:
+                      // a lone thumbnail there is furniture that cannot be
+                      // used. Paging keeps the chrome it has — this work
+                      // leaves paged reading alone (#46).
+                      if (!vertical || chapter.pages > 1)
+                        ThumbStrip(
+                          pages: chapter.pages,
+                          current: page,
+                          queue: thumbQueue,
+                          providerBuilder: thumbProvider,
+                          onTap: onSeek,
+                        ),
                       if (chapter.pages > 1)
                         Padding(
                           // The handle has to start and end where the strip's
@@ -1292,9 +1309,7 @@ class _BottomChrome extends StatelessWidget {
                               (chapter.pages - 1).toDouble(),
                             ),
                             max: (chapter.pages - 1).toDouble(),
-                            divisions: chapter.pages > 1
-                                ? chapter.pages - 1
-                                : null,
+                            divisions: chapter.pages - 1,
                             onChanged: (value) => onSeek(value.round()),
                           ),
                         ),

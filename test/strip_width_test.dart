@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/features/reader/strip_geometry.dart';
 import 'package:patra/src/features/reader/strip_width.dart';
 
@@ -44,6 +46,11 @@ final _onePixel = base64Decode(
 );
 final _pageImage = MemoryImage(_onePixel);
 
+/// Bytes that are not a picture: a page the server failed to serve, or one
+/// the decoder could not read. What that costs the strip is the question,
+/// and the answer has to be nothing.
+final _brokenImage = MemoryImage(Uint8List.fromList(<int>[0x00]));
+
 /// The strip the way the reader builds it: a `LayoutBuilder` measuring the
 /// canvas, the gesture owner above a scroll view, and the module's own sliver.
 class _Strip extends StatefulWidget {
@@ -51,11 +58,19 @@ class _Strip extends StatefulWidget {
     required this.scroll,
     required this.width,
     this.images = false,
+    this.pages = _pages,
+    this.aspectRatioFor = _aspectRatioFor,
+    this.failing = const {},
   });
 
   final ScrollController scroll;
   final StripWidthController width;
   final bool images;
+  final int pages;
+  final double Function(int page) aspectRatioFor;
+
+  /// Pages that will not load.
+  final Set<int> failing;
 
   @override
   State<_Strip> createState() => _StripState();
@@ -88,8 +103,8 @@ class _StripState extends State<_Strip> {
       builder: (context, constraints) {
         widget.width.measure(
           screenWidth: constraints.maxWidth,
-          pages: _pages,
-          aspectRatioFor: _aspectRatioFor,
+          pages: widget.pages,
+          aspectRatioFor: widget.aspectRatioFor,
           identity: _chapter,
         );
         return StripWidthGestures(
@@ -103,10 +118,19 @@ class _StripState extends State<_Strip> {
                     ? Image(
                         key: ValueKey(page),
                         image: ResizeImage(
-                          _pageImage,
+                          widget.failing.contains(page)
+                              ? _brokenImage
+                              : _pageImage,
                           width: widget.width.decodeWidth(pixelRatio),
                         ),
                         fit: BoxFit.fitWidth,
+                        // What the reader's own page does: a page that will
+                        // not load says so where it stands rather than
+                        // throwing in a test.
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.broken_image,
+                          color: Color(0x3DFFFFFF),
+                        ),
                       )
                     : SizedBox.expand(
                         key: ValueKey(page),
@@ -132,6 +156,9 @@ Future<_Harness> _pump(
   WidgetTester tester, {
   double widthFactor = 1.0,
   bool images = false,
+  int pages = _pages,
+  double Function(int page)? aspectRatioFor,
+  Set<int> failing = const {},
 }) async {
   // The test surface *is* the screen: the strip is given the whole of it, so
   // a finger's position on the screen is its position in the strip.
@@ -152,14 +179,17 @@ Future<_Harness> _pump(
     Directionality(
       textDirection: TextDirection.ltr,
       child: ColoredBox(
+        // The strip is given the whole of the surface, so turning the device
+        // really does change the width it is laid out at.
+        key: _surface,
         color: Colors.black,
-        child: Center(
-          child: SizedBox(
-            key: _surface,
-            width: _screenWidth,
-            height: _viewportHeight,
-            child: _Strip(scroll: scroll, width: width, images: images),
-          ),
+        child: _Strip(
+          scroll: scroll,
+          width: width,
+          images: images,
+          pages: pages,
+          aspectRatioFor: aspectRatioFor ?? _aspectRatioFor,
+          failing: failing,
         ),
       ),
     ),
@@ -851,6 +881,294 @@ void main() {
       await b.up();
       await tester.pump();
       expect(asked(100), 600);
+    });
+  });
+
+  group('a rotation', () {
+    /// The device on its side: the same surface, turned, so the canvas is
+    /// [_viewportHeight] wide and [_screenWidth] tall.
+    Future<void> turn(WidgetTester tester) async {
+      tester.view.physicalSize = Size(
+        _viewportHeight * _pixelRatio,
+        _screenWidth * _pixelRatio,
+      );
+      await tester.pump();
+    }
+
+    testWidgets('keeps the page, and the place within it', (tester) async {
+      // At a width other than full, which is the whole of the feature: the
+      // strip is narrower than the canvas already, and then the canvas
+      // changes under it. Every height follows the width, so the offset the
+      // strip is sitting at is a different page the moment it is turned.
+      final harness = await _pump(tester, widthFactor: 0.7);
+      await _seek(tester, harness, 100, fraction: 0.4);
+      final before = _under(tester, 0);
+      expect(before.page, 100, reason: 'the top of the screen is on page 100');
+
+      await turn(tester);
+
+      // The frame right after the resize is drawn at the old offset: the new
+      // width is not a number until the layout that is running hands it over,
+      // and moving the strip from inside a layout is what this screen has
+      // already died on. One frame, accepted (ADR-0006), and pinned here so
+      // it is not later filed as a bug.
+      expect(_under(tester, 0).page, isNot(before.page));
+      // But the correction was made in that frame and not a frame later: the
+      // offset is right before the next one is built.
+      expect(harness.width.resizing, isFalse);
+      expect(harness.width.geometry.screenWidth, _viewportHeight);
+
+      await tester.pump();
+      final after = _under(tester, 0);
+      expect(after.page, before.page);
+      expect(after.fraction, moreOrLessEquals(before.fraction, epsilon: 0.01));
+      // And it is drawn at the factor of the canvas it now has.
+      expect(
+        _rectOf(tester, before.page).width,
+        moreOrLessEquals(_viewportHeight * 0.7, epsilon: 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('and back again, as many times as it is turned', (tester) async {
+      final harness = await _pump(tester, widthFactor: 0.5);
+      await _seek(tester, harness, 100, fraction: 0.25);
+      final before = _under(tester, 0);
+
+      await turn(tester);
+      await tester.pump();
+      expect(_under(tester, 0).page, before.page);
+
+      // And back, which is the same correction the other way.
+      tester.view.physicalSize = Size(
+        _screenWidth * _pixelRatio,
+        _viewportHeight * _pixelRatio,
+      );
+      await tester.pump();
+      await tester.pump();
+      final back = _under(tester, 0);
+      expect(back.page, before.page);
+      expect(back.fraction, moreOrLessEquals(before.fraction, epsilon: 0.01));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('during a fling stops it, and holds the place it put back', (
+      tester,
+    ) async {
+      // A fling the last gesture left is still carrying the strip when the
+      // canvas is turned. The correction is a `jumpTo`, which goes idle on
+      // the way in, so what is left under the fingers is the place that was
+      // put back and not a place the fling walked away from.
+      final harness = await _pump(tester, widthFactor: 0.7);
+      await _seek(tester, harness, 100);
+      final resting = harness.scroll.offset;
+      await _swipe(tester, const Offset(200, 400), -272);
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        harness.scroll.offset,
+        isNot(moreOrLessEquals(resting, epsilon: 1)),
+        reason: 'the fling is still carrying the strip when it is turned',
+      );
+
+      await turn(tester);
+      await tester.pump();
+      expect(harness.width.resizing, isFalse);
+      final held = harness.scroll.offset;
+
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(
+        harness.scroll.offset,
+        moreOrLessEquals(held, epsilon: 0.5),
+        reason: 'nothing carries the place away from the one put back',
+      );
+      expect(
+        harness.scroll.offset,
+        lessThanOrEqualTo(harness.scroll.position.maxScrollExtent + 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('at the end of the chapter clamps, and says by how much', (
+      tester,
+    ) async {
+      // Read its last page on its side, where the screen is short and the
+      // canvas wide, and then turned back: the strip loses a third of its
+      // height and the screen gets 200pt taller, so there is no content left
+      // below the place it was holding to put under the top of it.
+      final harness = await _pump(tester);
+      await turn(tester);
+      await tester.pump();
+      harness.scroll.jumpTo(harness.scroll.position.maxScrollExtent);
+      await tester.pump();
+
+      tester.view.physicalSize = Size(
+        _screenWidth * _pixelRatio,
+        _viewportHeight * _pixelRatio,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        harness.scroll.offset,
+        moreOrLessEquals(harness.scroll.position.maxScrollExtent, epsilon: 0.5),
+        reason: 'the end of the chapter is where it was left',
+      );
+      expect(
+        harness.width.clampedBy,
+        greaterThan(0),
+        reason: 'and what the correction gave up is measured, not swallowed',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('at a document edge', () {
+    testWidgets('the last page clamps, and says by how much', (tester) async {
+      final harness = await _pump(tester);
+      harness.scroll.jumpTo(harness.scroll.position.maxScrollExtent);
+      await tester.pump();
+
+      // Narrowed to half: the whole strip below the place it is holding
+      // shrinks away, and there is nothing left to put under the top of the
+      // screen. What it gives up is measured rather than swallowed, which is
+      // what ADR-0006 asks of it.
+      harness.width.openingWidthFactor = 0.5;
+      await tester.pump();
+
+      // Worked out by hand. A 200-page strip is 81000pt long and the screen
+      // is 600 of it, so its end sits the top of the viewport at 80400 —
+      // page 198, halfway down. Halved, that page starts at 40100 and is 200
+      // tall, so holding the same place asks for 40200; the furthest the
+      // halved strip goes is 40500 − 600 = 39900. Three hundred points of
+      // chapter there is no longer any content to fill.
+      expect(
+        harness.width.geometry.offsetFor(const StripAnchor(198, 0.5)),
+        moreOrLessEquals(40200, epsilon: 0.5),
+      );
+      expect(harness.width.clampedBy, moreOrLessEquals(300, epsilon: 0.5));
+      expect(
+        harness.scroll.offset,
+        moreOrLessEquals(40500 - _viewportHeight, epsilon: 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the first page clamps too, and says by how much', (tester) async {
+      // The other end: the fingers are 270pt down the screen, and there is
+      // nothing above the first page to put under them.
+      final harness = await _pump(tester);
+      await _seek(tester, harness, 0);
+
+      const y = 270.0;
+      final a = await tester.startGesture(const Offset(140, y));
+      final b = await tester.startGesture(const Offset(260, y));
+      await tester.pump();
+      await _pinch(tester, a: a, b: b, centreX: 200, y: y, from: 120, to: 60);
+
+      expect(harness.scroll.offset, moreOrLessEquals(0, epsilon: 0.5));
+      // 270 of a page 400 tall is 0.675 of it; halved, the page is 200 tall
+      // and the same fraction is 135pt, which is what the correction gave up.
+      expect(harness.width.clampedBy, moreOrLessEquals(135, epsilon: 0.5));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('a chapter the server said nothing about', () {
+    // No dimensions: every page shares the default ratio, so this is a strip
+    // with nothing to be wrong about but its own total.
+    testWidgets('lays out, and its last page is still reachable', (tester) async {
+      final harness = await _pump(
+        tester,
+        // Every page shares the ratio the server's own default gives an
+        // unmeasured page, which is what a chapter with no dimensions is.
+        aspectRatioFor: (_) => PageDimension.defaultAspectRatio,
+      );
+      // The default is a portrait comic page, so at a canvas 400 wide every
+      // page is 600 tall.
+      expect(
+        harness.width.geometry.heights.first,
+        moreOrLessEquals(600, epsilon: 0.5),
+      );
+      expect(
+        harness.scroll.position.maxScrollExtent,
+        moreOrLessEquals(_pages * 600 - _viewportHeight, epsilon: 0.5),
+      );
+
+      harness.scroll.jumpTo(harness.scroll.position.maxScrollExtent);
+      await tester.pump();
+      expect(
+        tester.getBottomRight(find.byKey(const ValueKey(199))).dy,
+        moreOrLessEquals(_viewportHeight, epsilon: 0.5),
+        reason: 'the last page ends at the bottom of the screen',
+      );
+
+      // And at a width other than full, which is what a saved chapter is
+      // read at with no server to ask.
+      harness.width.openingWidthFactor = 0.5;
+      await tester.pump();
+      harness.scroll.jumpTo(harness.scroll.position.maxScrollExtent);
+      await tester.pump();
+      expect(
+        tester.getBottomRight(find.byKey(const ValueKey(199))).dy,
+        moreOrLessEquals(_viewportHeight, epsilon: 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('a chapter of one page', () {
+    testWidgets('is a strip of one page, and not a shorter one', (tester) async {
+      final harness = await _pump(tester, pages: 1);
+      expect(harness.width.geometry.pages, 1);
+      // Shorter than the screen at this width, so there is nothing to scroll
+      // and nothing a correction could hold.
+      expect(harness.scroll.position.maxScrollExtent, 0);
+
+      const y = 270.0;
+      final a = await tester.startGesture(const Offset(140, y));
+      final b = await tester.startGesture(const Offset(260, y));
+      await tester.pump();
+      await _pinch(tester, a: a, b: b, centreX: 200, y: y, from: 120, to: 60);
+
+      // The width still moves, and the one page is still the whole strip.
+      expect(harness.width.widthFactor, moreOrLessEquals(0.5, epsilon: 0.01));
+      expect(harness.scroll.offset, 0);
+      expect(
+        _rectOf(tester, 0).width,
+        moreOrLessEquals(_screenWidth / 2, epsilon: 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('a page that will not load', () {
+    testWidgets('does not distort the strip around it', (tester) async {
+      // A page is laid out at the height its dimensions say, whether or not
+      // its picture ever arrives: the extents are the strip's and not the
+      // image's, so a failed page costs the strip nothing but its picture.
+      final harness = await _pump(tester, images: true, failing: {100});
+      await _seek(tester, harness, 100);
+      await tester.pump();
+
+      final geometry = harness.width.geometry;
+      final painted = _painted(tester);
+      for (final page in painted) {
+        expect(
+          page.height,
+          moreOrLessEquals(geometry.heights[page.page], epsilon: 0.5),
+          reason: 'page ${page.page} is drawn at the height the strip says',
+        );
+      }
+
+      final failed = painted.where((page) => page.page == 100).singleOrNull;
+      final next = painted.where((page) => page.page == 101).singleOrNull;
+      expect(failed, isNotNull, reason: 'the failed page is still laid out');
+      expect(next, isNotNull);
+      // No gap and no overlap around it: a broken picture is a child that
+      // failed, not a page that shrank.
+      expect(next!.top, moreOrLessEquals(failed!.bottom, epsilon: 0.5));
+      expect(find.byIcon(Icons.broken_image), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

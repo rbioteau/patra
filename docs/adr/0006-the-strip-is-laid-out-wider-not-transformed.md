@@ -145,10 +145,13 @@ says the page counts or the geometry need it.
   layout that is O(pages) — nothing at 200, worth watching at 2000.
 - **At a document edge the anchor cannot be held** — there is no content left
   to put under the finger. It clamps and reports that it clamped (up to 189px
-  at the last page) instead of quietly missing.
+  at the last page) instead of quietly missing. (#51: the report is
+  `StripWidthController.clampedBy`, pinned at both ends of a chapter in
+  `test/strip_width_test.dart`.)
 - **A rotation's correction is one frame late.** The new width is not known
   until layout, so the frame right after the resize is still drawn at the old
-  offset.
+  offset. (#51: one frame, accepted — and asserted, so it is not later filed
+  as a bug.)
 - **The anchor is `(page, fraction within the page)`,** not a raw pixel
   offset: it survives heterogeneous page heights, a missing dimension, and a
   rotation. It is applied as one gagged transaction in the same turn as the

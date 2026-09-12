@@ -26,11 +26,16 @@ import 'strip_geometry.dart';
 /// Stage one only: `0.5`–`1.0`, the range [StripGeometry] holds. Below `1.0`
 /// the strip is never wider than the screen, so there is no horizontal pan
 /// and no axis to arbitrate — every bit of gesture risk lives above `1×`,
-/// which is a later ticket, and nothing here is shaped for it. Neither a
-/// rotation nor a document edge is handled here either: both are that
-/// ticket's, and both are reached through [measure] and the clamp in
-/// [_restore], which is why the clamp reads the geometry rather than the
-/// scroll extent.
+/// which is a later ticket, and nothing here is shaped for it.
+///
+/// A rotation is the one correction that is **not** made in the same turn:
+/// the width is handed to us by a layout, and moving the strip from inside a
+/// layout is what this screen has already died on. So it is named before the
+/// resize ([measure]) and put back at the end of the frame that was laid out
+/// at the new width — one frame drawn at the old offset, accepted and
+/// recorded in ADR-0006. At a document edge no correction can hold the place
+/// — there is no content left to put under the finger — so it clamps and
+/// [clampedBy] says by how much rather than quietly missing.
 class StripWidthController extends ChangeNotifier {
   StripWidthController({
     required ScrollController scroll,
@@ -65,11 +70,15 @@ class StripWidthController extends ChangeNotifier {
   /// [measure] was told.
   double _screenWidth = 0;
   int _pages = 0;
-  double Function(int page) _aspectRatioFor = _defaultAspectRatio;
+  double Function(int page) _aspectRatioFor = _squareAspectRatio;
   Object? _identity;
   double? _measuredFactor;
 
-  static double _defaultAspectRatio(int page) => 1.0;
+  /// What a page's shape is before the strip has been told what it is made
+  /// of: square, and never read, since a strip with no pages asks for no
+  /// height. Not the default a chapter with no dimensions is read at, which
+  /// is `PageDimension`'s to say.
+  static double _squareAspectRatio(int page) => 1.0;
 
   /// The width the strip *settled* at: the one pages are decoded for, which a
   /// live pinch does not move. See [decodeWidth].
@@ -92,11 +101,43 @@ class StripWidthController extends ChangeNotifier {
   /// form that survives every height changing at once.
   StripAnchor? _anchor;
 
+  /// The same kind of place, held across a rotation: the canvas is being
+  /// laid out at another width and there is nowhere to put the old offset
+  /// yet. Kept apart from [_anchor], which belongs to the fingers.
+  StripAnchor? _resizeAnchor;
+
+  /// How far the last correction fell short. See [clampedBy].
+  double _clampedBy = 0;
+
   /// Two fingers are down and the pinch has the gesture.
   ///
   /// The strip is being moved without anybody reading their way there, so
   /// nothing it lands on is progress.
   bool get pinching => _pinching;
+
+  /// The canvas changed size under the strip — a rotation — and the place
+  /// has not been put back yet.
+  ///
+  /// True from the layout that found the new width to the end of the frame
+  /// that was drawn at it. What the strip shows in between is the old offset
+  /// read against the new heights, which is not where the reader is, so
+  /// nothing it lands on in that window is progress either.
+  bool get resizing => _resizeAnchor != null;
+
+  /// How far the last move of the strip fell short of the place it was asked
+  /// to put it, in points. `0` when it landed where it was told to.
+  ///
+  /// Every move the module makes goes through [jumpToAnchor] — a correction,
+  /// a seek, a chapter being opened — and what is short is always the same
+  /// thing: a place the strip has no content for. At a document edge the
+  /// anchor cannot be held, because there is no content left to put under the
+  /// finger, so the correction clamps. A clamp nobody can see is a correction
+  /// that looks as though it worked when it did not, so it is measured and
+  /// left where anybody can read it rather than swallowed. (ADR-0006 measured
+  /// 189px at the last page, on the prototype's chapter and device: what is
+  /// lost is the whole of the strip that shrank away below the anchor, so it
+  /// grows with the page and with how far the width moved.)
+  double get clampedBy => _clampedBy;
 
   /// The width a page is asked of the decoder, in device pixels: the width the
   /// strip is drawn at *settled*, not the one a live pinch is passing through.
@@ -140,11 +181,59 @@ class StripWidthController extends ChangeNotifier {
       // factor, and the layout that follows it must not build it twice.
       return;
     }
+    // The same chapter, the same number of pages, another width: the canvas
+    // was turned. Not a new chapter, which places itself, and not a different
+    // page count, which is a different strip.
+    final resized =
+        identity == _identity &&
+        pages == _pages &&
+        screenWidth != _screenWidth &&
+        _geometry.pages > 0;
+    // Once a frame, and not while two fingers hold the width: a second
+    // width in the same frame would name the place off heights the strip has
+    // not been drawn at yet, and a pinch has an owner already — its own
+    // correction, about the fingers, on its next update at the new width.
+    // Two owners of one correction is what this module exists to avoid. The
+    // correction owed is paid at the end of the frame it was named in, which
+    // is what empties [_resizeAnchor].
+    if (resized && !_pinching && _resizeAnchor == null) {
+      _resizeAnchor = _capture(0);
+      _scheduleResizeCorrection();
+    }
     _identity = identity;
     _screenWidth = screenWidth;
     _pages = pages;
     _aspectRatioFor = aspectRatioFor;
     _rebuild();
+  }
+
+  /// Puts the place back after the frame that was laid out at the new width.
+  ///
+  /// The one correction this module waits a frame for, and the only one that
+  /// may: [measure] is handed the width *during* a layout, and a `jumpTo`
+  /// from inside a layout is what this screen has already died on — it leaves
+  /// a node needing layout whose relayout boundary does not know it. So the
+  /// frame right after a rotation is drawn at the old offset: one frame,
+  /// accepted, and the place is put back at the end of it, before the next
+  /// one is built. A pinch never pays this, because a pinch knows its width
+  /// before it asks for it.
+  void _scheduleResizeCorrection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final anchor = _resizeAnchor;
+      if (anchor == null) return;
+      if (!_scroll.hasClients) {
+        // The strip it was going to move is gone. Dropped rather than left
+        // owed, or [resizing] would stay true for the rest of the session
+        // and the reader would go on gagging its own progress reports.
+        _resizeAnchor = null;
+        return;
+      }
+      // Still held until the strip has moved: the correction is a `jumpTo`,
+      // and the scroll this screen listens to is told about it synchronously.
+      jumpToAnchor(anchor, 0);
+      _resizeAnchor = null;
+      notifyListeners();
+    });
   }
 
   /// The width a chapter opens at: the preference (#49), and the only width
@@ -164,11 +253,11 @@ class StripWidthController extends ChangeNotifier {
   set openingWidthFactor(double value) {
     final next = clampWidthFactor(value);
     if (next == _factor && next == _settled) return;
-    _capture(0);
+    final anchor = _capture(0);
     _factor = next;
     _settled = next;
     _rebuild();
-    _restore(0);
+    if (anchor != null) jumpToAnchor(anchor, 0);
     notifyListeners();
   }
 
@@ -201,7 +290,7 @@ class StripWidthController extends ChangeNotifier {
       // left — is stopped too, or it carries the place out from under the
       // fingers while they are holding it.
       if (_scroll.hasClients) _scroll.jumpTo(_scroll.offset);
-      _capture(_focal().dy);
+      _anchor = _capture(_focal().dy);
     }
   }
 
@@ -302,10 +391,11 @@ class StripWidthController extends ChangeNotifier {
   /// one made from a layout callback is what this screen has already died on.
   void _pinchTo(double next, double focalY) {
     final before = _factor;
+    final anchor = _anchor;
     _factor = next;
     _rebuild();
-    if (_factor == before) return;
-    _restore(focalY);
+    if (_factor == before || anchor == null) return;
+    jumpToAnchor(anchor, focalY);
     notifyListeners();
   }
 
@@ -323,18 +413,15 @@ class StripWidthController extends ChangeNotifier {
     _measuredFactor = _factor;
   }
 
-  /// The place under the fingers, named off the geometry the strip is drawn
-  /// at now — the one the current offset belongs to.
-  void _capture(double focalY) {
-    if (!_scroll.hasClients || _geometry.pages == 0) return;
-    _anchor = _geometry.anchorAt(_scroll.offset + focalY);
-  }
-
-  /// Puts that place back under [focalY].
-  void _restore(double focalY) {
-    final anchor = _anchor;
-    if (anchor == null) return;
-    jumpToAnchor(anchor, focalY);
+  /// The place at [focalY], named off the geometry the strip is drawn at now
+  /// — the one the current offset belongs to.
+  ///
+  /// Null when there is nothing to name: no scroll position yet, or a strip
+  /// that has not been measured. A caller holding one of these for later
+  /// simply has nothing to put back.
+  StripAnchor? _capture(double focalY) {
+    if (!_scroll.hasClients || _geometry.pages == 0) return null;
+    return _geometry.anchorAt(_scroll.offset + focalY);
   }
 
   /// Puts [anchor] at [focalY] in the viewport — at the top of it by default
@@ -349,15 +436,23 @@ class StripWidthController extends ChangeNotifier {
   /// The reader asks for this whenever it moves the strip itself — opening a
   /// chapter, a seek from the scrubber, a width the preference changed — and
   /// the pinch asks for the same thing about a point under the fingers.
+  ///
+  /// Where it cannot hold the place it clamps, and leaves by how much in
+  /// [clampedBy] rather than swallowing it: at a document edge the shortfall
+  /// is the whole of what the strip lost below the fingers, and a correction
+  /// that reported nothing would read as one that worked.
   void jumpToAnchor(StripAnchor anchor, [double focalY = 0.0]) {
     if (!_scroll.hasClients || _geometry.pages == 0) return;
+    // `jumpTo` calls `goIdle` on the way in, so whatever was still moving the
+    // strip — a fling the last gesture left — is dropped rather than left to
+    // carry the place away from the one that is being put back.
     final wanted = _geometry.offsetFor(anchor) - focalY;
-    _scroll.jumpTo(
-      wanted.clamp(
-        0.0,
-        math.max(0.0, _geometry.total - _scroll.position.viewportDimension),
-      ),
+    final most = math.max(
+      0.0,
+      _geometry.total - _scroll.position.viewportDimension,
     );
+    _clampedBy = (wanted - wanted.clamp(0.0, most)).abs();
+    _scroll.jumpTo(wanted.clamp(0.0, most));
   }
 
   /// The gesture is over: the width it left is the width pages are decoded
@@ -425,6 +520,9 @@ class StripWidthController extends ChangeNotifier {
   void dispose() {
     _drag = null;
     _pointers.clear();
+    // A correction still owed is dropped rather than made: the strip it was
+    // going to move is gone.
+    _resizeAnchor = null;
     super.dispose();
   }
 }
