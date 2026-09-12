@@ -9,19 +9,23 @@ import 'package:flutter/widgets.dart';
 /// That is the point of the module: the offsets the strip is scrolled to and
 /// the offsets it is *drawn at* are one set of numbers.
 ///
-/// It is derived for one (width, chapter) and only read from then on: the
-/// strip is built from one of these, so a geometry and a strip cannot disagree
-/// about where a page is.
+/// It is derived for one (canvas, width factor, chapter) and only read from
+/// then on: the strip is built from one of these, so a geometry and a strip
+/// cannot disagree about where a page is.
 class StripGeometry {
   StripGeometry({
-    required this.width,
+    required this.screenWidth,
+    double widthFactor = 1.0,
     required int pages,
     required double Function(int page) aspectRatioFor,
-  }) {
+  }) : widthFactor = widthFactor
+           .clamp(minWidthFactor, maxWidthFactor)
+           .toDouble() {
+    final laidOutWidth = width;
     var top = 0.0;
     for (var page = 0; page < pages; page++) {
       tops.add(top);
-      final height = width / aspectRatioFor(page);
+      final height = laidOutWidth / aspectRatioFor(page);
       heights.add(height);
       top += height;
     }
@@ -29,10 +33,43 @@ class StripGeometry {
 
   /// A strip with nothing in it: what the reader holds before the first
   /// layout, which is the only place the width is known.
-  StripGeometry.empty() : width = 0;
+  StripGeometry.empty()
+    : screenWidth = 0,
+      widthFactor = 1.0;
 
-  /// The width every page is laid out at.
-  final double width;
+  /// How narrow and how wide the strip is ever laid out.
+  ///
+  /// `1.0` is the whole screen — how a chapter opens, and the only value that
+  /// changes nothing about the way it reads today. Below it the strip is
+  /// narrower than the screen and sits centred on the reader's black canvas.
+  /// The range stops at `1.0` because wider than the screen is the half of
+  /// this feature that needs a horizontal pan to go with it; raising it is
+  /// that pan's business, and not this constant's alone.
+  static const double minWidthFactor = 0.5;
+  static const double maxWidthFactor = 1.0;
+
+  /// The width of the canvas the strip is drawn on: the screen, which is
+  /// what the factor is a fraction of. The reader hands it the width it was
+  /// given, which is the window's, since its body fills the window.
+  final double screenWidth;
+
+  /// How wide the strip is drawn, as a fraction of [screenWidth].
+  ///
+  /// Clamped here rather than wherever the factor comes from, because two
+  /// things will set it — a preference and a pinch — and they must not be
+  /// able to clamp it differently.
+  final double widthFactor;
+
+  /// The width every page is laid out at: a height is this over the page's
+  /// aspect ratio, so every number below follows from it.
+  double get width => screenWidth * widthFactor;
+
+  /// How much canvas is left either side of the strip.
+  ///
+  /// Half of what the strip does not take, on each side: below `1.0` the
+  /// strip is centred, and what is not strip is the reader's own black
+  /// canvas — nothing of the strip is painted over it.
+  double get inset => (screenWidth - width) / 2;
 
   /// The height of each page, in the order the chapter reads.
   final List<double> heights = <double>[];
@@ -44,6 +81,18 @@ class StripGeometry {
 
   /// The height of the whole strip.
   double get total => pages == 0 ? 0 : tops.last + heights.last;
+
+  /// The width a page is asked of the decoder: the width it is drawn at, in
+  /// device pixels, and never the size the file happens to be.
+  ///
+  /// Not an optimisation to be deferred. Narrowing the strip puts more pages
+  /// in the same cache extent — about three to five between full width and
+  /// half — so a decode left at the file's own size multiplies decoded
+  /// memory for a change nobody can see. It is one number for the whole
+  /// strip for a second reason: `ResizeImage` puts the width in its cache
+  /// key, so a page warmed ahead at one width and drawn at another is two
+  /// images, one of them decoded for nothing.
+  int decodeWidth(double devicePixelRatio) => (width * devicePixelRatio).ceil();
 
   /// The page containing [contentY], measured from the top of the strip.
   int pageAt(double contentY) {
@@ -94,7 +143,8 @@ class StripAnchor {
 
 /// The strip itself, as a sliver: a gapless column of pages, told every
 /// page's extent rather than left to lay them out one after another and
-/// remember where it got to.
+/// remember where it got to, and centred on the canvas when it is narrower
+/// than the canvas is.
 ///
 /// That difference is the whole of ADR-0006's sliver requirement. A sliver
 /// that measures its children as it goes keeps the offset its *first* child
@@ -108,19 +158,28 @@ class StripAnchor {
 /// The cost is a layout that walks the pages: the sliver sums the extents to
 /// place each child and searches from the first page for the one at the
 /// current offset. Nothing at 200 pages, worth watching at 2000.
-class StripExtentList extends SliverVariedExtentList {
-  StripExtentList({
+class StripExtentList extends StatelessWidget {
+  const StripExtentList({
     super.key,
-    required StripGeometry geometry,
-    required IndexedWidgetBuilder itemBuilder,
-  }) : super(
-         delegate: _StripChildDelegate(
-           itemBuilder,
-           pages: geometry.pages,
-           total: geometry.total,
-         ),
-         itemExtentBuilder: (int index, _) => geometry.heights[index],
-       );
+    required this.geometry,
+    required this.itemBuilder,
+  });
+
+  final StripGeometry geometry;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverPadding(
+      // The canvas the strip does not take. What is left either side is the
+      // reader's own black, which is also what centres the strip.
+      padding: EdgeInsets.symmetric(horizontal: geometry.inset),
+      sliver: SliverVariedExtentList(
+        delegate: _StripChildDelegate(itemBuilder, geometry: geometry),
+        itemExtentBuilder: (int index, _) => geometry.heights[index],
+      ),
+    );
+  }
 }
 
 /// A delegate that states the strip's whole extent, the way the reader's
@@ -133,13 +192,12 @@ class StripExtentList extends SliverVariedExtentList {
 /// reached. Stating it keeps the extent steady while the strip is built, too,
 /// where the guess moves on every frame.
 class _StripChildDelegate extends SliverChildBuilderDelegate {
-  _StripChildDelegate(super.builder, {required this.pages, required this.total});
+  _StripChildDelegate(super.builder, {required this.geometry});
 
-  final int pages;
-  final double total;
+  final StripGeometry geometry;
 
   @override
-  int? get childCount => pages;
+  int? get childCount => geometry.pages;
 
   @override
   double? estimateMaxScrollOffset(
@@ -148,5 +206,5 @@ class _StripChildDelegate extends SliverChildBuilderDelegate {
     double leadingScrollOffset,
     double trailingScrollOffset,
   ) =>
-      total;
+      geometry.total;
 }

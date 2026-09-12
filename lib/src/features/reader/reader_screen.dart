@@ -31,6 +31,16 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
   },
 );
 
+/// How wide a chapter opens: the whole screen, which is how a chapter opens
+/// today, and the one value that changes nothing about the way it reads.
+///
+/// It becomes a preference a person chooses (#49) and a pinch on top of it
+/// (#50); the strip's module already lays the strip out at whatever it is
+/// given, and holds the range. Deliberately not `StripGeometry`'s ceiling,
+/// though the two are the same number today: a chapter opens at the whole
+/// screen whether or not the strip can be made wider than one.
+const double _openingWidthFactor = 1.0;
+
 /// The reading surface: pure black canvas, chrome as gradient overlays, and a
 /// single reading-direction setting (vertical scrolling is a direction,
 /// not a mode).
@@ -163,11 +173,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   /// The view reports the first page it shows; a landscape spread has read
   /// both pages of the pair.
-  void _onPageChanged(int page, ChapterInfo info, {int span = 1}) {
+  ///
+  /// [precacheWidth] is the width the strip draws its pages at, which is the
+  /// width the next page has to be warmed at for the warm copy to be the one
+  /// that is then displayed. Paged reading shows a page at whatever the file
+  /// is, and asks for nothing in particular.
+  void _onPageChanged(
+    int page,
+    ChapterInfo info, {
+    int span = 1,
+    int? precacheWidth,
+  }) {
     if (page == _page) return;
     setState(() => _page = page);
     _saveProgress((page + span - 1).clamp(0, info.pages - 1), info);
-    _precache(page + span, info);
+    _precache(page + span, info, cacheWidth: precacheWidth);
     // Reading is what fills the image cache; this is where it has to be kept
     // inside its budget. The store throttles the sweeps.
     ref
@@ -175,9 +195,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         .trimIfDue(ref.read(imageCacheLimitProvider).bytes);
   }
 
-  void _precache(int page, ChapterInfo info) {
+  void _precache(int page, ChapterInfo info, {int? cacheWidth}) {
     if (page < 0 || page >= info.pages) return;
-    final provider = _imageProvider(page);
+    final provider = _imageProvider(page, cacheWidth: cacheWidth);
     if (provider != null) precacheImage(provider, context);
   }
 
@@ -437,8 +457,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             key: const ValueKey('verticalScroll'),
             chapter: chapter,
             page: _page,
+            widthFactor: _openingWidthFactor,
             imageBuilder: _pageImage,
-            onPageChanged: (page) => _onPageChanged(page, chapter),
+            onPageChanged: (page, decodeWidth) => _onPageChanged(
+              page,
+              chapter,
+              precacheWidth: decodeWidth,
+            ),
           )
         else
           _PagedView(
@@ -888,19 +913,33 @@ class _SpineShadow extends StatelessWidget {
 
 // --- vertical-scrolling view -----------------------------------------------------------
 
+/// Reports the page now being read, and the width the strip decodes its
+/// pages at.
+///
+/// The width comes along because the reader warms the page after the one
+/// being read, and has to ask for it at the width the strip draws it at:
+/// `ResizeImage` puts that width in its cache key, and a page warmed at one
+/// width and drawn at another is two images — one decoded for nothing.
+typedef StripPageChanged = void Function(int page, int decodeWidth);
+
 class _VerticalScrollView extends StatefulWidget {
   const _VerticalScrollView({
     super.key,
     required this.chapter,
     required this.page,
+    required this.widthFactor,
     required this.imageBuilder,
     required this.onPageChanged,
   });
 
   final ChapterInfo chapter;
   final int page;
+
+  /// How wide the strip is laid out, as a fraction of the width it is given.
+  /// `1.0` is the whole screen.
+  final double widthFactor;
   final PageImageBuilder imageBuilder;
-  final ValueChanged<int> onPageChanged;
+  final StripPageChanged onPageChanged;
 
   @override
   State<_VerticalScrollView> createState() => _VerticalScrollViewState();
@@ -910,6 +949,8 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   final _controller = ScrollController();
   late int _reported = widget.page;
   double _width = 0;
+  double _widthFactor = 1;
+  double _pixelRatio = 1;
 
   /// Whether the strip has been scrolled to the page it was opened at.
   var _placed = false;
@@ -919,17 +960,23 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   /// so scroll offsets are exact before any image has loaded.
   ///
   /// Measured in the layout, the only place the width is known, and only
-  /// re-derived when the width or the chapter changes, since every height is
-  /// computed and that is a walk over the whole chapter.
+  /// re-derived when the width, the factor or the chapter changes, since
+  /// every height is computed and that is a walk over the whole chapter.
   var _geometry = StripGeometry.empty();
   ChapterInfo? _measured;
 
   void _measure(double width) {
-    if (width == _width && _measured == widget.chapter) return;
+    if (width == _width &&
+        widget.widthFactor == _widthFactor &&
+        _measured == widget.chapter) {
+      return;
+    }
     _width = width;
+    _widthFactor = widget.widthFactor;
     _measured = widget.chapter;
     _geometry = StripGeometry(
-      width: width,
+      screenWidth: width,
+      widthFactor: widget.widthFactor,
       pages: widget.chapter.pages,
       aspectRatioFor: widget.chapter.aspectRatioFor,
     );
@@ -949,7 +996,7 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     final page = _pageAt(_controller.offset);
     if (page != _reported) {
       _reported = page;
-      widget.onPageChanged(page);
+      widget.onPageChanged(page, _geometry.decodeWidth(_pixelRatio));
     }
   }
 
@@ -996,6 +1043,11 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
 
   @override
   Widget build(BuildContext context) {
+    // Resolved here and not where it is used, for the reason the thumbnail
+    // strip's decode width is: what uses it is the strip's item builder,
+    // which a lazy sliver runs *during* layout, and a `MediaQuery` read
+    // there would enrol this element as its dependent in the middle of one.
+    _pixelRatio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         _measure(constraints.maxWidth);
@@ -1009,10 +1061,13 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
               geometry: _geometry,
               // Nothing in here reads an inherited widget or a provider: a
               // lazy sliver builds its children *during* layout, and this
-              // screen has already died on both.
+              // screen has already died on both. The decode width is the
+              // width the page is drawn at, so narrowing the strip does not
+              // go on decoding pages at full size.
               itemBuilder: (context, page) => widget.imageBuilder(
                 page,
                 fit: BoxFit.fitWidth,
+                cacheWidth: _geometry.decodeWidth(_pixelRatio),
               ),
             ),
           ],
