@@ -14,8 +14,6 @@ import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/features/login/login_screen.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
-import 'package:patra/src/features/reader/strip_geometry.dart';
-import 'package:patra/src/settings/profile_preferences.dart';
 
 import 'test_support.dart';
 
@@ -67,7 +65,6 @@ Widget _app({
   AuthState auth = const AuthState(),
   Directory? downloadsRoot,
   SignIn? signIn,
-  ProfilePreferencesStore? preferences,
 }) {
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
@@ -84,8 +81,6 @@ Widget _app({
       // Through `atLaunch`, as main() does: these tests say what the device
       // remembered, and the app answers with the screen that opens on it.
       initialAuthStateProvider.overrideWithValue(auth.atLaunch()),
-      if (preferences != null)
-        profilePreferencesStoreProvider.overrideWithValue(preferences),
       kavitaClientProvider.overrideWithValue(client),
       if (signIn != null) signInProvider.overrideWithValue(signIn),
       if (downloadsRoot != null) ...[
@@ -314,45 +309,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Default reading direction'), findsOneWidget);
     expect(find.text('Left to right'), findsOneWidget);
-    // The width a chapter opens at is set here as well as in the reader, so
-    // a person does not have to be reading to choose one.
-    expect(find.text('Page width'), findsOneWidget);
-    expect(find.text('100%'), findsOneWidget);
     // Not a sign-out: there are two verbs and that was neither. The card at
     // the top of this screen switches profile; the button at the bottom of
     // it removes this one.
     expect(find.text('Sign out'), findsNothing);
-  });
-
-  testWidgets('the width a chapter opens at is set from Settings', (tester) async {
-    // The same row the reader's cog draws, so what is pinned here is that
-    // this screen is a way in of its own: a person does not have to be
-    // reading to choose the width their chapters open at.
-    final root = Directory.systemTemp.createTempSync('patra-width-test');
-    addTearDown(() => root.deleteSync(recursive: true));
-    tester.view.physicalSize = const Size(1200, 2200);
-    tester.view.devicePixelRatio = 2;
-    addTearDown(tester.view.reset);
-
-    final store = ProfilePreferencesStore(keychain: MemoryKeychain());
-    await tester.pumpWidget(
-      _app(
-        auth: AuthState(profiles: [_profile], activeId: _profile.id),
-        downloadsRoot: root,
-        preferences: store,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-
-    // The one slider on this screen: the page scrubber belongs to the reader.
-    await tester.ensureVisible(find.byType(Slider));
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(Slider), const Offset(-2000, 0));
-    await tester.pumpAndSettle();
-
-    expect(store.widthFactorFor(_profile.id), StripGeometry.minWidthFactor);
   });
 
   testWidgets('the navigation bar drops its labels when they do not fit', (
