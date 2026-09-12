@@ -153,12 +153,22 @@ class StripWidthController extends ChangeNotifier {
   /// Setting it drops whatever the last pinch left, which is the whole of "a
   /// pinch writes nothing": leaving the chapter and coming back builds one of
   /// these from the preference and not from where the last one was pinched to.
+  ///
+  /// The place is held the same way a pinch holds it and in the same turn,
+  /// about the top of the screen rather than about a pair of fingers: what
+  /// must not move when every height changes is the page the reader is on. A
+  /// correction that waited for the frame after would paint one frame at the
+  /// old offset — once, for a preference set from a menu, and on every one of
+  /// the dozens of steps of the width slider, which is the strip jumping
+  /// through the whole drag.
   set openingWidthFactor(double value) {
     final next = clampWidthFactor(value);
     if (next == _factor && next == _settled) return;
+    _capture(0);
     _factor = next;
     _settled = next;
     _rebuild();
+    _restore(0);
     notifyListeners();
   }
 
@@ -323,15 +333,30 @@ class StripWidthController extends ChangeNotifier {
   /// Puts that place back under [focalY].
   void _restore(double focalY) {
     final anchor = _anchor;
-    if (anchor == null || !_scroll.hasClients) return;
-    // Clamped against this geometry and not against `maxScrollExtent`, which
-    // is the last frame's layout and an extent the strip has not been laid out
-    // at yet — `jumpTo` does not clamp at all, and an offset past either end
-    // of the strip is a strip drawn off its own content.
-    final viewport = _scroll.position.viewportDimension;
+    if (anchor == null) return;
+    jumpToAnchor(anchor, focalY);
+  }
+
+  /// Puts [anchor] at [focalY] in the viewport — at the top of it by default
+  /// — and nowhere else: clamped to what the strip can actually scroll to.
+  ///
+  /// Clamped against this geometry and not against `maxScrollExtent`, which is
+  /// the last frame's layout and an extent the strip has not been laid out at
+  /// yet: `jumpTo` clamps nothing at all, an offset past either end of the
+  /// strip is a strip drawn off its own content, and widening it at the end of
+  /// a chapter asks for an offset the old extent does not have.
+  ///
+  /// The reader asks for this whenever it moves the strip itself — opening a
+  /// chapter, a seek from the scrubber, a width the preference changed — and
+  /// the pinch asks for the same thing about a point under the fingers.
+  void jumpToAnchor(StripAnchor anchor, [double focalY = 0.0]) {
+    if (!_scroll.hasClients || _geometry.pages == 0) return;
     final wanted = _geometry.offsetFor(anchor) - focalY;
     _scroll.jumpTo(
-      wanted.clamp(0.0, math.max(0.0, _geometry.total - viewport)),
+      wanted.clamp(
+        0.0,
+        math.max(0.0, _geometry.total - _scroll.position.viewportDimension),
+      ),
     );
   }
 

@@ -93,6 +93,64 @@ class _PageLoadingState extends State<PageLoading> {
   }
 }
 
+/// One page's picture, which keeps the one it has while the next arrives.
+///
+/// A page is decoded at the width it is drawn at, and `ResizeImage` puts that
+/// width in its cache key — so every time the width moves, a new picture is
+/// asked for: a pinch settling, a hand on the width slider, a rotation.
+/// `gaplessPlayback` keeps the old one inside the widget, but it is
+/// [Image.frameBuilder] that decides what is drawn, and a builder that shows
+/// [PageLoading] whenever there is no frame covers the very picture it was
+/// asked to keep — the strip then blinked once per step of the gesture. This
+/// is the piece that remembers whether there is a picture to keep, so a new
+/// decode never blanks a page that has already been read.
+class PageImage extends StatefulWidget {
+  const PageImage({
+    super.key,
+    required this.image,
+    required this.fit,
+    required this.alignment,
+    required this.explain,
+  });
+
+  final ImageProvider image;
+  final BoxFit fit;
+  final AlignmentGeometry alignment;
+
+  /// Whether there is a wait worth explaining: see [PageLoading.explain].
+  final bool explain;
+
+  @override
+  State<PageImage> createState() => _PageImageState();
+}
+
+class _PageImageState extends State<PageImage> {
+  /// Whether a picture has been painted for this page.
+  ///
+  /// Noted down in [build] and not through `setState`: the frame that brings
+  /// a picture is already a rebuild, and asking for another from inside one
+  /// is the kind of thing this screen has already died on.
+  var _painted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image(
+      image: widget.image,
+      fit: widget.fit,
+      alignment: widget.alignment,
+      // The old picture, held until the new one has decoded.
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => const Center(
+        child: Icon(Icons.broken_image, color: Colors.white24),
+      ),
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (frame != null || wasSynchronouslyLoaded) _painted = true;
+        return _painted ? child : PageLoading(explain: widget.explain);
+      },
+    );
+  }
+}
+
 typedef PageImageBuilder = Widget Function(
   int page, {
   int? cacheWidth,
