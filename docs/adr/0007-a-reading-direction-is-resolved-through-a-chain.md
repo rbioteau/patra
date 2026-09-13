@@ -92,3 +92,24 @@ choice.
 - **Letting the detected rung outrank a stored choice.** Rejected: a guess
   must never beat a choice, and a household that set a direction once would
   be corrected by a heuristic.
+
+## Amendment — 2026-09-13 (#56)
+
+The numbered rungs above put the detected direction third and the device
+default fourth, which contradicts this ADR's own rule in the same section:
+*only a profile or a device that has **stored** a direction stands above [the
+detected rung]*. The two cannot both hold — a device that has stored a
+direction is outranked by detection under the numbering and outranks it under
+the rule.
+
+Implemented (#56) as the rule says, because the rule is the decision and the
+numbering is a summary of it: **the device's stored default is asked before
+the detected direction**, and the built-in left-to-right — which is what an
+absent key falls back to, and which nobody chose — sits behind both. The
+detected rung is therefore asked while the device holds nothing and stands
+down the moment it does, which is what "storing nothing is not the same as
+having stored left-to-right" has to mean for the chain to be a chain of
+choices.
+
+The last bullet of [Consequences] is amended with it: the device default is
+not the last rung. It is the last rung *anybody chose*.

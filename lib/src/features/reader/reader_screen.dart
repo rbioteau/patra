@@ -15,12 +15,12 @@ import '../../downloads/downloads_service.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/profile_preferences.dart';
-import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'page_rail.dart';
+import 'reading_direction.dart';
 import 'spread_layout.dart';
 import 'strip_geometry.dart';
 import 'strip_width.dart';
@@ -51,7 +51,6 @@ class ReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
-  late ReadingDirection _direction;
   int _page = 0;
   bool _showChrome = false;
   bool _initialProgressSaved = false;
@@ -89,8 +88,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void initState() {
     super.initState();
     _page = widget.initialPage;
-    // Starts from the saved preference; changing it here is per-chapter.
-    _direction = ref.read(defaultReadingDirectionProvider);
+    // Which direction the chapter opens in is the chain's to answer and the
+    // chain's alone (`reading_direction.dart`): it is a function of the
+    // series, of whoever is reading and of what they have stored, so the
+    // screen watches it rather than keeping a copy that a change in the cog
+    // would then have to keep in step with what was written.
+    //
     // The chapter opens with no chrome of ours, and none of the system's.
     _setSystemChrome(visible: false);
   }
@@ -409,7 +412,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _saveInitialProgress(chapter);
     _resolveLocalDir();
 
-    final direction = _direction;
+    // The whole chain, resolved for this chapter's series and for whoever is
+    // reading: the series' own choice, then the profile's, then the
+    // direction detected from the work, then the device's default.
+    final resolved = ref.watch(chapterDirectionProvider(chapter.seriesId));
+    final direction = resolved.direction;
     final rtl = direction.isRightToLeft;
     // Vertical scrolling is excluded rather than forgotten: there the drag
     // *is* the scroll, and a mode that took it away would leave the direction
@@ -522,9 +529,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             title: chapter.title.isNotEmpty
                 ? chapter.title
                 : chapter.seriesName,
-            direction: direction,
-            onDirectionChanged: (next) {
-              setState(() => _direction = next);
+            direction: resolved,
+            onOutcome: (outcome) {
+              switch (outcome) {
+                case DirectionPicked(direction: final chosen):
+                  // A direction picked here is this series' own from now on,
+                  // and the chain answers with it from the next frame —
+                  // nothing is held in memory that a write does not back.
+                  ref
+                      .read(seriesDirectionsProvider.notifier)
+                      .set(chapter.seriesId, chosen);
+                case DirectionPromoted():
+                  // What is in force becomes theirs for every series. The
+                  // series' own direction stays: one tap, one thing.
+                  ref.read(profileDirectionProvider.notifier).set(direction);
+                case SeriesDirectionCleared():
+                  ref
+                      .read(seriesDirectionsProvider.notifier)
+                      .clear(chapter.seriesId);
+              }
               _showChromeAndBars(false);
             },
           ),
@@ -1189,7 +1212,7 @@ class _TopChrome extends StatelessWidget {
   const _TopChrome({
     required this.title,
     required this.direction,
-    required this.onDirectionChanged,
+    required this.onOutcome,
   });
 
   /// How far the bar reaches down the screen, in points — what the rail
@@ -1200,8 +1223,8 @@ class _TopChrome extends StatelessWidget {
   static const double barHeight = 4 + 48 + 20;
 
   final String title;
-  final ReadingDirection direction;
-  final ValueChanged<ReadingDirection> onDirectionChanged;
+  final ChapterDirection direction;
+  final ValueChanged<ReaderSettingsOutcome> onOutcome;
 
   @override
   Widget build(BuildContext context) {
@@ -1239,7 +1262,7 @@ class _TopChrome extends StatelessWidget {
                 const SizedBox(width: 8),
                 _SettingsCog(
                   direction: direction,
-                  onDirectionChanged: onDirectionChanged,
+                  onOutcome: onOutcome,
                   tooltip: l10n.readerSettings,
                 ),
               ],
@@ -1257,12 +1280,12 @@ class _TopChrome extends StatelessWidget {
 class _SettingsCog extends StatelessWidget {
   const _SettingsCog({
     required this.direction,
-    required this.onDirectionChanged,
+    required this.onOutcome,
     required this.tooltip,
   });
 
-  final ReadingDirection direction;
-  final ValueChanged<ReadingDirection> onDirectionChanged;
+  final ChapterDirection direction;
+  final ValueChanged<ReaderSettingsOutcome> onOutcome;
   final String tooltip;
 
   @override
@@ -1270,11 +1293,16 @@ class _SettingsCog extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: InkWell(
-        onTap: () => showReaderSettingsSheet(
-          context,
-          direction: direction,
-          onDirectionChanged: onDirectionChanged,
-        ),
+        onTap: () async {
+          final outcome = await showReaderSettingsSheet(
+            context,
+            direction: direction,
+          );
+          // The sheet outlives the chrome it was opened from, so what it
+          // reports may arrive with the cog already out of the tree.
+          if (outcome == null || !context.mounted) return;
+          onOutcome(outcome);
+        },
         borderRadius: BorderRadius.circular(radiusPill),
         child: Container(
           height: 36,

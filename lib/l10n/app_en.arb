@@ -373,6 +373,43 @@
   "@readingDirectionVerticalScroll": {
     "description": "Continuous vertical scrolling direction, sits next to the two page-turning ones; the one word is enough on screen, it is the only vertical direction in the picker"
   },
+  "directionSourceSeries": "{direction} — chosen for this series",
+  "@directionSourceSeries": {
+    "description": "In the reader's sheet: the reading direction in force is one chosen for this one series alone.",
+    "placeholders": {
+      "direction": {"type": "String"}
+    }
+  },
+  "directionSourceProfile": "{direction} — your default",
+  "@directionSourceProfile": {
+    "description": "In the reader's sheet: the reading direction in force is the reading profile's own default.",
+    "placeholders": {
+      "direction": {"type": "String"}
+    }
+  },
+  "directionSourceDetected": "{direction} — detected from the work",
+  "@directionSourceDetected": {
+    "description": "In the reader's sheet: the reading direction in force was worked out from the work itself rather than chosen by anybody; a guess is not a choice, so this is said out loud.",
+    "placeholders": {
+      "direction": {"type": "String"}
+    }
+  },
+  "directionSourceDevice": "{direction} — the default",
+  "@directionSourceDevice": {
+    "description": "In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — this device's default, or the app's own. Worded neutrally, because it may not be the reading profile's.",
+    "placeholders": {
+      "direction": {"type": "String"}
+    }
+  },
+  "promoteReadingDirection": "Make this my default",
+  "@promoteReadingDirection": {
+    "description": "Reader action: makes the reading direction in force the profile's own default, so every series opens in it. The direction itself is shown beside the row; drawn only where it is not already their default."
+  },
+  "followDefaultDirection": "Follow the default",
+  "@followDefaultDirection": {
+    "description": "Reader action: drops the direction chosen for this series, which then follows the default again. The direction it lands on is shown beside the row; worded 'the default' rather than 'my default' because it may be a detected one."
+  },
+
   "savePill": "Save",
   "@savePill": {
     "description": "Download action on a chapter; always worded, never icon-only"

@@ -152,7 +152,7 @@ _Avoid_: next up, recommended, suggestions, up next
 ### Reading
 
 **Reading direction**:
-Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Profile]]'s own, then the [[Detected direction]], then the [[Device default]].
+Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Profile]]'s own, then this device's own stored [[Device default]] — a direction somebody set on this device is a choice, and a guess never beats one — then the [[Detected direction]], and last the left-to-right a chapter has always opened in.
 _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
 
 **Series direction**:

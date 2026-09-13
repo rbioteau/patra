@@ -21,11 +21,25 @@ void main() {
     expect(keychain.values['readingDirection'], 'verticalScroll');
   });
 
-  test('a value from no version at all is left-to-right', () {
+  test('a value from no version at all is no answer', () {
     final store = ReadingSettingsStore(
       MemoryKeychain({'readingDirection': 'sideways'}),
     );
-    expect(store.load(), completion(ReadingDirection.leftToRight));
+    expect(store.load(), completion(isNull));
+  });
+
+  test('a device that never chose has no answer, and that is not the built-in '
+      'left-to-right', () async {
+    // The chain only asks the device's own default last, and it must not be
+    // answered by a fallback nobody chose: a direction detected from the work
+    // (#57) has to be able to beat it, where it must never beat a direction
+    // somebody stored (ADR-0007). Left-to-right is where the chain *ends*,
+    // which is a different thing from what this device holds.
+    final store = ReadingSettingsStore(MemoryKeychain());
+    expect(await store.load(), isNull);
+
+    await store.save(ReadingDirection.rightToLeft);
+    expect(await store.load(), ReadingDirection.rightToLeft);
   });
 
   group('the magnify preference', () {

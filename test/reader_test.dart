@@ -31,10 +31,15 @@ class _ReaderAdapter implements HttpClientAdapter {
     this.pages = _pages,
     this.dimensions = true,
     this.offline = false,
+    this.seriesId = 3,
   });
 
   /// Every progress post, in the order the reader made them.
   final List<int> posted;
+
+  /// Which series the chapter belongs to: what a direction chosen in the
+  /// reader is remembered against.
+  final int seriesId;
 
   /// Pages the server reports as double-page scans.
   final Set<int> wide;
@@ -73,7 +78,7 @@ class _ReaderAdapter implements HttpClientAdapter {
     if (options.path == '/api/Reader/chapter-info') {
       return ResponseBody.fromString(
         jsonEncode({
-          'seriesId': 3,
+          'seriesId': seriesId,
           'volumeId': 4,
           'libraryId': 1,
           'pages': pages,
@@ -161,6 +166,7 @@ Future<List<int>> _pumpReader(
   int pages = _pages,
   bool dimensions = true,
   bool offline = false,
+  int seriesId = 3,
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
@@ -188,6 +194,7 @@ Future<List<int>> _pumpReader(
     pages: pages,
     dimensions: dimensions,
     offline: offline,
+    seriesId: seriesId,
   );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
@@ -1360,6 +1367,11 @@ void main() {
       await openSheet(tester);
 
       expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+      // The sheet scrolls, and the rows above this one decide whether the
+      // switch is below the fold: on a short screen it is.
+      await tester.ensureVisible(find.byType(Switch));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.byType(Switch));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -1386,6 +1398,9 @@ void main() {
 
       await showChrome(tester);
       await openSheet(tester);
+      await tester.ensureVisible(find.byType(Switch));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.byType(Switch));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -1480,7 +1495,143 @@ void main() {
         findsNothing,
         reason: 'the sheet should have closed',
       );
-      // The direction is per-chapter here, and the pager mirrors with it.
+      // Applied at once, because the chain answers with it from the frame
+      // after the write and nothing is held in memory beside it.
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+    });
+
+    testWidgets('a direction picked in the reader is kept for that series, and '
+        'for no other', (tester) async {
+      // The whole of what the series rung is for: a choice about a work, kept
+      // for that work, and for nobody else's copy of it.
+      final store = await preferencesStore(
+        deviceDirection: ReadingDirection.leftToRight,
+      );
+      final posted = await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+      );
+      await showChrome(tester);
+      await openSheet(tester);
+      final postedBefore = posted.length;
+
+      await tester.tap(find.text('Right to left'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Written down, under the series and under the person reading it.
+      expect(
+        store.seriesDirectionFor(_reader.id, 3),
+        ReadingDirection.rightToLeft,
+      );
+      expect(
+        posted,
+        hasLength(postedBefore),
+        reason: 'Kavita is never told: the choice never leaves the device',
+      );
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+
+      // Another series of the same person's has no direction of its own, so
+      // it opens at the rung below.
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+        seriesId: 9,
+        readerKey: const ValueKey('another series'),
+      );
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isFalse);
+
+      // And coming back to the first, it is still right-to-left: this is what
+      // a direction held in memory for the chapter never managed.
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+        readerKey: const ValueKey('the first series again'),
+      );
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+    });
+
+    testWidgets('a series that has been set can go back to following the '
+        'default', (tester) async {
+      final store = await preferencesStore(
+        deviceDirection: ReadingDirection.leftToRight,
+      );
+      await store.setSeriesDirection(
+        _reader.id,
+        3,
+        ReadingDirection.rightToLeft,
+      );
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+      );
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+
+      await showChrome(tester);
+      await openSheet(tester);
+      // Worded with where the series lands: the device's left-to-right.
+      expect(find.text('Follow the default'), findsOneWidget);
+      expect(find.text('Left to right'), findsWidgets);
+
+      await tester.tap(find.text('Follow the default'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(store.seriesDirectionFor(_reader.id, 3), isNull);
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isFalse);
+    });
+
+    testWidgets('promoting from the reader makes it theirs for every series', (
+      tester,
+    ) async {
+      // The one thing the reader could not do before, and the reason the
+      // direction's row was still in Settings.
+      final store = await preferencesStore(
+        deviceDirection: ReadingDirection.rightToLeft,
+      );
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.rightToLeft,
+        profile: _reader,
+        store: store,
+      );
+      await showChrome(tester);
+      await openSheet(tester);
+
+      await tester.tap(find.text('Make this my default'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(store.of(_reader.id).direction, ReadingDirection.rightToLeft);
+      expect(
+        store.seriesDirectionFor(_reader.id, 3),
+        isNull,
+        reason: 'promoting leaves the way back from the series free',
+      );
+
+      // Another series opens in it now, having been given nothing of its own.
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.rightToLeft,
+        profile: _reader,
+        store: store,
+        seriesId: 9,
+        readerKey: const ValueKey('another series'),
+      );
       expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
     });
   });

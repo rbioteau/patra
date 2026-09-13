@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../features/reader/reading_direction.dart';
 import '../features/reader/strip_geometry.dart';
 import '../settings/profile_preferences.dart';
 import '../settings/reading_settings.dart';
@@ -21,14 +22,42 @@ import 'direction_icon.dart';
 /// chrome is hidden while reading anyway, so that glance is only ever had by
 /// someone who has just tapped for a control.
 ///
+/// What the reader's sheet came back with.
+///
+/// Not a direction only, because the sheet can answer two other things: the
+/// direction in force can be promoted to the profile's own default, and a
+/// series' own direction can be dropped. Both are answers rather than
+/// side-effects for the one reason the direction was: the sheet has no series
+/// id of its own to write against, and the reader has it in hand.
+sealed class ReaderSettingsOutcome {
+  const ReaderSettingsOutcome();
+}
+
+/// A direction was picked: it becomes the series being read's own.
+final class DirectionPicked extends ReaderSettingsOutcome {
+  const DirectionPicked(this.direction);
+
+  final ReadingDirection direction;
+}
+
+/// The direction in force was made the reading profile's own default.
+final class DirectionPromoted extends ReaderSettingsOutcome {
+  const DirectionPromoted();
+}
+
+/// The series being read's own direction was dropped: it follows the default
+/// again.
+final class SeriesDirectionCleared extends ReaderSettingsOutcome {
+  const SeriesDirectionCleared();
+}
+
 /// A sheet rather than a `PopupMenuButton`: a [PopupMenuItem] pops its route
 /// when tapped, so a switch inside one dismisses the menu as it is flipped.
-Future<void> showReaderSettingsSheet(
+Future<ReaderSettingsOutcome?> showReaderSettingsSheet(
   BuildContext context, {
-  required ReadingDirection direction,
-  required ValueChanged<ReadingDirection> onDirectionChanged,
+  required ChapterDirection direction,
 }) async {
-  final picked = await showModalBottomSheet<ReadingDirection>(
+  final outcome = await showModalBottomSheet<ReaderSettingsOutcome>(
     context: context,
     backgroundColor: patraSurface,
     // Everything the sheet draws is read off [sheetContext], the context of
@@ -47,24 +76,137 @@ Future<void> showReaderSettingsSheet(
           mainAxisSize: MainAxisSize.min,
           children: [
             _SheetLabel(AppLocalizations.of(sheetContext).readingDirection),
+            // Where the direction in force came from. Only the reader's sheet
+            // carries it, because only the reader's sheet has a series in
+            // hand — and a checked row on its own reads as "I chose this",
+            // which a guess is not.
+            _ProvenanceLine(direction: direction),
             ReadingDirectionRows(
-              current: direction,
-              onPicked: (option) => Navigator.of(sheetContext).pop(option),
+              current: direction.direction,
+              onPicked: (option) => Navigator.of(sheetContext).pop(
+                DirectionPicked(option),
+              ),
             ),
+            // The two actions below are one-shot, like picking a direction:
+            // each is a single thing done to the choice in force, and neither
+            // is a switch that has to be turned back off. So both close the
+            // sheet, where the magnifying switch and the width slider stay
+            // open.
+            if (direction.canPromote)
+              _PromoteRow(
+                onTap: () => Navigator.of(sheetContext).pop(
+                  const DirectionPromoted(),
+                ),
+              ),
+            if (direction.hasSeriesDirection)
+              _FollowDefaultRow(
+                landsOn: direction.withoutSeries,
+                onTap: () => Navigator.of(sheetContext).pop(
+                  const SeriesDirectionCleared(),
+                ),
+              ),
             const Divider(height: 24, indent: gutter, endIndent: gutter),
-            _MagnifyRow(direction: direction),
+            _MagnifyRow(direction: direction.direction),
             const Divider(height: 24, indent: gutter, endIndent: gutter),
             // The width is inert in exactly the directions magnifying's is
             // not: a strip is laid out at one, and paging fits a page to the
             // screen instead.
-            _WidthFactorRow(inert: !direction.isVerticalScroll),
+            _WidthFactorRow(inert: !direction.direction.isVerticalScroll),
             const SizedBox(height: 8),
           ],
         ),
       ),
     ),
   );
-  if (picked != null) onDirectionChanged(picked);
+  return outcome;
+}
+
+/// Where the direction in force came from: this series' own, the profile's
+/// default, or detected from the work.
+class _ProvenanceLine extends StatelessWidget {
+  const _ProvenanceLine({required this.direction});
+
+  final ChapterDirection direction;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final label = direction.direction.label(l10n);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 8),
+      child: Text(
+        switch (direction.source) {
+          ReadingDirectionSource.series => l10n.directionSourceSeries(label),
+          ReadingDirectionSource.profile => l10n.directionSourceProfile(label),
+          ReadingDirectionSource.detected => l10n.directionSourceDetected(
+            label,
+          ),
+          ReadingDirectionSource.device => l10n.directionSourceDevice(label),
+        },
+        style: PatraText.metadata(color: patraTextMuted),
+      ),
+    );
+  }
+}
+
+/// Making the direction in force the reading profile's own default.
+///
+/// Drawn only where it is not that already — and where the profile has
+/// stored no default at all it is drawn for any direction, which is what lets
+/// a detected direction become somebody's default rather than being the one
+/// thing that can never outrank nothing.
+///
+/// It does not clear the series' own direction: one tap, one thing, and the
+/// way back from the series stays free because it now lands on the same
+/// value (ADR-0007).
+class _PromoteRow extends StatelessWidget {
+  const _PromoteRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListTile(
+      leading: const Icon(Icons.person_outline, size: 22, color: patraText),
+      // Not worded with the direction: the line above the three rows already
+      // names the one in force, and the row it is checked on shows it — and a
+      // label that starts with a capital does not sit mid-sentence in either
+      // language anyway.
+      title: Text(l10n.promoteReadingDirection, style: PatraText.body()),
+      onTap: onTap,
+    );
+  }
+}
+
+/// Dropping this series' own direction, so that it follows the default
+/// again.
+///
+/// Worded with the direction the series will actually land on, resolved
+/// through the chain — "follow the default" is not much of a promise without
+/// saying which one — and worded **neutrally**, because what it lands on may
+/// be the profile's own default or a direction detected from the work. The
+/// row is why setting a series to the value the default already holds is not
+/// the same as leaving it unset: a series that is set stops following a
+/// default that later changes, and this is the way back.
+class _FollowDefaultRow extends StatelessWidget {
+  const _FollowDefaultRow({required this.landsOn, required this.onTap});
+
+  /// The direction the series lands on once its own is dropped.
+  final ReadingDirection landsOn;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListTile(
+      leading: const Icon(Icons.restart_alt, size: 22, color: patraText),
+      title: Text(l10n.followDefaultDirection, style: PatraText.body()),
+      trailing: Text(landsOn.label(l10n), style: PatraText.metadata()),
+      onTap: onTap,
+    );
+  }
 }
 
 /// The three directions, as rows. Shared so the reader's sheet and the
