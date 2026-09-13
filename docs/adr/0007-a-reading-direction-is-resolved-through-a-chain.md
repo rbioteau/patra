@@ -186,3 +186,34 @@ left to correct it.
 
 The per-library direction is not an extra beside the profile's. It is what
 replaces it.
+
+## Amendment — 2026-09-13 (#57)
+
+The detected rung has an answer, and filling it changed no screen — which is
+what shipping the chain complete with an empty rung was for.
+
+It is measured **from the chapter being read**. `chapter-info` is the one
+place page dimensions reach the app, and it is asked for one chapter at a
+time: the catalogue deliberately keeps reader-level data out (ADR-0005), and
+a saved chapter carries a page count and no dimensions. So the reader's own
+fetch is what measures a work, and what it measures is recorded against the
+**series** rather than the chapter it was measured on, for the reason this
+ADR already gives — a direction detected for one chapter of a work is a
+direction for the work. The record is a measurement and not a preference:
+nothing is written to the device, a series is measured again when it is
+opened again, and the container it lives in is rebuilt for every profile.
+
+The two signals the guess is made from **answer different questions, so there
+is no precedence to arbitrate** between them:
+
+- **whether** a work is vertical is a property of the pages: the median
+  tallness (height over width) of the pages the server did not call a spread,
+  at **1.8** — a number measured on a real library rather than chosen, and
+  written up in `docs/research/reader-vertical-page-shape.md`;
+- **which way** it goes when it is not is a convention of origin, which the
+  library type is the only witness to: a manga library reads right to left,
+  every other one the way a chapter always has.
+
+Nothing above this rung moved. A guess is still asked only while the series,
+the profile and the device have all answered nothing, and the sheet still
+says that what is in force was detected rather than chosen.

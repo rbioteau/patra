@@ -164,7 +164,7 @@ The [[Reading direction]] chosen for one [[Series]] alone, which outranks the pe
 _Avoid_: per-series setting, override, book setting
 
 **Detected direction**:
-The [[Reading direction]] the app infers for a work it has been told nothing about, from what the server says about the series — its library type, and the shape of its pages — since Kavita exposes no direction of its own. Genres and tags carry no usable signal and are not consulted. It is a guess and never a choice: anything anybody actually chose outranks it, and the reader says where a direction came from rather than presenting a guess as one.
+The [[Reading direction]] the app infers for a work it has been told nothing about, from what the server says about the series — its library type, and the shape of its pages — since Kavita exposes no direction of its own. The two answer different questions and do not compete: whether a work is vertical is the pages' (a median tallness of 1.8 and above, measured on the chapter being read, which is the only place page dimensions reach the app), and which way it goes when it is not is the library type's, a manga library reading right to left and every other one the way a chapter always has. Genres and tags carry no usable signal and are not consulted. It is a guess and never a choice: anything anybody actually chose outranks it, and the reader says where a direction came from rather than presenting a guess as one.
 _Avoid_: automatic direction, smart default, heuristic (in prose)
 
 **Vertical scrolling**:

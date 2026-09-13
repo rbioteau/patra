@@ -20,6 +20,7 @@ import '../../widgets/reader_settings_sheet.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'page_rail.dart';
+import 'page_shape.dart';
 import 'reading_direction.dart';
 import 'spread_layout.dart';
 import 'strip_geometry.dart';
@@ -28,8 +29,15 @@ import 'thumb_strip.dart';
 
 final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
   retry: serverRetry,
-  (ref, chapterId) {
-    return ref.watch(kavitaClientProvider).chapterInfo(chapterId);
+  (ref, chapterId) async {
+    final info = await ref.watch(kavitaClientProvider).chapterInfo(chapterId);
+    // Page dimensions reach the app nowhere else, and they arrive a chapter
+    // at a time for a work that is one thing: recording what they say about
+    // the *work* is what lets the detected rung of the chain answer (#57).
+    // Guarded, because leaving the reader mid-fetch disposes this provider
+    // while it is still waiting.
+    if (ref.mounted) ref.read(pageShapesProvider.notifier).record(info);
+    return info;
   },
 );
 
