@@ -4,13 +4,15 @@
 /// answer** (ADR-0007):
 ///
 /// 1. the **series** — a direction chosen for that one series;
-/// 2. the **profile** — the reading profile's own stored default;
-/// 3. the **device** — this device's own stored default;
-/// 4. the **detected** — the direction the work itself suggests (#57), asked
+/// 2. the **library** — a direction chosen for every series shelved there
+///    (#65);
+/// 3. the **profile** — the reading profile's own stored default;
+/// 4. the **device** — this device's own stored default;
+/// 5. the **detected** — the direction the work itself suggests (#57), asked
 ///    only while the device holds nothing, since a guess must never beat a
 ///    choice: the library a work was shelved in and the shape of its pages,
 ///    measured by `page_shape.dart` from the chapter being read;
-/// 5. the left-to-right a chapter has always opened in.
+/// 6. the left-to-right a chapter has always opened in.
 ///
 /// The direction used to be taken from the profile's default when the chapter
 /// opened and changed in memory afterwards, which made it neither: a chapter
@@ -44,6 +46,10 @@ enum ReadingDirectionSource {
   /// This series' own direction: a choice about one work.
   series,
 
+  /// The direction chosen for every series in this library: a choice about
+  /// one library (#65).
+  library,
+
   /// The reading profile's own default, which is what they chose for
   /// everything they read.
   profile,
@@ -55,7 +61,7 @@ enum ReadingDirectionSource {
   /// left-to-right the chain ends in: the one rung that answers without
   /// anybody having chosen, and the one a detected direction is measured
   /// against.
-  device;
+  device,
 }
 
 /// The direction a chapter of one series is read in, and where it came from.
@@ -67,12 +73,14 @@ enum ReadingDirectionSource {
 class ChapterDirection {
   ChapterDirection({
     required this.series,
+    required this.library,
     required this.profile,
     required this.detected,
     required this.device,
   }) {
     final (resolved, from) = _resolve(
       series: series,
+      library: library,
       profile: profile,
       device: device,
       detected: detected,
@@ -83,15 +91,31 @@ class ChapterDirection {
     // between what is in force and what would be if the series' own choice
     // were dropped.
     final (landing, _) = _resolve(
+      library: library,
       profile: profile,
       device: device,
       detected: detected,
     );
     withoutSeries = landing;
+    // And with the library's empty instead: where the library lands, which
+    // is where the chapter does too unless the series has a direction of its
+    // own to keep.
+    final (libraryLanding, _) = _resolve(
+      series: series,
+      profile: profile,
+      device: device,
+      detected: detected,
+    );
+    withoutLibrary = libraryLanding;
   }
 
   /// What this series has chosen for itself, if anything.
   final ReadingDirection? series;
+
+  /// What has been chosen for every series in this library, if anything:
+  /// #65's rung, and the one that corrects a library the detected direction
+  /// gets wrong for all of them at once.
+  final ReadingDirection? library;
 
   /// What the reading profile has **stored** as their own default, if
   /// anything — not the direction a chapter opens in, which this often is
@@ -121,15 +145,29 @@ class ChapterDirection {
   /// lands on may be the profile's own or a detected one.
   late final ReadingDirection withoutSeries;
 
+  /// Where the library lands if its own direction is dropped: the chain below
+  /// the library rung, with the series keeping its own where it has one — so
+  /// this is what a chapter of this series really opens in afterwards, and
+  /// not merely what the library falls back to.
+  late final ReadingDirection withoutLibrary;
+
   /// Whether there is a series direction to go back on.
   bool get hasSeriesDirection => series != null;
 
-  /// Whether the direction in force is worth promoting to the profile's own
-  /// default: it differs from what they have stored — and **no stored default
-  /// counts as differing from everything**, which is what lets a detected
-  /// direction become somebody's default rather than only ever being beaten
-  /// by one.
-  bool get canPromote => direction != profile;
+  /// Whether there is a library direction to go back on.
+  bool get hasLibraryDirection => library != null;
+
+  /// Whether the direction in force is worth promoting to the library's own:
+  /// it differs from what that library holds — and a library holding nothing
+  /// counts as differing from everything, which is what lets a detected
+  /// direction become a library's rather than only ever being beaten by one.
+  bool get canPromoteToLibrary => direction != library;
+
+  /// The same question of the reading profile's own default: it differs from
+  /// what they have stored — and **no stored default counts as differing from
+  /// everything**, which is what lets a detected direction become somebody's
+  /// default rather than only ever being beaten by one.
+  bool get canPromoteToProfile => direction != profile;
 }
 
 /// #57's rung: the direction the work itself suggests, for one series.
@@ -169,30 +207,42 @@ ReadingDirection _horizontal(LibraryType type) => type == LibraryType.manga
     ? ReadingDirection.rightToLeft
     : ReadingDirection.leftToRight;
 
-/// Which direction a chapter of [seriesId] opens in for whoever is reading,
-/// and where that answer came from.
+/// What the chain is asked about: the series a chapter belongs to, and the
+/// library that series is shelved in — two ids because the library's rung is
+/// keyed on the library and the series' on the work.
+typedef ChapterDirectionKey = ({int seriesId, int libraryId});
+
+/// Which direction a chapter of [key.seriesId] opens in for whoever is
+/// reading, and where that answer came from.
 ///
-/// A family of the series and not of the chapter: the whole chain is
-/// per-series, and a chapter is one of many ways in.
-final chapterDirectionProvider = Provider.family<ChapterDirection, int>((
-  ref,
-  seriesId,
-) {
-  final store = ref.read(profilePreferencesStoreProvider);
-  return ChapterDirection(
-    series: ref.watch(seriesDirectionsProvider)[seriesId],
-    profile: ref.watch(profileDirectionProvider),
-    detected: ref.watch(detectedDirectionProvider(seriesId)),
-    device: store.deviceDirection,
-  );
-});
+/// A family of the series and its library rather than of the chapter: the
+/// whole chain is per-series but for the library's rung, and a chapter is one
+/// of many ways in.
+final chapterDirectionProvider =
+    Provider.family<ChapterDirection, ChapterDirectionKey>((ref, key) {
+      final store = ref.read(profilePreferencesStoreProvider);
+      return ChapterDirection(
+        series: ref.watch(seriesDirectionsProvider)[key.seriesId],
+        library: ref.watch(libraryDirectionsProvider)[key.libraryId],
+        profile: ref.watch(profileDirectionProvider),
+        detected: ref.watch(detectedDirectionProvider(key.seriesId)),
+        device: store.deviceDirection,
+      );
+    });
 
 /// The chain itself: the first rung with an answer, and which rung it was.
 ///
-/// The order is the series', then the profile's, then **this device's
-/// stored default**, then the detected direction, and the built-in
-/// left-to-right last of all. The last two of those are the surprising pair,
-/// and they are that way round because a guess must never beat a choice
+/// The order is the series', then the **library's** (#65), then the profile's,
+/// then **this device's stored default**, then the detected direction, and the
+/// built-in left-to-right last of all.
+///
+/// The library's rung sits directly under the series' because both are
+/// answers about the work's side of the chain, and a library is the wider of
+/// the two — and because it is what replaces the profile's own (ADR-0007), so
+/// it has to be the rung every series in the library follows even while a
+/// person has a default of their own stored. The last two of those are the
+/// surprising pair, and they are that way round because a guess must never
+/// beat a choice
 /// (ADR-0007): a direction this device has stored is one somebody set here,
 /// where the left-to-right an absent key falls back to is not a choice at
 /// all — the difference the stored language already makes between an empty
@@ -201,11 +251,13 @@ final chapterDirectionProvider = Provider.family<ChapterDirection, int>((
 /// nothing here has to change for that to be true.
 (ReadingDirection, ReadingDirectionSource) _resolve({
   ReadingDirection? series,
+  ReadingDirection? library,
   ReadingDirection? profile,
   ReadingDirection? device,
   ReadingDirection? detected,
 }) {
   if (series != null) return (series, ReadingDirectionSource.series);
+  if (library != null) return (library, ReadingDirectionSource.library);
   if (profile != null) return (profile, ReadingDirectionSource.profile);
   if (device != null) return (device, ReadingDirectionSource.device);
   if (detected != null) return (detected, ReadingDirectionSource.detected);

@@ -4,10 +4,10 @@
 /// setting is one of two kinds. **Reading direction, magnifying, the width a
 /// chapter opens at and the interface language belong to a person**: they are
 /// how somebody reads, and two people sharing a tablet each get their own.
-/// So does the direction one **series** is read in, which is why it is kept
-/// here beside their other preferences rather than anywhere the server could
-/// see it — see `features/reader/reading_direction.dart` for the chain that it
-/// is the first rung of.
+/// So does the direction one **series** or one **library** is read in, which
+/// is why it is kept here beside their other preferences rather than anywhere
+/// the server could see it — see `features/reader/reading_direction.dart` for
+/// the chain that those are the first two rungs of.
 /// **The image cache budget belongs to the device**: it is disk, and the iPad
 /// owns its disk — it lives
 /// in `cache_settings.dart` and is handed to every container `SessionScope`
@@ -47,6 +47,7 @@ class ProfilePreferences {
     this.widthFactor,
     this.language,
     this.seriesDirections = const {},
+    this.libraryDirections = const {},
   });
 
   static const none = ProfilePreferences();
@@ -80,18 +81,33 @@ class ProfilePreferences {
   /// a series that is set stops following a default that later changes.
   final Map<int, ReadingDirection> seriesDirections;
 
+  /// The direction each library is read in, keyed by library id: the second
+  /// rung of the same chain, and what corrects a library the guess is wrong
+  /// about wholesale (#65).
+  ///
+  /// A library is a set of works rather than one work, so it is the rung
+  /// **under** the
+  /// series' own and above everything a person chose for all of their
+  /// reading — a library whose type is wrong is wrong for every series in it,
+  /// and one tap here is what puts that right. Kept beside the series map it
+  /// mirrors, for the same reasons and in the same row: a choice about works
+  /// never sent to a server, gone with the profile that made it.
+  final Map<int, ReadingDirection> libraryDirections;
+
   ProfilePreferences copyWith({
     ReadingDirection? direction,
     bool? magnify,
     double? widthFactor,
     String? language,
     Map<int, ReadingDirection>? seriesDirections,
+    Map<int, ReadingDirection>? libraryDirections,
   }) => ProfilePreferences(
     direction: direction ?? this.direction,
     magnify: magnify ?? this.magnify,
     widthFactor: widthFactor ?? this.widthFactor,
     language: language ?? this.language,
     seriesDirections: seriesDirections ?? this.seriesDirections,
+    libraryDirections: libraryDirections ?? this.libraryDirections,
   );
 
   Map<String, dynamic> toJson() => {
@@ -100,10 +116,9 @@ class ProfilePreferences {
     if (widthFactor != null) 'widthFactor': widthFactor,
     if (language != null) 'language': language,
     if (seriesDirections.isNotEmpty)
-      'seriesDirections': {
-        for (final entry in seriesDirections.entries)
-          '${entry.key}': entry.value.name,
-      },
+      'seriesDirections': _directionsJson(seriesDirections),
+    if (libraryDirections.isNotEmpty)
+      'libraryDirections': _directionsJson(libraryDirections),
   };
 
   /// Defensive like every other read from the keychain: this is loaded before
@@ -130,23 +145,31 @@ class ProfilePreferences {
               (language.isEmpty || supportedLocale(language) != null)
           ? language
           : null,
-      seriesDirections: _seriesDirections(json['seriesDirections']),
+      seriesDirections: _directions(json['seriesDirections']),
+      libraryDirections: _directions(json['libraryDirections']),
     );
   }
 
-  /// One series at a time, and an entry of the wrong shape is dropped rather
-  /// than thrown: what a malformed row costs is the series it cannot read,
-  /// never the profile its other choices or the device its app.
-  static Map<int, ReadingDirection> _seriesDirections(Object? json) =>
-      json is! Map
+  /// One direction map as the wire carries it: the series' and the library's
+  /// are the same shape, because the second was built to mirror the first.
+  static Map<String, dynamic> _directionsJson(
+    Map<int, ReadingDirection> directions,
+  ) => {
+    for (final entry in directions.entries) '${entry.key}': entry.value.name,
+  };
+
+  /// One entry at a time, and an entry of the wrong shape is dropped rather
+  /// than thrown: what a malformed row costs is the series or the library it
+  /// cannot read, never the profile its other choices or the device its app.
+  static Map<int, ReadingDirection> _directions(Object? json) => json is! Map
       ? const {}
       : {
           for (final entry in json.entries)
-            if (int.tryParse('${entry.key}') case final int seriesId)
+            if (int.tryParse('${entry.key}') case final int id)
               if (entry.value case final String name)
                 if (ReadingSettingsStore.directionNamed(name)
                     case final ReadingDirection direction)
-                  seriesId: direction,
+                  id: direction,
         };
 }
 
@@ -328,6 +351,40 @@ class ProfilePreferencesStore {
     ),
   );
 
+  /// What [profileId] has chosen for every series in [libraryId], if
+  /// anything: the rung under one series' own choice and above everything
+  /// they chose for all of their reading (#65).
+  ReadingDirection? libraryDirectionFor(String? profileId, int libraryId) =>
+      of(profileId).libraryDirections[libraryId];
+
+  /// Every series in [libraryId] is read in [direction] from now on, for
+  /// [profileId] alone — until a series says otherwise of its own.
+  ///
+  /// The profile's own default is left where it is for the reason setting one
+  /// series does not move it: this is a choice about a library, and promoting
+  /// it
+  /// to everything they read is a different tap the sheet offers separately.
+  Future<void> setLibraryDirection(
+    String profileId,
+    int libraryId,
+    ReadingDirection direction,
+  ) => _update(
+    profileId,
+    (was) => was.copyWith(
+      libraryDirections: {...was.libraryDirections, libraryId: direction},
+    ),
+  );
+
+  /// [libraryId] goes back to following what stands below it, for [profileId]
+  /// alone.
+  Future<void> clearLibraryDirection(String profileId, int libraryId) =>
+      _update(
+        profileId,
+        (was) => was.copyWith(
+          libraryDirections: {...was.libraryDirections}..remove(libraryId),
+        ),
+      );
+
   Future<void> setMagnify(String profileId, bool enabled) =>
       _update(profileId, (was) => was.copyWith(magnify: enabled));
 
@@ -336,6 +393,11 @@ class ProfilePreferencesStore {
 
   /// [locale] null is a real choice — follow the device — and is stored as
   /// one, which is why it cannot go through [ProfilePreferences.copyWith].
+  ///
+  /// Which is also why it is the one write that names every field: a field
+  /// left out of this constructor is a preference silently dropped by the
+  /// next change of language, so **a field added to [ProfilePreferences] has
+  /// to be added here too**.
   Future<void> setLanguage(String profileId, Locale? locale) => _update(
     profileId,
     (was) => ProfilePreferences(
@@ -344,6 +406,7 @@ class ProfilePreferencesStore {
       widthFactor: was.widthFactor,
       language: locale?.languageCode ?? '',
       seriesDirections: was.seriesDirections,
+      libraryDirections: was.libraryDirections,
     ),
   );
 
@@ -473,25 +536,42 @@ final defaultReadingDirectionProvider = Provider<ReadingDirection>((ref) {
   return ref.watch(profileDirectionProvider) ?? store.defaultDirection;
 });
 
-/// The direction each series is read in, for whoever is reading: ADR-0007's
-/// first rung, and the only one a screen can set for one work at a time.
+/// One map of directions a person holds — one direction per series, or one
+/// per library — written through to the store under whoever is reading.
 ///
-/// One map and not a provider per series, because what is stored is one map
-/// in one keychain row and what a screen asks for is one series at a time —
-/// and because a series nobody has set is simply absent from it, which is not
-/// the same as being set to whatever the default happens to hold.
-class SeriesDirectionsNotifier extends Notifier<Map<int, ReadingDirection>> {
-  @override
-  Map<int, ReadingDirection> build() => ref
-      .read(profilePreferencesStoreProvider)
-      .of(ref.watch(readingProfileIdProvider))
-      .seriesDirections;
+/// The two rungs are the same shape all the way down: a map of id to
+/// direction in the one keychain row, replaced whole on every change, keyed on
+/// the work or on the library. So what writes them is one thing too, because a
+/// rule about how a direction is remembered — who it belongs to, what happens
+/// with nobody reading — is a rule both of them have to keep, and stated twice
+/// it is a rule one of them will lose.
+///
+/// What each map *is*, and which rung of the chain it is, stays with the two
+/// notifiers below, since that is the part that differs.
+abstract class DirectionMapNotifier
+    extends Notifier<Map<int, ReadingDirection>> {
+  /// The map [preferences] holds for this rung.
+  Map<int, ReadingDirection> held(ProfilePreferences preferences);
 
-  /// [seriesId] is read in [direction] from now on, for whoever is reading.
-  Future<void> set(int seriesId, ReadingDirection direction) async {
-    state = {...state, seriesId: direction};
-    final id = ref.read(sessionProvider)?.id;
-    if (id == null) {
+  /// Writes [direction] for [id], for [profileId] alone.
+  Future<void> write(String profileId, int id, ReadingDirection direction);
+
+  /// Drops whatever [profileId] holds for [id].
+  Future<void> drop(String profileId, int id);
+
+  @override
+  Map<int, ReadingDirection> build() => held(
+    ref
+        .read(profilePreferencesStoreProvider)
+        .of(ref.watch(readingProfileIdProvider)),
+  );
+
+  /// [id] — a series or a library — is read in [direction] from now on, for
+  /// whoever is reading.
+  Future<void> set(int id, ReadingDirection direction) async {
+    state = {...state, id: direction};
+    final profileId = ref.read(sessionProvider)?.id;
+    if (profileId == null) {
       // Nobody is reading, so there is nobody this could belong to: unlike a
       // profile's own default there is no flat key of the device's it could
       // fall back to, since this is a map, and one written under nobody's id
@@ -501,26 +581,85 @@ class SeriesDirectionsNotifier extends Notifier<Map<int, ReadingDirection>> {
       // sees, because the reader stands inside a session.
       return;
     }
-    await ref
-        .read(profilePreferencesStoreProvider)
-        .setSeriesDirection(id, seriesId, direction);
+    await write(profileId, id, direction);
   }
 
-  /// [seriesId] goes back to following the default.
-  Future<void> clear(int seriesId) async {
-    if (!state.containsKey(seriesId)) return;
-    state = {...state}..remove(seriesId);
-    final id = ref.read(sessionProvider)?.id;
-    if (id == null) return;
-    await ref
-        .read(profilePreferencesStoreProvider)
-        .clearSeriesDirection(id, seriesId);
+  /// [id] goes back to following what stands below it.
+  Future<void> clear(int id) async {
+    if (!state.containsKey(id)) return;
+    state = {...state}..remove(id);
+    final profileId = ref.read(sessionProvider)?.id;
+    if (profileId == null) return;
+    await drop(profileId, id);
   }
+}
+
+/// The direction each series is read in, for whoever is reading: ADR-0007's
+/// first rung, and the only one a screen can set for one work at a time.
+///
+/// One map and not a provider per series, because what is stored is one map
+/// in one keychain row and what a screen asks for is one series at a time —
+/// and because a series nobody has set is simply absent from it, which is not
+/// the same as being set to whatever the default happens to hold.
+class SeriesDirectionsNotifier extends DirectionMapNotifier {
+  @override
+  Map<int, ReadingDirection> held(ProfilePreferences preferences) =>
+      preferences.seriesDirections;
+
+  @override
+  Future<void> write(
+    String profileId,
+    int seriesId,
+    ReadingDirection direction,
+  ) => ref
+      .read(profilePreferencesStoreProvider)
+      .setSeriesDirection(profileId, seriesId, direction);
+
+  @override
+  Future<void> drop(String profileId, int seriesId) => ref
+      .read(profilePreferencesStoreProvider)
+      .clearSeriesDirection(profileId, seriesId);
 }
 
 final seriesDirectionsProvider =
     NotifierProvider<SeriesDirectionsNotifier, Map<int, ReadingDirection>>(
       SeriesDirectionsNotifier.new,
+    );
+
+/// The direction each library is read in, for whoever is reading: #65's rung,
+/// under one series' own choice and above everything a person chose for all of
+/// their reading, and the one that answers a library the detected direction is
+/// wrong about **wholesale** — a library shelved as manga holding manhua is
+/// wrong for every series in it, and the profile's own default is the wrong
+/// shape to correct that, since it is a choice about a person's reading rather
+/// than about one library.
+///
+/// One map in the one keychain row, like the series' beside it: a library
+/// nobody has set is absent from it, which is not the same as being set to
+/// whatever stands below it happens to hold.
+class LibraryDirectionsNotifier extends DirectionMapNotifier {
+  @override
+  Map<int, ReadingDirection> held(ProfilePreferences preferences) =>
+      preferences.libraryDirections;
+
+  @override
+  Future<void> write(
+    String profileId,
+    int libraryId,
+    ReadingDirection direction,
+  ) => ref
+      .read(profilePreferencesStoreProvider)
+      .setLibraryDirection(profileId, libraryId, direction);
+
+  @override
+  Future<void> drop(String profileId, int libraryId) => ref
+      .read(profilePreferencesStoreProvider)
+      .clearLibraryDirection(profileId, libraryId);
+}
+
+final libraryDirectionsProvider =
+    NotifierProvider<LibraryDirectionsNotifier, Map<int, ReadingDirection>>(
+      LibraryDirectionsNotifier.new,
     );
 
 /// Whether a one-finger drag magnifies the page instead of turning it.

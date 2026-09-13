@@ -656,17 +656,41 @@ abstract class AppLocalizations {
   /// **'{direction} — the default'**
   String directionSourceDevice(String direction);
 
+  /// In the reader's sheet: the reading direction in force is one chosen for every series in this library. {library} is the library's own name, as the server words it.
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} — the default for {library}'**
+  String directionSourceLibrary(String direction, String library);
+
   /// Reader action: makes the reading direction in force the profile's own default, so every series opens in it. The direction itself is shown beside the row; drawn only where it is not already their default.
   ///
   /// In en, this message translates to:
   /// **'Make this my default'**
   String get promoteReadingDirection;
 
+  /// Reader action: makes the reading direction in force the one every series in this library opens in, so a shelf the guess gets wrong is put right in one tap. {library} is the library's own name, as the server words it; drawn only where it is not already that library's.
+  ///
+  /// In en, this message translates to:
+  /// **'Make this the default for {library}'**
+  String promoteLibraryDirection(String library);
+
   /// Reader action: drops the direction chosen for this series, which then follows the default again. The direction it lands on is shown beside the row; worded 'the default' rather than 'my default' because it may be a detected one.
   ///
   /// In en, this message translates to:
   /// **'Follow the default'**
   String get followDefaultDirection;
+
+  /// Reader action: drops the direction chosen for a whole library, whose series then follow what stands below it again. The direction the chapter lands on is shown beside the row. {library} is the library's own name, as the server words it.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the default for {library}'**
+  String followDefaultDirectionForLibrary(String library);
+
+  /// Stands in for a library's name where the server's list has not reached the device yet, in the reader's rows that name a library.
+  ///
+  /// In en, this message translates to:
+  /// **'this library'**
+  String get thisLibrary;
 
   /// Download action on a chapter; always worded, never icon-only
   ///

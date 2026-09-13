@@ -19,6 +19,16 @@ import 'test_support.dart';
 
 const _library = Library(id: 7, name: 'Mangas', type: LibraryType.manga);
 
+/// Whoever is reading, for the containers below: the catalogue answers per
+/// profile, so a test that hands a store in still has to say whose.
+final _profile = Profile(
+  baseUrl: 'http://kavita.test',
+  accountId: 1,
+  username: 'romain',
+  apiKey: 'key',
+  token: signedToken(1),
+);
+
 Series _series(int id) => Series(
   id: id,
   name: 'Blame! $id',
@@ -123,6 +133,13 @@ ProviderContainer _container(HttpClientAdapter adapter, CatalogueStore store) {
     overrides: [
       kavitaClientProvider.overrideWithValue(client),
       catalogueStoreProvider.overrideWithValue(store),
+      // Somebody is reading, which the store above is theirs: the catalogue is
+      // keyed on the profile (`catalogueStoreProvider`), so a test that hands
+      // one in has to say who for, or anything asking the session first —
+      // `libraryNameProvider` does — is answered with nobody.
+      initialAuthStateProvider.overrideWithValue(
+        AuthState(profiles: [_profile], activeId: _profile.id),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -282,9 +299,10 @@ void main() {
       expect(overlay.isResolvedFailure, isTrue);
     });
 
-    test('the type and the current library come off the overlay', () async {
-      // Both used to read the raw fetch, so offline a comic library said
-      // "chapitre" and the scan menu had no library to act on.
+    test('the type, the name and the current library come off the overlay', () async {
+      // All three used to read the raw fetch, so offline a comic library said
+      // "chapitre" and the scan menu had no library to act on. The name is
+      // what the reader words a library by (#65), and it is read the same way.
       final store = _store();
       await store.putLibraries(const [
         Library(id: 7, name: 'Comics', type: LibraryType.comic),
@@ -299,6 +317,12 @@ void main() {
       expect(
         container.read(catalogue.libraryTypeProvider(7)),
         LibraryType.comic,
+      );
+      expect(container.read(catalogue.libraryNameProvider(7)), 'Comics');
+      expect(
+        container.read(catalogue.libraryNameProvider(8)),
+        isEmpty,
+        reason: 'a library the device holds nothing about has no name to give',
       );
       expect(container.read(currentLibraryProvider), 7);
     });

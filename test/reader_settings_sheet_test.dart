@@ -6,12 +6,14 @@ import 'package:patra/src/features/reader/reading_direction.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
 import 'package:patra/src/widgets/reader_settings_sheet.dart';
+
 import 'test_support.dart';
 
 /// The chain resolved for a series nobody has set: what is in force is the
 /// [device] default, which is the whole of what most chapters open on.
 ChapterDirection _fromDevice(ReadingDirection device) => ChapterDirection(
   series: null,
+  library: null,
   profile: null,
   detected: null,
   device: device,
@@ -58,6 +60,7 @@ void main() {
                             direction: _fromDevice(
                               ReadingDirection.verticalScroll,
                             ),
+                            libraryName: 'Manga',
                           ),
                         ),
                       )
@@ -100,13 +103,17 @@ void main() {
         tester,
         ChapterDirection(
           series: ReadingDirection.rightToLeft,
+          library: null,
           profile: null,
           detected: null,
           device: ReadingDirection.leftToRight,
         ),
       );
 
-      expect(find.text('Right to left — chosen for this series'), findsOneWidget);
+      expect(
+        find.text('Right to left — chosen for this series'),
+        findsOneWidget,
+      );
       // The way back, worded with the direction the series lands on.
       expect(find.text('Follow the default'), findsOneWidget);
       expect(find.text('Left to right'), findsWidgets);
@@ -119,11 +126,73 @@ void main() {
       );
     });
 
+    testWidgets("the library's own reads as a choice about that shelf", (
+      tester,
+    ) async {
+      await _openSheet(
+        tester,
+        ChapterDirection(
+          series: null,
+          library: ReadingDirection.rightToLeft,
+          profile: null,
+          detected: null,
+          device: ReadingDirection.leftToRight,
+        ),
+      );
+
+      expect(
+        find.text('Right to left — the default for Manga'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Make this the default for Manga'),
+        findsNothing,
+        reason: 'it already is this library\u2019s',
+      );
+      expect(find.text('Follow the default for Manga'), findsOneWidget);
+      expect(
+        find.text('Left to right'),
+        findsWidgets,
+        reason: 'the row says which direction dropping it lands on',
+      );
+      expect(
+        find.text('Follow the default'),
+        findsNothing,
+        reason: 'this series has no direction of its own to drop',
+      );
+    });
+
+    testWidgets('a shelf the server has not named is still worded', (
+      tester,
+    ) async {
+      // The name arrives with the library list, so a chapter opened before it
+      // has landed has an id and no name: the row says "this library" rather
+      // than trailing off into nothing.
+      await _openSheet(
+        tester,
+        ChapterDirection(
+          series: null,
+          library: ReadingDirection.rightToLeft,
+          profile: null,
+          detected: null,
+          device: ReadingDirection.leftToRight,
+        ),
+        libraryName: '',
+      );
+
+      expect(
+        find.text('Right to left — the default for this library'),
+        findsOneWidget,
+      );
+      expect(find.text('Follow the default for this library'), findsOneWidget);
+    });
+
     testWidgets("the profile's own reads as their default", (tester) async {
       await _openSheet(
         tester,
         ChapterDirection(
           series: null,
+          library: null,
           profile: ReadingDirection.rightToLeft,
           detected: null,
           device: ReadingDirection.leftToRight,
@@ -149,6 +218,7 @@ void main() {
         tester,
         ChapterDirection(
           series: null,
+          library: null,
           profile: null,
           detected: ReadingDirection.rightToLeft,
           // Nothing stored on this device either, which is the only case in
@@ -158,7 +228,10 @@ void main() {
         ),
       );
 
-      expect(find.text('Right to left — detected from the work'), findsOneWidget);
+      expect(
+        find.text('Right to left — detected from the work'),
+        findsOneWidget,
+      );
       expect(
         find.text('Make this my default'),
         findsOneWidget,
@@ -175,13 +248,17 @@ void main() {
         tester,
         ChapterDirection(
           series: ReadingDirection.rightToLeft,
+          library: null,
           profile: ReadingDirection.rightToLeft,
           detected: null,
           device: ReadingDirection.leftToRight,
         ),
       );
 
-      expect(find.text('Right to left — chosen for this series'), findsOneWidget);
+      expect(
+        find.text('Right to left — chosen for this series'),
+        findsOneWidget,
+      );
       expect(
         find.text('Make this my default'),
         findsNothing,
@@ -196,8 +273,8 @@ void main() {
     });
   });
 
-  group('the two actions', () {
-    // Independent of each other, and both one-shot: unlike the magnifying
+  group('the one-shot actions', () {
+    // Independent of each other, and all one-shot: unlike the magnifying
     // switch and the width slider, they close the sheet.
 
     testWidgets('promoting reports the promotion and closes the sheet', (
@@ -207,6 +284,7 @@ void main() {
         tester,
         ChapterDirection(
           series: null,
+          library: null,
           profile: null,
           detected: null,
           device: ReadingDirection.rightToLeft,
@@ -224,12 +302,61 @@ void main() {
       );
     });
 
+    testWidgets('promoting to the library reports it and closes the sheet', (
+      tester,
+    ) async {
+      final outcomes = await _openSheet(
+        tester,
+        ChapterDirection(
+          series: null,
+          library: null,
+          profile: null,
+          detected: ReadingDirection.rightToLeft,
+          device: null,
+        ),
+      );
+
+      // A detection is not a choice, and promoting is how one becomes a
+      // shelf's: one tap, for every series the guess is wrong about.
+      await tester.tap(find.text('Make this the default for Manga'));
+      await tester.pumpAndSettle();
+
+      expect(outcomes.single, isA<DirectionPromotedToLibrary>());
+      expect(
+        find.text('Drag to magnify'),
+        findsNothing,
+        reason: 'the sheet should have closed, as picking a direction does',
+      );
+    });
+
+    testWidgets('dropping a library direction reports it, and names where the '
+        'chapter lands', (tester) async {
+      final outcomes = await _openSheet(
+        tester,
+        ChapterDirection(
+          series: null,
+          library: ReadingDirection.verticalScroll,
+          profile: null,
+          detected: null,
+          device: ReadingDirection.rightToLeft,
+        ),
+      );
+
+      await tester.tap(find.text('Follow the default for Manga'));
+      expect(find.text('Right to left'), findsWidgets);
+      await tester.pumpAndSettle();
+
+      expect(outcomes.single, isA<LibraryDirectionCleared>());
+      expect(find.text('Drag to magnify'), findsNothing);
+    });
+
     testWidgets('dropping a series direction reports it, and names where the '
         'series lands', (tester) async {
       final outcomes = await _openSheet(
         tester,
         ChapterDirection(
           series: ReadingDirection.verticalScroll,
+          library: null,
           profile: null,
           detected: null,
           device: ReadingDirection.rightToLeft,
@@ -274,9 +401,19 @@ void main() {
 /// after the sheet is open and the answer arrives as the sheet closes.
 Future<List<ReaderSettingsOutcome>> _openSheet(
   WidgetTester tester,
-  ChapterDirection direction,
-) async {
+  ChapterDirection direction, {
+  // The shelf the chapter is on, as the server names it — which is what the
+  // two rows acting on the library's rung are worded with.
+  String libraryName = 'Manga',
+}) async {
   final outcomes = <ReaderSettingsOutcome>[];
+  // Taller than the 600pt a widget test is given, because every row the
+  // chain can ask for is more than a sheet is given on a real phone — and
+  // the sheet does scroll, so the honest fix is a surface that reaches them
+  // rather than a scroll in every test.
+  tester.view.physicalSize = const Size(1200, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -296,6 +433,7 @@ Future<List<ReaderSettingsOutcome>> _openSheet(
                 final outcome = await showReaderSettingsSheet(
                   cog,
                   direction: direction,
+                  libraryName: libraryName,
                 );
                 if (outcome != null) outcomes.add(outcome);
               },

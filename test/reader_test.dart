@@ -1654,6 +1654,11 @@ void main() {
       expect(find.text('Follow the default'), findsOneWidget);
       expect(find.text('Left to right'), findsWidgets);
 
+      // The sheet scrolls, and the library's row above this one decides
+      // whether it is below the fold.
+      await tester.ensureVisible(find.text('Follow the default'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('Follow the default'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -1680,6 +1685,11 @@ void main() {
       await showChrome(tester);
       await openSheet(tester);
 
+      // As above: the library's row was promoted to a rung of its own and
+      // sits above this one, and the sheet scrolls.
+      await tester.ensureVisible(find.text('Make this my default'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('Make this my default'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -1700,6 +1710,57 @@ void main() {
         store: store,
         seriesId: 9,
         readerKey: const ValueKey('another series'),
+      );
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+    });
+
+    testWidgets("promoting from the reader makes it the library's", (tester) async {
+      // #65: one tap for a whole library, which is the rung under a series'
+      // own and above the guess — the one that puts right a library the
+      // detection gets wrong for every series in it.
+      final store = await preferencesStore();
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+      );
+      await showChrome(tester);
+      await openSheet(tester);
+
+      // No library list has reached this device, so the library is worded the
+      // way an unnamed one is rather than trailing off into nothing.
+      final row = find.text('Make this the default for this library');
+      await tester.ensureVisible(row);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(row);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        store.libraryDirectionFor(_reader.id, 1),
+        ReadingDirection.rightToLeft,
+        reason: 'what the manga library detected became the library\u2019s own',
+      );
+      expect(
+        store.seriesDirectionFor(_reader.id, 3),
+        isNull,
+        reason: 'promoting leaves the way back from the series free',
+      );
+
+      // A work the guess now gets wrong opens the library's way all the same:
+      // a comic library reads left to right, and this one is told otherwise.
+      await _pumpReader(
+        tester,
+        initialPage: 10,
+        direction: ReadingDirection.leftToRight,
+        profile: _reader,
+        store: store,
+        seriesId: 9,
+        libraryType: LibraryType.comic,
+        readerKey: const ValueKey('a work the guess gets wrong'),
       );
       expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
     });

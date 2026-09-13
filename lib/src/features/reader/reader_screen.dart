@@ -10,6 +10,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/kavita_client.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_reads.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../downloads/image_cache_store.dart';
@@ -420,10 +421,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _saveInitialProgress(chapter);
     _resolveLocalDir();
 
-    // The whole chain, resolved for this chapter's series and for whoever is
-    // reading: the series' own choice, then the profile's, then the
-    // direction detected from the work, then the device's default.
-    final resolved = ref.watch(chapterDirectionProvider(chapter.seriesId));
+    // The whole chain, resolved for this chapter's series and its library,
+    // and for whoever is reading: the series' own choice, then the library's,
+    // then the profile's, then the direction detected from the work, then the
+    // device's default.
+    final resolved = ref.watch(
+      chapterDirectionProvider((
+        seriesId: chapter.seriesId,
+        libraryId: chapter.libraryId,
+      )),
+    );
+    // What the library this chapter is shelved in is called, which is how
+    // the sheet words the rows that act on its rung. Read off what the device
+    // already remembers of the shelves, so opening a chapter asks for
+    // nothing; an id with no name yet is worded "this library" rather than
+    // left trailing off.
+    final libraryName = ref.watch(libraryNameProvider(chapter.libraryId));
     final direction = resolved.direction;
     final rtl = direction.isRightToLeft;
     // Vertical scrolling is excluded rather than forgotten: there the drag
@@ -538,6 +551,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ? chapter.title
                 : chapter.seriesName,
             direction: resolved,
+            libraryName: libraryName,
             onOutcome: (outcome) {
               switch (outcome) {
                 case DirectionPicked(direction: final chosen):
@@ -547,10 +561,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ref
                       .read(seriesDirectionsProvider.notifier)
                       .set(chapter.seriesId, chosen);
+                case DirectionPromotedToLibrary():
+                  // What is in force becomes this library's, so every series
+                  // shelved with it opens this way — the one tap that puts a
+                  // library the guess gets wrong right. The series' own
+                  // direction stays above it: one tap, one thing.
+                  ref
+                      .read(libraryDirectionsProvider.notifier)
+                      .set(chapter.libraryId, direction);
                 case DirectionPromoted():
                   // What is in force becomes theirs for every series. The
                   // series' own direction stays: one tap, one thing.
                   ref.read(profileDirectionProvider.notifier).set(direction);
+                case LibraryDirectionCleared():
+                  ref
+                      .read(libraryDirectionsProvider.notifier)
+                      .clear(chapter.libraryId);
                 case SeriesDirectionCleared():
                   ref
                       .read(seriesDirectionsProvider.notifier)
@@ -1220,6 +1246,7 @@ class _TopChrome extends StatelessWidget {
   const _TopChrome({
     required this.title,
     required this.direction,
+    required this.libraryName,
     required this.onOutcome,
   });
 
@@ -1232,6 +1259,11 @@ class _TopChrome extends StatelessWidget {
 
   final String title;
   final ChapterDirection direction;
+
+  /// What the library this chapter is shelved in is called, for the sheet's
+  /// rows: empty where the server's list has not reached the device yet.
+  final String libraryName;
+
   final ValueChanged<ReaderSettingsOutcome> onOutcome;
 
   @override
@@ -1270,6 +1302,7 @@ class _TopChrome extends StatelessWidget {
                 const SizedBox(width: 8),
                 _SettingsCog(
                   direction: direction,
+                  libraryName: libraryName,
                   onOutcome: onOutcome,
                   tooltip: l10n.readerSettings,
                 ),
@@ -1288,11 +1321,13 @@ class _TopChrome extends StatelessWidget {
 class _SettingsCog extends StatelessWidget {
   const _SettingsCog({
     required this.direction,
+    required this.libraryName,
     required this.onOutcome,
     required this.tooltip,
   });
 
   final ChapterDirection direction;
+  final String libraryName;
   final ValueChanged<ReaderSettingsOutcome> onOutcome;
   final String tooltip;
 
@@ -1305,6 +1340,7 @@ class _SettingsCog extends StatelessWidget {
           final outcome = await showReaderSettingsSheet(
             context,
             direction: direction,
+            libraryName: libraryName,
           );
           // The sheet outlives the chrome it was opened from, so what it
           // reports may arrive with the cog already out of the tree.

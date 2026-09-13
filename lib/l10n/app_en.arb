@@ -401,13 +401,39 @@
       "direction": {"type": "String"}
     }
   },
+  "directionSourceLibrary": "{direction} — the default for {library}",
+  "@directionSourceLibrary": {
+    "description": "In the reader's sheet: the reading direction in force is one chosen for every series in this library. {library} is the library's own name, as the server words it.",
+    "placeholders": {
+      "direction": {"type": "String"},
+      "library": {"type": "String"}
+    }
+  },
   "promoteReadingDirection": "Make this my default",
   "@promoteReadingDirection": {
     "description": "Reader action: makes the reading direction in force the profile's own default, so every series opens in it. The direction itself is shown beside the row; drawn only where it is not already their default."
   },
+  "promoteLibraryDirection": "Make this the default for {library}",
+  "@promoteLibraryDirection": {
+    "description": "Reader action: makes the reading direction in force the one every series in this library opens in, so a shelf the guess gets wrong is put right in one tap. {library} is the library's own name, as the server words it; drawn only where it is not already that library's.",
+    "placeholders": {
+      "library": {"type": "String"}
+    }
+  },
   "followDefaultDirection": "Follow the default",
   "@followDefaultDirection": {
     "description": "Reader action: drops the direction chosen for this series, which then follows the default again. The direction it lands on is shown beside the row; worded 'the default' rather than 'my default' because it may be a detected one."
+  },
+  "followDefaultDirectionForLibrary": "Follow the default for {library}",
+  "@followDefaultDirectionForLibrary": {
+    "description": "Reader action: drops the direction chosen for a whole library, whose series then follow what stands below it again. The direction the chapter lands on is shown beside the row. {library} is the library's own name, as the server words it.",
+    "placeholders": {
+      "library": {"type": "String"}
+    }
+  },
+  "thisLibrary": "this library",
+  "@thisLibrary": {
+    "description": "Stands in for a library's name where the server's list has not reached the device yet, in the reader's rows that name a library."
   },
 
   "savePill": "Save",

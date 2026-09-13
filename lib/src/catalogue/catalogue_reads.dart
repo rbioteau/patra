@@ -1,4 +1,4 @@
-/// The six questions the catalogue answers, and the one thing derived from
+/// The six questions the catalogue answers, and the two things derived from
 /// them.
 ///
 /// These used to be declared at the top of the three screens that draw them —
@@ -19,6 +19,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/models.dart';
+import 'catalogue_overlay.dart';
 import 'catalogue_read.dart';
 
 /// The libraries this profile can see.
@@ -69,6 +70,33 @@ final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
     if (library.id == libraryId) return library.type;
   }
   return LibraryType.manga;
+});
+
+/// The name of one library, which is how a person is told which library a
+/// direction was set for (#65).
+///
+/// Empty where the device remembers nothing of it yet or the library is not
+/// in what it remembers, the way a `Series.libraryName` is: a name is the
+/// server's word and there is nothing to guess it from, so what a screen does
+/// with an empty one is its own business (the reader's sheet says "this
+/// library").
+///
+/// **Read off the spine and never through [libraries]**, which the type
+/// beside this does ask. Watching that read is a request, and not a small
+/// one — the library list's write starts the eager fill, which pages every
+/// library's series — and the one screen that wants a name is the reader, for
+/// a row in its own sheet. Opening a chapter is not the moment to fill a
+/// household's catalogue, so this takes what the launch already loaded.
+final libraryNameProvider = Provider.autoDispose.family<String, int>((
+  ref,
+  libraryId,
+) {
+  final spine = heldSpine(ref);
+  if (spine == null) return '';
+  for (final library in spine.libraries) {
+    if (library.id == libraryId) return library.name;
+  }
+  return '';
 });
 
 /// Every series in one library, and the catalogue's copy of that list.
