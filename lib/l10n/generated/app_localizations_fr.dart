@@ -393,10 +393,28 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String directionSourceLibrary(String direction, String library) {
+    return '$direction — le réglage par défaut de $library';
+  }
+
+  @override
   String get promoteReadingDirection => 'En faire mon réglage par défaut';
 
   @override
+  String promoteLibraryDirection(String library) {
+    return 'En faire le réglage par défaut de $library';
+  }
+
+  @override
   String get followDefaultDirection => 'Suivre le réglage par défaut';
+
+  @override
+  String followDefaultDirectionForLibrary(String library) {
+    return 'Suivre le réglage par défaut de $library';
+  }
+
+  @override
+  String get thisLibrary => 'cette bibliothèque';
 
   @override
   String get savePill => 'Enregistrer';

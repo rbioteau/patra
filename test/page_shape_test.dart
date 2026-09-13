@@ -316,7 +316,9 @@ void main() {
         _chapter(pages: [_panel, _panel, _panel]),
       ]);
 
-      final resolved = container.read(chapterDirectionProvider(3));
+      final resolved = container.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(resolved.direction, ReadingDirection.verticalScroll);
       expect(resolved.source, ReadingDirectionSource.detected);
     });
@@ -329,7 +331,9 @@ void main() {
       await container
           .read(seriesDirectionsProvider.notifier)
           .set(3, ReadingDirection.leftToRight);
-      final chosen = container.read(chapterDirectionProvider(3));
+      final chosen = container.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(chosen.direction, ReadingDirection.leftToRight);
       expect(chosen.source, ReadingDirectionSource.series);
 

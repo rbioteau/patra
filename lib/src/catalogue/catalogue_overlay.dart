@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import '../api/models.dart';
+import '../auth/session.dart';
 import 'catalogue_provider.dart';
 import 'catalogue_store.dart';
 
@@ -30,6 +31,32 @@ final _spineReadProvider = FutureProvider<Spine>(
   retry: (retryCount, error) => null,
   (ref) async => await _storeOrNull(ref)?.loadSpine() ?? const Spine(),
 );
+
+/// The spine this session's catalogue holds, or null where nobody is reading
+/// yet — for a caller that must put nothing on the wire.
+///
+/// [spineOverlay] is the ordinary way to ask the catalogue a question, and it
+/// is the right one for a screen: it answers from the device and refreshes
+/// from the server. What it also does is *ask*, and the request behind the
+/// library list is not a small one — its write starts the eager fill, which
+/// then pages every library's series. A chapter being opened is not the moment
+/// for that, so anything the reader needs of a library is read from memory
+/// alone: whatever the launch already loaded, or whatever the one read off the
+/// device has since brought in.
+///
+/// Nobody reading is answered off the session rather than caught off the
+/// store, whose own answer to it is a `StateError` — one Riverpod hands on
+/// wrapped rather than as the `StateError` it was, so [_storeOrNull] cannot
+/// see it. A catalogue with nobody signed in is not a failure, and a caller
+/// that asks for one anyway has to be told it holds nothing.
+Spine? heldSpine(Ref ref) {
+  if (ref.watch(sessionProvider.select((s) => s?.id)) == null) return null;
+  // Watched for its arrival, the way [spineOverlay] watches it: where the
+  // store has not read the device yet, that read is all there is — and it is
+  // what makes this answer again once it lands.
+  final read = ref.watch(_spineReadProvider);
+  return _storeOrNull(ref)?.spine ?? read.value;
+}
 
 /// One list, laid over what the device remembers of it: [fetch] is the
 /// request, and [held] picks that list out of the spine.

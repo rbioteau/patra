@@ -159,17 +159,38 @@ void main() {
     test('changing one preference keeps the others', () async {
       // `setLanguage` cannot go through `copyWith` — null is a choice — so it
       // builds the record by hand, and a field it forgets to carry is a
-      // preference that quietly resets itself on the next launch.
+      // preference that quietly resets itself on the next launch. The two
+      // direction maps are the fields most easily forgotten, being the
+      // newest: a series and a library set for a person are theirs however
+      // many times they change their language since.
       final store = await preferencesStore();
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setMagnify(_romain.id, true);
       await store.setWidthFactor(_romain.id, 0.6);
+      await store.setSeriesDirection(
+        _romain.id,
+        3,
+        ReadingDirection.verticalScroll,
+      );
+      await store.setLibraryDirection(
+        _romain.id,
+        1,
+        ReadingDirection.verticalScroll,
+      );
       await store.setLanguage(_romain.id, const Locale('fr'));
 
       expect(store.of(_romain.id).direction, ReadingDirection.rightToLeft);
       expect(store.of(_romain.id).magnify, isTrue);
       expect(store.widthFactorFor(_romain.id), 0.6);
       expect(store.languageFor(_romain.id), const Locale('fr'));
+      expect(
+        store.seriesDirectionFor(_romain.id, 3),
+        ReadingDirection.verticalScroll,
+      );
+      expect(
+        store.libraryDirectionFor(_romain.id, 1),
+        ReadingDirection.verticalScroll,
+      );
     });
 
     test('forgetting a profile takes its preferences with it', () async {
@@ -177,7 +198,11 @@ void main() {
       final store = await preferencesStore(keychain: keychain);
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setDirection(_lea.id, ReadingDirection.verticalScroll);
-      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.verticalScroll);
+      await store.setSeriesDirection(
+        _romain.id,
+        3,
+        ReadingDirection.verticalScroll,
+      );
 
       await store.forget(_romain.id);
       expect(store.of(_romain.id).direction, isNull);
@@ -194,8 +219,16 @@ void main() {
       // read the same series the same way round (ADR-0007).
       final keychain = MemoryKeychain();
       final store = await preferencesStore(keychain: keychain);
-      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.rightToLeft);
-      await store.setSeriesDirection(_lea.id, 3, ReadingDirection.verticalScroll);
+      await store.setSeriesDirection(
+        _romain.id,
+        3,
+        ReadingDirection.rightToLeft,
+      );
+      await store.setSeriesDirection(
+        _lea.id,
+        3,
+        ReadingDirection.verticalScroll,
+      );
 
       expect(
         store.seriesDirectionFor(_romain.id, 3),
@@ -218,15 +251,26 @@ void main() {
         reopened.seriesDirectionFor(_romain.id, 3),
         ReadingDirection.rightToLeft,
       );
-      expect(reopened.seriesDirectionFor(_lea.id, 3), ReadingDirection.verticalScroll);
+      expect(
+        reopened.seriesDirectionFor(_lea.id, 3),
+        ReadingDirection.verticalScroll,
+      );
       expect(reopened.seriesDirectionFor(_romain.id, 9), isNull);
     });
 
     test('a series can go back to following the default', () async {
       final keychain = MemoryKeychain();
       final store = await preferencesStore(keychain: keychain);
-      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.rightToLeft);
-      await store.setSeriesDirection(_romain.id, 9, ReadingDirection.verticalScroll);
+      await store.setSeriesDirection(
+        _romain.id,
+        3,
+        ReadingDirection.rightToLeft,
+      );
+      await store.setSeriesDirection(
+        _romain.id,
+        9,
+        ReadingDirection.verticalScroll,
+      );
 
       await store.clearSeriesDirection(_romain.id, 3);
       expect(store.seriesDirectionFor(_romain.id, 3), isNull);
@@ -251,6 +295,89 @@ void main() {
       );
     });
 
+    test('a library direction belongs to the profile that chose it', () async {
+      // The same shape as the series map it mirrors, and the same promise: a
+      // choice about a shelf, kept with the person who made it and gone when
+      // they are (#65).
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
+      await store.setLibraryDirection(
+        _romain.id,
+        1,
+        ReadingDirection.rightToLeft,
+      );
+      await store.setLibraryDirection(
+        _lea.id,
+        1,
+        ReadingDirection.verticalScroll,
+      );
+
+      expect(
+        store.libraryDirectionFor(_romain.id, 1),
+        ReadingDirection.rightToLeft,
+      );
+      expect(
+        store.libraryDirectionFor(_lea.id, 1),
+        ReadingDirection.verticalScroll,
+      );
+      expect(
+        store.libraryDirectionFor(_romain.id, 2),
+        isNull,
+        reason: 'a library nobody set was never given one',
+      );
+
+      final reopened = await preferencesStore(
+        keychain: MemoryKeychain({...keychain.values}),
+      );
+      expect(
+        reopened.libraryDirectionFor(_romain.id, 1),
+        ReadingDirection.rightToLeft,
+      );
+      expect(
+        reopened.libraryDirectionFor(_lea.id, 1),
+        ReadingDirection.verticalScroll,
+      );
+
+      await store.forget(_romain.id);
+      expect(store.libraryDirectionFor(_romain.id, 1), isNull);
+      expect(
+        store.libraryDirectionFor(_lea.id, 1),
+        ReadingDirection.verticalScroll,
+      );
+    });
+
+    test('a library can go back to following what stands below it', () async {
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
+      await store.setLibraryDirection(
+        _romain.id,
+        1,
+        ReadingDirection.rightToLeft,
+      );
+      await store.setLibraryDirection(
+        _romain.id,
+        2,
+        ReadingDirection.verticalScroll,
+      );
+
+      await store.clearLibraryDirection(_romain.id, 1);
+      expect(store.libraryDirectionFor(_romain.id, 1), isNull);
+      expect(
+        store.libraryDirectionFor(_romain.id, 2),
+        ReadingDirection.verticalScroll,
+        reason: 'one shelf going back moves no other',
+      );
+
+      final reopened = await preferencesStore(
+        keychain: MemoryKeychain({...keychain.values}),
+      );
+      expect(reopened.libraryDirectionFor(_romain.id, 1), isNull);
+      expect(
+        reopened.libraryDirectionFor(_romain.id, 2),
+        ReadingDirection.verticalScroll,
+      );
+    });
+
     test('a series map of the wrong shape costs a series, not the row', () async {
       // Read before `runApp`, so the safe direction is the least there is to
       // lose: one series goes back to following the default, and everything
@@ -260,7 +387,9 @@ void main() {
           'profilePreferences':
               '{"${_romain.id}": {"direction": "rightToLeft", "magnify": true,'
               ' "seriesDirections": {"3": 7, "4": "webtoon",'
-              ' "five": "rightToLeft", "6": "sideways"}}}',
+              ' "five": "rightToLeft", "6": "sideways"},'
+              ' "libraryDirections": {"1": 7, "2": "webtoon",'
+              ' "three": "rightToLeft"}}}',
         }),
       );
 
@@ -278,6 +407,13 @@ void main() {
       expect(store.seriesDirectionFor(_romain.id, 6), isNull);
       expect(store.of(_romain.id).direction, ReadingDirection.rightToLeft);
       expect(store.of(_romain.id).magnify, isTrue);
+      // The library map is the same shape, read by the same parser (#65).
+      expect(store.libraryDirectionFor(_romain.id, 1), isNull);
+      expect(
+        store.libraryDirectionFor(_romain.id, 2),
+        ReadingDirection.verticalScroll,
+      );
+      expect(store.libraryDirectionFor(_romain.id, 3), isNull);
 
       final nonsense = await preferencesStore(
         keychain: MemoryKeychain({

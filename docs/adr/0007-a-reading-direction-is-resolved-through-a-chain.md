@@ -162,27 +162,26 @@ The bullet of [Consequences] saying #58 *"must answer this before it takes the
 direction's row out of Settings"* is **superseded**: there is no default to
 unset, and #58 is no longer blocked on one.
 
-### A direction per library, planned
+### A direction per library, shipped (#65)
 
 The case the profile's rung covered is not empty. A "Manga" library holding
 manhua — whose pages are the shape of manga's, and would be detected
 right-to-left when they read the other way — is wrong for every series in it.
 A default held **per library** answers that in one tap and has the right
 shape: a library is a shelf of works, so it belongs on the work's side of the
-chain, under the series and above detection. It is also cheap to add —
-`ChapterInfo.libraryId` is already in the reader's hand, `Library` carries its
-own name, and the storage would mirror the per-series map that already
-exists.
+chain, under the series and above detection. It was also cheap to add —
+`ChapterInfo.libraryId` was already in the reader's hand, `Library` carries its
+own name, and the storage mirrors the per-series map that already existed.
 
-**Planned, and it lands before or with the profile rung's removal.** This
-amendment first deferred it, for the reason per-series magnifying was: nobody
-had complained, because detection does not exist yet. That reasoning does not
-survive what triaging #57 established — the genres and tags a series carries
-say what a work is *about* and nothing about how it is read, so detection
-rests on the library type and the shape of the pages, and nothing else. A
-library whose type is wrong is therefore wrong for **every** series in it, and
-with the profile rung gone there is no rung between the series and detection
-left to correct it.
+**It lands before or with the profile rung's removal** — which is why it is
+being built first (#65). This amendment first deferred it, for the reason
+per-series magnifying was: nobody had complained, because detection did not
+exist yet. That reasoning does not survive what triaging #57 established — the
+genres and tags a series carries say what a work is *about* and nothing about
+how it is read, so detection rests on the library type and the shape of the
+pages, and nothing else. A library whose type is wrong is therefore wrong for
+**every** series in it, and with the profile rung gone there is no rung
+between the series and detection left to correct it.
 
 The per-library direction is not an extra beside the profile's. It is what
 replaces it.
@@ -217,3 +216,36 @@ is no precedence to arbitrate** between them:
 Nothing above this rung moved. A guess is still asked only while the series,
 the profile and the device have all answered nothing, and the sheet still
 says that what is in force was detected rather than chosen.
+
+## Amendment — 2026-09-13 (#65)
+
+The per-library direction is built, and it is the second rung: **the series',
+then the library's**, then the profile's, then this device's stored default,
+then the detected direction, then the built-in left-to-right.
+
+It sits **directly under the series'** rather than merely somewhere above
+detection, for two reasons. Both rungs are answers about the work's side of the
+chain, and a library is the wider of the two. And it is what *replaces* the
+profile's own, so it has to be the rung every series in the library follows
+**even while a person has a default of their own stored** — otherwise the case
+it exists for, a library the guess gets wrong, is outranked by the very
+default this ADR says is the wrong shape.
+
+It is stored as `ProfilePreferences.libraryDirections`, a map of library id to
+direction in the same keychain row as the per-series map, read and written by
+the same parser: a choice about works, belonging to the profile that made it,
+never sent to the server, and gone when the profile is. The reader's sheet
+gained what the series rung already had — a row promoting the direction in
+force to the library's, a row back from it worded with where the chapter
+really lands, and a line of provenance — and reports each as a
+`ReaderSettingsOutcome` for the reader to act on, as it does for the series.
+
+**The name those rows are worded with is read off the spine the device already
+holds, and not through the catalogue's library list.** Watching that read is a
+request, and its write starts the eager fill, which pages every library's
+series; opening a chapter is not the moment to fill a household's catalogue.
+Where the device holds no name yet the rows say "this library" instead.
+
+The [Consequences] bullet about promoting a default that nothing can unset
+applies to this rung too, and is answered the same way: a library that is set
+owes a row back.

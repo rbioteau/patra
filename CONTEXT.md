@@ -156,11 +156,15 @@ _Avoid_: next up, recommended, suggestions, up next
 ### Reading
 
 **Reading direction**:
-Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Profile]]'s own, then this device's own stored [[Device default]] — a direction somebody set on this device is a choice, and a guess never beats one — then the [[Detected direction]], and last the left-to-right a chapter has always opened in.
+Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Library direction]], then the [[Profile]]'s own, then this device's own stored [[Device default]] — a direction somebody set on this device is a choice, and a guess never beats one — then the [[Detected direction]], and last the left-to-right a chapter has always opened in.
 _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
 
+**Library direction**:
+The [[Reading direction]] chosen for every [[Series]] shelved in one library, which outranks what a person chose for all of their reading and is outranked by a series' own. It is the rung that corrects a library the guess gets wrong wholesale — a library whose type is wrong is wrong for every work in it — and it is what replaces the profile's own default rather than an extra beside it. It belongs to the [[Profile]] that chose it and is never sent to the server, and a library nobody has set has none.
+_Avoid_: library default, library setting, shelf direction
+
 **Series direction**:
-The [[Reading direction]] chosen for one [[Series]] alone, which outranks the person's own for that series and for nothing else. It belongs to the [[Profile]] that chose it and is never sent to the server. A series nobody has set has none, and opens at whatever stands below it — which is the whole of why it is not the same thing as setting a series to the value the person's choice happens to hold: a series that is merely *set* stops following a default that later changes, where one with no series direction follows it wherever it goes.
+The [[Reading direction]] chosen for one [[Series]] alone, which outranks the library's and the person's own for that series and for nothing else. It belongs to the [[Profile]] that chose it and is never sent to the server. A series nobody has set has none, and opens at whatever stands below it — which is the whole of why it is not the same thing as setting a series to the value the person's choice happens to hold: a series that is merely *set* stops following a default that later changes, where one with no series direction follows it wherever it goes.
 _Avoid_: per-series setting, override, book setting
 
 **Detected direction**:

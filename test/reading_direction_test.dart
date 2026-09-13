@@ -60,27 +60,39 @@ void main() {
         deviceDirection: ReadingDirection.leftToRight,
       );
       await store.setDirection(_romain.id, ReadingDirection.verticalScroll);
-      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.rightToLeft);
+      await store.setSeriesDirection(
+        _romain.id,
+        3,
+        ReadingDirection.rightToLeft,
+      );
 
       final his = _container(store: store, active: _romain);
-      final series = his.read(chapterDirectionProvider(3));
+      final series = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(series.direction, ReadingDirection.rightToLeft);
       expect(series.source, ReadingDirectionSource.series);
       // Where the series lands if its own is dropped: the rung below.
       expect(series.withoutSeries, ReadingDirection.verticalScroll);
 
-      final unread = his.read(chapterDirectionProvider(9));
+      final unread = his.read(
+        chapterDirectionProvider((seriesId: 9, libraryId: 1)),
+      );
       expect(unread.direction, ReadingDirection.verticalScroll);
       expect(unread.source, ReadingDirectionSource.profile);
       expect(unread.hasSeriesDirection, isFalse);
 
       // Somebody who has chosen nothing of their own is on the device's.
       final hers = _container(store: store, active: _lea);
-      final onDevice = hers.read(chapterDirectionProvider(3));
+      final onDevice = hers.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(onDevice.direction, ReadingDirection.leftToRight);
       expect(onDevice.source, ReadingDirectionSource.device);
       expect(
-        hers.read(chapterDirectionProvider(9)).direction,
+        hers
+            .read(chapterDirectionProvider((seriesId: 9, libraryId: 1)))
+            .direction,
         ReadingDirection.leftToRight,
       );
     });
@@ -100,9 +112,10 @@ void main() {
       );
       expect(store.seriesDirectionFor(_lea.id, 3), isNull);
       expect(
-        _container(store: store, active: _lea)
-            .read(chapterDirectionProvider(3))
-            .direction,
+        _container(
+          store: store,
+          active: _lea,
+        ).read(chapterDirectionProvider((seriesId: 3, libraryId: 1))).direction,
         ReadingDirection.leftToRight,
       );
     });
@@ -119,13 +132,17 @@ void main() {
           .read(seriesDirectionsProvider.notifier)
           .set(3, ReadingDirection.verticalScroll);
       expect(
-        his.read(chapterDirectionProvider(3)).withoutSeries,
+        his
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .withoutSeries,
         ReadingDirection.rightToLeft,
       );
 
       await his.read(seriesDirectionsProvider.notifier).clear(3);
       expect(
-        his.read(chapterDirectionProvider(3)).direction,
+        his
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
         ReadingDirection.rightToLeft,
       );
       expect(store.seriesDirectionFor(_romain.id, 3), isNull);
@@ -151,11 +168,13 @@ void main() {
       );
       // Another series, which has no direction of its own, follows them now.
       expect(
-        his.read(chapterDirectionProvider(9)).direction,
+        his
+            .read(chapterDirectionProvider((seriesId: 9, libraryId: 1)))
+            .direction,
         ReadingDirection.rightToLeft,
       );
       expect(
-        his.read(chapterDirectionProvider(9)).source,
+        his.read(chapterDirectionProvider((seriesId: 9, libraryId: 1))).source,
         ReadingDirectionSource.profile,
       );
     });
@@ -173,9 +192,14 @@ void main() {
         active: _romain,
         detected: {3: ReadingDirection.rightToLeft},
       );
-      expect(his.read(chapterDirectionProvider(3)).direction, ReadingDirection.leftToRight);
       expect(
-        his.read(chapterDirectionProvider(3)).source,
+        his
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
+        ReadingDirection.leftToRight,
+      );
+      expect(
+        his.read(chapterDirectionProvider((seriesId: 3, libraryId: 1))).source,
         ReadingDirectionSource.profile,
       );
 
@@ -187,11 +211,13 @@ void main() {
         detected: {3: ReadingDirection.rightToLeft},
       );
       expect(
-        hers.read(chapterDirectionProvider(3)).direction,
+        hers
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
         ReadingDirection.verticalScroll,
       );
       expect(
-        hers.read(chapterDirectionProvider(3)).source,
+        hers.read(chapterDirectionProvider((seriesId: 3, libraryId: 1))).source,
         ReadingDirectionSource.device,
       );
     });
@@ -206,32 +232,233 @@ void main() {
         detected: {3: ReadingDirection.rightToLeft},
       );
 
-      final detected = his.read(chapterDirectionProvider(3));
+      final detected = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(detected.direction, ReadingDirection.rightToLeft);
       expect(detected.source, ReadingDirectionSource.detected);
       // Promotable, because no stored default counts as differing from
       // everything: a guess is not a choice, but it can be made into one.
-      expect(detected.canPromote, isTrue);
+      expect(detected.canPromoteToProfile, isTrue);
 
       // And a series nobody has set is the only thing that outranks it.
       await his
           .read(seriesDirectionsProvider.notifier)
           .set(3, ReadingDirection.verticalScroll);
       expect(
-        his.read(chapterDirectionProvider(3)).direction,
+        his
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
         ReadingDirection.verticalScroll,
       );
     });
 
-    test('nothing chosen and nothing detected ends where it always did', () async {
+    test(
+      'nothing chosen and nothing detected ends where it always did',
+      () async {
+        final store = await preferencesStore();
+        final his = _container(store: store, active: _romain);
+
+        final plain = his.read(
+          chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+        );
+        expect(plain.direction, ReadingDirection.leftToRight);
+        expect(plain.source, ReadingDirectionSource.device);
+        expect(plain.series, isNull);
+        expect(plain.profile, isNull);
+      },
+    );
+  });
+
+  group('the library\u2019s rung', () {
+    // #65: a direction for a whole shelf, on the work's side of the chain —
+    // under one series' own choice, above everything a person chose for all
+    // of their reading. It is the rung that corrects a library the guess is
+    // wrong about wholesale, and it is what replaces the profile's own.
+
+    test('is asked under the series and above what a person chose', () async {
+      final store = await preferencesStore(
+        deviceDirection: ReadingDirection.leftToRight,
+      );
+      await store.setDirection(_romain.id, ReadingDirection.verticalScroll);
+      await store.setLibraryDirection(
+        _romain.id,
+        1,
+        ReadingDirection.rightToLeft,
+      );
+
+      final his = _container(store: store, active: _romain);
+      final shelf = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(shelf.direction, ReadingDirection.rightToLeft);
+      expect(shelf.source, ReadingDirectionSource.library);
+      expect(
+        shelf.withoutLibrary,
+        ReadingDirection.verticalScroll,
+        reason: 'the profile\u2019s own stands below it, and it is not this',
+      );
+
+      // One series of the shelf saying otherwise for itself still wins.
+      await his
+          .read(seriesDirectionsProvider.notifier)
+          .set(3, ReadingDirection.leftToRight);
+      expect(
+        his
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
+        ReadingDirection.leftToRight,
+      );
+
+      // And a series on another shelf is untouched by either.
+      final elsewhere = his.read(
+        chapterDirectionProvider((seriesId: 9, libraryId: 2)),
+      );
+      expect(elsewhere.direction, ReadingDirection.verticalScroll);
+      expect(elsewhere.source, ReadingDirectionSource.profile);
+    });
+
+    test(
+      'every series in the library follows it, and nothing outside does',
+      () async {
+        // Set once for a shelf: the whole point of the rung is that a library
+        // whose type is wrong is wrong for all of them at once.
+        final store = await preferencesStore();
+        final his = _container(store: store, active: _romain);
+        await his
+            .read(libraryDirectionsProvider.notifier)
+            .set(1, ReadingDirection.rightToLeft);
+
+        for (final seriesId in [3, 4, 5]) {
+          expect(
+            his
+                .read(
+                  chapterDirectionProvider((seriesId: seriesId, libraryId: 1)),
+                )
+                .direction,
+            ReadingDirection.rightToLeft,
+          );
+        }
+        expect(
+          his
+              .read(chapterDirectionProvider((seriesId: 3, libraryId: 2)))
+              .direction,
+          ReadingDirection.leftToRight,
+        );
+      },
+    );
+
+    test('outranks a detection, and is outranked by a series', () async {
+      // A guess must never beat a choice, and a library's direction is one.
+      final store = await preferencesStore();
+      final his = _container(
+        store: store,
+        active: _romain,
+        detected: {3: ReadingDirection.verticalScroll},
+      );
+      expect(
+        his
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
+        ReadingDirection.verticalScroll,
+      );
+
+      await his
+          .read(libraryDirectionsProvider.notifier)
+          .set(1, ReadingDirection.rightToLeft);
+      final chosen = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(chosen.direction, ReadingDirection.rightToLeft);
+      expect(chosen.source, ReadingDirectionSource.library);
+
+      await his
+          .read(seriesDirectionsProvider.notifier)
+          .set(3, ReadingDirection.verticalScroll);
+      expect(
+        his.read(chapterDirectionProvider((seriesId: 3, libraryId: 1))).source,
+        ReadingDirectionSource.series,
+      );
+    });
+
+    test('belongs to the profile that set it', () async {
+      // A choice about a shelf, made by somebody: it goes where they go and
+      // stays behind when they do.
       final store = await preferencesStore();
       final his = _container(store: store, active: _romain);
+      await his
+          .read(libraryDirectionsProvider.notifier)
+          .set(1, ReadingDirection.rightToLeft);
 
-      final plain = his.read(chapterDirectionProvider(3));
-      expect(plain.direction, ReadingDirection.leftToRight);
-      expect(plain.source, ReadingDirectionSource.device);
-      expect(plain.series, isNull);
-      expect(plain.profile, isNull);
+      expect(
+        store.libraryDirectionFor(_romain.id, 1),
+        ReadingDirection.rightToLeft,
+      );
+      expect(store.libraryDirectionFor(_lea.id, 1), isNull);
+      expect(
+        _container(
+          store: store,
+          active: _lea,
+        ).read(chapterDirectionProvider((seriesId: 3, libraryId: 1))).direction,
+        ReadingDirection.leftToRight,
+      );
+
+      await store.forget(_romain.id);
+      expect(store.libraryDirectionFor(_romain.id, 1), isNull);
+    });
+
+    test('can be dropped again, and the row says where it lands', () async {
+      // Set is not the same as unset: a library that is set stops following
+      // a default that later changes, so the sheet owes a way back — and it
+      // is worded with the direction the chapter really opens in.
+      final store = await preferencesStore(
+        deviceDirection: ReadingDirection.rightToLeft,
+      );
+      final his = _container(store: store, active: _romain);
+      await his
+          .read(libraryDirectionsProvider.notifier)
+          .set(1, ReadingDirection.verticalScroll);
+
+      final shelf = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(shelf.hasLibraryDirection, isTrue);
+      expect(shelf.withoutLibrary, ReadingDirection.rightToLeft);
+
+      await his.read(libraryDirectionsProvider.notifier).clear(1);
+      final dropped = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(dropped.direction, ReadingDirection.rightToLeft);
+      expect(dropped.source, ReadingDirectionSource.device);
+      expect(store.libraryDirectionFor(_romain.id, 1), isNull);
+    });
+
+    test('a series keeping its own is where the library lands', () async {
+      // Dropping the library's own does not move a series that has one: the
+      // row is worded with what a chapter really opens in, not merely with
+      // what the shelf falls back to.
+      final store = await preferencesStore();
+      final his = _container(store: store, active: _romain);
+      await his
+          .read(libraryDirectionsProvider.notifier)
+          .set(1, ReadingDirection.rightToLeft);
+      await his
+          .read(seriesDirectionsProvider.notifier)
+          .set(3, ReadingDirection.verticalScroll);
+
+      final shelf = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(shelf.direction, ReadingDirection.verticalScroll);
+      expect(shelf.withoutLibrary, ReadingDirection.verticalScroll);
+      // Another series of the same shelf does follow it down.
+      expect(
+        his
+            .read(chapterDirectionProvider((seriesId: 4, libraryId: 1)))
+            .withoutLibrary,
+        ReadingDirection.leftToRight,
+      );
     });
   });
 
@@ -245,26 +472,36 @@ void main() {
       await store.setDirection(_romain.id, ReadingDirection.verticalScroll);
       final his = _container(store: store, active: _romain);
 
-      final before = his.read(chapterDirectionProvider(3));
+      final before = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(before.direction, ReadingDirection.verticalScroll);
-      expect(before.canPromote, isFalse, reason: 'it already is their default');
+      expect(
+        before.canPromoteToProfile,
+        isFalse,
+        reason: 'it already is their default',
+      );
       expect(before.hasSeriesDirection, isFalse);
 
       await his
           .read(seriesDirectionsProvider.notifier)
           .set(3, ReadingDirection.rightToLeft);
-      final after = his.read(chapterDirectionProvider(3));
+      final after = his.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
       expect(after.direction, ReadingDirection.rightToLeft);
       expect(after.source, ReadingDirectionSource.series);
       expect(after.hasSeriesDirection, isTrue);
       expect(
-        after.canPromote,
+        after.canPromoteToProfile,
         isTrue,
         reason: 'their stored default is still vertical',
       );
       // His other series is untouched, which is the whole point of the rung.
       expect(
-        his.read(chapterDirectionProvider(9)).direction,
+        his
+            .read(chapterDirectionProvider((seriesId: 9, libraryId: 1)))
+            .direction,
         ReadingDirection.verticalScroll,
       );
     });
@@ -274,8 +511,16 @@ void main() {
       // store is the device's — so what follows the person has to be read
       // from it again rather than held.
       final store = await preferencesStore();
-      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.rightToLeft);
-      await store.setSeriesDirection(_lea.id, 3, ReadingDirection.verticalScroll);
+      await store.setSeriesDirection(
+        _romain.id,
+        3,
+        ReadingDirection.rightToLeft,
+      );
+      await store.setSeriesDirection(
+        _lea.id,
+        3,
+        ReadingDirection.verticalScroll,
+      );
 
       final container = ProviderContainer(
         overrides: [
@@ -289,35 +534,44 @@ void main() {
       );
       addTearDown(container.dispose);
       expect(
-        container.read(chapterDirectionProvider(3)).direction,
+        container
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
         ReadingDirection.rightToLeft,
       );
 
       await container.read(authProvider.notifier).resume(_lea);
       expect(
-        container.read(chapterDirectionProvider(3)).direction,
+        container
+            .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+            .direction,
         ReadingDirection.verticalScroll,
       );
     });
 
-    test('survives the app being closed, which is the store’s own promise', () async {
-      // Loaded before `runApp`, written whole on every change.
-      final keychain = MemoryKeychain();
-      final store = await preferencesStore(keychain: keychain);
-      final his = _container(store: store, active: _romain);
-      await his
-          .read(seriesDirectionsProvider.notifier)
-          .set(3, ReadingDirection.rightToLeft);
+    test(
+      'survives the app being closed, which is the store’s own promise',
+      () async {
+        // Loaded before `runApp`, written whole on every change.
+        final keychain = MemoryKeychain();
+        final store = await preferencesStore(keychain: keychain);
+        final his = _container(store: store, active: _romain);
+        await his
+            .read(seriesDirectionsProvider.notifier)
+            .set(3, ReadingDirection.rightToLeft);
 
-      final reopened = await preferencesStore(
-        keychain: MemoryKeychain({...keychain.values}),
-      );
-      final next = _container(store: reopened, active: _romain);
-      expect(
-        next.read(chapterDirectionProvider(3)).direction,
-        ReadingDirection.rightToLeft,
-      );
-    });
+        final reopened = await preferencesStore(
+          keychain: MemoryKeychain({...keychain.values}),
+        );
+        final next = _container(store: reopened, active: _romain);
+        expect(
+          next
+              .read(chapterDirectionProvider((seriesId: 3, libraryId: 1)))
+              .direction,
+          ReadingDirection.rightToLeft,
+        );
+      },
+    );
   });
 }
 
