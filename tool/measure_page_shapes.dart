@@ -180,26 +180,32 @@ void _report(List<_Row> rows) {
   }
   stdout.writeln(buffer);
 
-  // Where the two populations separate is the widest gap in the sorted
-  // medians — the one place where a threshold costs the least.
-  var widest = 0.0;
-  _Row? below;
-  _Row? above;
-  for (var i = 1; i < rows.length; i++) {
-    final gap = rows[i].median - rows[i - 1].median;
-    if (gap > widest) {
-      widest = gap;
-      below = rows[i - 1];
-      above = rows[i];
-    }
-  }
-  if (below != null && above != null) {
+  // Where the two populations separate, as the threshold itself sees them:
+  // the highest work it calls paged and the lowest it calls vertical. The
+  // widest gap between any two neighbours is not the question — a library
+  // of a single kind has a widest gap and no separation in it, as the public
+  // demo showed by reporting 0.03 between two comics.
+  final paged = rows.where((row) => row.median < _verticalAt).toList();
+  final vertical = rows.where((row) => row.median >= _verticalAt).toList();
+  if (paged.isEmpty || vertical.isEmpty) {
     stdout.writeln(
-      'Widest gap: ${below.median.toStringAsFixed(2)} (${below.series}) to '
-      '${above.median.toStringAsFixed(2)} (${above.series}) — any threshold in '
-      'that interval splits this library the same way.',
+      paged.isEmpty
+          ? 'Every series measured here is vertical: this library holds nothing that '
+              'turns, so it says nothing about how tall a page can get before it stops being one.'
+          : 'Every series measured here is paged: this library holds nothing that '
+              'scrolls, so it corroborates the paged population and says nothing about '
+              'where the threshold goes.',
     );
+    return;
   }
+  final highest = paged.last;
+  final lowest = vertical.first;
+  stdout.writeln(
+    'Paged tops out at ${highest.median.toStringAsFixed(2)} (${highest.series}); vertical '
+    'starts at ${lowest.median.toStringAsFixed(2)} (${lowest.series}). Any threshold in '
+    '(${highest.median.toStringAsFixed(2)}, ${lowest.median.toStringAsFixed(2)}] splits '
+    'this library the same way, and $_verticalAt is in it.',
+  );
 }
 
 /// The command line, with the environment as its fallback.
