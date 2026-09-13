@@ -152,8 +152,16 @@ _Avoid_: next up, recommended, suggestions, up next
 ### Reading
 
 **Reading direction**:
-Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them.
+Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Profile]]'s own, then the [[Detected direction]], then the [[Device default]].
 _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
+
+**Series direction**:
+The [[Reading direction]] chosen for one [[Series]] alone, which outranks the person's own for that series and for nothing else. It belongs to the [[Profile]] that chose it and is never sent to the server. A series nobody has set has none, and opens at whatever stands below it — which is the whole of why it is not the same thing as setting a series to the value the person's choice happens to hold: a series that is merely *set* stops following a default that later changes, where one with no series direction follows it wherever it goes.
+_Avoid_: per-series setting, override, book setting
+
+**Detected direction**:
+The [[Reading direction]] the app infers for a work it has been told nothing about, from what the server says about the series — its library type and its genres, since Kavita exposes no direction of its own. It is a guess and never a choice: anything anybody actually chose outranks it, and the reader says where a direction came from rather than presenting a guess as one.
+_Avoid_: automatic direction, smart default, heuristic (in prose)
 
 **Vertical scrolling**:
 The reading direction in which the pages run as one continuous strip and are scrolled rather than turned. Kavita calls it *webtoon*, after the genre it was built for, and separately offers a **paged** vertical direction we do not — which is why the word here is "scrolling" and not merely "vertical". On screen the one word "Vertical" is enough, since it is the only vertical direction in the picker.
