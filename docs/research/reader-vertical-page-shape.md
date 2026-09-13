@@ -1,7 +1,7 @@
 # Where a page stops being a page: the vertical threshold
 
 **Status:** threshold named from Kavita's own reader, then **measured on a real library** — 1.8 confirmed  
-**Researched:** 2026-09-13 · **Measured:** 2026-09-13, 26 series  
+**Researched:** 2026-09-13 · **Measured:** 2026-09-13, 27 series · **Measured window:** (1.58, 1.86]  
 **Scope:** the one number #64 was opened for: the aspect ratio at which a page is a panel. It says nothing about *which way* a work reads — the library type answers that (#57).
 
 ## The question
@@ -84,11 +84,18 @@ Two things make these numbers evidence rather than somebody's first attempt:
 | Manga | Dragon Ball Super | 189 | 2 | 1.56 | 1.35 | 1.56 | paged |
 | Manga | One piece | 211 | 0 | 1.57 | 1.57 | 1.57 | paged |
 | Manga | Death Note | 194 | 2 | 1.58 | 1.50 | 1.58 | paged |
+| Manga | Nano Machine | 726 | 63 | 1.86 | 1.00 | 1.86 | vertical |
 | Manga | Solo Leveling | 9 | 0 | 6.94 | 1.43 | 10.62 | vertical |
 
 ### What the table says
 
-**The two populations do not overlap here, and the gap is enormous.** The twenty-five works that turn run from **1.30** (Blast - Intégrale) to **1.58** (Death Note); the one work that scrolls, Solo Leveling, medians at **6.94**. Nothing on the shelf lands between 1.58 and 6.94 — so any threshold in that interval classifies this library identically, and 1.8 sits in it, 0.22 above the highest paged work.
+**The two populations are now bracketed on both sides.** The twenty-five works that turn run from **1.30** (Blast - Intégrale) to **1.58** (Death Note). Two works scroll: **Nano Machine at 1.86** and Solo Leveling at **6.94**. So every threshold that classifies this shelf correctly lies in **(1.58, 1.86]** — a window 0.28 wide, with 1.8 sitting in it, 0.22 above the paged ceiling and **0.06 below the vertical floor**.
+
+**2.0 and 2.2 are now measurably too high.** Nano Machine would open paged at either. Above, that was an argument (2.2 is where Kavita is *certain*, not where the boundary is); Nano Machine makes it data, and it is the sharpest thing this measurement produced — the vertical population's floor sits *below* Kavita's own "strong" band.
+
+**The risk has flipped sides.** Until now the danger was a threshold too *low*, and 1.5 was struck for catching eight manga. The binding constraint is now a threshold too *high*: **1.8 is the highest number this shelf allows, not a comfortable middle.**
+
+**The median is load-bearing, not a nicety.** Nano Machine's min is **1.00** — it holds square pages — while its median and max are both **1.86**, so at least half its pages sit at 1.86 and the rest pull downward from there. A mean over those 726 pages would very likely fall below 1.8 and call a webtoon paged. That is inferred from the median and the min rather than computed; the instrument reports the median only.
 
 **1.5 is measurably too low.** Eight series — Death Note 1.58, One piece 1.57, Dragon Ball Super 1.56, Spy x Family 1.54, Demon Slayer and Jujutsu Kaisen 1.52, GTO and Attaque des Titans 1.50 — would open scrolling at Kavita's lower bound. That is the "weak" band Kavita hedges with `+0.2`, and on this shelf it is exactly where manga lives. **The threshold must be above 1.58.**
 
@@ -96,7 +103,7 @@ Two things make these numbers evidence rather than somebody's first attempt:
 
 **Solo Leveling is the case the median was chosen for, observed rather than argued.** It spans **1.43 to 10.62**: it contains pages shaped exactly like manga pages and still medians at 6.94. A mean over those nine pages is dragged toward 1.43 by pages that say nothing about the work.
 
-**What it does not settle: the upper half.** No series here lands between 1.58 and 6.94, so the measurement validates 1.8 but cannot choose between 1.8 and, say, 4.0. And the vertical population is **one series of nine pages** — the thinnest sample in the table. That is why 1.8 stays at the **low** end of the measured gap rather than in its middle: the paged population is well sampled and stops dead at 1.58, while the vertical population's lower tail is not sampled at all, and Solo Leveling proves that tail is real. Choosing 4.0 would bet that no webtoon medians below 4.0, on the evidence of one webtoon; choosing 1.8 bets only that no manga medians above 1.8, on the evidence of twenty-five.
+**What it does not settle: how far the vertical population reaches down.** Nano Machine answered the question Solo Leveling could not — a webtoon can median at 1.86 — and in doing so it moved the floor from "somewhere below 6.94" to "at least as low as 1.86". It did not find the bottom. The vertical population is **two series**, of which Solo Leveling is nine pages; and 1.86 is close enough to 1.8 that the margin above the threshold is 0.06, where the margin below is 0.22. Choosing 4.0 would have been a bet that no webtoon medians below 4.0, on the evidence of one webtoon; Nano Machine makes that bet and loses.
 
 ### A second library, one anybody can re-run: Kavita's public demo
 
@@ -118,7 +125,7 @@ The candidates are Kavita's own bands plus what the measurement added:
 
 - **≤ 1.58 is ruled out by measurement, not by Kavita.** Eight series on the shelf above reach 1.50–1.58. Whatever else is true, the threshold cannot be at or below the paged population's ceiling.
 - **Kavita's own detector has a reported false positive at 1.42.** Kavita issue #3604, *"Auto-webtoon formatting is triggering on a Manga series"* [Kavita-3604], reports it on a sample page of 650×924 — tallness **1.42** — which is inside the range the home shelf puts Berserk, Frieren and Atelier des sorciers in. It is one sample page, so it does not pin a number (the chapter must have held taller pages for Kavita's average to clear 0.7). What it does say is that a detector which misfires on real manga in the 1.4s is not one to copy *downwards* from.
-- **2.2 is where Kavita is *certain*, not where the boundary is.** It is the "strong" cutoff and the trigger for the 40% rule. Choosing it would catch only the unambiguous half of a shelf: a webtoon whose panels average 1.9 — taller than any manga page, and taller than Kavita needs when the widths are consistent — would still open paged.
+- **2.0 and 2.2 are ruled out by measurement.** Nano Machine medians at 1.86: both would open it paged. 2.2 is where Kavita is *certain*, not where the boundary is, and "certain" turns out to be the wrong side of the line — a webtoon whose panels sit at 1.86 is taller than any manga page on the shelf and still below Kavita's "strong" cutoff.
 - **1.5–1.8 cannot be the threshold**, because Kavita says in as many words that regular manga and comics live there. Scoring it at all is a hedge, not a judgement.
 - **1.8 is the seam.** It is the point where Kavita stops calling a page *weak* and starts calling it *moderate*, and it is the number its width-consistency rule turns on (`avgAspectRatio > 1.8` with `widthVariation < 0.15`). Below it, Kavita's own evidence is "this is probably a comic page"; above it, "this is probably a panel" — and with consistent widths, above it *is* webtoon mode in Kavita today.
 
@@ -142,9 +149,9 @@ It is keyed by **series**, not chapter: `detectedDirectionProvider` is a family 
 
 ## What is still thin
 
-- **The vertical population is one series.** Solo Leveling is n=1, and at nine pages it is the thinnest row in the table. More webtoons — or `--chapters 3` over the ones already here — would say whether that population's floor is nearer 2 or nearer 6. Until then 1.8 is the low end of the measured gap on purpose (above).
-- **Nothing lands between 1.58 and 6.94**, so this shelf does not exercise the upper half of the band at all. A library holding a vertical manhua, whose panels are shorter than a Korean webtoon's, is the case that would.
-- **The threshold did not move.** 1.8 was in the gap before the measurement and is in it after. What the measurement added is a floor — above 1.58 — and Kavita's 1.5 struck from the candidates.
+- **The vertical population is two series.** Nano Machine at 1.86 and Solo Leveling at 6.94 bracket nothing: the floor could be 1.7 or 1.8 and we could not tell. More webtoons, or `--chapters 3` over these two, is what would say.
+- **1.8 is the highest number this shelf allows, and its margin is thin.** It clears Nano Machine by 0.06. A third webtoon medians below 1.8 and the number has to come down — and the window says anywhere down to 1.58 is free, so there is room to move if that happens.
+- **The threshold did not move.** 1.8 was in the window before the measurement and is in it after. What the measurement added is a ceiling as well as a floor: above 1.58, and now below 1.86.
 
 ## How to re-run it
 

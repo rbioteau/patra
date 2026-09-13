@@ -3,9 +3,9 @@
 /// #64 asks where "very tall" starts, and says it cannot be guessed: it has to
 /// be measured on a library holding both things that scroll and things that
 /// turn. This is the instrument. It prints one row per series — the median
-/// page shape, the spread around it, and what the threshold in
-/// `docs/research/reader-vertical-page-shape.md` would decide — and then sorts
-/// the rows so the gap between the two populations is visible.
+/// page shape, the mean beside it, the spread around them, and what the
+/// threshold in `docs/research/reader-vertical-page-shape.md` would decide —
+/// and then reports where the two populations separate.
 ///
 /// It reads the numbers through `ChapterInfo`, so what it measures is exactly
 /// what the app will measure: the same endpoint, the same `includeDimensions`
@@ -87,6 +87,7 @@ class _Row {
     required this.library,
     required this.series,
     required this.median,
+    required this.mean,
     required this.min,
     required this.max,
     required this.pages,
@@ -96,6 +97,12 @@ class _Row {
   final String library;
   final String series;
   final double median;
+
+  /// The mean, alongside the median: the note argues the median is what makes
+  /// the threshold work, because a webtoon carrying square pages drags its
+  /// mean under 1.8 while its pages are plainly panels. Reported so that
+  /// argument can be checked on a real library rather than taken on trust.
+  final double mean;
   final double min;
   final double max;
   final int pages;
@@ -141,6 +148,7 @@ Future<_Row?> _measure(
     library: library.name,
     series: series.name,
     median: _median(tallness),
+    mean: tallness.reduce((sum, ratio) => sum + ratio) / tallness.length,
     min: tallness.first,
     max: tallness.last,
     pages: tallness.length,
@@ -163,8 +171,8 @@ void _report(List<_Row> rows) {
   rows.sort((a, b) => a.median.compareTo(b.median));
 
   final buffer = StringBuffer()
-    ..writeln('| Library | Series | Pages | Spreads | Median h/w | Min | Max | >= $_verticalAt |')
-    ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- |');
+    ..writeln('| Library | Series | Pages | Spreads | Median h/w | Mean h/w | Min | Max | >= $_verticalAt |')
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (final row in rows) {
     final cells = [
       row.library,
@@ -172,6 +180,7 @@ void _report(List<_Row> rows) {
       '${row.pages}',
       '${row.spreads}',
       row.median.toStringAsFixed(2),
+      row.mean.toStringAsFixed(2),
       row.min.toStringAsFixed(2),
       row.max.toStringAsFixed(2),
       row.median >= _verticalAt ? 'vertical' : 'paged',
