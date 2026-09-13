@@ -20,6 +20,7 @@ import '../../theme.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
+import 'page_rail.dart';
 import 'spread_layout.dart';
 import 'strip_geometry.dart';
 import 'strip_width.dart';
@@ -456,6 +457,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             page: _page,
             widthFactor: widthFactor,
             imageBuilder: _pageImage,
+            // The rail is part of the chrome: it is built with it and hidden
+            // with it, the same bargain the strip and the slider strike (#52).
+            railVisible: _showChrome,
             onPageChanged: (page, decodeWidth) =>
                 _onPageChanged(page, chapter, precacheWidth: decodeWidth),
           )
@@ -923,6 +927,7 @@ class _VerticalScrollView extends StatefulWidget {
     required this.page,
     required this.widthFactor,
     required this.imageBuilder,
+    required this.railVisible,
     required this.onPageChanged,
   });
 
@@ -933,6 +938,11 @@ class _VerticalScrollView extends StatefulWidget {
   /// `1.0` is the whole screen.
   final double widthFactor;
   final PageImageBuilder imageBuilder;
+
+  /// Whether the reader's chrome is up, which is when the rail is built:
+  /// vertical reading's seek control, in place of the thumbnail strip and
+  /// its slider (#52). Nothing the rail does exists while it is not.
+  final bool railVisible;
   final StripPageChanged onPageChanged;
 
   @override
@@ -1036,7 +1046,33 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
     if (page >= _width.geometry.pages) return;
     // Clamped by the strip's own geometry, which is where every other move of
     // this strip is clamped: `maxScrollExtent` is the last frame's extent.
-    _width.jumpToAnchor(StripAnchor(page, 0));
+    //
+    // The strip is being moved from here, which is the reader's build, so the
+    // notification the jump dispatches synchronously is gagged — the rail
+    // listens to the same controller, and a seek asked for by the reader is
+    // not news (it is covered by the build that follows), where a rebuild
+    // from inside this build is what this screen has already died on (#52).
+    _seeking = true;
+    try {
+      _width.jumpToAnchor(StripAnchor(page, 0));
+    } finally {
+      _seeking = false;
+    }
+  }
+
+  /// A seek the rail asked for: the strip lands on the top of [page], and
+  /// the reader is told the way it is told any other page change.
+  ///
+  /// That includes the page it is already on: a rail touch is a seek, and a
+  /// seek lands at the top of the page asked for either way (#52), so a
+  /// finger on the rail snaps a mid-page scroll to the page's top rather
+  /// than confirming it — the reader, whose `_page` has not moved, simply
+  /// hears about nothing.
+  void _railSeek(int page) {
+    if (page < 0 || page >= _width.geometry.pages) return;
+    _reported = page;
+    _jumpTo(page);
+    widget.onPageChanged(page, _width.decodeWidth(_pixelRatio));
   }
 
   @override
@@ -1090,30 +1126,57 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
           aspectRatioFor: widget.chapter.aspectRatioFor,
           identity: widget.chapter,
         );
-        return StripWidthGestures(
-          controller: _width,
-          child: CustomScrollView(
-            controller: _controller,
-            slivers: <Widget>[
-              // A continuous strip: no gaps and no page turns, and every
-              // page's extent known before it is built, so the offsets it is
-              // scrolled to are the offsets it is drawn at.
-              StripExtentList(
-                geometry: _width.geometry,
-                // Nothing in here reads an inherited widget or a provider: a
-                // lazy sliver builds its children *during* layout, and this
-                // screen has already died on both. The decode width is the
-                // width the page is drawn at, so narrowing the strip does
-                // not go on decoding pages at full size — the width it
-                // settled at, which a live pinch does not move.
-                itemBuilder: (context, page) => widget.imageBuilder(
-                  page,
-                  fit: BoxFit.fitWidth,
-                  cacheWidth: _width.decodeWidth(_pixelRatio),
-                ),
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            StripWidthGestures(
+              controller: _width,
+              child: CustomScrollView(
+                controller: _controller,
+                slivers: <Widget>[
+                  // A continuous strip: no gaps and no page turns, and every
+                  // page's extent known before it is built, so the offsets it
+                  // is scrolled to are the offsets it is drawn at.
+                  StripExtentList(
+                    geometry: _width.geometry,
+                    // Nothing in here reads an inherited widget or a
+                    // provider: a lazy sliver builds its children *during*
+                    // layout, and this screen has already died on both. The
+                    // decode width is the width the page is drawn at, so
+                    // narrowing the strip does not go on decoding pages at
+                    // full size — the width it settled at, which a live
+                    // pinch does not move.
+                    itemBuilder: (context, page) => widget.imageBuilder(
+                      page,
+                      fit: BoxFit.fitWidth,
+                      cacheWidth: _width.decodeWidth(_pixelRatio),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            // The rail: the chrome's seek control along the axis the chapter
+            // scrolls, which replaces the paged directions' strip and slider
+            // (#52). A chapter of one page has nowhere to seek to, so none
+            // is built for it — the same rule the vertical chrome keeps for
+            // its silhouette.
+            if (widget.railVisible && _width.geometry.pages > 1)
+              PageRail(
+                geometry: _width.geometry,
+                controller: _controller,
+                // The chrome the rail runs between: measured where the bars
+                // themselves are drawn, so a change to either bar is a
+                // change to the bar alone.
+                topGap: _TopChrome.barHeight,
+                bottomGap: _BottomChrome.barHeight,
+                onSeek: _railSeek,
+                // The controller's moves the rail must not rebuild itself
+                // from: a seek or a width change is being reported from
+                // inside the reader's build, and the build that follows
+                // carries where the strip landed.
+                seeking: () => _seeking,
+              ),
+          ],
         );
       },
     );
@@ -1128,6 +1191,13 @@ class _TopChrome extends StatelessWidget {
     required this.direction,
     required this.onDirectionChanged,
   });
+
+  /// How far the bar reaches down the screen, in points — what the rail
+  /// starts below (`page_rail.dart`), and the whole of the bar's geometry:
+  /// `4pt` in front of a `48pt` row with `20pt` behind it. The rail never
+  /// restates it; it reads it from here, which is what keeps a change of the
+  /// bar a change of the bar alone.
+  static const double barHeight = 4 + 48 + 20;
 
   final String title;
   final ReadingDirection direction;
@@ -1234,12 +1304,21 @@ class _BottomChrome extends StatelessWidget {
     required this.onSeek,
   });
 
+  /// How far the chrome reaches up the screen, in points — roughly where
+  /// the rail ends (`page_rail.dart`), which reads it from here rather than
+  /// restating it: `28pt` of headroom, about `18pt` for the numerals' own
+  /// line (13pt set at the source serif's height), `8pt` below, and a few
+  /// points of air so a handle at the very end of the rail never rides the
+  /// scrim.
+  static const double barHeight = 62.0;
+
   final ChapterInfo chapter;
   final int page;
   final int span;
   final bool rtl;
 
-  /// Reading vertically, where the thumbnail strip *is* the seek control.
+  /// Reading vertically, the strip and the slider are replaced by the rail
+  /// (`page_rail.dart`), so the vertical chrome keeps the counter alone.
   /// Paging has chrome of its own and this work leaves it alone (#46).
   final bool vertical;
   final ThumbLoadQueue thumbQueue;
@@ -1283,12 +1362,14 @@ class _BottomChrome extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // A chapter of one page has nowhere to seek to, and
-                      // reading vertically the strip *is* the seek control:
-                      // a lone thumbnail there is furniture that cannot be
-                      // used. Paging keeps the chrome it has — this work
-                      // leaves paged reading alone (#46).
-                      if (!vertical || chapter.pages > 1)
+                      // The thumbnail strip and the slider are the paged
+                      // directions' seek control. Vertical reading's is the
+                      // rail, built alongside this chrome against the right
+                      // edge of the screen (see `page_rail.dart`), so the
+                      // vertical chrome keeps the counter alone (#52). A
+                      // paged chapter of one page keeps the strip it has —
+                      // this work leaves paged reading alone.
+                      if (!vertical) ...[
                         ThumbStrip(
                           pages: chapter.pages,
                           current: page,
@@ -1296,23 +1377,25 @@ class _BottomChrome extends StatelessWidget {
                           providerBuilder: thumbProvider,
                           onTap: onSeek,
                         ),
-                      if (chapter.pages > 1)
-                        Padding(
-                          // The handle has to start and end where the strip's
-                          // bulge does: the strip works out how far in that is.
-                          padding: EdgeInsets.symmetric(
-                            horizontal: ThumbStrip.sliderPadding(context),
-                          ),
-                          child: Slider(
-                            value: page.toDouble().clamp(
-                              0,
-                              (chapter.pages - 1).toDouble(),
+                        if (chapter.pages > 1)
+                          Padding(
+                            // The handle has to start and end where the
+                            // strip's bulge does: the strip works out how
+                            // far in that is.
+                            padding: EdgeInsets.symmetric(
+                              horizontal: ThumbStrip.sliderPadding(context),
                             ),
-                            max: (chapter.pages - 1).toDouble(),
-                            divisions: chapter.pages - 1,
-                            onChanged: (value) => onSeek(value.round()),
+                            child: Slider(
+                              value: page.toDouble().clamp(
+                                0,
+                                (chapter.pages - 1).toDouble(),
+                              ),
+                              max: (chapter.pages - 1).toDouble(),
+                              divisions: chapter.pages - 1,
+                              onChanged: (value) => onSeek(value.round()),
+                            ),
                           ),
-                        ),
+                      ],
                     ],
                   ),
                 ),

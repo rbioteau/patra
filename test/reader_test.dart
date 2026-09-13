@@ -13,6 +13,7 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/features/reader/page_rail.dart';
 import 'package:patra/src/features/reader/strip_geometry.dart';
 import 'package:patra/src/features/reader/thumb_strip.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
@@ -509,7 +510,10 @@ void main() {
     await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(ThumbStrip), findsOneWidget);
+
+    // The rail is the vertical chrome's seek control, built with it and
+    // hidden with it (#52) — the strip and the slider are paged's now.
+    expect(find.byType(PageRail), findsOneWidget);
 
     final controller = tester
         .widget<CustomScrollView>(find.byType(CustomScrollView))
@@ -521,8 +525,176 @@ void main() {
     await tester.pump();
 
     expect(controller.offset, closeTo(before * 844 / 390, 1));
-    expect(find.byType(ThumbStrip), findsOneWidget, reason: 'the chrome stays');
+    expect(find.byType(PageRail), findsOneWidget, reason: 'the chrome stays');
     expect(posted, [20]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('vertical reading shows the rail', (tester) async {
+    // The rail replaces the thumbnail strip and its slider: the seek control
+    // runs along the axis the chapter is scrolled on (#52), and the vertical
+    // chrome carries that one and no other.
+    await _pumpReader(tester, initialPage: 0);
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(PageRail), findsOneWidget);
+    expect(find.byType(ThumbStrip), findsNothing);
+    expect(find.byType(Slider), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('paged reading keeps the strip and the slider', (tester) async {
+    // The rail is vertical reading's; this work leaves paged alone (#46) —
+    // the paged chrome keeps the chrome it has, strip and slider together.
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      direction: ReadingDirection.leftToRight,
+    );
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ThumbStrip), findsOneWidget);
+    expect(find.byType(Slider), findsOneWidget);
+    expect(find.byType(PageRail), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the rail\'s handle sits where the fraction of the chapter '
+      'above it ends', (tester) async {
+    // Height is what the rail is honest about: every page takes the share of
+    // the rail its height has of the chapter, and where the handle sits is
+    // where the reader actually is. At the top of page 10, with every page
+    // as tall as the next, the handle is a fifth of the way down the rail;
+    // at the top of the first page it is at the very top of it.
+    await _pumpReader(tester, initialPage: 10);
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rail = tester.getRect(find.byType(PageRail));
+    // The rail runs between the chrome bars: 72pt under the top bar and 62pt
+    // above the bottom counter, whatever the device's safe area says.
+    expect(rail.height, moreOrLessEquals(600 - 72 - 62, epsilon: 0.5));
+    // 10 of 50 pages, each 1200 of a 60000-point chapter.
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('pageRailHandle'))).dy,
+      moreOrLessEquals(rail.top + rail.height * 10 / 50, epsilon: 1.5),
+    );
+
+    // Reopened at the start of the chapter, where the fraction above the
+    // handle is nothing.
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      readerKey: const ValueKey('opened-top'),
+    );
+    final restarted = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(restarted.width / 2, restarted.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('pageRailHandle'))).dy,
+      moreOrLessEquals(rail.top, epsilon: 1.5),
+      reason:
+          'the handle sits at the top of the rail at the top of the chapter',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dragging the rail lands on the page asked for, first and last', (
+    tester,
+  ) async {
+    final posted = await _pumpReader(tester, initialPage: 20);
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rail = tester.getRect(find.byType(PageRail));
+    final x = rail.center.dx;
+    final controller = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller!;
+
+    // To the bottom of the rail: the far end of the chapter, which is the
+    // top of its last page — 49 pages of 1200 each.
+    final finger = await tester.startGesture(Offset(x, rail.top + 4));
+    await tester.pump();
+    await finger.moveTo(Offset(x, rail.bottom - 2));
+    await tester.pump();
+    await finger.up();
+    await tester.pump();
+    // The last seek posted progress; the request needs a clock to land in
+    // the adapter's list, so let it drain before reading the list.
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      controller.offset,
+      moreOrLessEquals(49 * 1200, epsilon: 1),
+      reason: 'the strip landed on the top of the last page',
+    );
+    // The last page reports the total, which is how a chapter reads as read.
+    expect(posted, contains(50));
+
+    // And to the top: the first page, offset zero. The seek is a seek
+    // whichever way it runs.
+    final finger2 = await tester.startGesture(Offset(x, rail.bottom - 2));
+    await tester.pump();
+    await finger2.moveTo(Offset(x, rail.top + 2));
+    await tester.pump();
+    await finger2.up();
+    await tester.pump();
+
+    expect(controller.offset, moreOrLessEquals(0, epsilon: 0.5));
+    expect(posted, contains(0));
+    // The seek posted progress; let the request drain before the end of the
+    // test, which is when the binding checks for pending timers.
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the rail shows its page number while dragged and never '
+      'otherwise', (tester) async {
+    await _pumpReader(tester, initialPage: 0);
+    final screen = tester.getSize(find.byType(Scaffold));
+    await tester.tapAt(Offset(screen.width / 2, screen.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      find.text('1'),
+      findsNothing,
+      reason: 'no number on the rail while nobody touches it',
+    );
+
+    final rail = tester.getRect(find.byType(PageRail));
+    final finger = await tester.startGesture(
+      Offset(rail.center.dx, rail.top + 4),
+    );
+    await tester.pump();
+    // Halfway down the chapter: the address the seek would land on.
+    await finger.moveTo(
+      Offset(rail.center.dx, rail.top + rail.height / 2),
+    );
+    await tester.pump();
+    expect(
+      find.text('26'),
+      findsOneWidget,
+      reason: 'the number is up while the finger is down',
+    );
+
+    await finger.up();
+    await tester.pump();
+    expect(find.text('26'), findsNothing, reason: 'and gone with it');
+    // The seek posted progress; let the request drain before the end of the
+    // test, which is when the binding checks for pending timers.
+    await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
   });
 
@@ -540,6 +712,7 @@ void main() {
 
     expect(find.byType(ThumbStrip), findsNothing);
     expect(find.byType(Slider), findsNothing);
+    expect(find.byType(PageRail), findsNothing, reason: 'nowhere to seek to');
     expect(find.text('1 / 1'), findsOneWidget);
     expect(posted, [1], reason: 'the one page is the last page too');
     expect(tester.takeException(), isNull);
