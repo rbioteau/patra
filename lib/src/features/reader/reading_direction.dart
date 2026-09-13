@@ -8,7 +8,8 @@
 /// 3. the **device** — this device's own stored default;
 /// 4. the **detected** — the direction the work itself suggests (#57), asked
 ///    only while the device holds nothing, since a guess must never beat a
-///    choice;
+///    choice: the library a work was shelved in and the shape of its pages,
+///    measured by `page_shape.dart` from the chapter being read;
 /// 5. the left-to-right a chapter has always opened in.
 ///
 /// The direction used to be taken from the profile's default when the chapter
@@ -29,8 +30,10 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../api/models.dart';
 import '../../settings/profile_preferences.dart';
 import '../../settings/reading_settings.dart';
+import 'page_shape.dart';
 
 /// Where the direction in force came from.
 ///
@@ -132,17 +135,39 @@ class ChapterDirection {
 /// #57's rung: the direction the work itself suggests, for one series.
 ///
 /// Asked only where nothing has been stored above it, and answering nothing
-/// today — which is why the chain reads as three rungs in practice. Filling
-/// this one provider is #57 and changes no screen: it is a seam and not a
-/// stub, so a guess can be slotted in without touching the resolution, the
-/// sheet or the reader.
+/// for a series the app has not measured — which is why the chain reads as
+/// three rungs until a chapter of that series has been opened. It is filled
+/// from [pageShapesProvider], which is what the reader's own `chapter-info`
+/// records: page dimensions reach the app nowhere else, so a work nobody has
+/// opened is a work nothing has been guessed about.
 ///
 /// Keyed by series and not by chapter because what is remembered is per
 /// series: a direction detected for one chapter of a work is a direction for
 /// the work.
-final detectedDirectionProvider = Provider.family<ReadingDirection?, int>(
-  (ref, seriesId) => null,
-);
+final detectedDirectionProvider = Provider.family<ReadingDirection?, int>((
+  ref,
+  seriesId,
+) {
+  final shape = ref.watch(pageShapesProvider)[seriesId];
+  if (shape == null) return null;
+  return shape.isVertical
+      ? ReadingDirection.verticalScroll
+      : _horizontal(shape.libraryType);
+});
+
+/// Which way a work goes when its pages are not panels, from the library it
+/// was shelved in.
+///
+/// The dimensions never say this — a manhua's pages are the shape of manga's
+/// and it reads the other way — so it is the library type's answer, and it is
+/// the one signal it carries. Manga is the only type that carries a direction
+/// with it; a comic, an issue run, a book, a light novel and a shelf of
+/// images all open the way a chapter always has. Where the type is wrong for
+/// a whole library, that library's own direction (#65) is what corrects it,
+/// and a series' own is what corrects one work.
+ReadingDirection _horizontal(LibraryType type) => type == LibraryType.manga
+    ? ReadingDirection.rightToLeft
+    : ReadingDirection.leftToRight;
 
 /// Which direction a chapter of [seriesId] opens in for whoever is reading,
 /// and where that answer came from.

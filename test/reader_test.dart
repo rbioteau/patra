@@ -32,6 +32,8 @@ class _ReaderAdapter implements HttpClientAdapter {
     this.dimensions = true,
     this.offline = false,
     this.seriesId = 3,
+    this.libraryType = LibraryType.manga,
+    this.pageSize = const Size(800, 1200),
   });
 
   /// Every progress post, in the order the reader made them.
@@ -46,6 +48,14 @@ class _ReaderAdapter implements HttpClientAdapter {
 
   /// How long the chapter is.
   final int pages;
+
+  /// The kind of library the series was shelved in. Half of what a direction
+  /// is guessed from (#57).
+  final LibraryType libraryType;
+
+  /// The size of an ordinary page, which is the other half: 800×1200 is a
+  /// comic or manga page (1.5 tall), 800×4000 is a panel.
+  final Size pageSize;
 
   /// Whether the server measured the pages at all. A server that has not
   /// crawled a chapter yet answers with no dimensions, and so does no server
@@ -81,6 +91,7 @@ class _ReaderAdapter implements HttpClientAdapter {
           'seriesId': seriesId,
           'volumeId': 4,
           'libraryId': 1,
+          'libraryType': libraryType.id,
           'pages': pages,
           'seriesName': 'Berserk',
           'title': 'Chapter 1',
@@ -89,8 +100,10 @@ class _ReaderAdapter implements HttpClientAdapter {
               for (var page = 0; page < pages; page++)
                 {
                   'pageNumber': page,
-                  'width': wide.contains(page) ? 1600 : 800,
-                  'height': 1200,
+                  'width': wide.contains(page)
+                      ? 1600
+                      : pageSize.width.toInt(),
+                  'height': pageSize.height.toInt(),
                   'isWide': wide.contains(page),
                 },
             ],
@@ -167,6 +180,8 @@ Future<List<int>> _pumpReader(
   bool dimensions = true,
   bool offline = false,
   int seriesId = 3,
+  LibraryType libraryType = LibraryType.manga,
+  Size pageSize = const Size(800, 1200),
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
@@ -195,6 +210,8 @@ Future<List<int>> _pumpReader(
     dimensions: dimensions,
     offline: offline,
     seriesId: seriesId,
+    libraryType: libraryType,
+    pageSize: pageSize,
   );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
@@ -569,6 +586,58 @@ void main() {
     expect(find.byType(ThumbStrip), findsOneWidget);
     expect(find.byType(Slider), findsOneWidget);
     expect(find.byType(PageRail), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a work nobody has set opens the way its pages suggest', (
+    tester,
+  ) async {
+    // #57: a manga library whose pages are panels, on a device that has
+    // never been given a direction — the work itself is the only thing left
+    // with an answer, and it is the shape of the pages that gives it.
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      // Panels, not pages: five times as tall as they are wide.
+      pageSize: const Size(800, 4000),
+      // Nothing stored anywhere: no session, and a device that holds no
+      // direction, so the chain has nothing above the guess.
+      store: ProfilePreferencesStore(keychain: MemoryKeychain()),
+    );
+
+    expect(find.byType(CustomScrollView), findsOneWidget);
+    expect(find.byType(PageView), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a library says which way a work goes when its pages are pages', (
+    tester,
+  ) async {
+    // The other half of the guess, and the one the dimensions can never
+    // answer: a manhua's pages are the shape of manga's and it reads the
+    // other way.
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      store: ProfilePreferencesStore(keychain: MemoryKeychain()),
+    );
+    expect(
+      tester.widget<PageView>(find.byType(PageView)).reverse,
+      isTrue,
+      reason: 'a manga library reads right to left',
+    );
+
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      libraryType: LibraryType.comic,
+      store: ProfilePreferencesStore(keychain: MemoryKeychain()),
+    );
+    expect(
+      tester.widget<PageView>(find.byType(PageView)).reverse,
+      isFalse,
+      reason: 'a comic library reads left to right',
+    );
     expect(tester.takeException(), isNull);
   });
 
