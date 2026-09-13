@@ -68,8 +68,8 @@ class SettingsScreen extends ConsumerWidget {
             // that is a decision rather than an omission: both are in the
             // reader's own sheet, which is where somebody notices they want
             // them — magnifying takes the swipe away, the width is the page
-            // under their eyes. See #58; the direction stays until #56 gives
-            // the reader a way to set the default itself.
+            // under their eyes. See #58, which takes this row out too now
+            // that the reader can set a default of its own (#56).
 
             _Section(label: l10n.storageSectionLabel),
             const _StorageRows(),
@@ -188,7 +188,11 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (picked != null) {
-      await ref.read(defaultReadingDirectionProvider.notifier).set(picked);
+      // The default and not a direction for one series: this row has no
+      // series in hand, which is also why its sheet carries no line saying
+      // where the direction came from. A series' own direction is set from
+      // the reader, which is where the series is (#56).
+      await ref.read(profileDirectionProvider.notifier).set(picked);
     }
   }
 }

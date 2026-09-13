@@ -373,6 +373,32 @@ class AppLocalizationsFr extends AppLocalizations {
   String get readingDirectionVerticalScroll => 'Vertical';
 
   @override
+  String directionSourceSeries(String direction) {
+    return '$direction — choisi pour cette série';
+  }
+
+  @override
+  String directionSourceProfile(String direction) {
+    return '$direction — votre réglage par défaut';
+  }
+
+  @override
+  String directionSourceDetected(String direction) {
+    return '$direction — détecté d\'après l\'œuvre';
+  }
+
+  @override
+  String directionSourceDevice(String direction) {
+    return '$direction — le réglage par défaut';
+  }
+
+  @override
+  String get promoteReadingDirection => 'En faire mon réglage par défaut';
+
+  @override
+  String get followDefaultDirection => 'Suivre le réglage par défaut';
+
+  @override
   String get savePill => 'Enregistrer';
 
   @override

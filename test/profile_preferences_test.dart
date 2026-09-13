@@ -78,7 +78,8 @@ void main() {
           deviceLanguage: const Locale('fr'),
         );
 
-        expect(store.directionFor(_lea.id), ReadingDirection.verticalScroll);
+        expect(store.of(_lea.id).direction, isNull);
+        expect(store.defaultDirection, ReadingDirection.verticalScroll);
         expect(store.magnifyFor(_lea.id), isTrue);
         expect(store.widthFactorFor(_lea.id), 0.6);
         expect(store.languageFor(_lea.id), const Locale('fr'));
@@ -130,7 +131,11 @@ void main() {
           }),
           deviceDirection: ReadingDirection.rightToLeft,
         );
-        expect(store.directionFor(_romain.id), ReadingDirection.rightToLeft);
+        // The direction of the wrong shape cost them the preference, and the
+        // device's own default stands in for it — which is what this test is
+        // about, not the value it stands in with.
+        expect(store.of(_romain.id).direction, isNull);
+        expect(store.defaultDirection, ReadingDirection.rightToLeft);
 
         final broken = await preferencesStore(
           keychain: MemoryKeychain({'profilePreferences': 'not json at all'}),
@@ -172,6 +177,7 @@ void main() {
       final store = await preferencesStore(keychain: keychain);
       await store.setDirection(_romain.id, ReadingDirection.rightToLeft);
       await store.setDirection(_lea.id, ReadingDirection.verticalScroll);
+      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.verticalScroll);
 
       await store.forget(_romain.id);
       expect(store.of(_romain.id).direction, isNull);
@@ -180,6 +186,108 @@ void main() {
         keychain.values['profilePreferences'],
         isNot(contains(_romain.id)),
       );
+    });
+
+    test('a series direction belongs to the profile that chose it', () async {
+      // It is a choice about a work rather than about a person, but it is
+      // still a person who made it — and two people sharing a tablet do not
+      // read the same series the same way round (ADR-0007).
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
+      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.rightToLeft);
+      await store.setSeriesDirection(_lea.id, 3, ReadingDirection.verticalScroll);
+
+      expect(
+        store.seriesDirectionFor(_romain.id, 3),
+        ReadingDirection.rightToLeft,
+      );
+      expect(
+        store.seriesDirectionFor(_lea.id, 3),
+        ReadingDirection.verticalScroll,
+      );
+      expect(
+        store.seriesDirectionFor(_romain.id, 9),
+        isNull,
+        reason: 'a series nobody set was never given one',
+      );
+
+      final reopened = await preferencesStore(
+        keychain: MemoryKeychain({...keychain.values}),
+      );
+      expect(
+        reopened.seriesDirectionFor(_romain.id, 3),
+        ReadingDirection.rightToLeft,
+      );
+      expect(reopened.seriesDirectionFor(_lea.id, 3), ReadingDirection.verticalScroll);
+      expect(reopened.seriesDirectionFor(_romain.id, 9), isNull);
+    });
+
+    test('a series can go back to following the default', () async {
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
+      await store.setSeriesDirection(_romain.id, 3, ReadingDirection.rightToLeft);
+      await store.setSeriesDirection(_romain.id, 9, ReadingDirection.verticalScroll);
+
+      await store.clearSeriesDirection(_romain.id, 3);
+      expect(store.seriesDirectionFor(_romain.id, 3), isNull);
+      expect(
+        store.seriesDirectionFor(_romain.id, 9),
+        ReadingDirection.verticalScroll,
+        reason: 'one series going back to the default moves no other',
+      );
+      expect(
+        store.of(_romain.id).direction,
+        isNull,
+        reason: "the series direction is not the profile's default",
+      );
+
+      final reopened = await preferencesStore(
+        keychain: MemoryKeychain({...keychain.values}),
+      );
+      expect(reopened.seriesDirectionFor(_romain.id, 3), isNull);
+      expect(
+        reopened.seriesDirectionFor(_romain.id, 9),
+        ReadingDirection.verticalScroll,
+      );
+    });
+
+    test('a series map of the wrong shape costs a series, not the row', () async {
+      // Read before `runApp`, so the safe direction is the least there is to
+      // lose: one series goes back to following the default, and everything
+      // else this profile chose is untouched.
+      final store = await preferencesStore(
+        keychain: MemoryKeychain({
+          'profilePreferences':
+              '{"${_romain.id}": {"direction": "rightToLeft", "magnify": true,'
+              ' "seriesDirections": {"3": 7, "4": "webtoon",'
+              ' "five": "rightToLeft", "6": "sideways"}}}',
+        }),
+      );
+
+      expect(
+        store.seriesDirectionFor(_romain.id, 3),
+        isNull,
+        reason: 'a direction that is not a name is no direction',
+      );
+      expect(
+        store.seriesDirectionFor(_romain.id, 4),
+        ReadingDirection.verticalScroll,
+        reason: 'the legacy name is still read, like everywhere else',
+      );
+      expect(store.seriesDirectionFor(_romain.id, 5), isNull);
+      expect(store.seriesDirectionFor(_romain.id, 6), isNull);
+      expect(store.of(_romain.id).direction, ReadingDirection.rightToLeft);
+      expect(store.of(_romain.id).magnify, isTrue);
+
+      final nonsense = await preferencesStore(
+        keychain: MemoryKeychain({
+          'profilePreferences':
+              '{"${_romain.id}": {"direction": "rightToLeft",'
+              ' "seriesDirections": "nonsense"}}',
+        }),
+      );
+      expect(nonsense.seriesDirectionFor(_romain.id, 3), isNull);
+      expect(nonsense.of(_romain.id).direction, ReadingDirection.rightToLeft);
     });
 
     test('the last profile forgotten leaves nothing in the keychain', () async {
@@ -274,7 +382,7 @@ void main() {
       final his = _container(store: store, active: _romain);
 
       await his
-          .read(defaultReadingDirectionProvider.notifier)
+          .read(profileDirectionProvider.notifier)
           .set(ReadingDirection.rightToLeft);
       await his.read(magnifyProvider.notifier).set(true);
       await his.read(widthFactorProvider.notifier).set(0.6);
@@ -283,7 +391,11 @@ void main() {
         his.read(defaultReadingDirectionProvider),
         ReadingDirection.rightToLeft,
       );
-      expect(store.directionFor(_lea.id), ReadingDirection.leftToRight);
+      expect(
+        store.of(_lea.id).direction,
+        isNull,
+        reason: 'she never chose, so nothing of hers moved either',
+      );
       expect(store.magnifyFor(_lea.id), isFalse);
       expect(store.widthFactorFor(_lea.id), 1.0);
     });
@@ -320,7 +432,7 @@ void main() {
       await locks.set(_romain.id, '1234');
 
       await locks.clear(_romain.id);
-      expect(store.directionFor(_romain.id), ReadingDirection.rightToLeft);
+      expect(store.of(_romain.id).direction, ReadingDirection.rightToLeft);
     });
 
     test('with nobody reading are the device’s to keep', () async {
@@ -332,7 +444,7 @@ void main() {
       final gate = _container(store: store, keychain: device);
 
       await gate
-          .read(defaultReadingDirectionProvider.notifier)
+          .read(profileDirectionProvider.notifier)
           .set(ReadingDirection.rightToLeft);
       await gate.read(magnifyProvider.notifier).set(true);
       await gate.read(widthFactorProvider.notifier).set(0.6);
@@ -418,9 +530,9 @@ class _CountingStore extends ProfilePreferencesStore {
   int reads = 0;
 
   @override
-  ReadingDirection directionFor(String? profileId) {
+  ProfilePreferences of(String? profileId) {
     reads++;
-    return super.directionFor(profileId);
+    return super.of(profileId);
   }
 }
 

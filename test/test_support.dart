@@ -181,7 +181,10 @@ class FakeBiometrics implements Biometrics {
 /// standing for what the flat keys held before anybody had a profile.
 Future<ProfilePreferencesStore> preferencesStore({
   MemoryKeychain? keychain,
-  ReadingDirection deviceDirection = ReadingDirection.leftToRight,
+  // Null by default, because that is what a device that has never been given
+  // a direction holds — and it is not the left-to-right a chapter opens in
+  // all the same, which is the difference the chain is built on (ADR-0007).
+  ReadingDirection? deviceDirection,
   bool deviceMagnify = false,
   double deviceWidthFactor = 1.0,
   Locale? deviceLanguage,

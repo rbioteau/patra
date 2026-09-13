@@ -632,6 +632,42 @@ abstract class AppLocalizations {
   /// **'Vertical'**
   String get readingDirectionVerticalScroll;
 
+  /// In the reader's sheet: the reading direction in force is one chosen for this one series alone.
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} — chosen for this series'**
+  String directionSourceSeries(String direction);
+
+  /// In the reader's sheet: the reading direction in force is the reading profile's own default.
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} — your default'**
+  String directionSourceProfile(String direction);
+
+  /// In the reader's sheet: the reading direction in force was worked out from the work itself rather than chosen by anybody; a guess is not a choice, so this is said out loud.
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} — detected from the work'**
+  String directionSourceDetected(String direction);
+
+  /// In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — this device's default, or the app's own. Worded neutrally, because it may not be the reading profile's.
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} — the default'**
+  String directionSourceDevice(String direction);
+
+  /// Reader action: makes the reading direction in force the profile's own default, so every series opens in it. The direction itself is shown beside the row; drawn only where it is not already their default.
+  ///
+  /// In en, this message translates to:
+  /// **'Make this my default'**
+  String get promoteReadingDirection;
+
+  /// Reader action: drops the direction chosen for this series, which then follows the default again. The direction it lands on is shown beside the row; worded 'the default' rather than 'my default' because it may be a detected one.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the default'**
+  String get followDefaultDirection;
+
   /// Download action on a chapter; always worded, never icon-only
   ///
   /// In en, this message translates to:

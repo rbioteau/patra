@@ -68,12 +68,22 @@ class ReadingSettingsStore {
     return _legacyNames[name];
   }
 
-  Future<ReadingDirection> load() async {
+  /// What this device has stored as its own default, or **null where it has
+  /// stored nothing** — which is deliberately not the left-to-right an absent
+  /// key used to be read as. The two are different answers and the chain asks
+  /// this one: only a direction that was really stored outranks one detected
+  /// from the work, so a built-in fallback must not be allowed to stand in
+  /// for a choice (ADR-0007). Where nothing answers anywhere, the chain ends
+  /// at left-to-right, which is what a chapter has always opened in.
+  Future<ReadingDirection?> load() async {
     try {
-      return directionNamed(await _keychain.read(_key)) ??
-          ReadingDirection.leftToRight;
+      return directionNamed(await _keychain.read(_key));
     } on Exception {
-      return ReadingDirection.leftToRight;
+      // A keychain that cannot be read is a device that never chose, not a
+      // device that cannot start — the same answer `SessionStorage.load`
+      // gives it, and the safe direction to be wrong in: what stands in for
+      // a default nobody stored is one the app has always drawn anyway.
+      return null;
     }
   }
 

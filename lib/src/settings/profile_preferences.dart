@@ -4,6 +4,10 @@
 /// setting is one of two kinds. **Reading direction, magnifying, the width a
 /// chapter opens at and the interface language belong to a person**: they are
 /// how somebody reads, and two people sharing a tablet each get their own.
+/// So does the direction one **series** is read in, which is why it is kept
+/// here beside their other preferences rather than anywhere the server could
+/// see it — see `features/reader/reading_direction.dart` for the chain that it
+/// is the first rung of.
 /// **The image cache budget belongs to the device**: it is disk, and the iPad
 /// owns its disk — it lives
 /// in `cache_settings.dart` and is handed to every container `SessionScope`
@@ -42,6 +46,7 @@ class ProfilePreferences {
     this.magnify,
     this.widthFactor,
     this.language,
+    this.seriesDirections = const {},
   });
 
   static const none = ProfilePreferences();
@@ -65,16 +70,28 @@ class ProfilePreferences {
   /// and here is where.
   final String? language;
 
+  /// The direction each series is read in, keyed by series id: the first rung
+  /// of the chain a chapter's direction is resolved through (ADR-0007).
+  ///
+  /// A choice about a work, kept with the person who made it — it is never
+  /// sent to the server, which has no such preference, and it goes with the
+  /// profile when the profile goes. A series nobody has set is simply absent,
+  /// which is not the same as being set to what the default happens to hold:
+  /// a series that is set stops following a default that later changes.
+  final Map<int, ReadingDirection> seriesDirections;
+
   ProfilePreferences copyWith({
     ReadingDirection? direction,
     bool? magnify,
     double? widthFactor,
     String? language,
+    Map<int, ReadingDirection>? seriesDirections,
   }) => ProfilePreferences(
     direction: direction ?? this.direction,
     magnify: magnify ?? this.magnify,
     widthFactor: widthFactor ?? this.widthFactor,
     language: language ?? this.language,
+    seriesDirections: seriesDirections ?? this.seriesDirections,
   );
 
   Map<String, dynamic> toJson() => {
@@ -82,6 +99,11 @@ class ProfilePreferences {
     if (magnify != null) 'magnify': magnify,
     if (widthFactor != null) 'widthFactor': widthFactor,
     if (language != null) 'language': language,
+    if (seriesDirections.isNotEmpty)
+      'seriesDirections': {
+        for (final entry in seriesDirections.entries)
+          '${entry.key}': entry.value.name,
+      },
   };
 
   /// Defensive like every other read from the keychain: this is loaded before
@@ -108,8 +130,24 @@ class ProfilePreferences {
               (language.isEmpty || supportedLocale(language) != null)
           ? language
           : null,
+      seriesDirections: _seriesDirections(json['seriesDirections']),
     );
   }
+
+  /// One series at a time, and an entry of the wrong shape is dropped rather
+  /// than thrown: what a malformed row costs is the series it cannot read,
+  /// never the profile its other choices or the device its app.
+  static Map<int, ReadingDirection> _seriesDirections(Object? json) =>
+      json is! Map
+      ? const {}
+      : {
+          for (final entry in json.entries)
+            if (int.tryParse('${entry.key}') case final int seriesId)
+              if (entry.value case final String name)
+                if (ReadingSettingsStore.directionNamed(name)
+                    case final ReadingDirection direction)
+                  seriesId: direction,
+        };
 }
 
 /// Every preference this device holds for a person, keyed by [Profile.id],
@@ -124,7 +162,7 @@ class ProfilePreferences {
 class ProfilePreferencesStore {
   ProfilePreferencesStore({
     Keychain? keychain,
-    this.deviceDirection = ReadingDirection.leftToRight,
+    this.deviceDirection,
     this.deviceMagnify = false,
     this.deviceWidthFactor = 1.0,
     Locale? deviceLanguage,
@@ -140,11 +178,19 @@ class ProfilePreferencesStore {
   /// once before the app starts and written whole on every change.
   static const _key = 'profilePreferences';
 
-  /// What a profile that has never chosen reads in, and what the reader opens
-  /// in for them. Read from the flat keys before `runApp` and handed in
-  /// there; frozen for the run, because nothing on any screen sets a device
-  /// default for these two — a person's choice is their own.
-  final ReadingDirection deviceDirection;
+  /// What this device has **stored** as its own default direction, or null
+  /// where it has stored nothing. Read from the flat keys before `runApp` and
+  /// handed in there; frozen for the run, because nothing on any screen sets
+  /// a device default — a person's choice is their own.
+  ///
+  /// Nullable, and that is the whole point: storing nothing is not the same
+  /// as the left-to-right an absent key has always been read as, and only a
+  /// direction that was really stored outranks one detected from the work
+  /// (ADR-0007). Where nothing answers either, the chain ends at
+  /// [ReadingDirection.leftToRight] — which is what the app has always
+  /// opened a chapter in, and what nothing here has to write down.
+  final ReadingDirection? deviceDirection;
+
   final bool deviceMagnify;
 
   /// The width a chapter opens at for a profile that has never chosen: the
@@ -220,10 +266,23 @@ class ProfilePreferencesStore {
   ProfilePreferences of(String? profileId) =>
       _byProfile[profileId] ?? ProfilePreferences.none;
 
-  /// The direction a chapter opens in for [profileId], falling through to the
-  /// device's default where they have never said.
-  ReadingDirection directionFor(String? profileId) =>
-      of(profileId).direction ?? deviceDirection;
+  /// What stands behind what a person has chosen: the device's own default,
+  /// or the left-to-right a chapter has always opened in where this device
+  /// holds none.
+  ///
+  /// The rung, and not a profile's whole answer: the chain asks the two
+  /// separately (`features/reader/reading_direction.dart`), because only a
+  /// direction that was really *stored* outranks one detected from the work —
+  /// so there is no lookup here that hands both out as one value any more.
+  /// What Settings shows and sets is [defaultReadingDirectionProvider], which
+  /// is this behind whatever the reading profile has chosen.
+  ReadingDirection get defaultDirection =>
+      deviceDirection ?? ReadingDirection.leftToRight;
+
+  /// What [profileId] has chosen for [seriesId] alone, if anything: the first
+  /// rung of the chain, and the only one a person can drop.
+  ReadingDirection? seriesDirectionFor(String? profileId, int seriesId) =>
+      of(profileId).seriesDirections[seriesId];
 
   bool magnifyFor(String? profileId) => of(profileId).magnify ?? deviceMagnify;
 
@@ -243,6 +302,32 @@ class ProfilePreferencesStore {
   Future<void> setDirection(String profileId, ReadingDirection direction) =>
       _update(profileId, (was) => was.copyWith(direction: direction));
 
+  /// [seriesId] is read in [direction] from now on, for [profileId] alone.
+  ///
+  /// The profile's own default is deliberately left where it is: setting one
+  /// series is not setting every series, and promoting a choice to a default
+  /// is a second tap the sheet offers rather than something this does behind
+  /// somebody's back. The series map lives in the one row per profile, so
+  /// `forget` takes it with everything else that profile chose.
+  Future<void> setSeriesDirection(
+    String profileId,
+    int seriesId,
+    ReadingDirection direction,
+  ) => _update(
+    profileId,
+    (was) => was.copyWith(
+      seriesDirections: {...was.seriesDirections, seriesId: direction},
+    ),
+  );
+
+  /// [seriesId] goes back to following the default, for [profileId] alone.
+  Future<void> clearSeriesDirection(String profileId, int seriesId) => _update(
+    profileId,
+    (was) => was.copyWith(
+      seriesDirections: {...was.seriesDirections}..remove(seriesId),
+    ),
+  );
+
   Future<void> setMagnify(String profileId, bool enabled) =>
       _update(profileId, (was) => was.copyWith(magnify: enabled));
 
@@ -258,6 +343,7 @@ class ProfilePreferencesStore {
       magnify: was.magnify,
       widthFactor: was.widthFactor,
       language: locale?.languageCode ?? '',
+      seriesDirections: was.seriesDirections,
     ),
   );
 
@@ -329,14 +415,29 @@ final profilePreferencesStoreProvider = Provider<ProfilePreferencesStore>(
 /// persisted, so it answers with the new value either way), which is exactly
 /// why this has to be pinned by counting rather than by a symptom — there
 /// is no symptom until somebody adds one.
-String? _readerId(Ref ref) => ref.watch(sessionProvider.select((s) => s?.id));
+/// [Profile.id] of whoever is reading, or null at the gate.
+///
+/// Public because the chain a chapter's direction is resolved through lives
+/// with the reader (`features/reader/reading_direction.dart`) and is a
+/// function of the same thing every preference here is.
+final readingProfileIdProvider = Provider<String?>(
+  (ref) => ref.watch(sessionProvider.select((s) => s?.id)),
+);
 
-/// The direction a newly opened chapter starts in, for whoever is reading.
-/// The reader can override it for the current chapter without changing this.
-class DefaultReadingDirectionNotifier extends Notifier<ReadingDirection> {
+/// The direction the reading profile has **stored** as their own, or null
+/// where they never chose one.
+///
+/// Null rather than the direction a chapter opens in, because the two are
+/// not the same question and the chain has to ask this one: having stored
+/// nothing is not the left-to-right the chain ends in, and it is the
+/// difference that keeps a direction detected from the work (#57) from being
+/// outranked by a fallback nobody chose (ADR-0007).
+class ProfileDirectionNotifier extends Notifier<ReadingDirection?> {
   @override
-  ReadingDirection build() =>
-      ref.read(profilePreferencesStoreProvider).directionFor(_readerId(ref));
+  ReadingDirection? build() => ref
+      .read(profilePreferencesStoreProvider)
+      .of(ref.watch(readingProfileIdProvider))
+      .direction;
 
   Future<void> set(ReadingDirection direction) async {
     state = direction;
@@ -353,9 +454,73 @@ class DefaultReadingDirectionNotifier extends Notifier<ReadingDirection> {
   }
 }
 
-final defaultReadingDirectionProvider =
-    NotifierProvider<DefaultReadingDirectionNotifier, ReadingDirection>(
-      DefaultReadingDirectionNotifier.new,
+final profileDirectionProvider =
+    NotifierProvider<ProfileDirectionNotifier, ReadingDirection?>(
+      ProfileDirectionNotifier.new,
+    );
+
+/// The direction a newly opened chapter starts in, for whoever is reading:
+/// their own where they have one, the device's default where they do not.
+///
+/// The **default**, which is the rung *below* a series' own choice: it is
+/// what Settings shows and sets, and what a series follows until it is given
+/// a direction of its own. Which direction a chapter actually opens in is the
+/// chain's to answer (`features/reader/reading_direction.dart`).
+final defaultReadingDirectionProvider = Provider<ReadingDirection>((ref) {
+  final store = ref.watch(profilePreferencesStoreProvider);
+  // Watched rather than read, because it is what moves when somebody
+  // chooses: the store only knows the rung behind them.
+  return ref.watch(profileDirectionProvider) ?? store.defaultDirection;
+});
+
+/// The direction each series is read in, for whoever is reading: ADR-0007's
+/// first rung, and the only one a screen can set for one work at a time.
+///
+/// One map and not a provider per series, because what is stored is one map
+/// in one keychain row and what a screen asks for is one series at a time —
+/// and because a series nobody has set is simply absent from it, which is not
+/// the same as being set to whatever the default happens to hold.
+class SeriesDirectionsNotifier extends Notifier<Map<int, ReadingDirection>> {
+  @override
+  Map<int, ReadingDirection> build() => ref
+      .read(profilePreferencesStoreProvider)
+      .of(ref.watch(readingProfileIdProvider))
+      .seriesDirections;
+
+  /// [seriesId] is read in [direction] from now on, for whoever is reading.
+  Future<void> set(int seriesId, ReadingDirection direction) async {
+    state = {...state, seriesId: direction};
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) {
+      // Nobody is reading, so there is nobody this could belong to: unlike a
+      // profile's own default there is no flat key of the device's it could
+      // fall back to, since this is a map, and one written under nobody's id
+      // would come back to whoever next reads here. What is left is the
+      // chapter in hand keeping the direction it was given for as long as it
+      // is open, and the store never hearing of it — which no screen ever
+      // sees, because the reader stands inside a session.
+      return;
+    }
+    await ref
+        .read(profilePreferencesStoreProvider)
+        .setSeriesDirection(id, seriesId, direction);
+  }
+
+  /// [seriesId] goes back to following the default.
+  Future<void> clear(int seriesId) async {
+    if (!state.containsKey(seriesId)) return;
+    state = {...state}..remove(seriesId);
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) return;
+    await ref
+        .read(profilePreferencesStoreProvider)
+        .clearSeriesDirection(id, seriesId);
+  }
+}
+
+final seriesDirectionsProvider =
+    NotifierProvider<SeriesDirectionsNotifier, Map<int, ReadingDirection>>(
+      SeriesDirectionsNotifier.new,
     );
 
 /// Whether a one-finger drag magnifies the page instead of turning it.
@@ -366,7 +531,7 @@ final defaultReadingDirectionProvider =
 class MagnifyNotifier extends Notifier<bool> {
   @override
   bool build() =>
-      ref.read(profilePreferencesStoreProvider).magnifyFor(_readerId(ref));
+      ref.read(profilePreferencesStoreProvider).magnifyFor(ref.watch(readingProfileIdProvider));
 
   Future<void> set(bool enabled) async {
     state = enabled;
@@ -395,7 +560,7 @@ final magnifyProvider = NotifierProvider<MagnifyNotifier, bool>(
 class WidthFactorNotifier extends Notifier<double> {
   @override
   double build() =>
-      ref.read(profilePreferencesStoreProvider).widthFactorFor(_readerId(ref));
+      ref.read(profilePreferencesStoreProvider).widthFactorFor(ref.watch(readingProfileIdProvider));
 
   /// The width while a finger is still on the slider: what the chapter in
   /// front of the reader is drawn at, but not yet a choice.
@@ -432,7 +597,7 @@ final widthFactorProvider = NotifierProvider<WidthFactorNotifier, double>(
 class LocaleNotifier extends Notifier<Locale?> {
   @override
   Locale? build() =>
-      ref.read(profilePreferencesStoreProvider).languageFor(_readerId(ref));
+      ref.read(profilePreferencesStoreProvider).languageFor(ref.watch(readingProfileIdProvider));
 
   /// Writes the choice **twice**, and that is the one asymmetry in this file.
   ///
