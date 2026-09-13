@@ -96,11 +96,26 @@ Two things make these numbers evidence rather than somebody's first attempt:
 
 **What it does not settle: the upper half.** No series here lands between 1.58 and 6.94, so the measurement validates 1.8 but cannot choose between 1.8 and, say, 4.0. And the vertical population is **one series of nine pages** — the thinnest sample in the table. That is why 1.8 stays at the **low** end of the measured gap rather than in its middle: the paged population is well sampled and stops dead at 1.58, while the vertical population's lower tail is not sampled at all, and Solo Leveling proves that tail is real. Choosing 4.0 would bet that no webtoon medians below 4.0, on the evidence of one webtoon; choosing 1.8 bets only that no manga medians above 1.8, on the evidence of twenty-five.
 
+### A second library, one anybody can re-run: Kavita's public demo
+
+Kavita publishes demo credentials in its own README [Kavita-demo], so this measurement can be repeated by somebody with no library of their own. Its three libraries are Books, Comics and Manga, and **five series carry page dimensions at all** — the rest are books, which have none:
+
+| Library | Series | Pages | Spreads | Median h/w | Min | Max | ≥ 1.8 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Comics | The Spirit | 36 | 0 | 1.38 | 1.36 | 1.48 | paged |
+| Comics | Captain Marvel Adventures | 68 | 1 | 1.41 | 1.27 | 1.47 | paged |
+| Manga | Give My Regards to Black Jack | 210 | 0 | 1.42 | 1.42 | 1.42 | paged |
+| Comics | Amazing-Man Comics | 57 | 0 | 1.44 | 1.36 | 1.52 | paged |
+| Comics | Strange Worlds | 37 | 0 | 1.44 | 1.44 | 1.49 | paged |
+
+It adds five works to the paged population — every one of them between 1.38 and 1.44 — and nothing to the vertical one: **the demo holds no webtoon and no manhua.** So it is a second opinion that a comic page is about 1.4, and a check anybody can repeat, but not evidence about where the boundary is.
+
 ## Why 1.8 and not 2.0 or 2.2
 
 The candidates are Kavita's own bands plus what the measurement added:
 
 - **≤ 1.58 is ruled out by measurement, not by Kavita.** Eight series on the shelf above reach 1.50–1.58. Whatever else is true, the threshold cannot be at or below the paged population's ceiling.
+- **Kavita's own detector has a reported false positive at 1.42.** Kavita issue #3604, *"Auto-webtoon formatting is triggering on a Manga series"* [Kavita-3604], reports it on a sample page of 650×924 — tallness **1.42** — which is inside the range the home shelf puts Berserk, Frieren and Atelier des sorciers in. It is one sample page, so it does not pin a number (the chapter must have held taller pages for Kavita's average to clear 0.7). What it does say is that a detector which misfires on real manga in the 1.4s is not one to copy *downwards* from.
 - **2.2 is where Kavita is *certain*, not where the boundary is.** It is the "strong" cutoff and the trigger for the 40% rule. Choosing it would catch only the unambiguous half of a shelf: a webtoon whose panels average 1.9 — taller than any manga page, and taller than Kavita needs when the widths are consistent — would still open paged.
 - **1.5–1.8 cannot be the threshold**, because Kavita says in as many words that regular manga and comics live there. Scoring it at all is a hedge, not a judgement.
 - **1.8 is the seam.** It is the point where Kavita stops calling a page *weak* and starts calling it *moderate*, and it is the number its width-consistency rule turns on (`avgAspectRatio > 1.8` with `widthVariation < 0.15`). Below it, Kavita's own evidence is "this is probably a comic page"; above it, "this is probably a panel" — and with consistent widths, above it *is* webtoon mode in Kavita today.
@@ -152,3 +167,5 @@ The table above was produced by exactly this run, one chapter per series, and is
 [Kavita-profile]: https://github.com/Kareadita/Kavita/blob/v0.9.1.4/Kavita.Models/Entities/User/AppUserReadingProfile.cs — the per-reading-profile setting
 [Kavita-pages]: https://github.com/Kareadita/Kavita/blob/v0.9.1.4/UI/Web/src/app/manga-reader/_service/manga-reader.service.ts — `pageDimensions`, the same array Patra maps into `ChapterInfo`
 [Patra-login]: ../../lib/src/api/kavita_client.dart — `_loginBody`, whose three fields all go on the wire
+[Kavita-demo]: https://github.com/Kareadita/Kavita/blob/develop/README.md — `demouser` / `Demouser64` at `demo.kavitareader.com`
+[Kavita-3604]: https://github.com/Kareadita/Kavita/issues/3604 — "Auto-webtoon formatting is triggering on a Manga series", sample page 650×924
