@@ -113,3 +113,76 @@ choices.
 
 The last bullet of [Consequences] is amended with it: the device default is
 not the last rung. It is the last rung *anybody chose*.
+
+## Amendment — 2026-09-13 (#58)
+
+The reading profile's own direction is **removed** from the chain.
+
+It was kept for one reason, in this ADR's own words: *the direction's row
+stayed only because the reader had no way to set a default of its own*. #57
+removes that reason. Detection is per series — `detectedDirectionProvider` is
+a family of the series id, and `ChapterInfo` already carries the library type,
+the series format and the page dimensions a guess is made from — so what the
+profile's default was doing, choosing a direction for works nobody has opened,
+is what detection does better and *per work*.
+
+It was also the wrong shape. The direction is **a property of the work**,
+which is this ADR's own reason for giving it a per-series rung and refusing
+one to magnifying and the width. A rung held by a person overrides detection
+for **every** series at once, so in a library holding manga and webtoons side
+by side it is precisely wrong: set right-to-left and every webtoon in it opens
+paged. The one case the rung genuinely served — a library the guess gets
+systematically wrong — is answered *below* the series, not above it, and is
+written up as such at the end of this amendment.
+
+The chain therefore reads:
+
+1. the **series** direction;
+2. the **detected** direction (#57);
+3. the built-in left-to-right.
+
+The **device's** stored default is removed with the profile's: its only writer
+was the notifier this amendment deletes, so nothing can store one, and a rung
+that cannot be written is not a rung. The built-in left-to-right keeps its
+place at the end, and is still the one answer nobody chose.
+
+Nothing else in this ADR changes. *A guess must never beat a choice* still
+holds, and is the stronger for there being one choice above detection rather
+than three. The sheet still says where the direction in force came from — the
+series' own, detected, or the built-in — and still owes a row back from a
+series' own choice, now worded with the direction the work itself suggests.
+
+**Sequencing.** This amendment must not be implemented before #57 lands.
+Detection answers nothing today, so removing the profile's rung while it is
+empty drops every series a person has not set to the built-in left-to-right: a
+manga reader who stored right-to-left would find the whole app reading
+backwards, and the per-series rung is two days old, so almost nobody has one.
+
+The bullet of [Consequences] saying #58 *"must answer this before it takes the
+direction's row out of Settings"* is **superseded**: there is no default to
+unset, and #58 is no longer blocked on one.
+
+### A direction per library, planned
+
+The case the profile's rung covered is not empty. A "Manga" library holding
+manhua — whose pages are the shape of manga's, and would be detected
+right-to-left when they read the other way — is wrong for every series in it.
+A default held **per library** answers that in one tap and has the right
+shape: a library is a shelf of works, so it belongs on the work's side of the
+chain, under the series and above detection. It is also cheap to add —
+`ChapterInfo.libraryId` is already in the reader's hand, `Library` carries its
+own name, and the storage would mirror the per-series map that already
+exists.
+
+**Planned, and it lands before or with the profile rung's removal.** This
+amendment first deferred it, for the reason per-series magnifying was: nobody
+had complained, because detection does not exist yet. That reasoning does not
+survive what triaging #57 established — the genres and tags a series carries
+say what a work is *about* and nothing about how it is read, so detection
+rests on the library type and the shape of the pages, and nothing else. A
+library whose type is wrong is therefore wrong for **every** series in it, and
+with the profile rung gone there is no rung between the series and detection
+left to correct it.
+
+The per-library direction is not an extra beside the profile's. It is what
+replaces it.

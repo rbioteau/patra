@@ -135,6 +135,10 @@ _Avoid_: virtual volume, fake volume, bucket
 The volumes and the loose chapters of a series read as one ordered story. It is only a storyline when the series actually has both, and only in a library type where it means something — an issue run is not a storyline.
 _Avoid_: timeline, reading order
 
+**Genre**:
+A metadata label on one [[Series]] — Action, Science-Fiction — alongside its tags. It says what a work is *about* and nothing about how it is read: genres and tags carry no usable signal for the [[Detected direction]], which is inferred from the [[Library type]] and the shape of the pages instead.
+_Avoid_: category, type, tag (for a genre), library type
+
 **Reading progress**:
 How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says.
 _Avoid_: completion, status, read state
@@ -160,7 +164,7 @@ The [[Reading direction]] chosen for one [[Series]] alone, which outranks the pe
 _Avoid_: per-series setting, override, book setting
 
 **Detected direction**:
-The [[Reading direction]] the app infers for a work it has been told nothing about, from what the server says about the series — its library type and its genres, since Kavita exposes no direction of its own. It is a guess and never a choice: anything anybody actually chose outranks it, and the reader says where a direction came from rather than presenting a guess as one.
+The [[Reading direction]] the app infers for a work it has been told nothing about, from what the server says about the series — its library type, and the shape of its pages — since Kavita exposes no direction of its own. Genres and tags carry no usable signal and are not consulted. It is a guess and never a choice: anything anybody actually chose outranks it, and the reader says where a direction came from rather than presenting a guess as one.
 _Avoid_: automatic direction, smart default, heuristic (in prose)
 
 **Vertical scrolling**:
