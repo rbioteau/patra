@@ -16,8 +16,10 @@ import '../../downloads/downloads_service.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/profile_preferences.dart';
+import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 import '../../widgets/reader_settings_sheet.dart';
+import 'book_page.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'page_rail.dart';
@@ -38,9 +40,31 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
     // Guarded, because leaving the reader mid-fetch disposes this provider
     // while it is still waiting.
     if (ref.mounted) ref.read(pageShapesProvider.notifier).record(info);
-    return info;
+    // A book has no image pages for `chapter-info` to count: it is the
+    // server that lays its words out into pages (ADR-0008), and `book-info`
+    // is where it says how many.
+    if (info.content != ChapterContent.reflowable) return info;
+    final book = await ref.watch(kavitaClientProvider).bookInfo(chapterId);
+    return info.withBook(book);
   },
 );
+
+/// What one page of a book is asked about: the chapter, and which page of it.
+typedef BookPageKey = ({int chapterId, int page});
+
+/// One page of a book: the HTML the server laid out, taken apart into the
+/// blocks the reader draws.
+///
+/// A family of the page as well as the chapter so a page the reader has been
+/// shown is not asked for again on the way back to it, and so a page it has
+/// left behind is forgotten with the screen.
+final bookPageProvider = FutureProvider.autoDispose
+    .family<BookPage, BookPageKey>(retry: serverRetry, (ref, key) async {
+      final html = await ref
+          .watch(kavitaClientProvider)
+          .bookPage(key.chapterId, key.page);
+      return BookPage.fromHtml(html);
+    });
 
 /// The reading surface: pure black canvas, chrome as gradient overlays, and a
 /// single reading-direction setting (vertical scrolling is a direction,
@@ -200,6 +224,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _precache(int page, ChapterInfo info, {int? cacheWidth}) {
+    // A book has no page picture to warm: `/api/Reader/image` serves nothing
+    // for it, and its pictures are named inside the page it has not been
+    // asked for yet.
+    if (info.content != ChapterContent.fixedPages) return;
     if (page < 0 || page >= info.pages) return;
     final provider = _imageProvider(page, cacheWidth: cacheWidth);
     if (provider != null) precacheImage(provider, context);
@@ -373,7 +401,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final info = ref.watch(chapterInfoProvider(widget.chapterId));
     final saved = ref.watch(savedChapterProvider(widget.chapterId));
     _savedChapter = saved;
@@ -400,24 +427,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         (null, _) => const Center(
           child: CircularProgressIndicator(color: patraAccent),
         ),
-        (final ChapterInfo chapter, _) => _buildReader(context, l10n, chapter),
+        (final ChapterInfo chapter, _) => _buildReader(context, chapter),
       },
     );
   }
 
-  Widget _buildReader(
-    BuildContext context,
-    AppLocalizations l10n,
-    ChapterInfo chapter,
-  ) {
-    // Reflowable content has no image pages to fetch: `/api/Reader/image`
-    // serves nothing for it, so opening it would be a reader full of broken
-    // pages. The series screen already refuses these rows; this catches the
-    // ways in that do not go through it — a deep link, or a resume.
-    if (chapter.content != ChapterContent.fixedPages) {
-      return const _UnsupportedFormat();
-    }
+  Widget _buildReader(BuildContext context, ChapterInfo chapter) {
+    // Nothing to read, whether the server counted no pages or could not be
+    // asked: a book with no pages is a book with nothing in it.
     if (chapter.pages == 0) return const _ReaderError();
+    // A book is a chapter of words, and the pages it is made of are the
+    // server's: it lays them out and hands them over one at a time, so
+    // reading one is a reader of its own rather than the picture reader
+    // with the pictures taken out.
+    if (chapter.content == ChapterContent.reflowable) {
+      return _buildBookReader(context, chapter);
+    }
     _saveInitialProgress(chapter);
     _resolveLocalDir();
 
@@ -508,85 +533,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
 
         // Tap zones: 30 / 40 / 30. The sides page, the middle toggles
-        // chrome; in right-to-left the side meanings swap with the layout.
+        // chrome; which way a side reads is the direction's, so right-to-left
+        // passes them the other way round.
         if (!direction.isVerticalScroll)
-          Positioned.fill(
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 30,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => _step(rtl, chapter, spread),
-                  ),
-                ),
-                Expanded(
-                  flex: 40,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => _showChromeAndBars(!_showChrome),
-                  ),
-                ),
-                Expanded(
-                  flex: 30,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => _step(!rtl, chapter, spread),
-                  ),
-                ),
-              ],
-            ),
+          _TapZones(
+            onLeft: () => _step(rtl, chapter, spread),
+            onRight: () => _step(!rtl, chapter, spread),
+            onMiddle: () => _showChromeAndBars(!_showChrome),
           )
         else
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () => _showChromeAndBars(!_showChrome),
-            ),
-          ),
+          _TapZones(onMiddle: () => _showChromeAndBars(!_showChrome)),
 
         if (_showChrome) ...[
           _TopChrome(
             title: chapter.title.isNotEmpty
                 ? chapter.title
                 : chapter.seriesName,
-            direction: resolved,
-            libraryName: libraryName,
-            onOutcome: (outcome) {
-              switch (outcome) {
-                case DirectionPicked(direction: final chosen):
-                  // A direction picked here is this series' own from now on,
-                  // and the chain answers with it from the next frame —
-                  // nothing is held in memory that a write does not back.
-                  ref
-                      .read(seriesDirectionsProvider.notifier)
-                      .set(chapter.seriesId, chosen);
-                case DirectionPromotedToLibrary():
-                  // What is in force becomes this library's, so every series
-                  // shelved with it opens this way — the one tap that puts a
-                  // library the guess gets wrong right. The series' own
-                  // direction stays above it: one tap, one thing.
-                  ref
-                      .read(libraryDirectionsProvider.notifier)
-                      .set(chapter.libraryId, direction);
-                case LibraryDirectionCleared():
-                  ref
-                      .read(libraryDirectionsProvider.notifier)
-                      .clear(chapter.libraryId);
-                case SeriesDirectionCleared():
-                  ref
-                      .read(seriesDirectionsProvider.notifier)
-                      .clear(chapter.seriesId);
-              }
-              _showChromeAndBars(false);
-            },
+            settings: _ReaderSettings(
+              direction: resolved,
+              libraryName: libraryName,
+              onOutcome: (outcome) =>
+                  _onSettingsOutcome(outcome, chapter, direction),
+            ),
           ),
           _BottomChrome(
             chapter: chapter,
             page: _page,
             span: span,
             rtl: rtl,
-            vertical: direction.isVerticalScroll,
+            showStrip: !direction.isVerticalScroll,
             thumbQueue: _thumbs,
             thumbProvider: (page) => _imageProvider(
               page,
@@ -598,6 +573,113 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ],
       ],
     );
+  }
+
+  /// A chapter of words, read a page at a time.
+  ///
+  /// The pages are the server's, and it is the server that turns them: one
+  /// page per screen, handed over as HTML (ADR-0008). So a book is paged like
+  /// an image chapter and by the same two gestures, but none of what the
+  /// picture reader is built on is asked of it — there is no page to measure,
+  /// so there is no direction to detect, no spread to pair, and no page
+  /// pictures to fill a strip with. The bar carries the book's title and no
+  /// cog: every setting the sheet holds is about pictures, and #75 is what
+  /// gives it a text size and a line spacing to hold instead.
+  Widget _buildBookReader(BuildContext context, ChapterInfo chapter) {
+    _saveInitialProgress(chapter);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _BookView(
+          chapterId: widget.chapterId,
+          pages: chapter.pages,
+          page: _page,
+          picture: _bookPicture,
+          onPageChanged: (page) => _onPageChanged(page, chapter),
+        ),
+        _TapZones(
+          onLeft: () => _goTo(_page - 1, chapter),
+          onRight: () => _goTo(_page + 1, chapter),
+          onMiddle: () => _showChromeAndBars(!_showChrome),
+        ),
+        if (_showChrome) ...[
+          _TopChrome(
+            // What the bar names is the book: `chapter-info` says the
+            // series' name, and the file's own title is on the page it is
+            // reading.
+            title: chapter.title,
+          ),
+          _BottomChrome(
+            chapter: chapter,
+            page: _page,
+            span: 1,
+            rtl: false,
+            showStrip: false,
+            thumbQueue: _thumbs,
+            thumbProvider: null,
+            onSeek: (page) => _goTo(page, chapter),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// What a picture a book's page refers to is drawn with.
+  ///
+  /// A page names its pictures the way the file does — a path inside the
+  /// book — and the server is what turns that name into bytes; a page that
+  /// already carries a whole address is left to it. Drawn with the client's
+  /// headers, which is the one way these can be fetched at all: unlike the
+  /// other image endpoints, `book-resources` takes no key in the query.
+  Widget _bookPicture(String src) {
+    final client = _client;
+    if (client == null) return const SizedBox.shrink();
+    final url = src.startsWith('http://') || src.startsWith('https://')
+        ? src
+        : client.bookResourceUrl(widget.chapterId, src);
+    return Image(
+      image: CachedNetworkImageProvider(
+        url,
+        // Without a key of its own the URL files this picture under the
+        // profile that fetched it (`imageCacheKey`).
+        cacheKey: imageCacheKey(url),
+        headers: client.imageHeaders,
+      ),
+      // The width of the column of words it sits in, and its own height from
+      // that: a picture in a page of a book is as wide as the page's text.
+      width: double.infinity,
+      fit: BoxFit.fitWidth,
+    );
+  }
+
+  /// What the cog's sheet asked for, whichever chapter it was opened on.
+  void _onSettingsOutcome(
+    ReaderSettingsOutcome outcome,
+    ChapterInfo chapter,
+    ReadingDirection direction,
+  ) {
+    switch (outcome) {
+      case DirectionPicked(direction: final chosen):
+        // A direction picked here is this series' own from now on, and the
+        // chain answers with it from the next frame — nothing is held in
+        // memory that a write does not back.
+        ref
+            .read(seriesDirectionsProvider.notifier)
+            .set(chapter.seriesId, chosen);
+      case DirectionPromotedToLibrary():
+        // What is in force becomes this library's, so every series shelved
+        // with it opens this way — the one tap that puts a library the guess
+        // gets wrong right. The series' own direction stays above it: one
+        // tap, one thing.
+        ref
+            .read(libraryDirectionsProvider.notifier)
+            .set(chapter.libraryId, direction);
+      case LibraryDirectionCleared():
+        ref.read(libraryDirectionsProvider.notifier).clear(chapter.libraryId);
+      case SeriesDirectionCleared():
+        ref.read(seriesDirectionsProvider.notifier).clear(chapter.seriesId);
+    }
+    _showChromeAndBars(false);
   }
 
   /// One page, zoomable, on the black canvas.
@@ -685,17 +767,17 @@ class _PagedViewState extends State<_PagedView> {
   /// the other path entirely, through `onPageChanged`.
   late int _reported;
 
-  @override
-  void initState() {
-    super.initState();
-    _reported = widget.page;
-  }
-
   int get _itemCount => widget.spread?.length ?? widget.pages;
 
   int _viewIndex(int page) => widget.spread?.indexOf(page) ?? page;
   int _firstPageOf(int viewIndex) =>
       widget.spread?.firstOf(viewIndex) ?? viewIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _reported = widget.page;
+  }
 
   /// True while the view is being moved from here rather than by a finger.
   ///
@@ -1236,15 +1318,198 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
   }
 }
 
+// --- a book -----------------------------------------------------------------
+
+/// A chapter of words, one page of the server's per screen.
+///
+/// The same pager the picture reader uses, and the same two ways of turning a
+/// page — a swipe, and a tap on a side — because what changes is what a page
+/// is, not what reading one feels like. Nothing else the paged view does
+/// carries over: no page has a size, so there is no spread in landscape and
+/// no magnification, and a page longer than the screen is scrolled by the
+/// page's own view rather than by the reader.
+class _BookView extends StatefulWidget {
+  const _BookView({
+    required this.chapterId,
+    required this.pages,
+    required this.page,
+    required this.picture,
+    required this.onPageChanged,
+  });
+
+  final int chapterId;
+  final int pages;
+  final int page;
+
+  /// What a picture a page refers to is drawn with. Passed in rather than
+  /// read from a provider, because a page is built by the pager's item
+  /// builder — which a lazy list runs *during layout*.
+  final Widget Function(String src) picture;
+
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  State<_BookView> createState() => _BookViewState();
+}
+
+class _BookViewState extends State<_BookView> {
+  late final PageController _controller = PageController(
+    initialPage: widget.page,
+  );
+
+  /// The page this view last told the reader about. See
+  /// [_PagedViewState._reported], whose trap this is too: a `late` field
+  /// would initialise at the comparison in [didUpdateWidget], where the page
+  /// is already the one being tested against.
+  late int _reported;
+
+  @override
+  void initState() {
+    super.initState();
+    _reported = widget.page;
+  }
+
+  /// True while the view is being moved from here rather than by a finger.
+  ///
+  /// `jumpToPage` reports the page it lands on **synchronously**, from inside
+  /// the build that asked for the jump — and a page the reader asked for is
+  /// not news to the reader.
+  var _seeking = false;
+
+  @override
+  void didUpdateWidget(_BookView old) {
+    super.didUpdateWidget(old);
+    if (widget.page == _reported) return;
+    _reported = widget.page;
+    if (!_controller.hasClients) return;
+    if (_controller.page?.round() == widget.page) return;
+    _seeking = true;
+    try {
+      _controller.jumpToPage(widget.page);
+    } finally {
+      _seeking = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      controller: _controller,
+      itemCount: widget.pages,
+      onPageChanged: (page) {
+        if (_seeking) return;
+        _reported = page;
+        widget.onPageChanged(page);
+      },
+      itemBuilder: (context, page) => _BookPage(
+        chapterId: widget.chapterId,
+        page: page,
+        picture: widget.picture,
+      ),
+    );
+  }
+}
+
+/// One page of a book, which is asked for when it is reached.
+///
+/// A page is a family of its own rather than one document holding them all,
+/// so the reader asks for the page it is on and no other: a book is as long
+/// as the server says it is, and a reader asking for all of it at once is a
+/// reader asking for the whole book to be laid out before a word of it is
+/// read.
+class _BookPage extends ConsumerWidget {
+  const _BookPage({
+    required this.chapterId,
+    required this.page,
+    required this.picture,
+  });
+
+  final int chapterId;
+  final int page;
+  final Widget Function(String src) picture;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final content = ref.watch(
+      bookPageProvider((chapterId: chapterId, page: page)),
+    );
+    return switch (content) {
+      // Nothing to show, and nothing coming: a page the server could not
+      // produce says so instead of being read as a page with no words in it.
+      AsyncError() => const BookPageUnavailable(),
+      AsyncData(:final value) => BookPageBody(page: value, picture: picture),
+      _ => const Center(child: CircularProgressIndicator(color: patraAccent)),
+    };
+  }
+}
+
+/// The three zones a tap can land in: the sides turn the page, the middle
+/// brings the chrome up and takes it away again. 30 / 40 / 30.
+///
+/// The two sides are named for where they are, not for what they do: which of
+/// them reads on is the reading direction's business (`_step`), and a
+/// right-to-left chapter mirrors them by passing the callbacks the other way
+/// round rather than by mirroring them here — a second mirror would undo the
+/// first.
+///
+/// A direction that scrolls has no sides to turn, so it passes the middle
+/// alone — and then the middle is the whole screen, because a strip that
+/// scrolls has to be tappable anywhere on it.
+class _TapZones extends StatelessWidget {
+  const _TapZones({this.onLeft, this.onRight, required this.onMiddle});
+
+  final VoidCallback? onLeft;
+  final VoidCallback? onRight;
+  final VoidCallback onMiddle;
+
+  Widget _zone(VoidCallback? onTap) =>
+      GestureDetector(behavior: HitTestBehavior.translucent, onTap: onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    if (onLeft == null || onRight == null) {
+      return Positioned.fill(child: _zone(onMiddle));
+    }
+    return Positioned.fill(
+      child: Row(
+        children: [
+          Expanded(flex: 30, child: _zone(onLeft)),
+          Expanded(flex: 40, child: _zone(onMiddle)),
+          Expanded(flex: 30, child: _zone(onRight)),
+        ],
+      ),
+    );
+  }
+}
 // --- chrome -----------------------------------------------------------------
 
-class _TopChrome extends StatelessWidget {
-  const _TopChrome({
-    required this.title,
+/// What the cog in the top bar opens, for a chapter that has settings to
+/// offer: the direction in force, the library a promotion would be written
+/// against, and what to do with the answer.
+class _ReaderSettings {
+  const _ReaderSettings({
     required this.direction,
     required this.libraryName,
     required this.onOutcome,
   });
+
+  final ChapterDirection direction;
+
+  /// What the library this chapter is shelved in is called, for the sheet's
+  /// rows: empty where the server's list has not reached the device yet.
+  final String libraryName;
+
+  final ValueChanged<ReaderSettingsOutcome> onOutcome;
+}
+
+class _TopChrome extends StatelessWidget {
+  const _TopChrome({required this.title, this.settings});
 
   /// How far the bar reaches down the screen, in points — what the rail
   /// starts below (`page_rail.dart`), and the whole of the bar's geometry:
@@ -1254,17 +1519,17 @@ class _TopChrome extends StatelessWidget {
   static const double barHeight = 4 + 48 + 20;
 
   final String title;
-  final ChapterDirection direction;
 
-  /// What the library this chapter is shelved in is called, for the sheet's
-  /// rows: empty where the server's list has not reached the device yet.
-  final String libraryName;
-
-  final ValueChanged<ReaderSettingsOutcome> onOutcome;
+  /// What the cog opens, or null where there is nothing to offer it: a book
+  /// has no reading direction, no spread, no magnification and no strip
+  /// width, so the bar carries its title alone (#75 gives the cog back with
+  /// a text size and a line spacing in it).
+  final _ReaderSettings? settings;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final settings = this.settings;
     return Positioned(
       top: 0,
       left: 0,
@@ -1295,13 +1560,15 @@ class _TopChrome extends StatelessWidget {
                     style: PatraText.rowTitle(color: Colors.white),
                   ),
                 ),
-                const SizedBox(width: 8),
-                _SettingsCog(
-                  direction: direction,
-                  libraryName: libraryName,
-                  onOutcome: onOutcome,
-                  tooltip: l10n.readerSettings,
-                ),
+                if (settings != null) ...[
+                  const SizedBox(width: 8),
+                  _SettingsCog(
+                    direction: settings.direction,
+                    libraryName: settings.libraryName,
+                    onOutcome: settings.onOutcome,
+                    tooltip: l10n.readerSettings,
+                  ),
+                ],
               ],
             ),
           ),
@@ -1366,7 +1633,7 @@ class _BottomChrome extends StatelessWidget {
     required this.page,
     required this.span,
     required this.rtl,
-    required this.vertical,
+    required this.showStrip,
     required this.thumbQueue,
     required this.thumbProvider,
     required this.onSeek,
@@ -1385,17 +1652,27 @@ class _BottomChrome extends StatelessWidget {
   final int span;
   final bool rtl;
 
-  /// Reading vertically, the strip and the slider are replaced by the rail
-  /// (`page_rail.dart`), so the vertical chrome keeps the counter alone.
-  /// Paging has chrome of its own and this work leaves it alone (#46).
-  final bool vertical;
+  /// Whether the scrubber is drawn: the thumbnail strip and the slider.
+  ///
+  /// Paging through pictures has one. Reading vertically has the rail
+  /// instead, built against the edge of the screen the chapter scrolls along
+  /// (`page_rail.dart`), and a book has no page pictures to scrub through at
+  /// all — its pages are words the server laid out. Either way this chrome
+  /// keeps the counter alone.
+  final bool showStrip;
   final ThumbLoadQueue thumbQueue;
-  final ImageProvider? Function(int page) thumbProvider;
+
+  /// Null where there is no strip to fill.
+  final ImageProvider? Function(int page)? thumbProvider;
   final ValueChanged<int> onSeek;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Read into a local so the strip below can be told there is one to fill:
+    // a field is not promoted, but a page of a book has no thumbnails to
+    // give it.
+    final thumbs = thumbProvider;
     final last = (page + span - 1).clamp(0, chapter.pages - 1);
     final counter = span > 1 && last > page
         ? l10n.pageSpreadCounter(page + 1, last + 1, chapter.pages)
@@ -1434,15 +1711,16 @@ class _BottomChrome extends StatelessWidget {
                       // directions' seek control. Vertical reading's is the
                       // rail, built alongside this chrome against the right
                       // edge of the screen (see `page_rail.dart`), so the
-                      // vertical chrome keeps the counter alone (#52). A
-                      // paged chapter of one page keeps the strip it has —
-                      // this work leaves paged reading alone.
-                      if (!vertical) ...[
+                      // vertical chrome keeps the counter alone (#52), and a
+                      // book's has nothing to show. A paged chapter of one
+                      // page keeps the strip it has — this work leaves paged
+                      // reading alone.
+                      if (showStrip && thumbs != null) ...[
                         ThumbStrip(
                           pages: chapter.pages,
                           current: page,
                           queue: thumbQueue,
-                          providerBuilder: thumbProvider,
+                          providerBuilder: thumbs,
                           onTap: onSeek,
                         ),
                         if (chapter.pages > 1)
@@ -1476,49 +1754,6 @@ class _BottomChrome extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// A format the page reader cannot show. Says so rather than failing page by
-/// page, and names what is coming.
-class _UnsupportedFormat extends StatelessWidget {
-  const _UnsupportedFormat();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Stack(
-      children: [
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.all(gutter),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.menu_book_outlined,
-                  color: Colors.white24,
-                  size: 34,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  l10n.formatNotSupported,
-                  textAlign: TextAlign.center,
-                  style: PatraText.rowTitle(),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.formatNotSupportedBody,
-                  textAlign: TextAlign.center,
-                  style: PatraText.metadata(),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SafeArea(child: BackButton(color: Colors.white70)),
-      ],
     );
   }
 }

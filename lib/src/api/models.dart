@@ -519,6 +519,54 @@ class PageDimension {
   }
 }
 
+/// What Kavita made of a book: how many pages it laid out, and whose words
+/// they are.
+///
+/// `BookInfoDto` — `GET /api/Book/{chapterId}/book-info`. The pages are the
+/// server's own pagination (ADR-0008): it is the server that breaks an EPUB
+/// into pages, so a chapter of one has no image pages for `chapter-info` to
+/// count and no dimensions either, and this is where the reader learns how
+/// long a book is.
+class BookInfo {
+  const BookInfo({
+    required this.seriesId,
+    required this.volumeId,
+    required this.libraryId,
+    required this.pages,
+    required this.seriesName,
+    required this.seriesFormat,
+    this.bookTitle = '',
+  });
+
+  final int seriesId;
+  final int volumeId;
+  final int libraryId;
+  final int pages;
+  final String seriesName;
+
+  /// The format of the whole series, which is what says the pages below are
+  /// reflowable rather than pictures.
+  final MangaFormat seriesFormat;
+
+  /// The title Kavita read out of the file itself, which is the book's own
+  /// name and not the series'. Empty where the file carried none.
+  final String bookTitle;
+
+  /// What the reader calls this book: the file's own title, or the series'
+  /// where the file said nothing.
+  String get title => bookTitle.isNotEmpty ? bookTitle : seriesName;
+
+  factory BookInfo.fromJson(Map<String, dynamic> json) => BookInfo(
+    seriesId: json['seriesId'] as int? ?? 0,
+    volumeId: json['volumeId'] as int? ?? 0,
+    libraryId: json['libraryId'] as int? ?? 0,
+    pages: json['pages'] as int? ?? 0,
+    seriesName: json['seriesName'] as String? ?? '',
+    seriesFormat: MangaFormat.fromId(json['seriesFormat'] as int?),
+    bookTitle: json['bookTitle'] as String? ?? '',
+  );
+}
+
 class ChapterInfo {
   const ChapterInfo({
     required this.seriesId,
@@ -565,6 +613,25 @@ class ChapterInfo {
     if (dimension == null) return false;
     return dimension.isWide || dimension.width > dimension.height;
   }
+
+  /// This chapter read as the book it is.
+  ///
+  /// The page count and the title come from `book-info` because that is where
+  /// the server says them: it lays a book's words out into pages of its own
+  /// (ADR-0008), so the `chapter-info` this was parsed from has nothing to
+  /// count. Everything else — whose series this is, and the library it is
+  /// shelved in — is still that answer's, and is kept: progress is posted to
+  /// the same ids whichever of the two a chapter is made of.
+  ChapterInfo withBook(BookInfo book) => ChapterInfo(
+    seriesId: book.seriesId,
+    volumeId: book.volumeId,
+    libraryId: book.libraryId,
+    pages: book.pages,
+    seriesName: book.seriesName,
+    title: book.title,
+    seriesFormat: book.seriesFormat,
+    libraryType: libraryType,
+  );
 
   factory ChapterInfo.fromJson(Map<String, dynamic> json) => ChapterInfo(
     seriesId: json['seriesId'] as int,

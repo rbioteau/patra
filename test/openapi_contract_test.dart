@@ -111,6 +111,9 @@ void main() {
       '/api/Reader/progress': 'post',
       '/api/Reader/image': 'get',
       '/api/Reader/thumbnail': 'get',
+      '/api/Book/{chapterId}/book-info': 'get',
+      '/api/Book/{chapterId}/book-page': 'get',
+      '/api/Book/{chapterId}/book-resources': 'get',
       '/api/Image/series-cover': 'get',
       '/api/Image/volume-cover': 'get',
       '/api/Image/chapter-cover': 'get',
@@ -145,6 +148,7 @@ void main() {
       'Volume': 'VolumeDto',
       'Chapter': 'ChapterDto',
       'ChapterInfo': 'ChapterInfoDto',
+      'BookInfo': 'BookInfoDto',
       'PageDimension': 'FileDimensionDto',
       'ClientDeviceDto': 'ClientDeviceDto',
     };

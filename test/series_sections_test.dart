@@ -346,9 +346,9 @@ void main() {
     expect(row.onTap, isNotNull);
   });
 
-  testWidgets('an EPUB chapter says so instead of opening a broken reader', (
-    tester,
-  ) async {
+  testWidgets('a book opens like any other chapter', (tester) async {
+    // In a Book library, which is where a book lives: the reader asks the
+    // server for the pages it made of the file's words.
     await _pump(tester, [
       {
         'id': 10,
@@ -357,13 +357,13 @@ void main() {
         'pages': 100,
         'chapters': [_chapter(101, '1', format: 3)],
       },
-    ]);
+    ], type: LibraryType.book);
 
-    expect(find.text('Format not supported yet'), findsOneWidget);
+    expect(find.text('Format not supported yet'), findsNothing);
     final row = tester.widget<InkWell>(
-      find.ancestor(of: find.text('Chapter 1'), matching: find.byType(InkWell)),
+      find.ancestor(of: find.text('Book 1'), matching: find.byType(InkWell)),
     );
-    expect(row.onTap, isNull);
+    expect(row.onTap, isNotNull);
   });
 
   group('the resume button names only what is numbered', () {

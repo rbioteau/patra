@@ -458,17 +458,11 @@ abstract class AppLocalizations {
   /// **'The server is turning this PDF into pages. Only the first open waits.'**
   String get pdfPreparingBody;
 
-  /// Shown on a chapter the image reader cannot open (EPUB, PDF)
+  /// Shown in place of a page of a book the server could not produce
   ///
   /// In en, this message translates to:
-  /// **'Format not supported yet'**
-  String get formatNotSupported;
-
-  /// Explanation shown in place of the reader for a format it cannot open
-  ///
-  /// In en, this message translates to:
-  /// **'This series is an EPUB. Patra reads image formats and PDFs for now; EPUB support is on the way.'**
-  String get formatNotSupportedBody;
+  /// **'This page could not be loaded.'**
+  String get bookPageUnavailable;
 
   /// Pages remaining in the chapter the home hero would resume
   ///

@@ -271,8 +271,9 @@ void main() {
       expect(featured!.id, 2);
     });
 
-    // The reader refuses an EPUB outright, so a hero built on one would offer
-    // a button that cannot do the only thing the hero is for.
+    // A book is passed over for now (#73): the reader opens one, but reading
+    // progress on a series of words is not what this promotion is built on
+    // yet.
     test('an EPUB is passed over for the next most recent', () {
       final featured = featuredSeries([
         _series(1, lastRead: '2026-09-05T10:00:00', format: 3),

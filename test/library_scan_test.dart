@@ -220,8 +220,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Every scan endpoint is behind Kavita's AdminPolicy, so a non-admin
-      // could earn nothing from one but a 403 — the same rule that leaves an
-      // EPUB row untappable.
+      // could earn nothing from one but a 403.
       expect(_menu, findsNothing);
       expect(find.text('Ask server to scan'), findsNothing);
       expect(adapter.scans, isEmpty);

@@ -30,9 +30,9 @@ import '../../routes.dart';
 /// `catalogue.onDeck`.
 ///
 /// What is left to decide here is only what the endpoint does not know: that
-/// this app cannot open an EPUB at all — the reader refuses one outright, so
-/// the hero's button, the whole reason the hero exists, would lead nowhere —
-/// and which of the candidates was read most recently. A series carrying no
+/// a series made of [[Reflowable content]] is still passed over here (#73) —
+/// the reader opens one, but its progress is not what this screen is reading
+/// yet — and which of the candidates was read most recently. A series carrying no
 /// read date stays eligible; it simply cannot outrank one that says when it
 /// was read, so with no dates anywhere the shelf's own order stands.
 ///
