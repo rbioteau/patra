@@ -109,11 +109,11 @@ _Avoid_: title, book, entry
 ### The parts of a series
 
 **Volume**:
-A numbered collection of chapters within a series. In a book library a volume *is* the book and has no chapters under it.
+A numbered collection of chapters within a series. In a book library a volume is *named after* the book, but the file, the format and the [[Reading progress]] sit on its chapters all the same — usually just one, and often the placeholder — because Kavita hangs a file on a chapter and never on a volume.
 _Avoid_: tome (English text), book (except in a book library)
 
 **Chapter**:
-The reading unit: the thing a row opens, and the thing reading progress attaches to. Called an **issue** in a comic library and a **book** in a book library — always name it in the library type's own vocabulary, never as a bare "chapter".
+The reading unit: the thing a row opens, and the thing reading progress attaches to. Called an **issue** in a comic library and a **book** in a book library — always name it in the library type's own vocabulary, never as a bare "chapter". A chapter is made either of [[Fixed pages]] or of [[Reflowable content]], and which of the two it is decides how it can be read.
 _Avoid_: episode, part, file
 
 **Issue**:
@@ -140,7 +140,7 @@ A metadata label on one [[Series]] — Action, Science-Fiction — alongside its
 _Avoid_: category, type, tag (for a genre), library type
 
 **Reading progress**:
-How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says.
+How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says. For [[Reflowable content]] the pages are **the server's**: it counts them, and it can count them again differently, so a copy kept on the device keeps the count it was made with.
 _Avoid_: completion, status, read state
 
 **Continue**:
@@ -155,8 +155,16 @@ _Avoid_: next up, recommended, suggestions, up next
 
 ### Reading
 
+**Reflowable content**:
+What a [[Chapter]] is made of when it is words rather than pictures: **Kavita** lays the text out and hands the app one page at a time, so a page is a slice the server chose and not a picture with a size — change the text size or the screen and the same words break somewhere else. Its [[Reading progress]] is therefore a page the server counted and may count again differently, and everything built on measuring pages — the [[Detected direction]], the [[Strip]], the [[Spread]], [[Magnifying]] — has nothing to measure and is never offered for it.
+_Avoid_: epub (that is one file format, and a [[Library type]] is a different thing entirely), book (that is what a chapter is *called* in a book library, not what it is made of), text (a chapter of words carries pictures too)
+
+**Fixed pages**:
+What a [[Chapter]] is made of when every page is one picture, whether it was archived as one or rasterised out of a PDF by Kavita. Every page has a size the app can measure before the page itself has loaded, which is what the [[Detected direction]], the [[Strip]], the [[Spread]] and [[Magnifying]] are all built on.
+_Avoid_: images (that is what they are, not the concept), paged (that is [[Reading direction]]'s business)
+
 **Reading direction**:
-Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Library direction]], then the [[Detected direction]] — a guess never beats a choice — and last the left-to-right a chapter has always opened in. No rung in it belongs to a [[Profile]] or to a device: a direction is a property of the work, and a default held for every series at once is the wrong shape for one.
+Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Library direction]], then the [[Detected direction]] — a guess never beats a choice — and last the left-to-right a chapter has always opened in. No rung in it belongs to a [[Profile]] or to a device: a direction is a property of the work, and a default held for every series at once is the wrong shape for one. The chain is not asked at all of [[Reflowable content]]: with no page sizes to measure, the detected rung could never speak, and there are no pictures to turn or to pair.
 _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
 
 **Library direction**:
@@ -198,7 +206,7 @@ _Avoid_: spread, landscape page
 ### Off the server
 
 **Saved chapter**:
-A chapter whose pages are stored on the device because a profile asked for them. Chosen deliberately, never evicted, and readable with no server at all. It belongs to the profile that saved it, so two people sharing a device do not share what each has saved. This is what the Downloads tab counts.
+A chapter whose pages are stored on the device because a profile asked for them. Chosen deliberately, never evicted, and readable with no server at all. It belongs to the profile that saved it, so two people sharing a device do not share what each has saved. This is what the Downloads tab counts. For [[Reflowable content]] what is stored is the pages **as the server rendered them**, so a copy is a pagination frozen on the day it was made.
 _Avoid_: download (that is the act of fetching one), cached chapter, offline chapter
 
 **Image cache**:
@@ -254,5 +262,12 @@ Four more are fixed by choice rather than by that test, because they name the ap
 | server  | serveur  |
 | lock    | verrou   |
 | PIN     | code     |
+
+Two more name what a chapter is **made of** rather than a part of a series, and are ours because Kavita has no word for the pair:
+
+| English     | French        |
+| ----------- | ------------- |
+| reflowable  | remis en page |
+| fixed pages | pages fixes   |
 
 *Profil* over *compte*, for the same reason the English term avoids "account": on a picker showing faces, the word has to name a person and not a credential. *Code* over *code PIN*, which is a pleonasm French does not need — and never *mot de passe*, which is what a server asks for and what this deliberately is not.
