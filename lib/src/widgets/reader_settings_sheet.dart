@@ -41,11 +41,6 @@ final class DirectionPicked extends ReaderSettingsOutcome {
   final ReadingDirection direction;
 }
 
-/// The direction in force was made the reading profile's own default.
-final class DirectionPromoted extends ReaderSettingsOutcome {
-  const DirectionPromoted();
-}
-
 /// The direction in force was made the one every series in this library opens
 /// in (#65): one tap, for a library the guess gets wrong wholesale.
 final class DirectionPromotedToLibrary extends ReaderSettingsOutcome {
@@ -105,7 +100,7 @@ Future<ReaderSettingsOutcome?> showReaderSettingsSheet(
               // hand — and a checked row on its own reads as "I chose this",
               // which a guess is not.
               _ProvenanceLine(direction: direction, libraryLabel: libraryLabel),
-              ReadingDirectionRows(
+              _DirectionRows(
                 current: direction.direction,
                 onPicked: (option) =>
                     Navigator.of(sheetContext).pop(DirectionPicked(option)),
@@ -124,13 +119,6 @@ Future<ReaderSettingsOutcome?> showReaderSettingsSheet(
                   onTap: () =>
                       Navigator.of(sheetContext)
                           .pop(const DirectionPromotedToLibrary()),
-                ),
-              if (direction.canPromoteToProfile)
-                _ActionRow(
-                  icon: Icons.person_outline,
-                  label: l10n.promoteReadingDirection,
-                  onTap: () =>
-                      Navigator.of(sheetContext).pop(const DirectionPromoted()),
                 ),
               if (direction.hasLibraryDirection)
                 _ActionRow(
@@ -168,7 +156,7 @@ Future<ReaderSettingsOutcome?> showReaderSettingsSheet(
 }
 
 /// Where the direction in force came from: this series' own, this library's,
-/// the profile's default, or detected from the work.
+/// detected from the work, or the built-in left-to-right.
 class _ProvenanceLine extends StatelessWidget {
   const _ProvenanceLine({required this.direction, required this.libraryLabel});
 
@@ -189,9 +177,8 @@ class _ProvenanceLine extends StatelessWidget {
           label,
           libraryLabel,
         ),
-        ReadingDirectionSource.profile => l10n.directionSourceProfile(label),
         ReadingDirectionSource.detected => l10n.directionSourceDetected(label),
-        ReadingDirectionSource.device => l10n.directionSourceDevice(label),
+        ReadingDirectionSource.builtIn => l10n.directionSourceBuiltIn(label),
       }, style: PatraText.metadata(color: patraTextMuted)),
     );
   }
@@ -251,14 +238,13 @@ class _ActionRow extends StatelessWidget {
   );
 }
 
-/// The three directions, as rows. Shared so the reader's sheet and the
-/// Settings screen's picker cannot drift into wording each one differently.
-class ReadingDirectionRows extends StatelessWidget {
-  const ReadingDirectionRows({
-    super.key,
-    required this.current,
-    required this.onPicked,
-  });
+/// The three directions, as rows.
+///
+/// It used to be shared with Settings' own picker, so the two could not drift
+/// into wording the choice differently (#58). Settings has no reading section
+/// now, so it is the reader's alone and private to its sheet.
+class _DirectionRows extends StatelessWidget {
+  const _DirectionRows({required this.current, required this.onPicked});
 
   final ReadingDirection current;
   final ValueChanged<ReadingDirection> onPicked;

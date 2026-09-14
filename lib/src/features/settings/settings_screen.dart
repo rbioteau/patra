@@ -11,12 +11,9 @@ import '../../lock/profile_lock.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/locale_settings.dart';
 import '../../settings/profile_preferences.dart';
-import '../../settings/reading_settings.dart';
 import '../../theme.dart';
-import '../../widgets/direction_icon.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/profile_lock_sheet.dart';
-import '../../widgets/reader_settings_sheet.dart';
 import '../../widgets/patra_wordmark.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -26,7 +23,6 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final session = ref.watch(sessionProvider);
-    final direction = ref.watch(defaultReadingDirectionProvider);
     final locale = ref.watch(localeProvider);
 
     return Scaffold(
@@ -57,20 +53,11 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => _pickLanguage(context, ref, locale),
             ),
 
-            _Section(label: l10n.readingSectionLabel),
-            _SettingRow(
-              icon: DirectionIcon(direction, color: patraAccent),
-              title: l10n.defaultReadingDirection,
-              value: direction.label(l10n),
-              onTap: () => _pickDirection(context, ref, direction),
-            ),
-            // Magnifying and the width a chapter opens at are not here, and
-            // that is a decision rather than an omission: both are in the
-            // reader's own sheet, which is where somebody notices they want
-            // them — magnifying takes the swipe away, the width is the page
-            // under their eyes. See #58, which takes this row out too now
-            // that the reader can set a default of its own (#56).
-
+            // There is no reading section here any more (#58): everything the
+            // reader's preferences can be is set from the reader's own sheet,
+            // which is where somebody notices they want them. What this held
+            // was a default for every series at once, which is precisely the
+            // wrong shape for a direction (ADR-0007).
             _Section(label: l10n.storageSectionLabel),
             const _StorageRows(),
 
@@ -158,41 +145,6 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (picked != null) {
       await ref.read(localeProvider.notifier).set(picked.locale);
-    }
-  }
-
-  Future<void> _pickDirection(
-    BuildContext context,
-    WidgetRef ref,
-    ReadingDirection current,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final picked = await showModalBottomSheet<ReadingDirection>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: _SheetColumn(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
-              child: SectionLabel(l10n.readingDirection),
-            ),
-            // The same rows the reader's own sheet draws, so the two
-            // cannot drift into wording the choice differently.
-            ReadingDirectionRows(
-              current: current,
-              onPicked: (option) => Navigator.of(sheetContext).pop(option),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (picked != null) {
-      // The default and not a direction for one series: this row has no
-      // series in hand, which is also why its sheet carries no line saying
-      // where the direction came from. A series' own direction is set from
-      // the reader, which is where the series is (#56).
-      await ref.read(profileDirectionProvider.notifier).set(picked);
     }
   }
 }

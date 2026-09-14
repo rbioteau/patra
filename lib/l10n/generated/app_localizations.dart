@@ -638,35 +638,23 @@ abstract class AppLocalizations {
   /// **'{direction} — chosen for this series'**
   String directionSourceSeries(String direction);
 
-  /// In the reader's sheet: the reading direction in force is the reading profile's own default.
-  ///
-  /// In en, this message translates to:
-  /// **'{direction} — your default'**
-  String directionSourceProfile(String direction);
-
   /// In the reader's sheet: the reading direction in force was worked out from the work itself rather than chosen by anybody; a guess is not a choice, so this is said out loud.
   ///
   /// In en, this message translates to:
   /// **'{direction} — detected from the work'**
   String directionSourceDetected(String direction);
 
-  /// In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — this device's default, or the app's own. Worded neutrally, because it may not be the reading profile's.
+  /// In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — nothing was chosen for this series or its library, and nothing was detected either. Worded neutrally, because it is nobody's choice.
   ///
   /// In en, this message translates to:
   /// **'{direction} — the default'**
-  String directionSourceDevice(String direction);
+  String directionSourceBuiltIn(String direction);
 
   /// In the reader's sheet: the reading direction in force is one chosen for every series in this library. {library} is the library's own name, as the server words it.
   ///
   /// In en, this message translates to:
   /// **'{direction} — the default for {library}'**
   String directionSourceLibrary(String direction, String library);
-
-  /// Reader action: makes the reading direction in force the profile's own default, so every series opens in it. The direction itself is shown beside the row; drawn only where it is not already their default.
-  ///
-  /// In en, this message translates to:
-  /// **'Make this my default'**
-  String get promoteReadingDirection;
 
   /// Reader action: makes the reading direction in force the one every series in this library opens in, so a shelf the guess gets wrong is put right in one tap. {library} is the library's own name, as the server words it; drawn only where it is not already that library's.
   ///
@@ -967,18 +955,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'System'**
   String get appLanguageSystem;
-
-  /// No description provided for @readingSectionLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading'**
-  String get readingSectionLabel;
-
-  /// No description provided for @defaultReadingDirection.
-  ///
-  /// In en, this message translates to:
-  /// **'Default reading direction'**
-  String get defaultReadingDirection;
 
   /// No description provided for @aboutSectionLabel.
   ///

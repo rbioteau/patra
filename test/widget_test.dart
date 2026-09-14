@@ -307,8 +307,12 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(find.text('Default reading direction'), findsOneWidget);
-    expect(find.text('Left to right'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
+    expect(
+      find.text('System'),
+      findsOneWidget,
+      reason: 'the language follows the device until somebody chooses one',
+    );
     // Not a sign-out: there are two verbs and that was neither. The card at
     // the top of this screen switches profile; the button at the bottom of
     // it removes this one.

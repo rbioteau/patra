@@ -569,10 +569,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ref
                       .read(libraryDirectionsProvider.notifier)
                       .set(chapter.libraryId, direction);
-                case DirectionPromoted():
-                  // What is in force becomes theirs for every series. The
-                  // series' own direction stays: one tap, one thing.
-                  ref.read(profileDirectionProvider.notifier).set(direction);
                 case LibraryDirectionCleared():
                   ref
                       .read(libraryDirectionsProvider.notifier)

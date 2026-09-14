@@ -135,11 +135,13 @@ paged. The one case the rung genuinely served — a library the guess gets
 systematically wrong — is answered *below* the series, not above it, and is
 written up as such at the end of this amendment.
 
-The chain therefore reads:
+The chain therefore reads — with the library's rung, which #65 built before
+this amendment was implemented:
 
 1. the **series** direction;
-2. the **detected** direction (#57);
-3. the built-in left-to-right.
+2. the **library** direction (#65);
+3. the **detected** direction (#57);
+4. the built-in left-to-right.
 
 The **device's** stored default is removed with the profile's: its only writer
 was the notifier this amendment deletes, so nothing can store one, and a rung
@@ -220,8 +222,9 @@ says that what is in force was detected rather than chosen.
 ## Amendment — 2026-09-13 (#65)
 
 The per-library direction is built, and it is the second rung: **the series',
-then the library's**, then the profile's, then this device's stored default,
-then the detected direction, then the built-in left-to-right.
+then the library's**, then the detected direction, then the built-in
+left-to-right. The two rungs about a person and a device that used to sit
+between the library's and the detected one are gone with the amendment above.
 
 It sits **directly under the series'** rather than merely somewhere above
 detection, for two reasons. Both rungs are answers about the work's side of the
@@ -249,3 +252,23 @@ Where the device holds no name yet the rows say "this library" instead.
 The [Consequences] bullet about promoting a default that nothing can unset
 applies to this rung too, and is answered the same way: a library that is set
 owes a row back.
+
+## Amendment — 2026-09-13 (#58, shipped)
+
+The removal above is implemented, and it is the whole of what Settings lost:
+the screen has no reading section now, and nothing was reachable only from it.
+`ProfilePreferences.direction`, `ProfilePreferencesStore.deviceDirection` and
+`ReadingSettingsStore`'s direction row are gone with the two notifiers that
+wrote them, and `ChapterDirection` asks three rungs where it asked five.
+
+**A direction somebody had really stored is dropped rather than migrated**, and
+that is a decision rather than an oversight: there is nothing to migrate it
+*to*. A profile's default was one direction for every series they read, and the
+only rung that could inherit it is a library's — but a profile's default is not
+per library, so there is no library to copy it onto. Whoever had one is now
+read by detection, per work, with the library's rung available where a library
+is guessed wrong. The key is left on the device and is simply not read.
+
+*A guess must never beat a choice* still holds, and is the whole of what is
+left to state: the two rungs above the detected one are the series' and the
+library's, and both are choices about works.

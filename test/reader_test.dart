@@ -12,8 +12,9 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
-import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/features/reader/page_rail.dart';
+import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/features/reader/reading_direction.dart';
 import 'package:patra/src/features/reader/strip_geometry.dart';
 import 'package:patra/src/features/reader/thumb_strip.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
@@ -167,7 +168,10 @@ final _reader = Profile(
 Future<List<int>> _pumpReader(
   WidgetTester tester, {
   required int initialPage,
-  ReadingDirection direction = ReadingDirection.verticalScroll,
+  // What the work suggests, and so what the chapter opens in where nothing
+  // has been chosen above it — null lets the work be measured for real,
+  // which is what a test *about* the guess asks for.
+  ReadingDirection? direction = ReadingDirection.verticalScroll,
   bool magnify = false,
   double widthFactor = 1.0,
   int? savedPagesRead,
@@ -226,14 +230,19 @@ Future<List<int>> _pumpReader(
           initialAuthStateProvider.overrideWithValue(
             AuthState(profiles: [profile], activeId: profile.id),
           ),
-        // No session unless [profile] says otherwise, so these are the
-        // device's own defaults — which is what a profile that has never
-        // chosen reads in.
+        // What the work suggests, which is what a chapter opens in where
+        // nothing has been chosen for its series or its library: the device
+        // has no direction of its own any more (#58), so this is the seam a
+        // test says "open this chapter thus" through.
+        if (direction != null)
+          detectedDirectionProvider.overrideWith((ref, _) => direction),
+        // No session unless [profile] says otherwise, so magnifying and the
+        // width are the device's own defaults — which is what a profile that
+        // has never chosen reads in.
         profilePreferencesStoreProvider.overrideWithValue(
           store ??
               ProfilePreferencesStore(
                 keychain: MemoryKeychain(),
-                deviceDirection: direction,
                 deviceMagnify: magnify,
                 deviceWidthFactor: widthFactor,
               ),
@@ -423,7 +432,6 @@ void main() {
     // default, and a store handed in brings its own.
     final store = ProfilePreferencesStore(
       keychain: keychain,
-      deviceDirection: ReadingDirection.verticalScroll,
     );
     await _pumpReader(tester, initialPage: 0, profile: _reader, store: store);
 
@@ -441,7 +449,6 @@ void main() {
     // opened at, which is the whole of what a narrower strip must not cost.
     final reopened = await preferencesStore(
       keychain: MemoryKeychain({...keychain.values}),
-      deviceDirection: ReadingDirection.verticalScroll,
     );
     expect(reopened.widthFactorFor(_reader.id), 0.5);
 
@@ -619,6 +626,7 @@ void main() {
     await _pumpReader(
       tester,
       initialPage: 0,
+      direction: null,
       store: ProfilePreferencesStore(keychain: MemoryKeychain()),
     );
     expect(
@@ -630,6 +638,7 @@ void main() {
     await _pumpReader(
       tester,
       initialPage: 0,
+      direction: null,
       libraryType: LibraryType.comic,
       store: ProfilePreferencesStore(keychain: MemoryKeychain()),
     );
@@ -898,7 +907,6 @@ void main() {
     final keychain = MemoryKeychain();
     final store = ProfilePreferencesStore(
       keychain: keychain,
-      deviceDirection: ReadingDirection.verticalScroll,
     );
     await _pumpReader(tester, initialPage: 20, profile: _reader, store: store);
 
@@ -916,7 +924,6 @@ void main() {
     final keychain = MemoryKeychain();
     final store = ProfilePreferencesStore(
       keychain: keychain,
-      deviceDirection: ReadingDirection.verticalScroll,
     );
     final posted = await _pumpReader(
       tester,
@@ -1521,7 +1528,6 @@ void main() {
       // vertically.
       final store = ProfilePreferencesStore(
         keychain: MemoryKeychain(),
-        deviceDirection: ReadingDirection.leftToRight,
       );
       await _pumpReader(
         tester,
@@ -1574,7 +1580,6 @@ void main() {
       // The whole of what the series rung is for: a choice about a work, kept
       // for that work, and for nobody else's copy of it.
       final store = await preferencesStore(
-        deviceDirection: ReadingDirection.leftToRight,
       );
       final posted = await _pumpReader(
         tester,
@@ -1632,7 +1637,6 @@ void main() {
     testWidgets('a series that has been set can go back to following the '
         'default', (tester) async {
       final store = await preferencesStore(
-        deviceDirection: ReadingDirection.leftToRight,
       );
       await store.setSeriesDirection(
         _reader.id,
@@ -1667,62 +1671,17 @@ void main() {
       expect(tester.widget<PageView>(find.byType(PageView)).reverse, isFalse);
     });
 
-    testWidgets('promoting from the reader makes it theirs for every series', (
-      tester,
-    ) async {
-      // The one thing the reader could not do before, and the reason the
-      // direction's row was still in Settings.
-      final store = await preferencesStore(
-        deviceDirection: ReadingDirection.rightToLeft,
-      );
-      await _pumpReader(
-        tester,
-        initialPage: 10,
-        direction: ReadingDirection.rightToLeft,
-        profile: _reader,
-        store: store,
-      );
-      await showChrome(tester);
-      await openSheet(tester);
-
-      // As above: the library's row was promoted to a rung of its own and
-      // sits above this one, and the sheet scrolls.
-      await tester.ensureVisible(find.text('Make this my default'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('Make this my default'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(store.of(_reader.id).direction, ReadingDirection.rightToLeft);
-      expect(
-        store.seriesDirectionFor(_reader.id, 3),
-        isNull,
-        reason: 'promoting leaves the way back from the series free',
-      );
-
-      // Another series opens in it now, having been given nothing of its own.
-      await _pumpReader(
-        tester,
-        initialPage: 10,
-        direction: ReadingDirection.rightToLeft,
-        profile: _reader,
-        store: store,
-        seriesId: 9,
-        readerKey: const ValueKey('another series'),
-      );
-      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
-    });
-
     testWidgets("promoting from the reader makes it the library's", (tester) async {
       // #65: one tap for a whole library, which is the rung under a series'
       // own and above the guess — the one that puts right a library the
       // detection gets wrong for every series in it.
       final store = await preferencesStore();
+      // What a manga library's work suggests, and so what is in force until
+      // somebody says otherwise.
       await _pumpReader(
         tester,
         initialPage: 10,
-        direction: ReadingDirection.leftToRight,
+        direction: ReadingDirection.rightToLeft,
         profile: _reader,
         store: store,
       );
@@ -1742,7 +1701,7 @@ void main() {
       expect(
         store.libraryDirectionFor(_reader.id, 1),
         ReadingDirection.rightToLeft,
-        reason: 'what the manga library detected became the library\u2019s own',
+        reason: 'what the work suggested became the library\u2019s own',
       );
       expect(
         store.seriesDirectionFor(_reader.id, 3),

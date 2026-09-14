@@ -377,17 +377,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String directionSourceProfile(String direction) {
-    return '$direction — your default';
-  }
-
-  @override
   String directionSourceDetected(String direction) {
     return '$direction — detected from the work';
   }
 
   @override
-  String directionSourceDevice(String direction) {
+  String directionSourceBuiltIn(String direction) {
     return '$direction — the default';
   }
 
@@ -395,9 +390,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String directionSourceLibrary(String direction, String library) {
     return '$direction — the default for $library';
   }
-
-  @override
-  String get promoteReadingDirection => 'Make this my default';
 
   @override
   String promoteLibraryDirection(String library) {
@@ -581,12 +573,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appLanguageSystem => 'System';
-
-  @override
-  String get readingSectionLabel => 'Reading';
-
-  @override
-  String get defaultReadingDirection => 'Default reading direction';
 
   @override
   String get aboutSectionLabel => 'About';

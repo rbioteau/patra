@@ -9,15 +9,10 @@ import 'package:patra/src/widgets/reader_settings_sheet.dart';
 
 import 'test_support.dart';
 
-/// The chain resolved for a series nobody has set: what is in force is the
-/// [device] default, which is the whole of what most chapters open on.
-ChapterDirection _fromDevice(ReadingDirection device) => ChapterDirection(
-  series: null,
-  library: null,
-  profile: null,
-  detected: null,
-  device: device,
-);
+/// The chain resolved for a series nobody has set and nothing has guessed:
+/// what is in force is the left-to-right a chapter has always opened in.
+ChapterDirection _builtIn() =>
+    ChapterDirection(series: null, library: null, detected: null);
 
 void main() {
   testWidgets('the sheet reads what it shows through its own context', (
@@ -38,10 +33,7 @@ void main() {
         overrides: [
           testKeychain(),
           profilePreferencesStoreProvider.overrideWithValue(
-            ProfilePreferencesStore(
-              keychain: MemoryKeychain(),
-              deviceDirection: ReadingDirection.verticalScroll,
-            ),
+            ProfilePreferencesStore(keychain: MemoryKeychain()),
           ),
         ],
         child: MaterialApp(
@@ -57,9 +49,7 @@ void main() {
                           icon: const Icon(Icons.settings),
                           onPressed: () => showReaderSettingsSheet(
                             cog,
-                            direction: _fromDevice(
-                              ReadingDirection.verticalScroll,
-                            ),
+                            direction: _builtIn(),
                             libraryName: 'Manga',
                           ),
                         ),
@@ -76,7 +66,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('READING DIRECTION'), findsOneWidget);
     expect(
-      find.text('Vertical — the default'),
+      find.text('Left to right — the default'),
       findsOneWidget,
       reason: 'the sheet says where the direction in force came from',
     );
@@ -104,9 +94,7 @@ void main() {
         ChapterDirection(
           series: ReadingDirection.rightToLeft,
           library: null,
-          profile: null,
           detected: null,
-          device: ReadingDirection.leftToRight,
         ),
       );
 
@@ -118,11 +106,11 @@ void main() {
       expect(find.text('Follow the default'), findsOneWidget);
       expect(find.text('Left to right'), findsWidgets);
       // And a guess is not a choice, so this is offered too: promoting is how
-      // a direction becomes somebody's own default rather than a series'.
+      // a direction becomes the shelf's own rather than only this series'.
       expect(
-        find.text('Make this my default'),
+        find.text('Make this the default for Manga'),
         findsOneWidget,
-        reason: 'nothing is stored as the profile\u2019s own',
+        reason: 'nothing is stored for this library',
       );
     });
 
@@ -134,9 +122,7 @@ void main() {
         ChapterDirection(
           series: null,
           library: ReadingDirection.rightToLeft,
-          profile: null,
           detected: null,
-          device: ReadingDirection.leftToRight,
         ),
       );
 
@@ -173,9 +159,7 @@ void main() {
         ChapterDirection(
           series: null,
           library: ReadingDirection.rightToLeft,
-          profile: null,
           detected: null,
-          device: ReadingDirection.leftToRight,
         ),
         libraryName: '',
       );
@@ -187,31 +171,6 @@ void main() {
       expect(find.text('Follow the default for this library'), findsOneWidget);
     });
 
-    testWidgets("the profile's own reads as their default", (tester) async {
-      await _openSheet(
-        tester,
-        ChapterDirection(
-          series: null,
-          library: null,
-          profile: ReadingDirection.rightToLeft,
-          detected: null,
-          device: ReadingDirection.leftToRight,
-        ),
-      );
-
-      expect(find.text('Right to left — your default'), findsOneWidget);
-      expect(
-        find.text('Follow the default'),
-        findsNothing,
-        reason: 'this series has no direction of its own to drop',
-      );
-      expect(
-        find.text('Make this my default'),
-        findsNothing,
-        reason: 'it already is their default',
-      );
-    });
-
     testWidgets('a detection is never presented as a choice', (tester) async {
       // #57 fills the rung; this is what the sheet will say when it does.
       await _openSheet(
@@ -219,12 +178,10 @@ void main() {
         ChapterDirection(
           series: null,
           library: null,
-          profile: null,
           detected: ReadingDirection.rightToLeft,
           // Nothing stored on this device either, which is the only case in
           // which the detected rung is asked at all: a direction somebody
           // stored here is a choice, and a guess must never beat one.
-          device: null,
         ),
       );
 
@@ -233,25 +190,23 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Make this my default'),
+        find.text('Make this the default for Manga'),
         findsOneWidget,
         reason:
-            'no stored default counts as differing from everything, which is '
-            'what lets a detected direction be promoted',
+            'a library holding nothing counts as differing from everything, '
+            'which is what lets a detected direction be promoted',
       );
     });
 
-    testWidgets('a promoted default is offered no more', (tester) async {
+    testWidgets('a promoted library direction is offered no more', (tester) async {
       // The row is drawn while the direction in force differs from what the
-      // profile has stored — and once promoted, it differs no longer.
+      // library holds — and once promoted, it differs no longer.
       await _openSheet(
         tester,
         ChapterDirection(
           series: ReadingDirection.rightToLeft,
-          library: null,
-          profile: ReadingDirection.rightToLeft,
+          library: ReadingDirection.rightToLeft,
           detected: null,
-          device: ReadingDirection.leftToRight,
         ),
       );
 
@@ -260,9 +215,9 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Make this my default'),
+        find.text('Make this the default for Manga'),
         findsNothing,
-        reason: 'it already is their default',
+        reason: 'it already is this library\u2019s',
       );
       expect(
         find.text('Follow the default'),
@@ -277,31 +232,6 @@ void main() {
     // Independent of each other, and all one-shot: unlike the magnifying
     // switch and the width slider, they close the sheet.
 
-    testWidgets('promoting reports the promotion and closes the sheet', (
-      tester,
-    ) async {
-      final outcomes = await _openSheet(
-        tester,
-        ChapterDirection(
-          series: null,
-          library: null,
-          profile: null,
-          detected: null,
-          device: ReadingDirection.rightToLeft,
-        ),
-      );
-
-      await tester.tap(find.text('Make this my default'));
-      await tester.pumpAndSettle();
-
-      expect(outcomes.single, isA<DirectionPromoted>());
-      expect(
-        find.text('Drag to magnify'),
-        findsNothing,
-        reason: 'the sheet should have closed, as picking a direction does',
-      );
-    });
-
     testWidgets('promoting to the library reports it and closes the sheet', (
       tester,
     ) async {
@@ -310,9 +240,7 @@ void main() {
         ChapterDirection(
           series: null,
           library: null,
-          profile: null,
           detected: ReadingDirection.rightToLeft,
-          device: null,
         ),
       );
 
@@ -336,9 +264,7 @@ void main() {
         ChapterDirection(
           series: null,
           library: ReadingDirection.verticalScroll,
-          profile: null,
           detected: null,
-          device: ReadingDirection.rightToLeft,
         ),
       );
 
@@ -357,9 +283,7 @@ void main() {
         ChapterDirection(
           series: ReadingDirection.verticalScroll,
           library: null,
-          profile: null,
           detected: null,
-          device: ReadingDirection.rightToLeft,
         ),
       );
 
@@ -376,7 +300,7 @@ void main() {
     testWidgets('picking a direction is still what it was', (tester) async {
       final outcomes = await _openSheet(
         tester,
-        _fromDevice(ReadingDirection.leftToRight),
+        _builtIn(),
       );
 
       await tester.tap(find.text('Right to left'));

@@ -156,11 +156,11 @@ _Avoid_: next up, recommended, suggestions, up next
 ### Reading
 
 **Reading direction**:
-Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Library direction]], then the [[Profile]]'s own, then this device's own stored [[Device default]] — a direction somebody set on this device is a choice, and a guess never beats one — then the [[Detected direction]], and last the left-to-right a chapter has always opened in.
+Which way the reader advances through a chapter: left-to-right, right-to-left, or vertical scrolling. One setting with three values — the third is a direction like the other two, not a separate mode sitting beside them. Which one a chapter opens in is answered by a chain, each rung only asked when the one above it has no answer: the [[Series direction]], then the [[Library direction]], then the [[Detected direction]] — a guess never beats a choice — and last the left-to-right a chapter has always opened in. No rung in it belongs to a [[Profile]] or to a device: a direction is a property of the work, and a default held for every series at once is the wrong shape for one.
 _Avoid_: mode, layout, LTR/RTL (in anything a user reads)
 
 **Library direction**:
-The [[Reading direction]] chosen for every [[Series]] shelved in one library, which outranks what a person chose for all of their reading and is outranked by a series' own. It is the rung that corrects a library the guess gets wrong wholesale — a library whose type is wrong is wrong for every work in it — and it is what replaces the profile's own default rather than an extra beside it. It belongs to the [[Profile]] that chose it and is never sent to the server, and a library nobody has set has none.
+The [[Reading direction]] chosen for every [[Series]] shelved in one library, which outranks the guess and is outranked by a series' own. It is the rung that corrects a library the guess gets wrong wholesale — a library whose type is wrong is wrong for every work in it — and it is what replaces the profile's own default rather than an extra beside it. It belongs to the [[Profile]] that chose it and is never sent to the server, and a library nobody has set has none.
 _Avoid_: library default, library setting, shelf direction
 
 **Series direction**:
@@ -222,11 +222,11 @@ One question the [[Catalogue]] answers, with the request behind it: the device's
 _Avoid_: fetch (that is the request, which is half of one), query, provider, answer (that is what a read carries, not what it is)
 
 **Preference**:
-A setting somebody chose. Reading direction, magnifying, the width a chapter opens at and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]].
+A setting somebody chose. Magnifying, the width a chapter opens at and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]]. **The [[Reading direction]] is the one reading preference that is not one of these** — it belongs to a work or to a [[Library]], never to a person, and it has no device default to fall back on.
 _Avoid_: setting (that is the row it is changed on), option, config
 
 **Device default**:
-What a profile that has never chosen a preference reads in — the value under the flat key this device held before it had profiles. For the language it is also what the [[Gate]] is drawn in, since the picker stands in front of every session and has nobody to ask; choosing a language moves it, and that is the only preference it is true of.
+What a profile that has never chosen a preference reads in — the value under the flat key this device held before it had profiles. For the language it is also what the [[Gate]] is drawn in, since the picker stands in front of every session and has nobody to ask; choosing a language moves it, and that is the only preference it is true of. There is no device default for the [[Reading direction]] any more: the chain ends at the [[Detected direction]] and then at the left-to-right a chapter has always opened in.
 _Avoid_: fallback, global setting, system default (that is the device's own language, which is a separate answer)
 
 **Offline**:
