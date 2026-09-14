@@ -46,7 +46,6 @@ Future<void> main() async {
   const readingSettings = ReadingSettingsStore(keychain);
   final preferences = ProfilePreferencesStore(
     keychain: keychain,
-    deviceDirection: await readingSettings.load(),
     deviceMagnify: await readingSettings.loadMagnify(),
     deviceLanguage: await const LocaleSettingsStore(keychain).load(),
   );

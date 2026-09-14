@@ -253,7 +253,7 @@ void main() {
     // somebody else is not leaving yourself.
     expect(find.text('lea'), findsNothing);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('Default reading direction'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
   });
 
   testWidgets('removing a profile is in Settings, and needs confirming', (

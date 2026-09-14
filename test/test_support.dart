@@ -14,7 +14,6 @@ import 'package:patra/src/keychain.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
-import 'package:patra/src/settings/reading_settings.dart';
 
 /// Points path_provider at a temp directory for the duration of a test.
 ///
@@ -177,21 +176,17 @@ class FakeBiometrics implements Biometrics {
   }
 }
 
-/// A loaded preferences store on a keychain of its own, with [device]
-/// standing for what the flat keys held before anybody had a profile.
+/// A loaded preferences store on a keychain of its own, standing in for what
+/// the flat keys held before anybody had a profile — all of them but the
+/// reading direction, which #58 stopped this device from holding at all.
 Future<ProfilePreferencesStore> preferencesStore({
   MemoryKeychain? keychain,
-  // Null by default, because that is what a device that has never been given
-  // a direction holds — and it is not the left-to-right a chapter opens in
-  // all the same, which is the difference the chain is built on (ADR-0007).
-  ReadingDirection? deviceDirection,
   bool deviceMagnify = false,
   double deviceWidthFactor = 1.0,
   Locale? deviceLanguage,
 }) async {
   final store = ProfilePreferencesStore(
     keychain: keychain ?? MemoryKeychain(),
-    deviceDirection: deviceDirection,
     deviceMagnify: deviceMagnify,
     deviceWidthFactor: deviceWidthFactor,
     deviceLanguage: deviceLanguage,

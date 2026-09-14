@@ -32,12 +32,17 @@ enum ReadingDirection {
 /// this is what a profile that has never chosen starts from — which is what
 /// makes a device set before it held profiles keep its settings for
 /// everybody on it.
+///
+/// **The direction is not one of them any more** (#58): it used to be stored
+/// here as the device's own default, and read as the rung behind a person's.
+/// ADR-0007 removed both rungs — detection is per series, and a default held
+/// for every series at once is the wrong shape for a direction — so the row
+/// is written no more. A device that has one still parses: the key is simply
+/// not read.
 class ReadingSettingsStore {
   const ReadingSettingsStore(this._keychain);
 
   final Keychain _keychain;
-
-  static const _key = 'readingDirection';
 
   /// Deliberately still `loupeGesture`. The concept was called a loupe
   /// before the word was found to be wrong for it — a loupe is a lens over
@@ -66,33 +71,6 @@ class ReadingSettingsStore {
       if (direction.name == name) return direction;
     }
     return _legacyNames[name];
-  }
-
-  /// What this device has stored as its own default, or **null where it has
-  /// stored nothing** — which is deliberately not the left-to-right an absent
-  /// key used to be read as. The two are different answers and the chain asks
-  /// this one: only a direction that was really stored outranks one detected
-  /// from the work, so a built-in fallback must not be allowed to stand in
-  /// for a choice (ADR-0007). Where nothing answers anywhere, the chain ends
-  /// at left-to-right, which is what a chapter has always opened in.
-  Future<ReadingDirection?> load() async {
-    try {
-      return directionNamed(await _keychain.read(_key));
-    } on Exception {
-      // A keychain that cannot be read is a device that never chose, not a
-      // device that cannot start — the same answer `SessionStorage.load`
-      // gives it, and the safe direction to be wrong in: what stands in for
-      // a default nobody stored is one the app has always drawn anyway.
-      return null;
-    }
-  }
-
-  Future<void> save(ReadingDirection direction) async {
-    try {
-      await _keychain.write(_key, direction.name);
-    } on Exception {
-      // A preference is not worth surfacing a storage failure for.
-    }
   }
 
   /// Off unless it was deliberately turned on: the gesture replaces the swipe

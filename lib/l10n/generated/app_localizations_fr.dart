@@ -378,17 +378,12 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String directionSourceProfile(String direction) {
-    return '$direction — votre réglage par défaut';
-  }
-
-  @override
   String directionSourceDetected(String direction) {
     return '$direction — détecté d\'après l\'œuvre';
   }
 
   @override
-  String directionSourceDevice(String direction) {
+  String directionSourceBuiltIn(String direction) {
     return '$direction — le réglage par défaut';
   }
 
@@ -396,9 +391,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String directionSourceLibrary(String direction, String library) {
     return '$direction — le réglage par défaut de $library';
   }
-
-  @override
-  String get promoteReadingDirection => 'En faire mon réglage par défaut';
 
   @override
   String promoteLibraryDirection(String library) {
@@ -582,12 +574,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get appLanguageSystem => 'Système';
-
-  @override
-  String get readingSectionLabel => 'Lecture';
-
-  @override
-  String get defaultReadingDirection => 'Sens de lecture par défaut';
 
   @override
   String get aboutSectionLabel => 'À propos';

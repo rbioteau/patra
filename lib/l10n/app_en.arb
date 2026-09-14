@@ -380,13 +380,6 @@
       "direction": {"type": "String"}
     }
   },
-  "directionSourceProfile": "{direction} — your default",
-  "@directionSourceProfile": {
-    "description": "In the reader's sheet: the reading direction in force is the reading profile's own default.",
-    "placeholders": {
-      "direction": {"type": "String"}
-    }
-  },
   "directionSourceDetected": "{direction} — detected from the work",
   "@directionSourceDetected": {
     "description": "In the reader's sheet: the reading direction in force was worked out from the work itself rather than chosen by anybody; a guess is not a choice, so this is said out loud.",
@@ -394,9 +387,9 @@
       "direction": {"type": "String"}
     }
   },
-  "directionSourceDevice": "{direction} — the default",
-  "@directionSourceDevice": {
-    "description": "In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — this device's default, or the app's own. Worded neutrally, because it may not be the reading profile's.",
+  "directionSourceBuiltIn": "{direction} — the default",
+  "@directionSourceBuiltIn": {
+    "description": "In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — nothing was chosen for this series or its library, and nothing was detected either. Worded neutrally, because it is nobody's choice.",
     "placeholders": {
       "direction": {"type": "String"}
     }
@@ -408,10 +401,6 @@
       "direction": {"type": "String"},
       "library": {"type": "String"}
     }
-  },
-  "promoteReadingDirection": "Make this my default",
-  "@promoteReadingDirection": {
-    "description": "Reader action: makes the reading direction in force the profile's own default, so every series opens in it. The direction itself is shown beside the row; drawn only where it is not already their default."
   },
   "promoteLibraryDirection": "Make this the default for {library}",
   "@promoteLibraryDirection": {
@@ -582,8 +571,6 @@
   "@appLanguageSystem": {
     "description": "The default option in Settings > Language: follow whatever language the device is set to. The other options are each named in their own language and are never translated."
   },
-  "readingSectionLabel": "Reading",
-  "defaultReadingDirection": "Default reading direction",
   "aboutSectionLabel": "About",
   "aboutVersion": "Version {version}",
   "@aboutVersion": {
