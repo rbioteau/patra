@@ -225,13 +225,9 @@
   "@pdfPreparingBody": {
     "description": "Explanation under the PDF preparing indicator"
   },
-  "formatNotSupported": "Format not supported yet",
-  "@formatNotSupported": {
-    "description": "Shown on a chapter the image reader cannot open (EPUB, PDF)"
-  },
-  "formatNotSupportedBody": "This series is an EPUB. Patra reads image formats and PDFs for now; EPUB support is on the way.",
-  "@formatNotSupportedBody": {
-    "description": "Explanation shown in place of the reader for a format it cannot open"
+  "bookPageUnavailable": "This page could not be loaded.",
+  "@bookPageUnavailable": {
+    "description": "Shown in place of a page of a book the server could not produce"
   },
   "homeHeroPagesLeft": "{count, plural, =1{1 page left} other{{count} pages left}}",
   "@homeHeroPagesLeft": {

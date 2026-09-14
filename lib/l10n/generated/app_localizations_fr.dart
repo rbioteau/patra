@@ -238,11 +238,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le serveur découpe ce PDF en pages. Seule la première ouverture attend.';
 
   @override
-  String get formatNotSupported => 'Format pas encore pris en charge';
-
-  @override
-  String get formatNotSupportedBody =>
-      'Cette série est un EPUB. Patra lit les formats image et les PDF pour l\'instant ; la prise en charge de l\'EPUB arrive.';
+  String get bookPageUnavailable => 'Cette page n\'a pas pu être chargée.';
 
   @override
   String homeHeroPagesLeft(int count) {

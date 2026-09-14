@@ -156,7 +156,7 @@ _Avoid_: next up, recommended, suggestions, up next
 ### Reading
 
 **Reflowable content**:
-What a [[Chapter]] is made of when it is words rather than pictures: **Kavita** lays the text out and hands the app one page at a time, so a page is a slice the server chose and not a picture with a size — change the text size or the screen and the same words break somewhere else. Its [[Reading progress]] is therefore a page the server counted and may count again differently, and everything built on measuring pages — the [[Detected direction]], the [[Strip]], the [[Spread]], [[Magnifying]] — has nothing to measure and is never offered for it.
+What a [[Chapter]] is made of when it is words rather than pictures: **Kavita** lays the text out and hands the app one page at a time, so a page is a slice the server chose and not a picture with a size — change the text size or the screen and the same words break somewhere else. **The app draws that page itself**: the HTML Kavita scoped is taken apart into paragraphs, headings, quotations, list items and pictures, and those are set in this app's type on this app's background rather than handed to a browser (ADR-0010). Its [[Reading progress]] is therefore a page the server counted and may count again differently, and everything built on measuring pages — the [[Detected direction]], the [[Strip]], the [[Spread]], [[Magnifying]] — has nothing to measure and is never offered for it.
 _Avoid_: epub (that is one file format, and a [[Library type]] is a different thing entirely), book (that is what a chapter is *called* in a book library, not what it is made of), text (a chapter of words carries pictures too)
 
 **Fixed pages**:

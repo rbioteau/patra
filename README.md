@@ -12,13 +12,13 @@ Usable, still young. What works:
 - **Home** — Continue reading, On deck, and your libraries
 - **Library** — filter pills per library, 3-column cover grid with reading progress
 - **Series** — volumes, chapters and specials as rows, with covers and per-chapter progress
-- **Reader** — left-to-right, right-to-left (manga) or vertical scrolling; pinch to zoom, tap zones, thumbnail strip and slider, automatic two-page spread in landscape, progress synced back to the server
+- **Books (EPUB)** — a book's row opens the reader on the pages Kavita laid out; saved offline copies, the table of contents and a text size are still open
 - **Offline** — save chapters to the device and read them with no server reachable
 - English and French, following the system language
 
 ## Roadmap
 
-- [ ] EPUB reading (Kavita renders book chapters to HTML server-side, so a styled WebView is enough)
+- [x] EPUB reading — Kavita renders a book into pages of HTML server-side and the app draws them in its own type (ADR-0008, ADR-0010)
 - [ ] Search across libraries
 - [ ] Reading lists and collections
 

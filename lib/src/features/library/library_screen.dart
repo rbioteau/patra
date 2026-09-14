@@ -266,7 +266,8 @@ class LibraryScreen extends ConsumerWidget {
 ///
 /// Drawn only for an administrator, because every way into a scan is behind
 /// Kavita's `AdminPolicy` and a non-admin could earn nothing from it but a
-/// 403 — the same rule that leaves an EPUB row untappable. And only once a
+/// 403, which is the rule this app draws its controls by: one that cannot
+/// work is not drawn. And only once a
 /// library is selected, because a menu whose one item acts on "the current
 /// library" says nothing while the list is still in flight or has failed.
 class _ScanMenu extends ConsumerWidget {
@@ -542,7 +543,8 @@ class _ErrorState extends ConsumerWidget {
 /// `scan-multiple`, `scan-all`, and `scan-folder`, which is
 /// `[AllowAnonymous]` but checks the account itself and refuses. A non-admin
 /// could earn nothing but a 403 from it, and this app does not draw controls
-/// that cannot work: it is the same rule that leaves an EPUB row untappable.
+/// that cannot work, as a book's row once was while the reader had nothing to
+/// open it with.
 ///
 /// It keeps its own button now that the app bar carries a scan menu too,
 /// because the two do different jobs: this one explains why there is nothing

@@ -439,9 +439,9 @@ class _SeriesHero extends ConsumerWidget {
     // Offline the button follows the same rule as the row it opens: a chapter
     // that is not on the device cannot be read, and a hero offering what the
     // dimmed row below it refuses is the screen disagreeing with itself. The
-    // *format* is deliberately not asked about here, as it never has been:
-    // the reader refuses an EPUB outright, because a deep link and a resume
-    // do not pass through this screen either.
+    // *format* is deliberately not asked about here, as it never has been — a
+    // book is read through the pages the server makes of it, so there is no
+    // format left that a chapter cannot be opened in.
     final openable =
         target != null &&
         (!ref.watch(offlineProvider) ||
@@ -664,11 +664,15 @@ class _ChapterRow extends ConsumerWidget {
             .recordProgress(chapter.id, chapter.pagesRead);
       });
     }
-    // Reflowable content is laid out by the server, not paginated into
-    // images: the reader has nothing to show for it.
-    final readable = chapter.content == ChapterContent.fixedPages;
-    // Offline, a chapter that is not stored locally cannot be opened.
-    final openable = readable && (saved || !offline);
+    // Saving is the one thing a book's row cannot offer yet (#77): a copy is
+    // made of the pages the server rendered, and what the downloader knows
+    // how to store today is a page that is a picture. Reading is not — a
+    // book opens like any other chapter, on the pages the server made of it.
+    final storable = chapter.content == ChapterContent.fixedPages;
+    // Offline, a chapter that is not stored locally cannot be opened: a book
+    // is read from the server's own pages, so there is nothing to open
+    // without one.
+    final openable = saved || !offline;
 
     final row = Container(
       // Rows are separated by a hairline, not by whitespace.
@@ -773,13 +777,6 @@ class _ChapterRow extends ConsumerWidget {
                       : l10n.pageCount(chapter.pages),
                   style: PatraText.metadata(size: tablet ? 12 : 11),
                 ),
-                if (!readable) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    l10n.formatNotSupported,
-                    style: PatraText.metadata(color: patraTextMuted),
-                  ),
-                ],
                 // Progress belongs to the chapter being read, and only to it.
                 if (inProgress) ...[
                   const SizedBox(height: 7),
@@ -803,8 +800,9 @@ class _ChapterRow extends ConsumerWidget {
           // The same rule as the tap: offline the pill could only offer what
           // it cannot do, since a chapter that is not already on the device
           // cannot be fetched. A copy already here keeps its pill, because
-          // removing one is local.
-          if (openable)
+          // removing one is local. A book's row has no pill at all until
+          // #77: a copy of its pages is made of what the server rendered.
+          if (storable && openable)
             SavePill(
               request: SavedChapter(
                 chapterId: chapter.id,

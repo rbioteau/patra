@@ -474,6 +474,56 @@ class KavitaClient {
     return ChapterInfo.fromJson(res.data!);
   }
 
+  /// What Kavita made of a book: the pages it laid the file's words out into,
+  /// and the title it read out of it.
+  ///
+  /// `GET /api/Book/{chapterId}/book-info`, which is the only place a book's
+  /// length is said: `chapter-info` counts image pages, and a book has none
+  /// (ADR-0008). Kavita caches the file on this call, so it is asked once per
+  /// chapter the reader opens rather than once per page.
+  Future<BookInfo> bookInfo(int chapterId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/Book/$chapterId/book-info',
+    );
+    return BookInfo.fromJson(res.data!);
+  }
+
+  /// One page of a book, as the HTML the server laid it out in.
+  ///
+  /// `GET /api/Book/{chapterId}/book-page?page=N`. What comes back is a page
+  /// of the book, not a JSON envelope: Kavita scopes its HTML and its CSS for
+  /// a reader of its own, which is the whole reason this app never opens the
+  /// EPUB (ADR-0008).
+  ///
+  /// The body is read as it is decoded, without asking for
+  /// `ResponseType.plain`: a string answer comes back as a [String] whichever
+  /// of `text/plain` and `application/json` the server chose, and forcing the
+  /// raw body would turn the second into a JSON-quoted one.
+  Future<String> bookPage(int chapterId, int page) async {
+    final res = await _dio.get<dynamic>(
+      '/api/Book/$chapterId/book-page',
+      queryParameters: {'page': page},
+    );
+    final body = res.data;
+    return body is String ? body : '';
+  }
+
+  /// Where the pictures a book's page refers to are served from.
+  ///
+  /// The `file` is what the page's own HTML named: a path inside the EPUB,
+  /// which the server resolves and hands back ([bookPage]'s HTML is written
+  /// for a reader that has no way into the file itself).
+  ///
+  /// **Header-authenticated, and the one image URL here with no `apiKey` in
+  /// it**: the other image endpoints accept the key in the query string
+  /// because an `<img>` cannot send a header, and this one does not. A page's
+  /// picture is therefore fetched with [imageHeaders] — which is also why a
+  /// page is rendered by the app rather than handed to a web view, since a
+  /// web view's own `<img>` can carry no header of ours.
+  String bookResourceUrl(int chapterId, String file) =>
+      '$baseUrl/api/Book/$chapterId/book-resources'
+      '?file=${Uri.encodeQueryComponent(file)}';
+
   /// Marks one chapter read or unread.
   ///
   /// The pair `mark-multiple-read` / `mark-multiple-unread` rather than

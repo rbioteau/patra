@@ -101,9 +101,7 @@ class _ReaderAdapter implements HttpClientAdapter {
               for (var page = 0; page < pages; page++)
                 {
                   'pageNumber': page,
-                  'width': wide.contains(page)
-                      ? 1600
-                      : pageSize.width.toInt(),
+                  'width': wide.contains(page) ? 1600 : pageSize.width.toInt(),
                   'height': pageSize.height.toInt(),
                   'isWide': wide.contains(page),
                 },
@@ -253,7 +251,11 @@ Future<List<int>> _pumpReader(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: sliderThumb == null
-            ? ReaderScreen(key: readerKey, chapterId: 7, initialPage: initialPage)
+            ? ReaderScreen(
+                key: readerKey,
+                chapterId: 7,
+                initialPage: initialPage,
+              )
             : SliderTheme(
                 data: SliderThemeData(thumbShape: sliderThumb),
                 child: ReaderScreen(
@@ -430,9 +432,7 @@ void main() {
     final keychain = MemoryKeychain();
     // Vertical, like the reader's own tests: the store carries the device's
     // default, and a store handed in brings its own.
-    final store = ProfilePreferencesStore(
-      keychain: keychain,
-    );
+    final store = ProfilePreferencesStore(keychain: keychain);
     await _pumpReader(tester, initialPage: 0, profile: _reader, store: store);
 
     await _showChromeAndCog(tester);
@@ -467,11 +467,9 @@ void main() {
       for (final image in tester.widgetList<Image>(find.byType(Image)))
         (image.image as ResizeImage).width,
     };
-    expect(
-      asked,
-      {(tester.view.physicalSize.width * StripGeometry.minWidthFactor).ceil()},
-      reason: 'the chapter opens at the width that was chosen',
-    );
+    expect(asked, {
+      (tester.view.physicalSize.width * StripGeometry.minWidthFactor).ceil(),
+    }, reason: 'the chapter opens at the width that was chosen');
     expect(posted, [40], reason: 'and at the page it was left at');
   });
 
@@ -503,11 +501,7 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
 
-    final posted = await _pumpReader(
-      tester,
-      initialPage: 20,
-      widthFactor: 0.7,
-    );
+    final posted = await _pumpReader(tester, initialPage: 20, widthFactor: 0.7);
     final controller = tester
         .widget<CustomScrollView>(find.byType(CustomScrollView))
         .controller!;
@@ -764,9 +758,7 @@ void main() {
     );
     await tester.pump();
     // Halfway down the chapter: the address the seek would land on.
-    await finger.moveTo(
-      Offset(rail.center.dx, rail.top + rail.height / 2),
-    );
+    await finger.moveTo(Offset(rail.center.dx, rail.top + rail.height / 2));
     await tester.pump();
     expect(
       find.text('26'),
@@ -783,7 +775,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a chapter of one page draws nothing to seek with', (tester) async {
+  testWidgets('a chapter of one page draws nothing to seek with', (
+    tester,
+  ) async {
     // A lone thumbnail over a slider with one position is furniture that
     // cannot be used. Where there is nowhere to seek to, the reader draws
     // the counter and nothing else.
@@ -905,9 +899,7 @@ void main() {
     // and a pinch is a live adjustment on top of the preference: it writes
     // nothing. So does a scroll, for the same reason.
     final keychain = MemoryKeychain();
-    final store = ProfilePreferencesStore(
-      keychain: keychain,
-    );
+    final store = ProfilePreferencesStore(keychain: keychain);
     await _pumpReader(tester, initialPage: 20, profile: _reader, store: store);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
@@ -922,9 +914,7 @@ void main() {
     // hand and nothing else: the width a chapter *opens* at is a preference
     // and a pinch is a live adjustment on top of it (#50).
     final keychain = MemoryKeychain();
-    final store = ProfilePreferencesStore(
-      keychain: keychain,
-    );
+    final store = ProfilePreferencesStore(keychain: keychain);
     final posted = await _pumpReader(
       tester,
       initialPage: 20,
@@ -951,7 +941,10 @@ void main() {
     }
     expect(
       controller.position.maxScrollExtent,
-      moreOrLessEquals((whole + screen.height) * 0.5 - screen.height, epsilon: 1),
+      moreOrLessEquals(
+        (whole + screen.height) * 0.5 - screen.height,
+        epsilon: 1,
+      ),
       reason: 'the strip is laid out at half the width',
     );
 
@@ -974,11 +967,9 @@ void main() {
       for (final image in tester.widgetList<Image>(find.byType(Image)))
         (image.image as ResizeImage).width,
     };
-    expect(
-      asked,
-      {(tester.view.physicalSize.width * StripGeometry.maxWidthFactor).ceil()},
-      reason: 'a chapter opens at the width the preference says',
-    );
+    expect(asked, {
+      (tester.view.physicalSize.width * StripGeometry.maxWidthFactor).ceil(),
+    }, reason: 'a chapter opens at the width the preference says');
   });
 
   testWidgets('a paged chapter opens where it was left too', (tester) async {
@@ -989,6 +980,37 @@ void main() {
     );
 
     expect(posted, [20]);
+  });
+
+  testWidgets('right-to-left mirrors the sides, as it mirrors the layout', (
+    tester,
+  ) async {
+    // Portrait, so a step is a page and not a screen: what is under test is
+    // which side reads on, not how far.
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    // The two sides are named for where they are; which of them reads on is
+    // the direction's. A second mirror, on top of the layout's own, would
+    // page a manga chapter backwards — and no test tapped a side in
+    // right-to-left, so it went unnoticed.
+    final posted = await _pumpReader(
+      tester,
+      initialPage: 20,
+      direction: ReadingDirection.rightToLeft,
+    );
+    final size = tester.getSize(find.byType(Scaffold));
+
+    await tester.tapAt(Offset(size.width * .15, size.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(posted, [20, 21], reason: 'the left-hand side reads on');
+
+    await tester.tapAt(Offset(size.width * .85, size.height / 2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(posted, [20, 21, 20], reason: 'the right-hand side reads back');
   });
 
   testWidgets('opening a saved chapter elsewhere does not write in build', (
@@ -1526,9 +1548,7 @@ void main() {
       // settable, which is the magnifying row's rule mirrored: the width
       // belongs to the person, and the next chapter may well be read
       // vertically.
-      final store = ProfilePreferencesStore(
-        keychain: MemoryKeychain(),
-      );
+      final store = ProfilePreferencesStore(keychain: MemoryKeychain());
       await _pumpReader(
         tester,
         initialPage: 10,
@@ -1579,8 +1599,7 @@ void main() {
         'for no other', (tester) async {
       // The whole of what the series rung is for: a choice about a work, kept
       // for that work, and for nobody else's copy of it.
-      final store = await preferencesStore(
-      );
+      final store = await preferencesStore();
       final posted = await _pumpReader(
         tester,
         initialPage: 10,
@@ -1636,8 +1655,7 @@ void main() {
 
     testWidgets('a series that has been set can go back to following the '
         'default', (tester) async {
-      final store = await preferencesStore(
-      );
+      final store = await preferencesStore();
       await store.setSeriesDirection(
         _reader.id,
         3,
@@ -1671,7 +1689,9 @@ void main() {
       expect(tester.widget<PageView>(find.byType(PageView)).reverse, isFalse);
     });
 
-    testWidgets("promoting from the reader makes it the library's", (tester) async {
+    testWidgets("promoting from the reader makes it the library's", (
+      tester,
+    ) async {
       // #65: one tap for a whole library, which is the rung under a series'
       // own and above the guess — the one that puts right a library the
       // detection gets wrong for every series in it.
