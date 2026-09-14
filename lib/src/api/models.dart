@@ -4,7 +4,7 @@
 /// suffix. Only the fields the app actually uses are mapped — 8 of `SeriesDto`'s
 /// 38, 10 of `ChapterDto`'s 81 — and what they carry besides is knowledge the
 /// wire does not: [Volume.isLooseLeaf], [Chapter.isVolumePlaceholder],
-/// [LibraryType.hasStoryline], [MangaFormat.isImageReadable],
+/// [LibraryType.hasStoryline], [MangaFormat.content],
 /// [ChapterInfo.isWide], and a [SeriesMetadata] that flattens two nested lists
 /// into names. Those are Kavita's *behaviour*, learned from its source rather
 /// than read off its description, and they are what makes each of these the
@@ -167,14 +167,30 @@ enum MangaFormat {
   static MangaFormat fromId(int? id) =>
       MangaFormat.values.firstWhere((f) => f.id == id, orElse: () => unknown);
 
-  /// Whether our page reader can show it.
+  /// What a chapter of this format is made of.
   ///
-  /// A PDF can: Kavita rasterises it into one image per page on demand, and
-  /// the reader-image query asks it to. An EPUB cannot — it is reflowable
-  /// text, the server has no image path for it at all (`ReadingItemService
-  /// .Extract` does nothing for Epub), and it needs the `/api/Book` endpoints
-  /// and a reader of its own.
-  bool get isImageReadable => this != epub;
+  /// Only an EPUB is reflowable content: it is words the server lays out, and
+  /// it has no image path at all (`ReadingItemService.Extract` does nothing
+  /// for Epub), so reading one takes the `/api/Book` endpoints and a reader of
+  /// its own. A PDF is fixed pages — Kavita rasterises it into one image per
+  /// page on demand, and the reader-image query asks it to — as is anything
+  /// unknown, which is Kavita's own fallback and worth attempting as pictures.
+  ChapterContent get content =>
+      this == epub ? ChapterContent.reflowable : ChapterContent.fixedPages;
+}
+
+/// What a chapter is made of: [[Fixed pages]], one picture each, or
+/// [[Reflowable content]], words the server lays out into pages of its own
+/// choosing. Which of the two a chapter is decides how it can be read — it is
+/// the one question asked of a format, and every decision that used to ask
+/// whether the image reader could show a chapter asks this instead.
+///
+/// Only [MangaFormat] answers it; a chapter, a series and a chapter's server
+/// metadata each carry it, derived from the format they already hold, so the
+/// mapping has one owner and no second opinion.
+enum ChapterContent {
+  fixedPages,
+  reflowable;
 }
 
 class Library {
@@ -224,6 +240,9 @@ class Series {
   /// What the files behind the series are, which decides whether this app can
   /// open it at all.
   final MangaFormat format;
+
+  /// What its chapters are made of. See [MangaFormat.content].
+  ChapterContent get content => format.content;
 
   /// When the series was last read, or null if it never was.
   ///
@@ -412,8 +431,12 @@ class Chapter {
   /// the server sorts every list it builds on this.
   final num sortOrder;
 
-  /// What the files are. Our reader only handles the image formats.
+  /// What the files are.
   final MangaFormat format;
+
+  /// What this chapter is made of: the one thing the reader asks of a format.
+  /// See [MangaFormat.content].
+  ChapterContent get content => format.content;
 
   /// Every page read. See [Series.isRead]; the same question of a chapter.
   bool get isRead => pages > 0 && pagesRead >= pages;
@@ -520,6 +543,9 @@ class ChapterInfo {
   /// this is the only place the reader can learn it before opening a page.
   final MangaFormat seriesFormat;
   final LibraryType libraryType;
+
+  /// What the chapter is made of. See [MangaFormat.content].
+  ChapterContent get content => seriesFormat.content;
 
   /// Keyed by the page number the server reported, which may be 0- or
   /// 1-based depending on the source file — [aspectRatioFor] tries both.

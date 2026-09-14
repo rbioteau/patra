@@ -42,7 +42,9 @@ Series? featuredSeries(List<Series> candidates) {
   Series? best;
   for (final series in candidates) {
     if (series.isRead) continue;
-    if (!series.format.isImageReadable) continue;
+    // Only a series of fixed pages can be opened again, which is the whole
+    // of what the hero's button offers.
+    if (series.content != ChapterContent.fixedPages) continue;
     if (best == null || _readMoreRecently(series, best)) best = series;
   }
   return best;

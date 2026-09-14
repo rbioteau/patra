@@ -664,9 +664,9 @@ class _ChapterRow extends ConsumerWidget {
             .recordProgress(chapter.id, chapter.pagesRead);
       });
     }
-    // EPUB and PDF are laid out, not paginated into images: the reader has
-    // nothing to show and the server will not serve pages for them.
-    final readable = chapter.format.isImageReadable;
+    // Reflowable content is laid out by the server, not paginated into
+    // images: the reader has nothing to show for it.
+    final readable = chapter.content == ChapterContent.fixedPages;
     // Offline, a chapter that is not stored locally cannot be opened.
     final openable = readable && (saved || !offline);
 
