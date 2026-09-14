@@ -92,16 +92,16 @@ void main() {
       }
     });
 
-    test('the page reader handles everything the server can rasterise', () {
+    test('what a chapter is made of, for every format', () {
       expect(MangaFormat.fromId(0), MangaFormat.image);
-      expect(MangaFormat.fromId(1).isImageReadable, isTrue);
+      expect(MangaFormat.fromId(1).content, ChapterContent.fixedPages);
       expect(MangaFormat.fromId(3), MangaFormat.epub);
       // A PDF is served as page images once Kavita is asked to extract it.
-      expect(MangaFormat.pdf.isImageReadable, isTrue);
+      expect(MangaFormat.pdf.content, ChapterContent.fixedPages);
       // An EPUB is reflowable text: the server has no image path for it.
-      expect(MangaFormat.epub.isImageReadable, isFalse);
+      expect(MangaFormat.epub.content, ChapterContent.reflowable);
       // Unknown is Kavita's own fallback: worth attempting.
-      expect(MangaFormat.fromId(null).isImageReadable, isTrue);
+      expect(MangaFormat.fromId(null).content, ChapterContent.fixedPages);
     });
 
     test('a chapter carries its sort order and format', () {
@@ -113,6 +113,31 @@ void main() {
       });
       expect(chapter.sortOrder, 3.5);
       expect(chapter.format, MangaFormat.epub);
+      // The nature of its content is the chapter's own to answer, and it is
+      // what the reader asks instead of the format.
+      expect(chapter.content, ChapterContent.reflowable);
+      expect(
+        Chapter.fromJson({'id': 2, 'format': 1}).content,
+        ChapterContent.fixedPages,
+      );
+    });
+  });
+
+  group('what a chapter is made of', () {
+    // The reader learns the nature of a chapter's content from the one place
+    // that says it before a page is opened, and refuses it there.
+    test('a chapter\'s server metadata says it too', () {
+      final info = ChapterInfo.fromJson({
+        'seriesId': 1,
+        'pages': 10,
+        'seriesFormat': 3,
+      });
+      expect(info.content, ChapterContent.reflowable);
+      expect(
+        ChapterInfo.fromJson({'seriesId': 1, 'pages': 10, 'seriesFormat': 4})
+            .content,
+        ChapterContent.fixedPages,
+      );
     });
   });
 
@@ -231,8 +256,9 @@ void main() {
 
     test('carries the format, so an EPUB can be told apart', () {
       expect(series({'format': 3}).format, MangaFormat.epub);
-      expect(series({'format': 3}).format.isImageReadable, isFalse);
+      expect(series({'format': 3}).content, ChapterContent.reflowable);
       expect(series({'format': 1}).format, MangaFormat.archive);
+      expect(series({'format': 1}).content, ChapterContent.fixedPages);
     });
 
     test('an absent format is unknown rather than a crash', () {

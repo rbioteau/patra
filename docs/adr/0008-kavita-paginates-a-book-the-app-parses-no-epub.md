@@ -5,9 +5,10 @@
 ## Context
 
 A chapter can be made of [[Reflowable content]] — an EPUB — and the app has
-refused those since it was written: `MangaFormat.isImageReadable` excludes them
-and the reader answers with "Format not supported yet". Making them readable
-meant choosing who turns a file of words into pages.
+refused those since it was written: `MangaFormat.content` answers `reflowable`
+for them (it was `MangaFormat.isImageReadable` when this was decided) and the
+reader answers with "Format not supported yet". Making them readable meant
+choosing who turns a file of words into pages.
 
 The obvious reading of the API is that the client does it. Kavita *does* expose
 the file (`GET /api/Download/chapter`), and there are Dart packages that open an

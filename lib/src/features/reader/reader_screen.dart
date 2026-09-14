@@ -410,11 +410,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     AppLocalizations l10n,
     ChapterInfo chapter,
   ) {
-    // An EPUB or a PDF has no pages to fetch: `/api/Reader/image` serves
-    // nothing for them, so opening one would be a reader full of broken
+    // Reflowable content has no image pages to fetch: `/api/Reader/image`
+    // serves nothing for it, so opening it would be a reader full of broken
     // pages. The series screen already refuses these rows; this catches the
     // ways in that do not go through it — a deep link, or a resume.
-    if (!chapter.seriesFormat.isImageReadable) {
+    if (chapter.content != ChapterContent.fixedPages) {
       return const _UnsupportedFormat();
     }
     if (chapter.pages == 0) return const _ReaderError();
