@@ -12,8 +12,8 @@ Usable, still young. What works:
 - **Home** — Continue reading, On deck, and your libraries
 - **Library** — filter pills per library, 3-column cover grid with reading progress
 - **Series** — volumes, chapters and specials as rows, with covers and per-chapter progress
-- **Books (EPUB)** — a book's row opens the reader on the pages Kavita laid out; saved offline copies, the table of contents and a text size are still open
-- **Offline** — save chapters to the device and read them with no server reachable
+- **Books (EPUB)** — a book's row opens the reader on the pages Kavita laid out, with a table of contents, a text size and a line spacing of your own, and a copy you can save for the train
+- **Offline** — save chapters and books to the device and read them with no server reachable
 - English and French, following the system language
 
 ## Roadmap

@@ -118,6 +118,8 @@ Future<SavedChapter> saveChapterFixture(
   int seriesId = 5,
   int volumeId = 1,
   int libraryId = 1,
+  MangaFormat format = MangaFormat.unknown,
+  String? pageHtml,
 }) async {
   final chapter = SavedChapter(
     chapterId: chapterId,
@@ -129,14 +131,21 @@ Future<SavedChapter> saveChapterFixture(
     pages: pages,
     bytes: bytes,
     pagesRead: pagesRead,
+    format: format,
   );
   final dir = (await DownloadsService(
     root: root,
     profileId: profileId,
   ).chapterDir(chapterId))..createSync(recursive: true);
   for (var page = 0; page < pages; page++) {
-    File('${dir.path}/${DownloadsService.pageFileName(page)}')
-        .writeAsBytesSync(const [0]);
+    final file = File('${dir.path}/${DownloadsService.pageFileName(page)}');
+    // A book is stored as the pages the server laid its words out into, so
+    // its page files are HTML rather than pictures.
+    if (pageHtml == null) {
+      file.writeAsBytesSync(const [0]);
+    } else {
+      file.writeAsStringSync(pageHtml);
+    }
   }
   File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(chapter.toJson()));
   return chapter;
