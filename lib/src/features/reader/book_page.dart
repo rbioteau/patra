@@ -83,6 +83,17 @@ const double bookTextSize = 16;
 /// choice, and the half that decides whether dense text is readable.
 const double bookLineHeight = 1.55;
 
+/// The room a page is set in.
+///
+/// The bottom is four times the top because the page counter sits there: a
+/// page allowed to end under it is a page whose last line cannot be read.
+const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
+  gutter,
+  gutter,
+  gutter,
+  4 * gutter,
+);
+
 /// One page of a book, read top to bottom.
 class BookPageBody extends StatelessWidget {
   const BookPageBody({super.key, required this.page, required this.picture});
@@ -114,22 +125,36 @@ class BookPageBody extends StatelessWidget {
     // A page with nothing in it is a page the server did not produce, and it
     // says so rather than being a screen of nothing at all.
     if (page.isEmpty) return const BookPageUnavailable();
-    return SingleChildScrollView(
-      // The last line is given room to be read: the counter sits at the
-      // bottom of the screen, and a page ending under it is a page cut off.
-      padding: const EdgeInsets.fromLTRB(gutter, gutter, gutter, 4 * gutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final block in page.blocks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: switch (block) {
-                BookWords() => _words(block),
-                BookPicture(:final src) => picture(src),
-              },
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: _pagePadding,
+        child: ConstrainedBox(
+          // A page is a page and not a flow: what the server laid out on one
+          // is shorter than the screen more often than not — a cover, a
+          // part's title, the last page of a chapter — and content that fits
+          // is set in the middle of the page rather than left hanging off its
+          // top edge. A page taller than the screen keeps the scroll it
+          // already had, which is all a minimum height can leave it.
+          constraints: BoxConstraints(
+            minHeight: constraints.maxHeight - _pagePadding.vertical,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final block in page.blocks)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: switch (block) {
+                      BookWords() => _words(block),
+                      BookPicture(:final src) => picture(src),
+                    },
+                  ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -142,6 +167,17 @@ class BookPageBody extends StatelessWidget {
     };
     final words = Text.rich(
       TextSpan(children: [for (final span in block.spans) span.toSpan(base)]),
+      // A page of a book is set justified, as the printed page it stands in
+      // for is: both edges of the column are straight, which is what the eye
+      // reads a block of prose by. Only the lines that break of their own
+      // accord are stretched, so the last line of a paragraph stays where a
+      // left-aligned one would be. A title is not prose and a list item is
+      // a line, so neither is justified: stretching either would open holes
+      // in a handful of words.
+      textAlign: block.style == BookBlockStyle.paragraph ||
+              block.style == BookBlockStyle.quotation
+          ? TextAlign.justify
+          : TextAlign.start,
     );
     return switch (block.style) {
       BookBlockStyle.item => Row(

@@ -32,12 +32,19 @@ String _pageHtml(int page) =>
     '<p>The spice must flow, &amp; the worm <b>follows</b>.</p>'
     '<p><img src="OEBPS/images/worm$page.jpg"/></p>';
 
+/// What Kavita really writes for a page's pictures: a whole address with no
+/// scheme in it, not a path inside the book.
+const _addressedPicture =
+    '<p><img src="//kavita.test/api/Book/7/book-resources'
+    '?file=OEBPS/images/cover.jpg"/></p>';
+
 /// A Kavita holding one book, in a Book library.
 class _BookAdapter implements HttpClientAdapter {
   _BookAdapter({
     required this.requested,
     required this.posted,
     this.unavailable,
+    this.html,
   });
 
   /// Every page the reader asked the server for, in order.
@@ -48,6 +55,11 @@ class _BookAdapter implements HttpClientAdapter {
 
   /// A page the server cannot produce.
   final int? unavailable;
+
+  /// What every page is made of, where a test has a page of its own: the
+  /// server's HTML is not what any assertion here is about, but the address
+  /// a picture is named by is.
+  final String? html;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
@@ -88,7 +100,7 @@ class _BookAdapter implements HttpClientAdapter {
             type: DioExceptionType.badResponse,
           );
         }
-        return _answer(_pageHtml(page));
+        return _answer(html ?? _pageHtml(page));
     }
     throw DioException(
       requestOptions: options,
@@ -117,6 +129,7 @@ Future<(List<int> requested, List<int> posted)> _pumpBook(
   WidgetTester tester, {
   int initialPage = 0,
   int? unavailable,
+  String? html,
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
@@ -135,6 +148,7 @@ Future<(List<int> requested, List<int> posted)> _pumpBook(
     requested: requested,
     posted: posted,
     unavailable: unavailable,
+    html: html,
   );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
@@ -274,6 +288,27 @@ void main() {
     expect(cached.cacheKey, imageCacheKey(cached.url));
   });
 
+  testWidgets('a picture the page addresses with no scheme is drawn', (
+    tester,
+  ) async {
+    await _pumpBook(tester, html: _addressedPicture);
+
+    final pictures = tester.widgetList<Image>(find.byType(Image));
+    expect(pictures, hasLength(1));
+    final cached = pictures.single.image as CachedNetworkImageProvider;
+    // Asked for as the page wrote it, with this server's scheme in front: a
+    // whole address wrapped into `book-resources` as though it were a path
+    // inside the book is answered with a 400, and the page that carried it —
+    // a cover's, which has no words — is then drawn as nothing at all.
+    expect(
+      cached.url,
+      startsWith('http://kavita.test/api/Book/7/book-resources'),
+    );
+    expect(cached.url, contains('file=OEBPS/images/cover.jpg'));
+    expect(cached.url, isNot(contains('%2F%2F')));
+    expect(cached.cacheKey, imageCacheKey(cached.url));
+  });
+
   group('what a page is made of', () {
     test('words are kept, and the tags around them are not', () {
       final page = BookPage.fromHtml('<p>One.</p><p>Two.</p>');
@@ -366,6 +401,115 @@ void main() {
     test('a page of nothing is not a page', () {
       expect(BookPage.fromHtml('').isEmpty, isTrue);
       expect(BookPage.fromHtml('<p>  </p>').isEmpty, isTrue);
+    });
+  });
+
+  group('where a page sits in the screen', () {
+    /// A phone's screen, and a page in it whose one picture is [height] tall
+    /// — which is what a test can say about a picture it cannot fetch.
+    const height = 800.0;
+
+    Future<void> pumpPage(WidgetTester tester, double pictureHeight) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: patraTheme(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Center(
+            child: SizedBox(
+              width: 400,
+              height: height,
+              child: BookPageBody(
+                page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
+                picture: (_) => SizedBox(
+                  key: const Key('picture'),
+                  height: pictureHeight,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('content that fits is set in the middle of the page', (
+      tester,
+    ) async {
+      await pumpPage(tester, 300);
+
+      final page = tester.getRect(find.byType(BookPageBody));
+      final content = tester.getRect(find.byType(Column));
+      // The room the counter leaves is not the page's: the top of it is a
+      // gutter, the bottom four, and what fits is equidistant from the two.
+      expect(
+        content.top - page.top - gutter,
+        closeTo(page.bottom - 4 * gutter - content.bottom, 1),
+      );
+    });
+
+    testWidgets('a page taller than the screen still starts at the top', (
+      tester,
+    ) async {
+      await pumpPage(tester, 2000);
+
+      // Centring is not something that can be done to a page one has to
+      // scroll: it would begin off the top edge, with no way back to it.
+      final page = tester.getRect(find.byType(BookPageBody));
+      final content = tester.getRect(find.byType(Column));
+      expect(content.top - page.top, closeTo(gutter, 1));
+    });
+  });
+
+  group('how a page is set', () {
+    Future<void> pumpWords(WidgetTester tester, String html) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: patraTheme(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Center(
+            child: SizedBox(
+              width: 400,
+              height: 800,
+              child: BookPageBody(
+                page: BookPage.fromHtml(html),
+                picture: (_) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('prose is justified, and a title is not', (tester) async {
+      await pumpWords(
+        tester,
+        '<h2>Book two</h2><p>One.</p>'
+        '<blockquote>Two.</blockquote><ul><li>Three.</li></ul>',
+      );
+
+      final aligns = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.textAlign ?? TextAlign.start)
+          .toList();
+      expect(aligns, [
+        // Both edges of the column are straight, which is what the eye reads
+        // a block of prose by — but a title is not prose and a list item is
+        // a line, and stretching either opens holes in a handful of words.
+        TextAlign.start, // the title
+        TextAlign.justify, // the paragraph
+        TextAlign.justify, // the quotation
+        TextAlign.start, // the bullet
+        TextAlign.start, // the item
+      ]);
     });
   });
 }

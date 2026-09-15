@@ -627,16 +627,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// What a picture a book's page refers to is drawn with.
   ///
   /// A page names its pictures the way the file does — a path inside the
-  /// book — and the server is what turns that name into bytes; a page that
-  /// already carries a whole address is left to it. Drawn with the client's
-  /// headers, which is the one way these can be fetched at all: unlike the
-  /// other image endpoints, `book-resources` takes no key in the query.
+  /// book — and the server is what turns that name into bytes. A page that
+  /// already carries a whole address is left to it, **including one with no
+  /// scheme in it**: Kavita writes those (`//host/api/Book/…?file=cover.jpg`)
+  /// and the scheme is the server's own, so it is completed from the address
+  /// this session was built with. Handing one to `book-resources` as though
+  /// it were a path inside the book answers 400, and a page whose only block
+  /// is that picture is then drawn as nothing at all.
+  ///
+  /// Drawn with the client's headers, which is the one way a picture named
+  /// as a path can be fetched at all: unlike the other image endpoints,
+  /// `book-resources` takes no key in the query.
   Widget _bookPicture(String src) {
     final client = _client;
     if (client == null) return const SizedBox.shrink();
-    final url = src.startsWith('http://') || src.startsWith('https://')
-        ? src
-        : client.bookResourceUrl(widget.chapterId, src);
+    final url = _pictureUrl(client, src);
     return Image(
       image: CachedNetworkImageProvider(
         url,
@@ -650,6 +655,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       width: double.infinity,
       fit: BoxFit.fitWidth,
     );
+  }
+
+  /// Where the picture a page named is fetched from.
+  String _pictureUrl(KavitaClient client, String src) {
+    if (src.startsWith('http://') || src.startsWith('https://')) return src;
+    // A scheme-less address is completed from this session's own, which is
+    // what `//host/…` has always meant and the only thing the server it
+    // names will answer.
+    if (src.startsWith('//')) {
+      return Uri.parse(client.baseUrl).resolve(src).toString();
+    }
+    return client.bookResourceUrl(widget.chapterId, src);
   }
 
   /// What the cog's sheet asked for, whichever chapter it was opened on.
