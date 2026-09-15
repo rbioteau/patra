@@ -33,7 +33,8 @@ import 'thumb_strip.dart';
 final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
   retry: serverRetry,
   (ref, chapterId) async {
-    final info = await ref.watch(kavitaClientProvider).chapterInfo(chapterId);
+    final client = ref.watch(kavitaClientProvider);
+    final info = await client.chapterInfo(chapterId);
     // Page dimensions reach the app nowhere else, and they arrive a chapter
     // at a time for a work that is one thing: recording what they say about
     // the *work* is what lets the detected rung of the chain answer (#57).
@@ -42,10 +43,16 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
     if (ref.mounted) ref.read(pageShapesProvider.notifier).record(info);
     // A book has no image pages for `chapter-info` to count: it is the
     // server that lays its words out into pages (ADR-0008), and `book-info`
-    // is where it says how many.
+    // is where it says how many. Where the reader was is a third question,
+    // and the only one with an answer a book cannot do without: a page of a
+    // book can be longer than the screen, so the page number alone opens it
+    // again at words already read.
     if (info.content != ChapterContent.reflowable) return info;
-    final book = await ref.watch(kavitaClientProvider).bookInfo(chapterId);
-    return info.withBook(book);
+    final (book, progress) = await (
+      client.bookInfo(chapterId),
+      client.chapterProgress(chapterId),
+    ).wait;
+    return info.withBook(book, progress);
   },
 );
 
@@ -87,6 +94,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   int _page = 0;
   bool _showChrome = false;
   bool _initialProgressSaved = false;
+
+  /// Where in each page of a book the reader is, by page.
+  ///
+  /// A book's page can be longer than the screen, so where a reader is is a
+  /// page and a place within it, and the place is what travels to the server
+  /// with the page number. Keyed by page rather than held as one number
+  /// because turning a page is arriving at its beginning while coming back
+  /// to one is not; a page with no entry is a page opened at its top.
+  final Map<int, BookAnchor> _anchors = {};
+
+  /// Whether a book has been put where the reader left it. Once, and from
+  /// what the server says rather than from the page the route named: a
+  /// reader who has turned a page has said where they are.
+  var _opened = false;
 
   /// Serializes progress posts so a slow request for an earlier page can't
   /// overwrite a later one, and swallows failures (a lost save is resent on
@@ -194,6 +215,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             volumeId: info.volumeId,
             chapterId: widget.chapterId,
             pageNum: pageNum,
+            // Where in the page the reader is, for a book whose page can be
+            // longer than the screen: a page number alone opens it again at
+            // the top, which is words already read. A chapter of pictures
+            // has no place within a page to report.
+            bookScrollId: info.content == ChapterContent.reflowable
+                ? (_anchors[page] ?? BookAnchor.top).id
+                : null,
           ),
         )
         .catchError((Object _) {});
@@ -575,6 +603,42 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
+  /// Where in [page] a book is opened, or null for a page opened at its top.
+  BookAnchor? _anchorFor(int page) => _anchors[page];
+
+  /// The reader has come to rest [at] in [page]: where that page is opened
+  /// next time, and what travels to the server with its number.
+  ///
+  /// A page other than the one being read is not reading — the page beside
+  /// it is built before it is turned to, and a scroll settled there is not a
+  /// place the reader has come to.
+  void _onBookScrolled(int page, BookAnchor at, ChapterInfo chapter) {
+    if (page != _page) return;
+    _anchors[page] = at;
+    _saveProgress(page, chapter);
+  }
+
+  /// Opens a book where the reader left it, once.
+  ///
+  /// Asked of the server rather than taken from the route, because the two
+  /// ways in do not say the same thing: the series screen names a page and a
+  /// link names none, so a book opened from a link would otherwise open at
+  /// its first page while the place it was left at belongs to another one.
+  /// Where the server was not asked, or has nothing recorded, a book opens
+  /// at the page the route named and at the top of it.
+  void _openBook(ChapterInfo chapter) {
+    if (_opened) return;
+    _opened = true;
+    final progress = chapter.progress;
+    if (progress == null) return;
+    // A book read to its end is remembered at the page *past* it, which is
+    // not a page it has — Kavita marks a chapter read at `pagesRead >=
+    // pages` — so the last page is where it opens.
+    _page = progress.pageNum.clamp(0, chapter.pages - 1);
+    final anchor = BookAnchor.from(progress.bookScrollId);
+    if (anchor != null) _anchors[_page] = anchor;
+  }
+
   /// A chapter of words, read a page at a time.
   ///
   /// The pages are the server's, and it is the server that turns them: one
@@ -586,6 +650,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// cog: every setting the sheet holds is about pictures, and #75 is what
   /// gives it a text size and a line spacing to hold instead.
   Widget _buildBookReader(BuildContext context, ChapterInfo chapter) {
+    _openBook(chapter);
     _saveInitialProgress(chapter);
     return Stack(
       fit: StackFit.expand,
@@ -594,8 +659,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           chapterId: widget.chapterId,
           pages: chapter.pages,
           page: _page,
+          anchorFor: _anchorFor,
           picture: _bookPicture,
           onPageChanged: (page) => _onPageChanged(page, chapter),
+          onScrolled: (page, at) => _onBookScrolled(page, at, chapter),
         ),
         _TapZones(
           onLeft: () => _goTo(_page - 1, chapter),
@@ -1350,13 +1417,20 @@ class _BookView extends StatefulWidget {
     required this.chapterId,
     required this.pages,
     required this.page,
+    required this.anchorFor,
     required this.picture,
     required this.onPageChanged,
+    required this.onScrolled,
   });
 
   final int chapterId;
   final int pages;
   final int page;
+
+  /// Where in [page] the reader was, or null for a page opened at its top.
+  /// Asked for as a page is built rather than held here, because the place a
+  /// reader is in a page changes under the view.
+  final BookAnchor? Function(int page) anchorFor;
 
   /// What a picture a page refers to is drawn with. Passed in rather than
   /// read from a provider, because a page is built by the pager's item
@@ -1364,6 +1438,9 @@ class _BookView extends StatefulWidget {
   final Widget Function(String src) picture;
 
   final ValueChanged<int> onPageChanged;
+
+  /// How far into [page] the reader has come to rest.
+  final void Function(int page, BookAnchor at) onScrolled;
 
   @override
   State<_BookView> createState() => _BookViewState();
@@ -1428,6 +1505,8 @@ class _BookViewState extends State<_BookView> {
         chapterId: widget.chapterId,
         page: page,
         picture: widget.picture,
+        anchor: widget.anchorFor(page),
+        onScroll: (at) => widget.onScrolled(page, at),
       ),
     );
   }
@@ -1445,11 +1524,20 @@ class _BookPage extends ConsumerWidget {
     required this.chapterId,
     required this.page,
     required this.picture,
+    required this.anchor,
+    required this.onScroll,
   });
 
   final int chapterId;
   final int page;
   final Widget Function(String src) picture;
+
+  /// Where in the page the reader was, or null for a page that opens at its
+  /// top: a page turned to is arrived at at its beginning.
+  final BookAnchor? anchor;
+
+  /// How far down the page the reader has come to rest.
+  final ValueChanged<BookAnchor> onScroll;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1460,7 +1548,12 @@ class _BookPage extends ConsumerWidget {
       // Nothing to show, and nothing coming: a page the server could not
       // produce says so instead of being read as a page with no words in it.
       AsyncError() => const BookPageUnavailable(),
-      AsyncData(:final value) => BookPageBody(page: value, picture: picture),
+      AsyncData(:final value) => BookPageBody(
+        page: value,
+        picture: picture,
+        anchor: anchor,
+        onScroll: onScroll,
+      ),
       _ => const Center(child: CircularProgressIndicator(color: patraAccent)),
     };
   }

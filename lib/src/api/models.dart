@@ -188,10 +188,7 @@ enum MangaFormat {
 /// Only [MangaFormat] answers it; a chapter, a series and a chapter's server
 /// metadata each carry it, derived from the format they already hold, so the
 /// mapping has one owner and no second opinion.
-enum ChapterContent {
-  fixedPages,
-  reflowable;
-}
+enum ChapterContent { fixedPages, reflowable }
 
 class Library {
   const Library({required this.id, required this.name, required this.type});
@@ -567,6 +564,36 @@ class BookInfo {
   );
 }
 
+/// Where the server says a reader is in a chapter: `ProgressDto` —
+/// `GET /api/Reader/get-progress`.
+///
+/// The page number is the one [Chapter.pagesRead] already carries, read back
+/// from the authority rather than out of a list of chapters. The marker is
+/// the half this app has had no word for: Kavita has always handed a reader
+/// back a string it defined itself, and for a book that string is the place
+/// *within* the page — a page of a book can be longer than the screen, so a
+/// page number alone opens it again at words already read.
+class ChapterProgress {
+  const ChapterProgress({required this.pageNum, this.bookScrollId});
+
+  final int pageNum;
+
+  /// The reader's own marker for the place within the page, kept by the
+  /// server and handed back untouched.
+  ///
+  /// Null where there is none, which is every chapter of pictures and a book
+  /// nobody has opened, and unreadable where somebody else's reader wrote it:
+  /// Kavita's own web client fills it with the id of an element in the page,
+  /// and there is no element in a page this app draws.
+  final String? bookScrollId;
+
+  factory ChapterProgress.fromJson(Map<String, dynamic> json) =>
+      ChapterProgress(
+        pageNum: json['pageNum'] as int? ?? 0,
+        bookScrollId: json['bookScrollId'] as String?,
+      );
+}
+
 class ChapterInfo {
   const ChapterInfo({
     required this.seriesId,
@@ -578,6 +605,7 @@ class ChapterInfo {
     this.seriesFormat = MangaFormat.unknown,
     this.libraryType = LibraryType.manga,
     this.pageDimensions = const {},
+    this.progress,
   });
 
   final int seriesId;
@@ -598,6 +626,15 @@ class ChapterInfo {
   /// Keyed by the page number the server reported, which may be 0- or
   /// 1-based depending on the source file — [aspectRatioFor] tries both.
   final Map<int, PageDimension> pageDimensions;
+
+  /// Where the reader was, as the server remembers it: the page, and the
+  /// marker for the place within it.
+  ///
+  /// Asked of `get-progress` when a chapter is a book — a book's page can be
+  /// longer than the screen, so opening one is a page *and* a place in it,
+  /// and neither is something the route that opened it can say. Null for a
+  /// chapter of pictures, whose page the route already names.
+  final ChapterProgress? progress;
 
   double aspectRatioFor(int page) =>
       (pageDimensions[page] ?? pageDimensions[page + 1])?.aspectRatio ??
@@ -622,7 +659,12 @@ class ChapterInfo {
   /// count. Everything else — whose series this is, and the library it is
   /// shelved in — is still that answer's, and is kept: progress is posted to
   /// the same ids whichever of the two a chapter is made of.
-  ChapterInfo withBook(BookInfo book) => ChapterInfo(
+  ///
+  /// Where the reader was comes along with it, and is the reason a book is
+  /// asked three questions rather than one: the page a book is opened at is
+  /// the page the server says, and the reader's own place in it is a string
+  /// only the reader can read back.
+  ChapterInfo withBook(BookInfo book, ChapterProgress progress) => ChapterInfo(
     seriesId: book.seriesId,
     volumeId: book.volumeId,
     libraryId: book.libraryId,
@@ -631,6 +673,7 @@ class ChapterInfo {
     title: book.title,
     seriesFormat: book.seriesFormat,
     libraryType: libraryType,
+    progress: progress,
   );
 
   factory ChapterInfo.fromJson(Map<String, dynamic> json) => ChapterInfo(

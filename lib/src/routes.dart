@@ -24,7 +24,9 @@ String seriesLocation(Series series) => Uri(
 /// finishing a volume leaves the next one untouched, so a series under way
 /// resumes at the chapter's own progress while one never opened begins at the
 /// beginning. Opening a saved chapter at 0 would post that back and wipe the
-/// place it was left.
+/// place it was left. A book is the exception, and not one that needs saying
+/// here: it opens where the server says, so whatever this names for it is
+/// the same page by another road.
 String readerLocation(Chapter chapter, {required bool started}) =>
     '/reader/${chapter.id}?page=${started ? chapter.pagesRead : 0}';
 
