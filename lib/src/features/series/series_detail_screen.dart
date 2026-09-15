@@ -667,14 +667,11 @@ class _ChapterRow extends ConsumerWidget {
             .recordProgress(chapter.id, chapter.pagesRead);
       });
     }
-    // Saving is the one thing a book's row cannot offer yet (#77): a copy is
-    // made of the pages the server rendered, and what the downloader knows
-    // how to store today is a page that is a picture. Reading is not — a
-    // book opens like any other chapter, on the pages the server made of it.
-    final storable = chapter.content == ChapterContent.fixedPages;
     // Offline, a chapter that is not stored locally cannot be opened: a book
     // is read from the server's own pages, so there is nothing to open
-    // without one.
+    // without one. Saving one is the same fetch as any other chapter's — a
+    // copy is made of the pages the server rendered (ADR-0009), whichever
+    // of the two kinds of page those are.
     final openable = saved || !offline;
 
     final row = Container(
@@ -803,9 +800,8 @@ class _ChapterRow extends ConsumerWidget {
           // The same rule as the tap: offline the pill could only offer what
           // it cannot do, since a chapter that is not already on the device
           // cannot be fetched. A copy already here keeps its pill, because
-          // removing one is local. A book's row has no pill at all until
-          // #77: a copy of its pages is made of what the server rendered.
-          if (storable && openable)
+          // removing one is local.
+          if (openable)
             SavePill(
               request: SavedChapter(
                 chapterId: chapter.id,
@@ -817,6 +813,7 @@ class _ChapterRow extends ConsumerWidget {
                 pages: chapter.pages,
                 bytes: 0,
                 pagesRead: chapter.pagesRead,
+                format: chapter.format,
               ),
             ),
         ],

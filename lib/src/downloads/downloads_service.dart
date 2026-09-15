@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../api/kavita_client.dart';
+import '../api/models.dart';
+import '../features/reader/book_page.dart';
 import '../profile_files.dart';
 
 /// A chapter whose pages are stored on the device.
@@ -19,6 +21,7 @@ class SavedChapter {
     required this.pages,
     required this.bytes,
     this.pagesRead = 0,
+    this.format = MangaFormat.unknown,
   });
 
   final int chapterId;
@@ -30,8 +33,21 @@ class SavedChapter {
   final int pages;
   final int bytes;
 
+  /// What the files behind this chapter are, which is what the copy itself is
+  /// made of: a stored book is the pages the server rendered, and an offline
+  /// reader can only open it as the book it is if the copy says so. See
+  /// [MangaFormat.content].
+  ///
+  /// Unknown for every copy stored before a book could be saved, which reads
+  /// as [[ChapterContent.fixedPages]] — the only thing a copy could ever hold
+  /// until now.
+  final MangaFormat format;
+
   /// Mirrored locally so the Downloads tab can show progress with no server.
   final int pagesRead;
+
+  /// What the copy is made of, which is what decides how it is read back.
+  ChapterContent get content => format.content;
 
   double get progress => pages == 0 ? 0 : (pagesRead / pages).clamp(0.0, 1.0);
   bool get isRead => pages > 0 && pagesRead >= pages;
@@ -46,6 +62,7 @@ class SavedChapter {
     pages: pages,
     bytes: bytes ?? this.bytes,
     pagesRead: pagesRead ?? this.pagesRead,
+    format: format,
   );
 
   /// "Series — Volume 1": what a confirmation dialog needs to say which copy
@@ -63,6 +80,7 @@ class SavedChapter {
     'pages': pages,
     'bytes': bytes,
     'pagesRead': pagesRead,
+    'format': format.id,
   };
 
   static SavedChapter? fromJson(Object? json) {
@@ -80,6 +98,7 @@ class SavedChapter {
       pages: pages,
       bytes: json['bytes'] as int? ?? 0,
       pagesRead: json['pagesRead'] as int? ?? 0,
+      format: MangaFormat.fromId(json['format'] as int?),
     );
   }
 }
@@ -176,6 +195,11 @@ class DownloadsService {
   }
 
   /// Downloads every page of [chapter]. [onProgress] receives 0..1.
+  ///
+  /// What a page is differs by what the chapter is made of, and so does where
+  /// the pages come from: a chapter of pictures is one image per page, and a
+  /// book is the pages the server laid its words out into (ADR-0008), stored
+  /// as it rendered them and made to carry their own pictures (ADR-0009).
   Future<SavedChapter> download({
     required KavitaClient client,
     required SavedChapter chapter,
@@ -188,18 +212,47 @@ class DownloadsService {
     await _deleteQuietly(dir);
     dir.createSync(recursive: true);
 
+    final int pages;
     var bytes = 0;
     try {
-      for (var page = 0; page < chapter.pages; page++) {
-        final data = await client.readerImageBytes(
-          chapter.chapterId,
-          page,
-          cancelToken: cancelToken,
-        );
-        final file = File('${dir.path}/${pageFileName(page)}');
-        file.writeAsBytesSync(data);
-        bytes += data.length;
-        onProgress((page + 1) / chapter.pages);
+      switch (chapter.content) {
+        case ChapterContent.fixedPages:
+          pages = chapter.pages;
+          for (var page = 0; page < pages; page++) {
+            final data = await client.readerImageBytes(
+              chapter.chapterId,
+              page,
+              cancelToken: cancelToken,
+            );
+            File('${dir.path}/${pageFileName(page)}').writeAsBytesSync(data);
+            bytes += data.length;
+            onProgress((page + 1) / pages);
+          }
+        case ChapterContent.reflowable:
+          // How long a book is is the server's to say, and `book-info` is the
+          // only place it says it: the chapter's own page count is of image
+          // pages, and a book has none. The copy keeps the total it was made
+          // with, which is what tells a later reader whether the two still
+          // agree (#78).
+          final book = await client.bookInfo(
+            chapter.chapterId,
+            cancelToken: cancelToken,
+          );
+          pages = book.pages;
+          // A picture named on several pages is fetched once.
+          final carried = <String, String?>{};
+          for (var page = 0; page < pages; page++) {
+            bytes += await _storeBookPage(
+              dir,
+              client: client,
+              chapterId: chapter.chapterId,
+              page: page,
+              pages: pages,
+              onProgress: onProgress,
+              cancelToken: cancelToken,
+              carried: carried,
+            );
+          }
       }
     } on Object {
       await _deleteQuietly(dir);
@@ -213,12 +266,67 @@ class DownloadsService {
       libraryId: chapter.libraryId,
       seriesName: chapter.seriesName,
       title: chapter.title,
-      pages: chapter.pages,
+      pages: pages,
       bytes: bytes,
       pagesRead: chapter.pagesRead,
+      format: chapter.format,
     );
     File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(saved.toJson()));
     return saved;
+  }
+
+  /// Stores one page of a book: the HTML the server laid out, with every
+  /// picture it named carried inside it.
+  ///
+  /// Returns what the page cost, which is what the Downloads tab reports.
+  Future<int> _storeBookPage(
+    Directory dir, {
+    required KavitaClient client,
+    required int chapterId,
+    required int page,
+    required int pages,
+    required void Function(double progress) onProgress,
+    required Map<String, String?> carried,
+    CancelToken? cancelToken,
+  }) async {
+    final html = await client.bookPage(
+      chapterId,
+      page,
+      cancelToken: cancelToken,
+    );
+    for (final src in BookPage.fromHtml(html).pictureSources) {
+      // Asked for once however many pages name it — including a picture the
+      // server refuses, which is why the memo is keyed and not the value.
+      if (!carried.containsKey(src)) {
+        carried[src] = await _carryPicture(client, chapterId, src, cancelToken);
+      }
+    }
+    final stored = utf8.encode(renameBookPictures(html, (src) => carried[src]));
+    File('${dir.path}/${pageFileName(page)}').writeAsBytesSync(stored);
+    onProgress((page + 1) / pages);
+    return stored.length;
+  }
+
+  /// What a page names a picture by once the copy carries the picture itself.
+  ///
+  /// A picture the server will not hand over is left as the page named it: it
+  /// costs the page its picture and not the reader the book, which is a
+  /// better answer than a copy that failed over one illustration.
+  Future<String?> _carryPicture(
+    KavitaClient client,
+    int chapterId,
+    String src,
+    CancelToken? cancelToken,
+  ) async {
+    try {
+      return carriedPictureName(
+        await client.bookPictureBytes(chapterId, src, cancelToken: cancelToken),
+      );
+    } on DioException catch (error) {
+      // A cancelled download is not a picture that could not be fetched.
+      if (error.type == DioExceptionType.cancel) rethrow;
+      return null;
+    }
   }
 
   /// Rewrites `meta.json` in place, for progress recorded while reading.
