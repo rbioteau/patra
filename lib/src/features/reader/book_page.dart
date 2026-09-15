@@ -11,6 +11,9 @@
 /// carry no header of ours, and a book's pictures are header-authenticated.
 library;
 
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -69,7 +72,37 @@ class BookPage {
   /// answered with.
   bool get isEmpty => blocks.isEmpty;
 
+  /// Every picture the page refers to, in the order it refers to them: what a
+  /// copy of the page has to carry with it if it is to be read with no
+  /// server left to ask.
+  Iterable<String> get pictureSources =>
+      blocks.whereType<BookPicture>().map((picture) => picture.src);
+
   factory BookPage.fromHtml(String html) => BookPage(parseBookPage(html));
+}
+
+/// What a stored page carries a picture as, in place of the name it named it
+/// by: the bytes themselves, so that a page read with no server needs nothing
+/// but the page (ADR-0009).
+///
+/// No media type is claimed, because the one thing that reads this — the
+/// decoder — sniffs the bytes as it does for a stored page of pictures, and a
+/// type the server did not state is not invented.
+String carriedPictureName(List<int> bytes) =>
+    'data:;base64,${base64Encode(bytes)}';
+
+/// The bytes a name carries, where it is a picture a stored page brought with
+/// it. Null for any other name, which is one the server is still needed for.
+Uint8List? carriedPictureBytes(String src) {
+  if (!src.startsWith('data:')) return null;
+  final comma = src.indexOf(',');
+  if (comma == -1) return null;
+  try {
+    return base64Decode(src.substring(comma + 1));
+  } on FormatException {
+    // A copy whose page was damaged on the way here keeps its words.
+    return null;
+  }
 }
 
 /// The room a page is set in.
@@ -445,19 +478,12 @@ List<BookBlock> parseBookPage(String html) {
   void write(String text) =>
       words.write(_decode(text).replaceAll(_runsOfSpace, ' '));
 
-  var at = 0;
-  while (at < html.length) {
-    final markup = _markup.matchAsPrefix(html, at);
-    if (markup == null) {
-      // Words, up to the next tag.
-      final next = html.indexOf('<', at);
-      final end = next == -1 ? html.length : next;
-      if (dropping == null) write(html.substring(at, end));
-      at = end;
+  for (final piece in markupPieces(html)) {
+    if (!piece.isTag) {
+      if (dropping == null) write(piece.text);
       continue;
     }
-    final tag = markup.group(0)!;
-    at = markup.end;
+    final tag = piece.text;
     if (tag.startsWith('<!--')) continue;
 
     final match = _tagName.firstMatch(tag);
@@ -509,11 +535,90 @@ List<BookBlock> parseBookPage(String html) {
   return blocks;
 }
 
+/// A page as its own markup splits it: a run of words, or one tag.
+typedef MarkupPiece = ({String text, bool isTag});
+
+/// The one walk over a page's markup, which [parseBookPage] and
+/// [renameBookPictures] both consume.
+///
+/// Two walkers over one grammar is how two answers to "what is a tag" come
+/// to exist, and the second one here has to reproduce a page exactly — so it
+/// walks the same pieces and leaves every one of them alone but the one it
+/// is rewriting.
+Iterable<MarkupPiece> markupPieces(String html) sync* {
+  var at = 0;
+  while (at < html.length) {
+    final markup = _markup.matchAsPrefix(html, at);
+    if (markup == null) {
+      // Words, up to the next tag.
+      final next = html.indexOf('<', at);
+      final end = next == -1 ? html.length : next;
+      yield (text: html.substring(at, end), isTag: false);
+      at = end;
+      continue;
+    }
+    yield (text: markup.group(0)!, isTag: true);
+    at = markup.end;
+  }
+}
+
+/// The same page as [html], with every picture named differently.
+///
+/// A page that is going to be read with no server has to carry its pictures
+/// with it, and what a page says about one is only ever a name — a path
+/// inside the book, or an address (ADR-0009). [rename] answers with the name
+/// the copy should carry instead, or with null to leave the page's own.
+///
+/// The words of the page are not touched and no tree is built: the page is
+/// put back together out of the same pieces [parseBookPage] reads.
+String renameBookPictures(String html, String? Function(String src) rename) {
+  final out = StringBuffer();
+  for (final piece in markupPieces(html)) {
+    if (!piece.isTag) {
+      out.write(piece.text);
+      continue;
+    }
+    final tag = piece.text;
+    final name = _tagName.firstMatch(tag)?.group(1)?.toLowerCase();
+    out.write(
+      (name == 'img' || name == 'image') && !tag.startsWith('</')
+          ? _renamedPicture(tag, rename)
+          : tag,
+    );
+  }
+  return out.toString();
+}
+
+/// [tag] with the name of its picture replaced, or [tag] itself where
+/// [rename] has nothing to put in its place.
+String _renamedPicture(String tag, String? Function(String src) rename) {
+  // Which attribute named it is kept: a page that named it with `href` gets
+  // its `href` back rather than a second `src` beside the first.
+  for (final attribute in const ['src', 'href']) {
+    final match = _attributeMatch(tag, attribute);
+    if (match == null) continue;
+    final renamed = rename(_attributeValue(match));
+    return renamed == null
+        ? tag
+        : tag.replaceRange(match.start, match.end, '$attribute="$renamed"');
+  }
+  return tag;
+}
+
 /// What [tag] says [name] is, or null where it says nothing.
 String? _attributeOf(String tag, String name) {
+  final match = _attributeMatch(tag, name);
+  return match == null ? null : _attributeValue(match);
+}
+
+/// What one attribute of a tag says, whichever of the three ways it said it.
+String _attributeValue(RegExpMatch match) =>
+    match.group(2) ?? match.group(3) ?? match.group(4)!;
+
+RegExpMatch? _attributeMatch(String tag, String name) {
   for (final match in _attribute.allMatches(tag)) {
     if (match.group(1)!.toLowerCase() != name) continue;
-    return match.group(2) ?? match.group(3) ?? match.group(4);
+    return match;
   }
   return null;
 }

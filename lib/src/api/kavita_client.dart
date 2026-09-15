@@ -483,9 +483,10 @@ class KavitaClient {
   /// length is said: `chapter-info` counts image pages, and a book has none
   /// (ADR-0008). Kavita caches the file on this call, so it is asked once per
   /// chapter the reader opens rather than once per page.
-  Future<BookInfo> bookInfo(int chapterId) async {
+  Future<BookInfo> bookInfo(int chapterId, {CancelToken? cancelToken}) async {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/Book/$chapterId/book-info',
+      cancelToken: cancelToken,
     );
     return BookInfo.fromJson(res.data!);
   }
@@ -501,10 +502,15 @@ class KavitaClient {
   /// `ResponseType.plain`: a string answer comes back as a [String] whichever
   /// of `text/plain` and `application/json` the server chose, and forcing the
   /// raw body would turn the second into a JSON-quoted one.
-  Future<String> bookPage(int chapterId, int page) async {
+  Future<String> bookPage(
+    int chapterId,
+    int page, {
+    CancelToken? cancelToken,
+  }) async {
     final res = await _dio.get<dynamic>(
       '/api/Book/$chapterId/book-page',
       queryParameters: {'page': page},
+      cancelToken: cancelToken,
     );
     final body = res.data;
     return body is String ? body : '';
@@ -525,6 +531,44 @@ class KavitaClient {
   String bookResourceUrl(int chapterId, String file) =>
       '$baseUrl/api/Book/$chapterId/book-resources'
       '?file=${Uri.encodeQueryComponent(file)}';
+
+  /// Where the picture a page of a book named is served from, whichever of
+  /// the two ways it named it.
+  ///
+  /// A path inside the book, usually — but Kavita also writes a **whole
+  /// address with no scheme in it** (`//host/api/Book/7/book-resources
+  /// ?file=cover.jpg`), which is what a cover page is made of. That one is
+  /// the address it already is, and the scheme is this session's own: handed
+  /// to `book-resources` as though it were a path it is answered with a 400,
+  /// and a page whose only block is that picture is then drawn as nothing at
+  /// all.
+  String bookPictureUrl(int chapterId, String src) {
+    if (src.startsWith('http://') || src.startsWith('https://')) return src;
+    if (src.startsWith('//')) {
+      return Uri.parse(baseUrl).resolve(src).toString();
+    }
+    return bookResourceUrl(chapterId, src);
+  }
+
+  /// The bytes of one picture a page of a book named.
+  ///
+  /// Fetched with this client's own headers, which is the only way a picture
+  /// named as a path can be had at all — `book-resources` takes no key in the
+  /// query. Saving a book is what it is for: a stored page carries its
+  /// pictures with it, because there is no server left to ask for one
+  /// (ADR-0009).
+  Future<List<int>> bookPictureBytes(
+    int chapterId,
+    String src, {
+    CancelToken? cancelToken,
+  }) async {
+    final res = await _dio.getUri<List<int>>(
+      Uri.parse(bookPictureUrl(chapterId, src)),
+      options: Options(responseType: ResponseType.bytes),
+      cancelToken: cancelToken,
+    );
+    return res.data!;
+  }
 
   /// What a book is made of, as the file's own navigation lists it: a tree of
   /// parts and their children, each with the page it begins on.

@@ -424,19 +424,15 @@ void main() {
   testWidgets('a book under way carries the bar of its progress', (
     tester,
   ) async {
-    await _pump(
-      tester,
-      [
-        {
-          'id': 10,
-          'name': '-100000',
-          'minNumber': -100000,
-          'pages': 100,
-          'chapters': [_chapter(101, '1', format: 3, pagesRead: 40)],
-        },
-      ],
-      type: LibraryType.book,
-    );
+    await _pump(tester, [
+      {
+        'id': 10,
+        'name': '-100000',
+        'minNumber': -100000,
+        'pages': 100,
+        'chapters': [_chapter(101, '1', format: 3, pagesRead: 40)],
+      },
+    ], type: LibraryType.book);
 
     expect(find.text('Page 40 / 100'), findsOneWidget);
     final bar = tester.widget<LinearProgressIndicator>(
@@ -572,10 +568,11 @@ void main() {
       ]);
     });
 
-    testWidgets('the trailing swipe still removes a saved copy', (tester) async {
+    testWidgets('the trailing swipe still removes a saved copy', (
+      tester,
+    ) async {
       // The pane keys on a copy being here and never on the format, so a
-      // book already on the device is removed like anything else — even
-      // though its row offers nothing to save until #77.
+      // book already on the device is removed like anything else.
       await _pump(tester, book(0), type: LibraryType.book, savedChapter: 101);
 
       await tester.drag(find.text('Book 1'), const Offset(-200, 0));
@@ -583,13 +580,36 @@ void main() {
       expect(find.text('Remove'), findsOneWidget);
     });
 
+    testWidgets('the row offers to save the book', (tester) async {
+      // A book is saved the way any other chapter is: what is stored is a
+      // copy of the pages the server rendered, and the pill asks for one.
+      await _pump(tester, book(0), type: LibraryType.book);
+
+      expect(find.byType(SavePill), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+    });
+
+    testWidgets('offline a book that is not here cannot be opened', (
+      tester,
+    ) async {
+      // Reading a book is reading the server's pages, so a copy that is not
+      // on the device is a book there is nothing to open — and offering to
+      // fetch one is offering what cannot be done.
+      await _pump(tester, book(0), type: LibraryType.book);
+      ProviderScope.containerOf(tester.element(find.byType(SeriesDetailScreen)))
+          .read(offlineProvider.notifier)
+          .set(true);
+      await tester.pumpAndSettle();
+
+      expect(rowOpacity(tester, 'Book 1'), 0.4);
+      expect(find.byType(SavePill), findsNothing);
+    });
+
     testWidgets('offline there is nothing to swipe for', (tester) async {
       // Marking read is a write to the server, and a book is no exception:
       // the pane is not drawn at all rather than drawn and refused.
       await _pump(tester, book(0), type: LibraryType.book);
-      ProviderScope.containerOf(
-            tester.element(find.byType(SeriesDetailScreen)),
-          )
+      ProviderScope.containerOf(tester.element(find.byType(SeriesDetailScreen)))
           .read(offlineProvider.notifier)
           .set(true);
       await tester.pumpAndSettle();
