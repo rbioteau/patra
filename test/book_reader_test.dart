@@ -39,6 +39,25 @@ const _addressedPicture =
     '<p><img src="//kavita.test/api/Book/7/book-resources'
     '?file=OEBPS/images/cover.jpg"/></p>';
 
+
+/// What the server says a book is made of: a part with two chapters under it,
+/// and a second part after them.
+///
+/// The nesting is the point — which chapter belongs to which part is the
+/// whole of what a contents is for, and a reader that flattened it would
+/// lose the one thing the server knows about the shape of the book.
+const _contents = [
+  {
+    'title': 'Part one',
+    'page': 0,
+    'children': [
+      {'title': 'The desert', 'page': 2, 'children': <Object>[]},
+      {'title': 'The worm', 'page': 5, 'children': <Object>[]},
+    ],
+  },
+  {'title': 'Part two', 'page': 8, 'children': <Object>[]},
+];
+
 /// A Kavita holding one book, in a Book library.
 class _BookAdapter implements HttpClientAdapter {
   _BookAdapter({
@@ -48,6 +67,7 @@ class _BookAdapter implements HttpClientAdapter {
     this.html,
     this.progressPage = 0,
     this.bookScrollId,
+    this.contents = _contents,
   });
 
   /// Every page the reader asked the server for, in order.
@@ -71,6 +91,13 @@ class _BookAdapter implements HttpClientAdapter {
   /// which is the round trip rather than its two halves apart.
   int progressPage;
   String? bookScrollId;
+
+  /// What the server says the book is made of: a tree of parts and the
+  /// chapters under them, each with the page it begins on.
+  ///
+  /// Empty for a book the server listed nothing for, which is a book the
+  /// reader offers no contents for.
+  final List<Object>? contents;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
@@ -124,6 +151,8 @@ class _BookAdapter implements HttpClientAdapter {
           );
         }
         return _answer(html ?? _pageHtml(page));
+      case '/api/Book/7/chapters':
+        return _answer(contents ?? const <Object>[], json: true);
     }
     throw DioException(
       requestOptions: options,
@@ -175,6 +204,7 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   int progressPage = 0,
   String? bookScrollId,
   _BookAdapter? server,
+  List<Object>? contents,
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
@@ -196,6 +226,7 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         html: html,
         progressPage: progressPage,
         bookScrollId: bookScrollId,
+        contents: contents ?? _contents,
       );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
@@ -576,6 +607,81 @@ void main() {
     expect(cached.url, contains('file=OEBPS/images/cover.jpg'));
     expect(cached.url, isNot(contains('%2F%2F')));
     expect(cached.cacheKey, imageCacheKey(cached.url));
+  });
+
+  group('the contents of a book', () {
+    /// Choosing an entry in the contents, and waiting for the page it names
+    /// to have been asked for and reported.
+    Future<void> choose(WidgetTester tester, String entry) async {
+      await tester.tap(find.text('Contents'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(entry));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets('the parts and their children are what is offered', (
+      tester,
+    ) async {
+      await _pumpBook(tester);
+      await _showChrome(tester);
+
+      await tester.tap(find.text('Contents'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Part one'), findsOneWidget);
+      expect(find.text('The desert'), findsOneWidget);
+      expect(find.text('The worm'), findsOneWidget);
+      expect(find.text('Part two'), findsOneWidget);
+      // Hierarchical on the screen and not only in the parsing: a child is
+      // set in from the part it belongs to, which a sheet that walked the
+      // tree into one flat list would not do however it ordered it.
+      final part = tester.getRect(find.text('Part one'));
+      final child = tester.getRect(find.text('The desert'));
+      expect(child.left, greaterThan(part.left));
+      expect(child.top, greaterThan(part.top));
+      // The page an entry begins on, counted the way the reader's own
+      // counter counts: the server numbers a book's pages from zero.
+      expect(find.text('6'), findsOneWidget);
+    });
+
+    testWidgets('choosing an entry moves the reader to its page', (
+      tester,
+    ) async {
+      final (requested, posted) = await _pumpBook(tester);
+      await _showChrome(tester);
+
+      await choose(tester, 'The worm');
+
+      // Page 5 is the one the server named for that chapter, and it is both
+      // the page asked for and the progress reported for it: a reader who
+      // has chosen a chapter has read their way to where it begins.
+      expect(requested.last, 5);
+      expect(_postedPages(posted).last, 5);
+    });
+
+    testWidgets('choosing a part moves the reader to the page it begins on', (
+      tester,
+    ) async {
+      final (requested, posted) = await _pumpBook(tester);
+      await _showChrome(tester);
+
+      await choose(tester, 'Part two');
+
+      expect(requested.last, 8);
+      expect(_postedPages(posted).last, 8);
+    });
+
+    testWidgets('a book the server listed nothing for offers none', (
+      tester,
+    ) async {
+      await _pumpBook(tester, contents: const []);
+      await _showChrome(tester);
+
+      // No control, and nothing anywhere saying there is no contents: the
+      // absence is not itself a message.
+      expect(find.text('Contents'), findsNothing);
+    });
   });
 
   group('what a page is made of', () {

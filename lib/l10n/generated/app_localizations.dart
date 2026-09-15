@@ -464,6 +464,12 @@ abstract class AppLocalizations {
   /// **'This page could not be loaded.'**
   String get bookPageUnavailable;
 
+  /// A book's table of contents: the label on the control in the reader's bottom chrome that opens it, and the heading of the sheet it opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Contents'**
+  String get bookContents;
+
   /// Pages remaining in the chapter the home hero would resume
   ///
   /// In en, this message translates to:

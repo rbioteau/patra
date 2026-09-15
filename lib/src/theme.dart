@@ -38,6 +38,16 @@ final patraTrack = patraText.withValues(alpha: .14);
 final patraTextOnArt = patraText.withValues(alpha: .78);
 final patraBorder = Colors.white.withValues(alpha: .08);
 
+/// A control laid over a page, which is what the reader's chrome sits on.
+///
+/// Shares of white rather than colours of ours, because what is underneath
+/// is a scan or a photograph and may be anything from black ink to bare
+/// white paper: a fill that is a share of white reads as a control on all of
+/// them. The reader draws two of them — the cog in the top bar, and, for a
+/// book, the control that opens its contents.
+final patraOnPageFill = Colors.white.withValues(alpha: .12);
+final patraOnPageOutline = Colors.white.withValues(alpha: .18);
+
 /// Radii
 
 const radiusThumb = 6.0;
