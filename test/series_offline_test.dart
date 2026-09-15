@@ -171,14 +171,6 @@ Future<void> _fillAll(CatalogueStore store) async {
   await store.putSeriesMetadata(5, _metadata);
 }
 
-/// The nearest [Opacity] above the row labelled [label] — 0.4 is the
-/// dimming that says a row cannot be opened.
-double _rowOpacity(WidgetTester tester, String label) => tester
-    .widget<Opacity>(
-      find.ancestor(of: find.text(label), matching: find.byType(Opacity)).first,
-    )
-    .opacity;
-
 bool _rowOpens(WidgetTester tester, String label) =>
     tester
         .widget<InkWell>(
@@ -238,7 +230,7 @@ void main() {
     // exists and how far through it you are, and the dimming tells the truth
     // about every row.
     for (final row in ['Chapter 1', 'Chapter 2', 'Blame! Academy']) {
-      expect(_rowOpacity(tester, row), 0.4, reason: row);
+      expect(rowOpacity(tester, row), 0.4, reason: row);
       expect(_rowOpens(tester, row), isFalse, reason: row);
     }
     // The hero says the same thing as the rows: the chapter it would resume
@@ -282,7 +274,7 @@ void main() {
 
     // Its row is the one that opens, and the only one.
     expect(_rowOpens(tester, 'Chapter 2'), isTrue);
-    expect(_rowOpacity(tester, 'Chapter 2'), 1);
+    expect(rowOpacity(tester, 'Chapter 2'), 1);
     expect(_rowOpens(tester, 'Chapter 1'), isFalse);
     expect(_rowOpens(tester, 'Blame! Academy'), isFalse);
     // And the hero resumes into it, which is the whole chain: the saved

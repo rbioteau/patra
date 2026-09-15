@@ -274,3 +274,15 @@ class UnreachableServer implements HttpClientAdapter {
   @override
   void close({bool force = false}) {}
 }
+
+/// The nearest [Opacity] above the row labelled [label] — 0.4 is the dimming
+/// that says a row cannot be opened.
+///
+/// Shared because more than one suite asks it: the series screen dims a row
+/// it will not open, and what says so is a number in the widget tree rather
+/// than anything a reader is told.
+double rowOpacity(WidgetTester tester, String label) => tester
+    .widget<Opacity>(
+      find.ancestor(of: find.text(label), matching: find.byType(Opacity)).first,
+    )
+    .opacity;

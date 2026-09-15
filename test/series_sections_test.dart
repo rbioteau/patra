@@ -290,6 +290,10 @@ class _PushHost extends StatelessWidget {
 /// from a session.
 const _profileId = 'https://kavita.test#1';
 
+/// The copy that promised EPUB support is going away: the key the screen read
+/// it from, and the sentence itself.
+const _retiredCopy = ['formatNotSupported', 'EPUB support'];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -380,7 +384,6 @@ void main() {
       },
     ]);
 
-    expect(find.text('Format not supported yet'), findsNothing);
     final row = tester.widget<InkWell>(
       find.ancestor(of: find.text('Chapter 1'), matching: find.byType(InkWell)),
     );
@@ -390,21 +393,30 @@ void main() {
   testWidgets('a book opens like any other chapter', (tester) async {
     // In a Book library, which is where a book lives: the reader asks the
     // server for the pages it made of the file's words.
-    await _pump(tester, [
-      {
-        'id': 10,
-        'name': '-100000',
-        'minNumber': -100000,
-        'pages': 100,
-        'chapters': [_chapter(101, '1', format: 3)],
-      },
-    ], type: LibraryType.book);
-
-    expect(find.text('Format not supported yet'), findsNothing);
-    final row = tester.widget<InkWell>(
-      find.ancestor(of: find.text('Book 1'), matching: find.byType(InkWell)),
+    await _pump(
+      tester,
+      [
+        {
+          'id': 10,
+          'name': '-100000',
+          'minNumber': -100000,
+          'pages': 100,
+          'chapters': [_chapter(101, '1', format: 3)],
+        },
+      ],
+      type: LibraryType.book,
+      routed: true,
     );
-    expect(row.onTap, isNotNull);
+
+    // Neither dimmed: 0.4 is what this screen draws over a row it will not
+    // open. What says the format cannot be read is guarded over `lib/`
+    // rather than here, since a sentence that exists nowhere is one this
+    // test could never catch.
+    expect(rowOpacity(tester, 'Book 1'), 1);
+
+    await tester.tap(find.text('Book 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('reader 101'), findsOneWidget);
   });
 
   // How far through a book is, is the same arithmetic as a chapter: the
@@ -477,6 +489,146 @@ void main() {
     // row says what it is.
     expect(find.text('READ'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  // A book is one reading unit the server paginates itself (ADR-0008), and
+  // nothing about the row changes because of it: the same swipe marks it, and
+  // the same vocabulary names it.
+  group('a book behaves like any other row', () {
+    /// One book in a Book library: a volume of its own holding the single
+    /// placeholder chapter Kavita stands in for a file that is a whole book.
+    List<Map<String, dynamic>> book(int pagesRead) => [
+      {
+        'id': 10,
+        'name': '1',
+        'minNumber': 1,
+        'pages': 100,
+        'chapters': [_chapter(101, '-100000', format: 3, pagesRead: pagesRead)],
+      },
+    ];
+
+    testWidgets('the leading swipe marks it read before the server answers', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      await _pump(
+        tester,
+        book(0),
+        type: LibraryType.book,
+        postGate: gate.future,
+      );
+
+      // The leading edge carries progress, as it does on a chapter.
+      await tester.drag(find.text('Book 1'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Mark read'), findsOneWidget);
+
+      await tester.tap(find.text('Mark read'));
+      await tester.pump();
+
+      // The server has not answered — and will not until the gate opens.
+      expect(find.text('READ'), findsOneWidget);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('READ'), findsOneWidget);
+    });
+
+    testWidgets('and posts the book to the server, both ways', (tester) async {
+      final posted = <String>[];
+      RequestOptions? last;
+      await _pump(
+        tester,
+        book(0),
+        type: LibraryType.book,
+        // Every POST the screen makes lands here, the series listing among
+        // them: only the write is what this test is about.
+        onPost: (options) {
+          if (!options.path.startsWith('/api/Reader/mark-multiple')) return;
+          posted.add(options.path);
+          last = options;
+        },
+      );
+
+      await tester.drag(find.text('Book 1'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mark read'));
+      await tester.pumpAndSettle();
+
+      expect(posted, ['/api/Reader/mark-multiple-read']);
+      // The book is one chapter to the server, and it is that chapter's id
+      // that goes up — there is no book of its own to mark.
+      expect((last!.data as Map<String, dynamic>)['chapterIds'], [101]);
+
+      // Read now, so the same edge offers the other direction.
+      await tester.drag(find.text('Book 1'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mark unread'));
+      await tester.pumpAndSettle();
+
+      expect(posted, [
+        '/api/Reader/mark-multiple-read',
+        '/api/Reader/mark-multiple-unread',
+      ]);
+    });
+
+    testWidgets('the trailing swipe still removes a saved copy', (tester) async {
+      // The pane keys on a copy being here and never on the format, so a
+      // book already on the device is removed like anything else — even
+      // though its row offers nothing to save until #77.
+      await _pump(tester, book(0), type: LibraryType.book, savedChapter: 101);
+
+      await tester.drag(find.text('Book 1'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove'), findsOneWidget);
+    });
+
+    testWidgets('offline there is nothing to swipe for', (tester) async {
+      // Marking read is a write to the server, and a book is no exception:
+      // the pane is not drawn at all rather than drawn and refused.
+      await _pump(tester, book(0), type: LibraryType.book);
+      ProviderScope.containerOf(
+            tester.element(find.byType(SeriesDetailScreen)),
+          )
+          .read(offlineProvider.notifier)
+          .set(true);
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.text('Book 1'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Mark read'), findsNothing);
+    });
+
+    testWidgets('the row names it in the library\'s own word', (tester) async {
+      await _pump(
+        tester,
+        book(40),
+        type: LibraryType.book,
+        locale: const Locale('fr'),
+      );
+
+      // A bare "chapitre" over a book is the server's vocabulary spoken
+      // wrong, which is the mistake `LibraryTypeNaming` exists to prevent.
+      expect(find.text('Livre 1'), findsOneWidget);
+      expect(find.textContaining('Chapitre'), findsNothing);
+    });
+
+    test('nothing in the app still promises EPUB support', () {
+      // The row used to be dimmed and labelled "Format not supported yet",
+      // and the series screen told the reader EPUB support was on the way.
+      // A row that opens has said all of that: what is guarded here is that
+      // neither sentence can come back, in the tree or in the copy.
+      final offenders = <String>[];
+      for (final file in Directory('lib').listSync(recursive: true)) {
+        if (file is! File) continue;
+        if (!file.path.endsWith('.dart') && !file.path.endsWith('.arb')) {
+          continue;
+        }
+        final source = file.readAsStringSync();
+        if (_retiredCopy.any(source.contains)) offenders.add(file.path);
+      }
+      expect(offenders, isEmpty);
+    });
   });
 
   group('the resume button names only what is numbered', () {
