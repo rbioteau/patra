@@ -549,12 +549,20 @@ class KavitaClient {
     },
   );
 
+  /// Where in a chapter the reader is, and where in the page they were.
+  ///
+  /// [bookScrollId] is the place *within* the page, and the progress call has
+  /// always carried it — Kavita's own web client fills it with the id of an
+  /// element in the page, and hands it back. A book's page can be longer than
+  /// the screen, so a page number on its own opens it again at words already
+  /// read. Null for a chapter of pictures, which has no place within a page.
   Future<void> saveProgress({
     required int libraryId,
     required int seriesId,
     required int volumeId,
     required int chapterId,
     required int pageNum,
+    String? bookScrollId,
   }) => _dio.post(
     '/api/Reader/progress',
     data: {
@@ -563,8 +571,28 @@ class KavitaClient {
       'volumeId': volumeId,
       'chapterId': chapterId,
       'pageNum': pageNum,
+      'bookScrollId': bookScrollId,
     },
   );
+
+  /// Where the server says the reader is in a chapter.
+  ///
+  /// Asked when a book opens: the page is the one the route may or may not
+  /// name — a link names none — and the marker is the place within it, which
+  /// nothing else carries. A chapter nobody has opened is not a failure: the
+  /// server answers with a page of 0 and no marker, and so does a chapter it
+  /// answers with nothing at all for.
+  Future<ChapterProgress> chapterProgress(int chapterId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/Reader/get-progress',
+      queryParameters: {'chapterId': chapterId},
+    );
+    final Object? body = res.data;
+    return switch (body) {
+      Map() => ChapterProgress.fromJson(body.cast<String, dynamic>()),
+      _ => const ChapterProgress(pageNum: 0),
+    };
+  }
 
   /// Downloads one reader page as bytes, for offline storage.
   Future<List<int>> readerImageBytes(

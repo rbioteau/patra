@@ -140,7 +140,7 @@ A metadata label on one [[Series]] — Action, Science-Fiction — alongside its
 _Avoid_: category, type, tag (for a genre), library type
 
 **Reading progress**:
-How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says. For [[Reflowable content]] the pages are **the server's**: it counts them, and it can count them again differently, so a copy kept on the device keeps the count it was made with.
+How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says. For [[Reflowable content]] the pages are **the server's**: it counts them, and it can count them again differently, so a copy kept on the device keeps the count it was made with — and there is a second half a page count cannot hold, which is *where in the page* the reader had come to: a page longer than the screen is not a page reopened at its top. That place is a position in the words and not a distance down a screen of them, because the words move under another reading size and another window.
 _Avoid_: completion, status, read state
 
 **Continue**:

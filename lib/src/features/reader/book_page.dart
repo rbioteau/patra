@@ -94,9 +94,59 @@ const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
   4 * gutter,
 );
 
+/// Where in a page of a book the reader is.
+///
+/// A page of a book can be longer than the screen, so where a reader is is a
+/// page *and* a place within it — and the progress call Kavita's own web
+/// client uses has always carried a marker for that place, `bookScrollId`, a
+/// string the reader defines and the server hands back. That client fills it
+/// with the id of an element in the page; there is no element in a page this
+/// app draws (ADR-0010), so what travels is how far down the page the reader
+/// is.
+///
+/// A fraction of the room there is to scroll, and not a number of points,
+/// because a fraction survives being read somewhere else: a text size (#75),
+/// a rotation and a differently sized window all move the words, and an
+/// offset saved at one size opens at another place entirely at another.
+@immutable
+class BookAnchor {
+  const BookAnchor(this.fraction);
+
+  /// The top of a page: where every page with no marker opens, and where a
+  /// reader arrives on a page they have just turned to.
+  static const top = BookAnchor(0);
+
+  /// 0 at the top of the page, 1 at the end of it.
+  final double fraction;
+
+  /// What the server is asked to remember.
+  String get id => fraction.toStringAsFixed(4);
+
+  /// What the server handed back, or null where it is not a place this app
+  /// wrote — the web client's element ids among them, which name nothing in a
+  /// page drawn here.
+  static BookAnchor? from(String? id) {
+    if (id == null) return null;
+    final fraction = double.tryParse(id);
+    if (fraction == null || !fraction.isFinite) return null;
+    return BookAnchor(fraction.clamp(0.0, 1.0));
+  }
+
+  /// Where in a page [offset] is, of the [extent] there is to scroll.
+  factory BookAnchor.at(double offset, double extent) => extent <= 0
+      ? BookAnchor.top
+      : BookAnchor((offset / extent).clamp(0.0, 1.0));
+}
+
 /// One page of a book, read top to bottom.
-class BookPageBody extends StatelessWidget {
-  const BookPageBody({super.key, required this.page, required this.picture});
+class BookPageBody extends StatefulWidget {
+  const BookPageBody({
+    super.key,
+    required this.page,
+    required this.picture,
+    this.anchor,
+    this.onScroll,
+  });
 
   final BookPage page;
 
@@ -104,6 +154,72 @@ class BookPageBody extends StatelessWidget {
   /// name in, a widget out. The reader owns it, because resolving that name
   /// into a request is the client's job and not a page's.
   final Widget Function(String src) picture;
+
+  /// Where in the page the reader was, when it is opened again: null, or the
+  /// top, for a page with nowhere to be but its beginning.
+  final BookAnchor? anchor;
+
+  /// How far down the page the reader has come to rest, told once a scroll
+  /// has settled rather than on every frame of one — what is told is what
+  /// travels to the server, and a post a frame is not a thing to ask for.
+  final ValueChanged<BookAnchor>? onScroll;
+
+  @override
+  State<BookPageBody> createState() => _BookPageBodyState();
+}
+
+class _BookPageBodyState extends State<BookPageBody> {
+  final ScrollController _scroll = ScrollController();
+
+  /// Whether the page has been put where it opens.
+  ///
+  /// Opening a page halfway down is a scroll as well, and one the reader did
+  /// not make: the place it lands on is the place the server already holds,
+  /// so it is not told back until it has been made.
+  var _placed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final anchor = widget.anchor;
+    // Offsets are not a number until the page has been laid out, and a page
+    // that opens at its top has nowhere to be put.
+    if (anchor == null || anchor.fraction == 0) {
+      _placed = true;
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _open(anchor));
+  }
+
+  /// Puts the page where the reader left it.
+  void _open(BookAnchor anchor) {
+    if (mounted && _scroll.hasClients) {
+      final extent = _scroll.position.maxScrollExtent;
+      // A page that cannot be scrolled has nowhere to be put: nothing has
+      // been laid out under it yet, or it is a page that fits.
+      if (extent > 0) {
+        _scroll.jumpTo((anchor.fraction * extent).clamp(0.0, extent));
+      }
+    }
+    // Placed either way: a page with nowhere to be put — one that is gone, or
+    // one that fits — is still a page the reader reads, and one that has to
+    // go on reporting where they are.
+    _placed = true;
+  }
+
+  /// How far down the page the reader is, now that a scroll has settled.
+  void _settle() {
+    final onScroll = widget.onScroll;
+    if (!_placed || onScroll == null || !_scroll.hasClients) return;
+    final position = _scroll.position;
+    onScroll(BookAnchor.at(position.pixels, position.maxScrollExtent));
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   TextStyle get _paragraph => PatraText.body().copyWith(
     fontSize: bookTextSize,
@@ -124,34 +240,41 @@ class BookPageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     // A page with nothing in it is a page the server did not produce, and it
     // says so rather than being a screen of nothing at all.
-    if (page.isEmpty) return const BookPageUnavailable();
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        padding: _pagePadding,
-        child: ConstrainedBox(
-          // A page is a page and not a flow: what the server laid out on one
-          // is shorter than the screen more often than not — a cover, a
-          // part's title, the last page of a chapter — and content that fits
-          // is set in the middle of the page rather than left hanging off its
-          // top edge. A page taller than the screen keeps the scroll it
-          // already had, which is all a minimum height can leave it.
-          constraints: BoxConstraints(
-            minHeight: constraints.maxHeight - _pagePadding.vertical,
-          ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final block in page.blocks)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: switch (block) {
-                      BookWords() => _words(block),
-                      BookPicture(:final src) => picture(src),
-                    },
-                  ),
-              ],
+    if (widget.page.isEmpty) return const BookPageUnavailable();
+    return NotificationListener<ScrollEndNotification>(
+      onNotification: (_) {
+        _settle();
+        return false;
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          controller: _scroll,
+          padding: _pagePadding,
+          child: ConstrainedBox(
+            // A page is a page and not a flow: what the server laid out on one
+            // is shorter than the screen more often than not — a cover, a
+            // part's title, the last page of a chapter — and content that fits
+            // is set in the middle of the page rather than left hanging off its
+            // top edge. A page taller than the screen keeps the scroll it
+            // already had, which is all a minimum height can leave it.
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - _pagePadding.vertical,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final block in widget.page.blocks)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: switch (block) {
+                        BookWords() => _words(block),
+                        BookPicture(:final src) => widget.picture(src),
+                      },
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -174,7 +297,8 @@ class BookPageBody extends StatelessWidget {
       // left-aligned one would be. A title is not prose and a list item is
       // a line, so neither is justified: stretching either would open holes
       // in a handful of words.
-      textAlign: block.style == BookBlockStyle.paragraph ||
+      textAlign:
+          block.style == BookBlockStyle.paragraph ||
               block.style == BookBlockStyle.quotation
           ? TextAlign.justify
           : TextAlign.start,

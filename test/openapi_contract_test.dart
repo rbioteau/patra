@@ -109,6 +109,7 @@ void main() {
       '/api/Reader/mark-multiple-read': 'post',
       '/api/Reader/mark-multiple-unread': 'post',
       '/api/Reader/progress': 'post',
+      '/api/Reader/get-progress': 'get',
       '/api/Reader/image': 'get',
       '/api/Reader/thumbnail': 'get',
       '/api/Book/{chapterId}/book-info': 'get',
@@ -149,6 +150,7 @@ void main() {
       'Chapter': 'ChapterDto',
       'ChapterInfo': 'ChapterInfoDto',
       'BookInfo': 'BookInfoDto',
+      'ChapterProgress': 'ProgressDto',
       'PageDimension': 'FileDimensionDto',
       'ClientDeviceDto': 'ClientDeviceDto',
     };

@@ -45,13 +45,15 @@ class _BookAdapter implements HttpClientAdapter {
     required this.posted,
     this.unavailable,
     this.html,
+    this.progressPage = 0,
+    this.bookScrollId,
   });
 
   /// Every page the reader asked the server for, in order.
   final List<int> requested;
 
-  /// Every progress post, as the page number inside it.
-  final List<int> posted;
+  /// Every progress post: the page number, and the anchor sent with it.
+  final List<({int pageNum, String? anchor})> posted;
 
   /// A page the server cannot produce.
   final int? unavailable;
@@ -61,12 +63,32 @@ class _BookAdapter implements HttpClientAdapter {
   /// a picture is named by is.
   final String? html;
 
+  /// Where the server says the reader was: what `get-progress` answers.
+  ///
+  /// Moved by a progress post, because that is what a post is — so one test
+  /// can read a book, close it, and open it again through the same server,
+  /// which is the round trip rather than its two halves apart.
+  int progressPage;
+  String? bookScrollId;
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
     switch (options.path) {
       case '/api/Reader/progress':
-        posted.add((options.data as Map<String, dynamic>)['pageNum'] as int);
+        final body = options.data as Map<String, dynamic>;
+        progressPage = body['pageNum'] as int;
+        bookScrollId = body['bookScrollId'] as String?;
+        posted.add((pageNum: progressPage, anchor: bookScrollId));
         return _answer('{}', json: true);
+      case '/api/Reader/get-progress':
+        return _answer({
+          'volumeId': 4,
+          'chapterId': 7,
+          'seriesId': 3,
+          'libraryId': 1,
+          'pageNum': progressPage,
+          'bookScrollId': bookScrollId,
+        }, json: true);
       case '/api/Reader/chapter-info':
         // A book has no image pages for this endpoint to count, so it says
         // none: how long the book is has to be asked of the book.
@@ -124,32 +146,56 @@ ResponseBody _answer(Object body, {bool json = false}) =>
       },
     );
 
+/// A progress post: the page number, and the anchor it carried.
+typedef _Post = ({int pageNum, String? anchor});
+
+/// What the reader posted, as page numbers alone.
+List<int> _postedPages(List<_Post> posted) => [
+  for (final post in posted) post.pageNum,
+];
+
+/// What the reader posted, as anchors alone.
+List<String?> _postedAnchors(List<_Post> posted) => [
+  for (final post in posted) post.anchor,
+];
+
 /// The reader on a book, and what it asked the server for.
-Future<(List<int> requested, List<int> posted)> _pumpBook(
+///
+/// [initialPage] is the page the route named, which is what the series screen
+/// passes and what a link does not; [progressPage] and [bookScrollId] are what
+/// the server says about where the reader was, which is what a book opens at.
+/// [server] is that server, where a test needs the same one twice — a book
+/// closed and opened again, which is the round trip.
+Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   WidgetTester tester, {
   int initialPage = 0,
   int? unavailable,
   String? html,
+  int progressPage = 0,
+  String? bookScrollId,
+  _BookAdapter? server,
 }) async {
   final dir = mockPathProvider();
   final downloads = DownloadsService(
     root: Directory('${dir.path}/downloads')..createSync(),
     profileId: 'https://kavita.test#1',
   );
-  final requested = <int>[];
-  final posted = <int>[];
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
     username: 'romain',
     apiKey: 'key',
   );
-  final adapter = _BookAdapter(
-    requested: requested,
-    posted: posted,
-    unavailable: unavailable,
-    html: html,
-  );
+  final adapter =
+      server ??
+      _BookAdapter(
+        requested: <int>[],
+        posted: <_Post>[],
+        unavailable: unavailable,
+        html: html,
+        progressPage: progressPage,
+        bookScrollId: bookScrollId,
+      );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
 
@@ -172,8 +218,31 @@ Future<(List<int> requested, List<int> posted)> _pumpBook(
   for (var i = 0; i < 4; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
-  return (requested, posted);
+  return (adapter.requested, adapter.posted);
 }
+
+/// Where the page on screen is scrolled to, read out of the render tree
+/// rather than off anything the reader said about it.
+ScrollPosition _pagePosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byType(SingleChildScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    )
+    .position;
+
+/// A page longer than the screen it is read on, which is the only case in
+/// which there is a place within a page to be asked about.
+///
+/// Words rather than a picture: a picture fetched from a server a test does
+/// not have is a picture with no height at all, and a page of nothing is not
+/// a page that scrolls.
+final String _longPage = [
+  for (var i = 0; i < 40; i++) '<p>Paragraph $i of a long page.</p>',
+].join();
 
 /// The reader's chrome: a tap in the middle of the screen.
 Future<void> _showChrome(WidgetTester tester) async {
@@ -197,7 +266,9 @@ void main() {
     final (requested, posted) = await _pumpBook(tester);
 
     expect(requested, [0], reason: 'the first page is the one asked for');
-    expect(posted, [0], reason: 'opening a book says where it was opened');
+    expect(_postedPages(posted), [
+      0,
+    ], reason: 'opening a book says where it was opened');
     await _showChrome(tester);
     // Twelve, which is what the book says: `chapter-info` counted no pages
     // at all, so a reader that asked it instead would show nothing.
@@ -205,12 +276,143 @@ void main() {
   });
 
   testWidgets('a book opens where reading left off', (tester) async {
-    final (requested, posted) = await _pumpBook(tester, initialPage: 4);
+    final (requested, posted) = await _pumpBook(tester, progressPage: 4);
 
     expect(requested, [4]);
-    expect(posted, [4]);
+    expect(_postedPages(posted), [4]);
     await _showChrome(tester);
     expect(find.text('5 / $_pages'), findsOneWidget);
+  });
+
+  testWidgets('a book opened from a link lands in the same place', (
+    tester,
+  ) async {
+    // What a link carries is a chapter and nothing else: no page, and no
+    // place within one. The series screen does name a page, and it is not the
+    // one that counts — so the two ways in are made to disagree here, and
+    // both have to land on the server's.
+    final (fromLink, linkPosted) = await _pumpBook(tester, progressPage: 4);
+    final (fromSeries, _) = await _pumpBook(
+      tester,
+      initialPage: 7,
+      progressPage: 4,
+    );
+
+    expect(fromLink, [4], reason: 'a link names no page at all');
+    expect(fromSeries, [
+      4,
+    ], reason: 'the page the route named is not the one a book opens at');
+    expect(_postedPages(linkPosted), [4]);
+  });
+
+  testWidgets('a book opens again where in the page it was left', (
+    tester,
+  ) async {
+    await _pumpBook(
+      tester,
+      progressPage: 4,
+      bookScrollId: '0.5000',
+      html: _longPage,
+    );
+
+    final position = _pagePosition(tester);
+    // Half way down a page longer than the screen, and not at the top of it:
+    // that is the whole of what an anchor is for, and a page number on its
+    // own is a page opened again at words already read.
+    expect(position.pixels, closeTo(position.maxScrollExtent / 2, 1));
+  });
+
+  testWidgets('a book closed and opened again is put back where it was', (
+    tester,
+  ) async {
+    // The round trip, rather than its two halves apart: the same server is
+    // asked to restore what the first reader posted to it, so an anchor
+    // written by one arithmetic and read back by another cannot pass.
+    final server = _BookAdapter(
+      requested: <int>[],
+      posted: <_Post>[],
+      html: _longPage,
+    );
+    await _pumpBook(tester, server: server);
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    final left = _pagePosition(tester).pixels;
+    expect(left, greaterThan(0), reason: 'the reader did scroll the page');
+
+    await _pumpBook(tester, server: server);
+
+    final reopened = _pagePosition(tester);
+    expect(reopened.pixels, closeTo(left, 1));
+  });
+
+  testWidgets('a page the reader comes back to is where they left it', (
+    tester,
+  ) async {
+    await _pumpBook(tester, html: _longPage);
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    final left = _pagePosition(tester).pixels;
+
+    await _swipe(tester);
+    // The page turned to is arrived at at its beginning.
+    expect(_pagePosition(tester).pixels, 0);
+
+    await tester.drag(find.byType(PageView), const Offset(600, 0));
+    await tester.pumpAndSettle();
+    // Coming back is not: the place in the page is kept per page, so the
+    // reader is put back down it rather than at its top.
+    expect(_pagePosition(tester).pixels, closeTo(left, 1));
+  });
+
+  testWidgets('reading a long page posts where in it the reader is', (
+    tester,
+  ) async {
+    final (_, posted) = await _pumpBook(tester, html: _longPage);
+
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+
+    final position = _pagePosition(tester);
+    expect(position.pixels, greaterThan(0), reason: 'the page did scroll');
+    // What was posted is where the page is, as a fraction of the room there
+    // was to scroll — a number of points would be a place in a page laid out
+    // at another size, and no anchor at all is a page reopened at its top.
+    expect(
+      double.parse(_postedAnchors(posted).last!),
+      closeTo(position.pixels / position.maxScrollExtent, .01),
+    );
+  });
+
+  testWidgets('a book with nothing recorded opens at the top of its page', (
+    tester,
+  ) async {
+    await _pumpBook(tester, progressPage: 4, html: _longPage);
+
+    expect(_pagePosition(tester).pixels, 0);
+  });
+
+  testWidgets('a marker another reader wrote is not a place', (tester) async {
+    // Kavita's own web client fills `bookScrollId` with the id of an element
+    // in the page, and there is no element in a page this app draws: a book
+    // whose place was last saved there opens at the top of its page rather
+    // than nowhere at all.
+    await _pumpBook(
+      tester,
+      progressPage: 4,
+      bookScrollId: 'body-h2-17',
+      html: _longPage,
+    );
+
+    expect(_pagePosition(tester).pixels, 0);
   });
 
   testWidgets('a swipe turns the page, and the counter follows', (
@@ -221,7 +423,7 @@ void main() {
     await _swipe(tester);
 
     expect(requested, [0, 1]);
-    expect(posted, [0, 1]);
+    expect(_postedPages(posted), [0, 1]);
     await _showChrome(tester);
     expect(find.text('2 / $_pages'), findsOneWidget);
   });
@@ -232,22 +434,33 @@ void main() {
     await tester.tapAt(Offset(size.width * .85, size.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(posted, [0, 1], reason: 'the right-hand side reads on');
+    expect(_postedPages(posted), [
+      0,
+      1,
+    ], reason: 'the right-hand side reads on');
     // The page it turned to is the page it asked the server for.
     expect(requested, contains(1));
 
     await tester.tapAt(Offset(size.width * .15, size.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(posted, [0, 1, 0], reason: 'the left-hand side reads back');
+    expect(_postedPages(posted), [
+      0,
+      1,
+      0,
+    ], reason: 'the left-hand side reads back');
   });
 
   testWidgets('the last page reports the whole book', (tester) async {
-    final (_, posted) = await _pumpBook(tester, initialPage: _pages - 1);
+    final (_, posted) = await _pumpBook(
+      tester,
+      initialPage: _pages - 1,
+      progressPage: _pages - 1,
+    );
 
     // Kavita marks a chapter read at `pagesRead >= pages`, so the last page
     // is posted as the total rather than as its own number.
-    expect(posted, [_pages]);
+    expect(_postedPages(posted), [_pages]);
   });
 
   testWidgets('the bar names the book', (tester) async {
@@ -424,10 +637,8 @@ void main() {
               height: height,
               child: BookPageBody(
                 page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
-                picture: (_) => SizedBox(
-                  key: const Key('picture'),
-                  height: pictureHeight,
-                ),
+                picture: (_) =>
+                    SizedBox(key: const Key('picture'), height: pictureHeight),
               ),
             ),
           ),
