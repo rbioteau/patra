@@ -491,7 +491,10 @@ class _SeriesHero extends ConsumerWidget {
           Positioned.fill(
             child: PageBackdrop(
               seriesId: seriesId,
-              chapterId: onPage.id,
+              // A book has no page picture to draw — see
+              // [Chapter.hasPagePictures]. The cover stands in, which is
+              // what the backdrop already does for a page that cannot load.
+              chapterId: onPage.hasPagePictures ? onPage.id : null,
               page: onPage.pagesRead,
             ),
           ),

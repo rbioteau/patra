@@ -256,9 +256,7 @@ void main() {
 
     test('carries the format, so an EPUB can be told apart', () {
       expect(series({'format': 3}).format, MangaFormat.epub);
-      expect(series({'format': 3}).content, ChapterContent.reflowable);
       expect(series({'format': 1}).format, MangaFormat.archive);
-      expect(series({'format': 1}).content, ChapterContent.fixedPages);
     });
 
     test('an absent format is unknown rather than a crash', () {

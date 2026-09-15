@@ -59,6 +59,7 @@ Map<String, dynamic> _chapter(
   int pages = 20,
   int read = 0,
   String title = '',
+  int format = 1,
 }) => {
   'id': id,
   'range': '$number',
@@ -68,14 +69,22 @@ Map<String, dynamic> _chapter(
   'sortOrder': number,
   'title': title,
   'titleName': title,
+  'format': format,
 };
 
 class _HomeAdapter implements HttpClientAdapter {
-  _HomeAdapter({this.onDeck = const [], this.volumes = const []});
+  _HomeAdapter({
+    this.onDeck = const [],
+    this.volumes = const [],
+    this.libraryType = LibraryType.manga,
+  });
 
   /// On deck is the home screen's only shelf *and* the hero's candidates.
   List<Map<String, dynamic>> onDeck;
   List<Map<String, dynamic>> volumes;
+
+  /// What the one library holds, which is what names a series' parts.
+  final LibraryType libraryType;
 
   /// Fails only the featured series' chapter fetch, which is the one call the
   /// hero cannot do without.
@@ -104,7 +113,7 @@ class _HomeAdapter implements HttpClientAdapter {
     );
     return switch (options.path) {
       '/api/Library/libraries' => json([
-        {'id': 1, 'name': 'Manga', 'type': 0},
+        {'id': 1, 'name': 'Shelf', 'type': libraryType.id},
       ]),
       '/api/Series/on-deck' => await () async {
         await onDeckGate?.future;
@@ -246,6 +255,54 @@ void _phone(WidgetTester tester) {
 const _token =
     'eyJhbGciOiAiSFM1MTIifQ.eyJuYW1lIjogInRlc3RlciIsICJuYW1laWQiOiAiMSJ9.sig';
 
+/// A book two thirds read, in a Book library — which is where a book lives.
+///
+/// The pages are the ones Kavita counted out of the file, and every number
+/// the home screen draws comes from them.
+_HomeAdapter _oneBookInProgress({int read = 200}) => _HomeAdapter(
+  libraryType: LibraryType.book,
+  onDeck: [
+    _json(
+      5,
+      name: 'Dune',
+      pages: 300,
+      read: read,
+      format: MangaFormat.epub.id,
+      lastRead: '2026-09-05T10:00:00',
+    ),
+  ],
+  volumes: [
+    {
+      'id': 1,
+      'name': '1',
+      'minNumber': 1,
+      'chapters': [
+        _chapter(101, 1, pages: 300, read: read, format: MangaFormat.epub.id),
+      ],
+    },
+  ],
+);
+
+/// The same book's volume, read through.
+final _finishedBookVolume = {
+  'id': 1,
+  'name': '1',
+  'minNumber': 1,
+  'chapters': [
+    _chapter(101, 1, pages: 300, read: 300, format: MangaFormat.epub.id),
+  ],
+};
+
+/// A second book, a third read, in the same library.
+final _otherBookOnDeck = _json(
+  6,
+  name: 'Dune Messiah',
+  pages: 300,
+  read: 100,
+  format: MangaFormat.epub.id,
+  lastRead: '2026-09-04T10:00:00',
+);
+
 /// The page behind the card — the one image that is not the cover thumbnail.
 Finder _backdrop() => find.descendant(
   of: find.byType(ContinueHero),
@@ -271,21 +328,32 @@ void main() {
       expect(featured!.id, 2);
     });
 
-    // A book is passed over for now (#73): the reader opens one, but reading
-    // progress on a series of words is not what this promotion is built on
-    // yet.
-    test('an EPUB is passed over for the next most recent', () {
+    // A book is read on the pages the server made of it, and its progress is
+    // a page count like any other: what decides the promotion is that the
+    // series is under way, never what it is made of.
+    test('a book is promoted like any series in progress', () {
       final featured = featuredSeries([
         _series(1, lastRead: '2026-09-05T10:00:00', format: 3),
         _series(2, lastRead: '2026-09-03T10:00:00'),
       ]);
-      expect(featured!.id, 2);
+      expect(featured!.id, 1);
     });
 
-    test('a shelf of nothing but EPUBs promotes nothing', () {
+    test('a shelf of nothing but books promotes one', () {
       expect(
         featuredSeries([
           _series(1, lastRead: '2026-09-05T10:00:00', format: 3),
+        ])!.id,
+        1,
+      );
+    });
+
+    // The last page posts the total, which is what the server counts as
+    // finished, so a book that has been read through is no longer under way.
+    test('a finished book is not promoted', () {
+      expect(
+        featuredSeries([
+          _series(1, pages: 100, read: 100, format: 3),
         ]),
         isNull,
       );
@@ -924,6 +992,80 @@ void main() {
         ),
       );
       expect(cover(tester).url, contains('/api/Image/series-cover'));
+    });
+  });
+
+  // A book is read on the pages the server made of it, and Home says the same
+  // things about it that it says about a chapter: it is under way, it is
+  // promoted, and how far through it is.
+  group('a book on the home screen', () {
+    testWidgets('is the Continue hero, with the book\'s own progress', (
+      tester,
+    ) async {
+      await _pumpHome(tester, _oneBookInProgress());
+
+      expect(find.byType(ContinueHero), findsOneWidget);
+      expect(find.text('Dune'), findsOneWidget);
+      // Named in the library's own vocabulary, as the row below is.
+      expect(find.text('Book 1'), findsOneWidget);
+      expect(find.text('100 pages left'), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+            .value,
+        closeTo(2 / 3, 0.001),
+      );
+    });
+
+    // On deck is the one answer the hero is promoted from, so a book that is
+    // not the one being promoted is still on the shelf, carrying its own
+    // progress the way any series there does.
+    testWidgets('a book that is not promoted stays on the shelf', (
+      tester,
+    ) async {
+      final adapter = _oneBookInProgress();
+      adapter.onDeck = [...adapter.onDeck, _otherBookOnDeck];
+      await _pumpHome(tester, adapter);
+
+      expect(find.text('Dune Messiah'), findsOneWidget);
+      expect(
+        tester.widgetList<CoverTile>(find.byType(CoverTile)).single.progress,
+        closeTo(1 / 3, 0.001),
+      );
+    });
+
+    // A book has no page to draw behind the card: `/api/Reader/image` serves
+    // nothing for one, so asking for it is a request that can only come back
+    // empty — and the cover is what stands in.
+    testWidgets('draws the cover behind the card, not a page', (tester) async {
+      await _pumpHome(tester, _oneBookInProgress());
+
+      expect(
+        tester.widget<CachedNetworkImage>(_backdrop()).imageUrl,
+        contains('/api/Image/series-cover'),
+      );
+    });
+
+    // The last page posts the total, which is what the server counts as
+    // finished: a book read through stops being under way, and coming back
+    // has to say so.
+    testWidgets('a finished book leaves the Continue hero', (tester) async {
+      final adapter = _oneBookInProgress();
+      await _pumpRouted(tester, adapter);
+      expect(find.byType(ContinueHero), findsOneWidget);
+
+      // The book was finished while the reader was open.
+      adapter.onDeck = [];
+      adapter.volumes = [_finishedBookVolume];
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+      expect(find.text('reader 101'), findsOneWidget);
+
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ContinueHero), findsNothing);
+      expect(find.text('Dune'), findsNothing);
     });
   });
 }

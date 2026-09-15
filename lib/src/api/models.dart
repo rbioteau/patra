@@ -234,12 +234,9 @@ class Series {
   final int pages;
   final int pagesRead;
 
-  /// What the files behind the series are, which decides whether this app can
-  /// open it at all.
+  /// What the files behind the series are, which is what its chapters are
+  /// made of — see [Chapter.content], the one that anything asks about.
   final MangaFormat format;
-
-  /// What its chapters are made of. See [MangaFormat.content].
-  ChapterContent get content => format.content;
 
   /// When the series was last read, or null if it never was.
   ///
@@ -434,6 +431,13 @@ class Chapter {
   /// What this chapter is made of: the one thing the reader asks of a format.
   /// See [MangaFormat.content].
   ChapterContent get content => format.content;
+
+  /// Whether the server can serve a picture of one of its pages.
+  ///
+  /// A book's pages are words the server laid out into them (ADR-0008):
+  /// `/api/Reader/image` serves nothing for one, so asking for a page
+  /// picture is a request that can only come back empty.
+  bool get hasPagePictures => content == ChapterContent.fixedPages;
 
   /// Every page read. See [Series.isRead]; the same question of a chapter.
   bool get isRead => pages > 0 && pagesRead >= pages;

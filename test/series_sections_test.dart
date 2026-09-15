@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
@@ -86,7 +87,10 @@ class _Adapter implements HttpClientAdapter {
     this.postStatus = 200,
   });
 
-  final List<Map<String, dynamic>> volumes;
+  /// What the server says the series is made of. Mutable, so a test can
+  /// change what reading did to it while the reader was open.
+  List<Map<String, dynamic>> volumes;
+
   final LibraryType libraryType;
   final void Function(RequestOptions options)? onPost;
 
@@ -134,7 +138,13 @@ class _Adapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-Future<void> _pump(
+/// Mounts the series screen and answers for it, handing back the adapter so a
+/// test can change what the server says while the screen is up.
+///
+/// [routed] puts it under a router with the reader on it, so a row's tap can
+/// be followed and *come back* — which is what the screen asks the server
+/// again for.
+Future<_Adapter> _pump(
   WidgetTester tester,
   List<Map<String, dynamic>> volumes, {
   LibraryType type = LibraryType.manga,
@@ -145,6 +155,7 @@ Future<void> _pump(
   bool underNavigator = false,
   int? savedChapter,
   bool tablet = false,
+  bool routed = false,
 }) async {
   // The size belongs to `_pump`: setting it in a caller before this ran was
   // silently overwritten, which left every "tablet" test on a 550pt phone.
@@ -186,7 +197,9 @@ Future<void> _pump(
   );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
-
+  final theme = patraTheme();
+  final delegates = AppLocalizations.localizationsDelegates;
+  final locales = AppLocalizations.supportedLocales;
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -199,19 +212,27 @@ Future<void> _pump(
         ),
         testCatalogue(profileId: _profileId),
       ],
-      child: MaterialApp(
-        theme: patraTheme(),
-        locale: locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: underNavigator
-            ? const _PushHost()
-            : const SeriesDetailScreen(
-                seriesId: 7,
-                seriesName: 'Berserk',
-                libraryId: 1,
-              ),
-      ),
+      child: routed
+          ? MaterialApp.router(
+              theme: theme,
+              locale: locale,
+              localizationsDelegates: delegates,
+              supportedLocales: locales,
+              routerConfig: _readerRouter(),
+            )
+          : MaterialApp(
+              theme: theme,
+              locale: locale,
+              localizationsDelegates: delegates,
+              supportedLocales: locales,
+              home: underNavigator
+                  ? const _PushHost()
+                  : const SeriesDetailScreen(
+                      seriesId: 7,
+                      seriesName: 'Berserk',
+                      libraryId: 1,
+                    ),
+            ),
     ),
   );
   await tester.pumpAndSettle();
@@ -219,7 +240,27 @@ Future<void> _pump(
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
+  return adapter;
 }
+
+/// The reader as a route, so a row can be tapped into it and back.
+GoRouter _readerRouter() => GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (_, _) => const SeriesDetailScreen(
+        seriesId: 7,
+        seriesName: 'Berserk',
+        libraryId: 1,
+      ),
+    ),
+    GoRoute(
+      path: '/reader/:chapterId',
+      builder: (_, state) =>
+          Text('reader ${state.pathParameters['chapterId']}'),
+    ),
+  ],
+);
 
 /// Puts the screen on a route that can be popped, so a test can leave it.
 class _PushHost extends StatelessWidget {
@@ -364,6 +405,78 @@ void main() {
       find.ancestor(of: find.text('Book 1'), matching: find.byType(InkWell)),
     );
     expect(row.onTap, isNotNull);
+  });
+
+  // How far through a book is, is the same arithmetic as a chapter: the
+  // pages the server counted, and the ones read of them.
+  testWidgets('a book under way carries the bar of its progress', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      [
+        {
+          'id': 10,
+          'name': '-100000',
+          'minNumber': -100000,
+          'pages': 100,
+          'chapters': [_chapter(101, '1', format: 3, pagesRead: 40)],
+        },
+      ],
+      type: LibraryType.book,
+    );
+
+    expect(find.text('Page 40 / 100'), findsOneWidget);
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(bar.value, closeTo(0.4, 0.001));
+    // Reading progress, which is the accent's job everywhere in this app.
+    expect(bar.valueColor?.value, patraAccent);
+  });
+
+  // The last page posts the whole book, which is what the server counts as
+  // read — so coming back has to ask: the rows and the hero are drawn from
+  // what it says, and a screen that kept its own copy would keep a finished
+  // book under way.
+  testWidgets('a book read through is read on the way back', (tester) async {
+    final adapter = await _pump(
+      tester,
+      [
+        {
+          'id': 10,
+          'name': '-100000',
+          'minNumber': -100000,
+          'pages': 100,
+          'chapters': [_chapter(101, '1', format: 3, pagesRead: 40)],
+        },
+      ],
+      type: LibraryType.book,
+      routed: true,
+    );
+    expect(find.text('Page 40 / 100'), findsOneWidget);
+
+    // The book was finished while the reader was open.
+    adapter.volumes = [
+      {
+        'id': 10,
+        'name': '-100000',
+        'minNumber': -100000,
+        'pages': 100,
+        'chapters': [_chapter(101, '1', format: 3, pagesRead: 100)],
+      },
+    ];
+    await tester.tap(find.text('Book 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('reader 101'), findsOneWidget);
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+
+    // Read, without a second visit: the bar that was there is gone, and the
+    // row says what it is.
+    expect(find.text('READ'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
   group('the resume button names only what is numbered', () {
