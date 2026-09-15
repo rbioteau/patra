@@ -14,6 +14,7 @@ import 'package:patra/src/keychain.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
+import 'package:patra/src/settings/reading_settings.dart';
 
 /// Points path_provider at a temp directory for the duration of a test.
 ///
@@ -183,12 +184,16 @@ Future<ProfilePreferencesStore> preferencesStore({
   MemoryKeychain? keychain,
   bool deviceMagnify = false,
   double deviceWidthFactor = 1.0,
+  double deviceBookTextSize = defaultBookTextSize,
+  double deviceBookLineHeight = defaultBookLineHeight,
   Locale? deviceLanguage,
 }) async {
   final store = ProfilePreferencesStore(
     keychain: keychain ?? MemoryKeychain(),
     deviceMagnify: deviceMagnify,
     deviceWidthFactor: deviceWidthFactor,
+    deviceBookTextSize: deviceBookTextSize,
+    deviceBookLineHeight: deviceBookLineHeight,
     deviceLanguage: deviceLanguage,
   );
   await store.load();

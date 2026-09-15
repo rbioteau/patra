@@ -72,17 +72,6 @@ class BookPage {
   factory BookPage.fromHtml(String html) => BookPage(parseBookPage(html));
 }
 
-/// The size a book is set at.
-///
-/// Somebody's own reading size from #75 on; until then it is the size a page
-/// of words is comfortable at, which is not the size the rest of the app's
-/// copy is set at.
-const double bookTextSize = 16;
-
-/// The leading between a page's lines — the other half of what #75 makes a
-/// choice, and the half that decides whether dense text is readable.
-const double bookLineHeight = 1.55;
-
 /// The room a page is set in.
 ///
 /// The bottom is four times the top because the page counter sits there: a
@@ -138,12 +127,15 @@ class BookAnchor {
       : BookAnchor((offset / extent).clamp(0.0, 1.0));
 }
 
-/// One page of a book, read top to bottom.
+/// One page of a book, read top to bottom and set at the size whoever is
+/// reading chose.
 class BookPageBody extends StatefulWidget {
   const BookPageBody({
     super.key,
     required this.page,
     required this.picture,
+    required this.textSize,
+    required this.lineHeight,
     this.anchor,
     this.onScroll,
   });
@@ -154,6 +146,13 @@ class BookPageBody extends StatefulWidget {
   /// name in, a widget out. The reader owns it, because resolving that name
   /// into a request is the client's job and not a page's.
   final Widget Function(String src) picture;
+
+  /// How large the words are set, in points: the reader's own, one number for
+  /// every book (#75).
+  final double textSize;
+
+  /// The room between the lines, as a share of [textSize].
+  final double lineHeight;
 
   /// Where in the page the reader was, when it is opened again: null, or the
   /// top, for a page with nowhere to be but its beginning.
@@ -177,17 +176,40 @@ class _BookPageBodyState extends State<BookPageBody> {
   /// not make: the place it lands on is the place the server already holds,
   /// so it is not told back until it has been made.
   var _placed = false;
-
   @override
   void initState() {
     super.initState();
-    final anchor = widget.anchor;
+    _place(widget.anchor);
+  }
+
+  @override
+  void didUpdateWidget(BookPageBody old) {
+    super.didUpdateWidget(old);
+    // A page set at another size is a different page to scroll through, and
+    // the place the reader is in it has to be carried across rather than
+    // left where the words used to be: an offset is a number of points, and
+    // the points are not the same words any more. So it is read as a
+    // fraction before the words move — which is the whole of why an anchor
+    // is a fraction — and put back once they have been laid out again.
+    if (old.textSize != widget.textSize || old.lineHeight != widget.lineHeight) {
+      _place(_here());
+    }
+  }
+
+  /// Where in the page the reader is, as it stands.
+  BookAnchor? _here() => _scroll.hasClients
+      ? BookAnchor.at(_scroll.position.pixels, _scroll.position.maxScrollExtent)
+      : widget.anchor;
+
+  /// Puts the page where [anchor] is, once the words have been laid out.
+  void _place(BookAnchor? anchor) {
     // Offsets are not a number until the page has been laid out, and a page
     // that opens at its top has nowhere to be put.
     if (anchor == null || anchor.fraction == 0) {
       _placed = true;
       return;
     }
+    _placed = false;
     WidgetsBinding.instance.addPostFrameCallback((_) => _open(anchor));
   }
 
@@ -220,15 +242,14 @@ class _BookPageBodyState extends State<BookPageBody> {
     _scroll.dispose();
     super.dispose();
   }
-
   TextStyle get _paragraph => PatraText.body().copyWith(
-    fontSize: bookTextSize,
-    height: bookLineHeight,
+    fontSize: widget.textSize,
+    height: widget.lineHeight,
     fontWeight: FontWeight.w400,
   );
 
   TextStyle get _heading => _paragraph.copyWith(
-    fontSize: bookTextSize + 3,
+    fontSize: widget.textSize + 3,
     fontWeight: FontWeight.w700,
     height: 1.3,
   );

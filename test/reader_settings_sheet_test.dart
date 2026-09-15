@@ -316,6 +316,64 @@ void main() {
       );
     });
   });
+
+  group('for a book', () {
+    // The sheet is the same surface for both, and what is in it is not: how
+    // pages turn is a question about pictures, and a book has no page sizes
+    // for anything to measure or to pair.
+    testWidgets('offers a text size and a line spacing', (tester) async {
+      await _openBookSheet(tester);
+
+      expect(find.text('Text size'), findsOneWidget);
+      expect(find.text('Line spacing'), findsOneWidget);
+      expect(find.text('16 pt'), findsOneWidget);
+      expect(find.text('155%'), findsOneWidget);
+    });
+
+    testWidgets('offers nothing that is a question about pictures', (
+      tester,
+    ) async {
+      await _openBookSheet(tester);
+
+      // No direction, because nothing detects one and there are no pictures
+      // to turn; no strip width and no magnifying gesture, because a book is
+      // not laid out at a width and its pages have no size to magnify.
+      expect(find.text('READING DIRECTION'), findsNothing);
+      expect(find.text('Left to right'), findsNothing);
+      expect(find.text('Drag to magnify'), findsNothing);
+      expect(find.text('Page width'), findsNothing);
+      expect(find.byType(Slider), findsNWidgets(2));
+    });
+
+    testWidgets('what the sliders are left at is what a book is set at', (
+      tester,
+    ) async {
+      await _openBookSheet(tester);
+
+      await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('16 pt'),
+        findsNothing,
+        reason: 'the size a book opens at is not the size it was set to',
+      );
+      expect(find.text('22 pt'), findsOneWidget);
+      expect(
+        find.text('155%'),
+        findsOneWidget,
+        reason: 'setting the size leaves the spacing alone',
+      );
+    });
+  });
+
+  testWidgets('a chapter of pictures is offered no text size', (tester) async {
+    await _openSheet(tester, _builtIn());
+
+    expect(find.text('READING DIRECTION'), findsOneWidget);
+    expect(find.text('Text size'), findsNothing);
+    expect(find.text('Line spacing'), findsNothing);
+  });
 }
 
 /// Opens the reader's sheet over a cog of its own, and reports what it came
@@ -367,7 +425,39 @@ Future<List<ReaderSettingsOutcome>> _openSheet(
       ),
     ),
   );
+
   await tester.tap(find.byIcon(Icons.settings));
   await tester.pumpAndSettle();
   return outcomes;
+}
+
+/// Opens the sheet a book's cog opens, over a cog of its own.
+Future<void> _openBookSheet(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(1200, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        testKeychain(),
+        profilePreferencesStoreProvider.overrideWithValue(
+          ProfilePreferencesStore(keychain: MemoryKeychain()),
+        ),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (cog) => IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () => showBookSettingsSheet(cog),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.byIcon(Icons.settings));
+  await tester.pumpAndSettle();
 }

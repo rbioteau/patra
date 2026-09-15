@@ -2,8 +2,9 @@
 ///
 /// A family tablet is several profiles at one address (ADR-0003), and a
 /// setting is one of two kinds. **Reading direction, magnifying, the width a
-/// chapter opens at and the interface language belong to a person**: they are
-/// how somebody reads, and two people sharing a tablet each get their own.
+/// chapter opens at, the size a book is set at, the room between its lines and
+/// the interface language belong to a person**: they are how somebody reads,
+/// and two people sharing a tablet each get their own.
 /// So does the direction one **series** or one **library** is read in, which
 /// is why it is kept here beside their other preferences rather than anywhere
 /// the server could see it — see `features/reader/reading_direction.dart` for
@@ -44,6 +45,8 @@ class ProfilePreferences {
   const ProfilePreferences({
     this.magnify,
     this.widthFactor,
+    this.bookTextSize,
+    this.bookLineHeight,
     this.language,
     this.seriesDirections = const {},
     this.libraryDirections = const {},
@@ -60,6 +63,15 @@ class ProfilePreferences {
   /// preference and a pinch both set it, and they must not clamp it
   /// differently — so what is stored is whatever was asked for.
   final double? widthFactor;
+
+  /// The size a book's words are set at, in points — a property of the
+  /// person's eyes and not of the work, so it is one number for every book
+  /// (#75) rather than one per series the way a direction is.
+  final double? bookTextSize;
+
+  /// The room between a book's lines, as a share of [bookTextSize]: the half
+  /// of the same choice that decides whether dense text is readable.
+  final double? bookLineHeight;
 
   /// The language chosen, as a code — or the **empty string** for "follow the
   /// device", which is a choice a person can make and come back to. It is not
@@ -95,12 +107,16 @@ class ProfilePreferences {
   ProfilePreferences copyWith({
     bool? magnify,
     double? widthFactor,
+    double? bookTextSize,
+    double? bookLineHeight,
     String? language,
     Map<int, ReadingDirection>? seriesDirections,
     Map<int, ReadingDirection>? libraryDirections,
   }) => ProfilePreferences(
     magnify: magnify ?? this.magnify,
     widthFactor: widthFactor ?? this.widthFactor,
+    bookTextSize: bookTextSize ?? this.bookTextSize,
+    bookLineHeight: bookLineHeight ?? this.bookLineHeight,
     language: language ?? this.language,
     seriesDirections: seriesDirections ?? this.seriesDirections,
     libraryDirections: libraryDirections ?? this.libraryDirections,
@@ -109,6 +125,8 @@ class ProfilePreferences {
   Map<String, dynamic> toJson() => {
     if (magnify != null) 'magnify': magnify,
     if (widthFactor != null) 'widthFactor': widthFactor,
+    if (bookTextSize != null) 'bookTextSize': bookTextSize,
+    if (bookLineHeight != null) 'bookLineHeight': bookLineHeight,
     if (language != null) 'language': language,
     if (seriesDirections.isNotEmpty)
       'seriesDirections': _directionsJson(seriesDirections),
@@ -124,10 +142,14 @@ class ProfilePreferences {
     if (json is! Map) return none;
     final magnify = json['magnify'];
     final widthFactor = json['widthFactor'];
+    final bookTextSize = json['bookTextSize'];
+    final bookLineHeight = json['bookLineHeight'];
     final language = json['language'];
     return ProfilePreferences(
       magnify: magnify is bool ? magnify : null,
       widthFactor: widthFactor is num ? widthFactor.toDouble() : null,
+      bookTextSize: bookTextSize is num ? bookTextSize.toDouble() : null,
+      bookLineHeight: bookLineHeight is num ? bookLineHeight.toDouble() : null,
       // A code this build no longer ships is not a choice it can honour, so
       // it reads as never having chosen and the device's default stands —
       // the same answer `supportedLocale` gives the device's own.
@@ -178,6 +200,8 @@ class ProfilePreferencesStore {
     Keychain? keychain,
     this.deviceMagnify = false,
     this.deviceWidthFactor = 1.0,
+    this.deviceBookTextSize = defaultBookTextSize,
+    this.deviceBookLineHeight = defaultBookLineHeight,
     Locale? deviceLanguage,
     // A private field cannot be a named parameter, so the lint's suggestion
     // is not available here.
@@ -204,6 +228,15 @@ class ProfilePreferencesStore {
   /// every preference here is answered the same way, and so a test can say
   /// what a person who has not chosen gets.
   final double deviceWidthFactor;
+
+  /// How a book is set for a profile that has never chosen: the size and the
+  /// leading a page of words is comfortable at, which is what every book was
+  /// set at before there was anything to choose (#75).
+  ///
+  /// No flat key behind either, for the same reason the width has none: this
+  /// device never held a text size, so there is no household choice to keep.
+  final double deviceBookTextSize;
+  final double deviceBookLineHeight;
 
   /// The language of the **gate**, which is drawn before anybody has been
   /// chosen and so cannot ask a profile.
@@ -277,6 +310,27 @@ class ProfilePreferencesStore {
   /// device's default where they have never said.
   double widthFactorFor(String? profileId) =>
       of(profileId).widthFactor ?? deviceWidthFactor;
+  /// The size [profileId]'s books are set at, falling through to the device's
+  /// default where they have never said. One number for every book: this is a
+  /// choice about a person's eyes, not about one work (#75).
+  ///
+  /// Clamped to the range the sheet offers, which is what keeps the page and
+  /// the sheet from disagreeing: a row written by a build whose range was a
+  /// wider one is answered with the nearest size this one can set, rather
+  /// than with a page drawn at a number no slider can reach.
+  double bookTextSizeFor(String? profileId) =>
+      (of(profileId).bookTextSize ?? deviceBookTextSize).clamp(
+        minBookTextSize,
+        maxBookTextSize,
+      );
+
+  /// The room between the lines of [profileId]'s books, as a share of the
+  /// size their words are set at.
+  double bookLineHeightFor(String? profileId) =>
+      (of(profileId).bookLineHeight ?? deviceBookLineHeight).clamp(
+        minBookLineHeight,
+        maxBookLineHeight,
+      );
 
   /// The language [profileId] reads in. The empty string is a choice — follow
   /// the device — and must not fall through to [deviceLanguage]; only never
@@ -352,6 +406,15 @@ class ProfilePreferencesStore {
   Future<void> setWidthFactor(String profileId, double factor) =>
       _update(profileId, (was) => was.copyWith(widthFactor: factor));
 
+  /// Every book is set at [size] from now on, for [profileId] alone.
+  Future<void> setBookTextSize(String profileId, double size) =>
+      _update(profileId, (was) => was.copyWith(bookTextSize: size));
+
+  /// Every book's lines are [height] apart from now on, as a share of the
+  /// size of its words, for [profileId] alone.
+  Future<void> setBookLineHeight(String profileId, double height) =>
+      _update(profileId, (was) => was.copyWith(bookLineHeight: height));
+
   /// [locale] null is a real choice — follow the device — and is stored as
   /// one, which is why it cannot go through [ProfilePreferences.copyWith].
   ///
@@ -364,6 +427,8 @@ class ProfilePreferencesStore {
     (was) => ProfilePreferences(
       magnify: was.magnify,
       widthFactor: was.widthFactor,
+      bookTextSize: was.bookTextSize,
+      bookLineHeight: was.bookLineHeight,
       language: locale?.languageCode ?? '',
       seriesDirections: was.seriesDirections,
       libraryDirections: was.libraryDirections,
@@ -673,4 +738,58 @@ class LocaleNotifier extends Notifier<Locale?> {
 
 final localeProvider = NotifierProvider<LocaleNotifier, Locale?>(
   LocaleNotifier.new,
+);
+
+/// How large the words of a book are set for whoever is reading, in points.
+///
+/// One number for **every** book, and a number of the person's rather than of
+/// the work's: what is being chosen is the size somebody reads at, and
+/// setting it once is the whole point (#75). Of the profile, with the
+/// device's default behind it, like every preference here.
+class BookTextSizeNotifier extends Notifier<double> {
+  @override
+  double build() => ref
+      .read(profilePreferencesStoreProvider)
+      .bookTextSizeFor(ref.watch(readingProfileIdProvider));
+
+  /// The size while a finger is still on the slider: what the page in front
+  /// of the reader is set at, but not yet a choice — see
+  /// [WidthFactorNotifier.preview], whose reason is this one's too.
+  void preview(double size) => state = size;
+
+  Future<void> set(double size) async {
+    state = size;
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) return;
+    await ref.read(profilePreferencesStoreProvider).setBookTextSize(id, size);
+  }
+}
+
+final bookTextSizeProvider = NotifierProvider<BookTextSizeNotifier, double>(
+  BookTextSizeNotifier.new,
+);
+
+/// The room between a book's lines for whoever is reading, as a share of the
+/// size of its words: the half of the same choice that decides whether dense
+/// text is readable.
+class BookLineHeightNotifier extends Notifier<double> {
+  @override
+  double build() => ref
+      .read(profilePreferencesStoreProvider)
+      .bookLineHeightFor(ref.watch(readingProfileIdProvider));
+
+  void preview(double height) => state = height;
+
+  Future<void> set(double height) async {
+    state = height;
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) return;
+    await ref
+        .read(profilePreferencesStoreProvider)
+        .setBookLineHeight(id, height);
+  }
+}
+
+final bookLineHeightProvider = NotifierProvider<BookLineHeightNotifier, double>(
+  BookLineHeightNotifier.new,
 );

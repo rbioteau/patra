@@ -360,62 +360,244 @@ class _WidthFactorRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final factor = ref.watch(widthFactorProvider);
-    // The accent says "not the width a chapter opens at having never
-    // chosen", the way it says "on" for the switch above.
-    final notFullWidth = !inert && factor != StripGeometry.maxWidthFactor;
     final percent = l10n.percent((factor * 100).round());
     final notifier = ref.read(widthFactorProvider.notifier);
 
+    return _NumberRow(
+      icon: Icons.width_normal,
+      label: l10n.pageWidth,
+      // Where it does not apply it **says so** in place of its explanation
+      // and stays settable, which is the magnifying row's rule mirrored: the
+      // paged directions fit a page to the screen rather than laying a strip
+      // out at a width of its own, but the preference belongs to the person
+      // and not to the chapter, and the next one may well be read
+      // vertically. A slider sitting at 70% while the screen is drawn full
+      // width, with nothing saying why, would be the worst of both.
+      explained: inert ? l10n.pageWidthInPaged : l10n.pageWidthExplained,
+      value: factor,
+      defaultValue: StripGeometry.maxWidthFactor,
+      min: StripGeometry.minWidthFactor,
+      max: StripGeometry.maxWidthFactor,
+      divisions: _divisions,
+      display: percent,
+      semantic: (value) => l10n.percent((value * 100).round()),
+      onPreview: notifier.preview,
+      onSet: notifier.set,
+      inert: inert,
+    );
+  }
+}
+
+/// The reader's settings **for a book**, and the only ones: how the words are
+/// set, and nothing about pictures.
+///
+/// Which way pages turn is a question about pictures. With no page sizes
+/// there is nothing for a detected direction to measure, nothing to pair into
+/// a spread, no strip to lay out at a width of its own, and no page for a
+/// magnifying gesture to carry — so the sheet a book's cog opens offers none
+/// of them (#75). What is left is the type: how large the words are, and how
+/// much room there is between the lines. Both are one number for **every**
+/// book, and both belong to the person reading rather than to the work,
+/// because what is being chosen is the size somebody reads at.
+///
+/// Nothing comes back from it: both are written straight through to the
+/// profile the way the width is, and the sheet stays open over the page it is
+/// changing.
+Future<void> showBookSettingsSheet(BuildContext context) =>
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: patraSurface,
+      // Everything the sheet draws is read off [sheetContext], the context of
+      // the sheet's own route — never off [context], which belongs to the cog
+      // that opened it and leaves the tree when the chrome does.
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              _BookTextSizeRow(),
+              Divider(height: 24, indent: gutter, endIndent: gutter),
+              _BookLineSpacingRow(),
+              SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+
+/// One number a person picks with a slider, in a sheet that stays open.
+///
+/// The size a book is set at, the room between its lines, and the width a
+/// chapter opens at are three numbers chosen the same way: a row naming the
+/// choice, what it changes, and the value it stands at — then a slider whose
+/// write happens once, when the finger lifts. What they share is not the
+/// shape of the value but everything around it, so one row draws all three
+/// rather than three rows that could drift apart.
+class _NumberRow extends StatelessWidget {
+  const _NumberRow({
+    required this.icon,
+    required this.label,
+    required this.explained,
+    required this.value,
+    required this.defaultValue,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.display,
+    required this.semantic,
+    required this.onPreview,
+    required this.onSet,
+    this.inert = false,
+  });
+
+  final IconData icon;
+  final String label;
+
+  /// What the choice changes — or, where it changes nothing here, why.
+  final String explained;
+
+  final double value;
+
+  /// What [value] is where nobody has chosen, which is also what the accent
+  /// is measured against: it says "not the default", the way "on" is said
+  /// for the switch above.
+  final double defaultValue;
+
+  final double min;
+  final double max;
+  final int divisions;
+
+  /// The value in words, beside the label and on the slider's own bubble.
+  final String display;
+
+  /// The value said out loud, for every step the slider can stand on rather
+  /// than only for the one it was left at.
+  final String Function(double value) semantic;
+
+  final ValueChanged<double> onPreview;
+  final ValueChanged<double> onSet;
+
+  /// Whether the number does nothing where this row is drawn. It stays
+  /// settable all the same, and says why in place of its explanation: the
+  /// preference belongs to the person and not to the chapter in front of
+  /// them, and the next one may well be read the other way.
+  final bool inert;
+
+  @override
+  Widget build(BuildContext context) {
+    final chosen = !inert && value != defaultValue;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         ListTile(
           leading: Icon(
-            Icons.width_normal,
+            icon,
             size: 22,
-            color: notFullWidth ? patraAccent : patraText,
+            color: chosen ? patraAccent : patraText,
           ),
           title: Text(
-            l10n.pageWidth,
-            style: PatraText.body(
-              color: notFullWidth ? patraAccent : patraText,
-            ),
+            label,
+            style: PatraText.body(color: chosen ? patraAccent : patraText),
           ),
           subtitle: Text(
-            inert ? l10n.pageWidthInPaged : l10n.pageWidthExplained,
+            explained,
             style: PatraText.metadata(color: inert ? patraDanger : null),
           ),
           // The number, because a slider alone says nothing about where it
           // is standing.
           trailing: Text(
-            percent,
-            style: PatraText.metadata(color: notFullWidth ? patraAccent : null),
+            display,
+            style: PatraText.metadata(color: chosen ? patraAccent : null),
           ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 4),
           child: Slider(
-            // Clamped for the slider's own sake: the module clamps the strip,
-            // and a value out of the range is a corrupt row rather than a
-            // choice anybody made.
-            value: factor.clamp(
-              StripGeometry.minWidthFactor,
-              StripGeometry.maxWidthFactor,
-            ),
-            min: StripGeometry.minWidthFactor,
-            max: StripGeometry.maxWidthFactor,
-            divisions: _divisions,
-            label: percent,
-            semanticFormatterCallback: (value) =>
-                l10n.percent((value * 100).round()),
-            // The chapter follows the finger; the keychain hears about it
-            // once, when the finger lifts. A drag is dozens of steps and a
+            // Clamped for the slider's own sake: the range belongs to the
+            // module the number is for, and a value outside it is a corrupt
+            // row rather than a choice anybody made.
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: display,
+            semanticFormatterCallback: semantic,
+            // The page follows the finger; the keychain hears about it once,
+            // when the finger lifts. A drag is dozens of steps and a
             // preference is one choice.
-            onChanged: notifier.preview,
-            onChangeEnd: notifier.set,
+            onChanged: onPreview,
+            onChangeEnd: onSet,
           ),
         ),
       ],
+    );
+  }
+}
+
+/// How large the words of a book are, for whoever is reading.
+///
+/// The range it slides over is the setting's own (`reading_settings.dart`)
+/// and not this row's, so every surface that sets a size sets the same one.
+class _BookTextSizeRow extends ConsumerWidget {
+  const _BookTextSizeRow();
+
+  /// One point a step over the range: small print at one end, and a book
+  /// held at arm's length at the other.
+  static const _divisions = 8;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final size = ref.watch(bookTextSizeProvider);
+    final notifier = ref.read(bookTextSizeProvider.notifier);
+    return _NumberRow(
+      icon: Icons.format_size,
+      label: l10n.bookTextSize,
+      explained: l10n.bookTextSizeExplained,
+      value: size,
+      defaultValue: defaultBookTextSize,
+      min: minBookTextSize,
+      max: maxBookTextSize,
+      divisions: _divisions,
+      display: l10n.textSizePoints(size.round()),
+      semantic: (value) => l10n.textSizePoints(value.round()),
+      onPreview: notifier.preview,
+      onSet: notifier.set,
+    );
+  }
+}
+
+/// The room between a book's lines, as a share of the size of its words.
+///
+/// The half of the same choice that decides whether dense text is readable,
+/// and the one shown as a percentage: a leading *is* a share of the type
+/// size, which is what a typographer means by 155%.
+class _BookLineSpacingRow extends ConsumerWidget {
+  const _BookLineSpacingRow();
+
+  /// A twentieth of the range a step: a line pressed against the next at one
+  /// end, and a page of air at the other.
+  static const _divisions = 16;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final height = ref.watch(bookLineHeightProvider);
+    final percent = l10n.percent((height * 100).round());
+    final notifier = ref.read(bookLineHeightProvider.notifier);
+    return _NumberRow(
+      icon: Icons.format_line_spacing,
+      label: l10n.bookLineSpacing,
+      explained: l10n.bookLineSpacingExplained,
+      value: height,
+      defaultValue: defaultBookLineHeight,
+      min: minBookLineHeight,
+      max: maxBookLineHeight,
+      divisions: _divisions,
+      display: percent,
+      semantic: (value) => l10n.percent((value * 100).round()),
+      onPreview: notifier.preview,
+      onSet: notifier.set,
     );
   }
 }
