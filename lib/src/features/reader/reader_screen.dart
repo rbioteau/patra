@@ -577,7 +577,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             title: chapter.title.isNotEmpty
                 ? chapter.title
                 : chapter.seriesName,
-            settings: _ReaderSettings(
+            settings: _PictureSettings(
               direction: resolved,
               libraryName: libraryName,
               onOutcome: (outcome) =>
@@ -646,9 +646,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// an image chapter and by the same two gestures, but none of what the
   /// picture reader is built on is asked of it — there is no page to measure,
   /// so there is no direction to detect, no spread to pair, and no page
-  /// pictures to fill a strip with. The bar carries the book's title and no
-  /// cog: every setting the sheet holds is about pictures, and #75 is what
-  /// gives it a text size and a line spacing to hold instead.
+  /// pictures to fill a strip with. What the bar's cog offers instead is how
+  /// the book is set: a text size and a line spacing (#75), both the reader's
+  /// own and both one number for every book.
   Widget _buildBookReader(BuildContext context, ChapterInfo chapter) {
     _openBook(chapter);
     _saveInitialProgress(chapter);
@@ -675,6 +675,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             // series' name, and the file's own title is on the page it is
             // reading.
             title: chapter.title,
+            settings: const _BookSettings(),
           ),
           _BottomChrome(
             chapter: chapter,
@@ -1512,13 +1513,18 @@ class _BookViewState extends State<_BookView> {
   }
 }
 
-/// One page of a book, which is asked for when it is reached.
+/// One page of a book, which is asked for when it is reached, and set at the
+/// size whoever is reading chose.
 ///
 /// A page is a family of its own rather than one document holding them all,
 /// so the reader asks for the page it is on and no other: a book is as long
 /// as the server says it is, and a reader asking for all of it at once is a
 /// reader asking for the whole book to be laid out before a word of it is
 /// read.
+///
+/// The two settings are watched **here** rather than by the reader above, so
+/// moving a slider rebuilds the page it is changing and nothing else — not
+/// the pager, not the chrome, not the bar.
 class _BookPage extends ConsumerWidget {
   const _BookPage({
     required this.chapterId,
@@ -1544,6 +1550,8 @@ class _BookPage extends ConsumerWidget {
     final content = ref.watch(
       bookPageProvider((chapterId: chapterId, page: page)),
     );
+    final textSize = ref.watch(bookTextSizeProvider);
+    final lineHeight = ref.watch(bookLineHeightProvider);
     return switch (content) {
       // Nothing to show, and nothing coming: a page the server could not
       // produce says so instead of being read as a page with no words in it.
@@ -1551,6 +1559,8 @@ class _BookPage extends ConsumerWidget {
       AsyncData(:final value) => BookPageBody(
         page: value,
         picture: picture,
+        textSize: textSize,
+        lineHeight: lineHeight,
         anchor: anchor,
         onScroll: onScroll,
       ),
@@ -1599,11 +1609,22 @@ class _TapZones extends StatelessWidget {
 }
 // --- chrome -----------------------------------------------------------------
 
-/// What the cog in the top bar opens, for a chapter that has settings to
-/// offer: the direction in force, the library a promotion would be written
-/// against, and what to do with the answer.
-class _ReaderSettings {
-  const _ReaderSettings({
+/// What the cog in the top bar opens: the sheet for what is being read, and
+/// what to do with the answer it comes back with.
+///
+/// There are two sheets, and which one a chapter gets is decided by what the
+/// chapter is made of. A chapter of pictures has a direction to choose, a
+/// library to promote it to and a width to open at; a book has the size of
+/// its words and the room between its lines, and nothing else (#75) — so the
+/// two are one cog and two answers rather than two cogs.
+sealed class _ReaderSettings {
+  const _ReaderSettings();
+}
+
+/// The sheet for a chapter of pictures: the direction in force, the library a
+/// promotion would be written against, and what to do with the answer.
+final class _PictureSettings extends _ReaderSettings {
+  const _PictureSettings({
     required this.direction,
     required this.libraryName,
     required this.onOutcome,
@@ -1615,7 +1636,17 @@ class _ReaderSettings {
   /// rows: empty where the server's list has not reached the device yet.
   final String libraryName;
 
+  /// What the sheet came back with, once it has closed. Not everything a
+  /// chapter's sheet changes comes back this way — the width is written
+  /// straight through, the way a book's two settings are.
   final ValueChanged<ReaderSettingsOutcome> onOutcome;
+}
+
+/// The sheet for a book, which offers how the book is set and nothing about
+/// pictures. It has nothing to report: both of its settings are written
+/// straight through to the person reading.
+final class _BookSettings extends _ReaderSettings {
+  const _BookSettings();
 }
 
 class _TopChrome extends StatelessWidget {
@@ -1630,10 +1661,10 @@ class _TopChrome extends StatelessWidget {
 
   final String title;
 
-  /// What the cog opens, or null where there is nothing to offer it: a book
-  /// has no reading direction, no spread, no magnification and no strip
-  /// width, so the bar carries its title alone (#75 gives the cog back with
-  /// a text size and a line spacing in it).
+  /// What the cog opens, or null where there is nothing to offer: which sheet
+  /// that is depends on what is being read — a chapter of pictures has a
+  /// direction to choose, a book has the size of its words and the room
+  /// between its lines (#75).
   final _ReaderSettings? settings;
 
   @override
@@ -1673,9 +1704,7 @@ class _TopChrome extends StatelessWidget {
                 if (settings != null) ...[
                   const SizedBox(width: 8),
                   _SettingsCog(
-                    direction: settings.direction,
-                    libraryName: settings.libraryName,
-                    onOutcome: settings.onOutcome,
+                    settings: settings,
                     tooltip: l10n.readerSettings,
                   ),
                 ],
@@ -1688,20 +1717,15 @@ class _TopChrome extends StatelessWidget {
   }
 }
 
-/// The one control in the reader's top bar. Everything it opens lives in
-/// [showReaderSettingsSheet], which says why this is a cog rather than the
-/// direction pill it replaced.
+/// The one control in the top bar. What it opens depends on what is being
+/// read: [showReaderSettingsSheet] for a chapter of pictures,
+/// [showBookSettingsSheet] for a book — see [_ReaderSettings] for why the two
+/// are one cog, and the sheet for why it is a cog rather than the direction
+/// pill it replaced.
 class _SettingsCog extends StatelessWidget {
-  const _SettingsCog({
-    required this.direction,
-    required this.libraryName,
-    required this.onOutcome,
-    required this.tooltip,
-  });
+  const _SettingsCog({required this.settings, required this.tooltip});
 
-  final ChapterDirection direction;
-  final String libraryName;
-  final ValueChanged<ReaderSettingsOutcome> onOutcome;
+  final _ReaderSettings settings;
   final String tooltip;
 
   @override
@@ -1710,15 +1734,26 @@ class _SettingsCog extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: () async {
-          final outcome = await showReaderSettingsSheet(
-            context,
-            direction: direction,
-            libraryName: libraryName,
-          );
+          final outcome = await switch (settings) {
+            _PictureSettings(:final direction, :final libraryName) =>
+              showReaderSettingsSheet(
+                context,
+                direction: direction,
+                libraryName: libraryName,
+              ),
+            // A book's sheet has nothing to report: what it changes, it
+            // writes to the person reading as it is being changed.
+            _BookSettings() => showBookSettingsSheet(context).then((_) => null),
+          };
           // The sheet outlives the chrome it was opened from, so what it
           // reports may arrive with the cog already out of the tree.
           if (outcome == null || !context.mounted) return;
-          onOutcome(outcome);
+          switch (settings) {
+            case _PictureSettings(:final onOutcome):
+              onOutcome(outcome);
+            case _BookSettings():
+              return;
+          }
         },
         borderRadius: BorderRadius.circular(radiusPill),
         child: Container(

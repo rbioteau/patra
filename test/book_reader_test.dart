@@ -14,6 +14,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/settings/reading_settings.dart';
 import 'package:patra/src/theme.dart';
 
 import 'test_support.dart';
@@ -223,11 +224,14 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
 
 /// Where the page on screen is scrolled to, read out of the render tree
 /// rather than off anything the reader said about it.
+///
+/// Asked for inside the page itself, because a sheet open over the reader
+/// scrolls too.
 ScrollPosition _pagePosition(WidgetTester tester) => tester
     .state<ScrollableState>(
       find
           .descendant(
-            of: find.byType(SingleChildScrollView),
+            of: find.byType(BookPageBody),
             matching: find.byType(Scrollable),
           )
           .first,
@@ -472,6 +476,58 @@ void main() {
     expect(find.text('Dune'), findsNothing);
   });
 
+  testWidgets('the cog offers how the book is set, and nothing else', (
+    tester,
+  ) async {
+    await _pumpBook(tester);
+    await _showChrome(tester);
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+
+    // How a book is set is a question about words, and the only one there
+    // is: which way pages turn is a question about pictures.
+    expect(find.text('Text size'), findsOneWidget);
+    expect(find.text('Line spacing'), findsOneWidget);
+    expect(find.text('READING DIRECTION'), findsNothing);
+    expect(find.text('Drag to magnify'), findsNothing);
+    expect(find.text('Page width'), findsNothing);
+  });
+
+  testWidgets('a book set at another size keeps the place in the page', (
+    tester,
+  ) async {
+    await _pumpBook(tester, html: _longPage);
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    final scrolled = _pagePosition(tester);
+    // Read as numbers, not held as a position: the page is about to be laid
+    // out again, and a position is a live thing that would answer with the
+    // new page.
+    final extent = scrolled.maxScrollExtent;
+    final read = scrolled.pixels / extent;
+    expect(read, greaterThan(0), reason: 'the reader did scroll the page');
+
+    await _showChrome(tester);
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+    await tester.pumpAndSettle();
+
+    final after = _pagePosition(tester);
+    expect(
+      after.maxScrollExtent,
+      greaterThan(extent),
+      reason: 'the words are set larger, so there is more page to scroll',
+    );
+    // Where the reader is, and not where in the pixels they are: the page
+    // grew under them, and a page that sends them back to its top is a page
+    // that has made them read the words above again.
+    expect(after.pixels / after.maxScrollExtent, closeTo(read, .02));
+  });
+
   testWidgets('a page the server cannot produce says so', (tester) async {
     await _pumpBook(tester, unavailable: 1);
 
@@ -636,6 +692,8 @@ void main() {
               width: 400,
               height: height,
               child: BookPageBody(
+                textSize: defaultBookTextSize,
+                lineHeight: defaultBookLineHeight,
                 page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
                 picture: (_) =>
                     SizedBox(key: const Key('picture'), height: pictureHeight),
@@ -690,6 +748,8 @@ void main() {
               width: 400,
               height: 800,
               child: BookPageBody(
+                textSize: defaultBookTextSize,
+                lineHeight: defaultBookLineHeight,
                 page: BookPage.fromHtml(html),
                 picture: (_) => const SizedBox.shrink(),
               ),

@@ -62,11 +62,19 @@ void main() {
         final store = await preferencesStore(
           deviceMagnify: true,
           deviceWidthFactor: 0.6,
+          deviceBookTextSize: 20,
+          deviceBookLineHeight: 1.9,
           deviceLanguage: const Locale('fr'),
         );
 
         expect(store.magnifyFor(_lea.id), isTrue);
         expect(store.widthFactorFor(_lea.id), 0.6);
+        expect(
+          store.bookTextSizeFor(_lea.id),
+          20,
+          reason: 'a book is set at the size the device says, for everybody',
+        );
+        expect(store.bookLineHeightFor(_lea.id), 1.9);
         expect(store.languageFor(_lea.id), const Locale('fr'));
       },
     );
@@ -92,6 +100,10 @@ void main() {
       final store = await preferencesStore(keychain: keychain);
       await store.setMagnify(_romain.id, true);
       await store.setWidthFactor(_romain.id, 0.6);
+      // How a book is set, which is one number for every book: a choice
+      // about a person's eyes, not about one work.
+      await store.setBookTextSize(_romain.id, 20);
+      await store.setBookLineHeight(_romain.id, 1.9);
       await store.setSeriesDirection(
         _romain.id,
         3,
@@ -104,6 +116,8 @@ void main() {
       );
       expect(reopened.of(_romain.id).magnify, isTrue);
       expect(reopened.widthFactorFor(_romain.id), 0.6);
+      expect(reopened.bookTextSizeFor(_romain.id), 20);
+      expect(reopened.bookLineHeightFor(_romain.id), 1.9);
       expect(
         reopened.seriesDirectionFor(_romain.id, 3),
         ReadingDirection.rightToLeft,
@@ -122,7 +136,8 @@ void main() {
           keychain: MemoryKeychain({
             'profilePreferences':
                 '{"${_romain.id}": {"magnify": "yes", "magnified": true,'
-                ' "widthFactor": 0.6}}',
+                ' "widthFactor": 0.6, "bookTextSize": 40,'
+                ' "bookLineHeight": 9}}',
           }),
           deviceMagnify: true,
         );
@@ -132,6 +147,11 @@ void main() {
           0.6,
           reason: 'one field of the wrong shape costs that field alone',
         );
+        // A size no slider on this build can reach is answered with the
+        // nearest one that can: a page drawn at 40pt while the sheet swears
+        // it is set at 22 is the sheet lying about what is on the screen.
+        expect(store.bookTextSizeFor(_romain.id), maxBookTextSize);
+        expect(store.bookLineHeightFor(_romain.id), maxBookLineHeight);
 
         final broken = await preferencesStore(
           keychain: MemoryKeychain({'profilePreferences': 'not json at all'}),
@@ -462,6 +482,8 @@ void main() {
       final store = await preferencesStore();
       await store.setMagnify(_romain.id, true);
       await store.setWidthFactor(_romain.id, 0.6);
+      await store.setBookTextSize(_romain.id, 20);
+      await store.setBookLineHeight(_romain.id, 1.9);
       await store.setLanguage(_romain.id, const Locale('fr'));
       await store.setSeriesDirection(
         _romain.id,
@@ -475,6 +497,8 @@ void main() {
       });
       expect(his.read(magnifyProvider), isTrue);
       expect(his.read(widthFactorProvider), 0.6);
+      expect(his.read(bookTextSizeProvider), 20);
+      expect(his.read(bookLineHeightProvider), 1.9);
       expect(his.read(localeProvider), const Locale('fr'));
 
       // The next person to be handed the tablet, on a container of their own
@@ -488,6 +512,11 @@ void main() {
         reason:
             'she has not chosen, and 1.0 is how a chapter has always opened',
       );
+      // How a book is set follows the person and not the device: she reads
+      // on the same tablet, and a size chosen for somebody else's eyes is
+      // not hers.
+      expect(hers.read(bookTextSizeProvider), defaultBookTextSize);
+      expect(hers.read(bookLineHeightProvider), defaultBookLineHeight);
       expect(hers.read(localeProvider), isNull);
     });
 
@@ -543,6 +572,10 @@ void main() {
           .set(3, ReadingDirection.rightToLeft);
       await his.read(magnifyProvider.notifier).set(true);
       await his.read(widthFactorProvider.notifier).set(0.6);
+      // What the sheet sets for a book, through the same seam it uses: the
+      // notifier a slider's finger writes to when it lifts.
+      await his.read(bookTextSizeProvider.notifier).set(20);
+      await his.read(bookLineHeightProvider.notifier).set(1.9);
 
       expect(his.read(seriesDirectionsProvider), {
         3: ReadingDirection.rightToLeft,
@@ -554,6 +587,8 @@ void main() {
       );
       expect(store.magnifyFor(_lea.id), isFalse);
       expect(store.widthFactorFor(_lea.id), 1.0);
+      expect(store.bookTextSizeFor(_lea.id), defaultBookTextSize);
+      expect(store.bookLineHeightFor(_lea.id), defaultBookLineHeight);
     });
 
     test('are not recomputed because a token moved', () async {

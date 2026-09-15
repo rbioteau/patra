@@ -25,6 +25,30 @@ enum ReadingDirection {
   };
 }
 
+// How a book is set, and the range the two choices are offered over.
+//
+// They are **reading** settings of the person's — with a device default
+// behind them like the others, and chosen in the reader's sheet (#75) — so
+// they are answered here rather than by the page that is set in them. The
+// page is drawn at whatever number these hold.
+
+/// The size a book's words are set at, in points: one number for every book,
+/// and the size every book was set at before there was anything to choose.
+const double defaultBookTextSize = 16;
+
+// The range the sheet offers it over, one point a step.
+const double minBookTextSize = 14;
+const double maxBookTextSize = 22;
+
+/// The leading between a book's lines, as a share of the size of its words
+/// — `1.55` is a line and a half, which is what dense prose asks for.
+const double defaultBookLineHeight = 1.55;
+
+// The range the sheet offers it over, in sixteen steps: narrow enough for a
+// page of small print, and open enough to read with a finger under a line.
+const double minBookLineHeight = 1.2;
+const double maxBookLineHeight = 2.0;
+
 /// The **device's** reading defaults, under the flat keys they have always
 /// been written to.
 ///

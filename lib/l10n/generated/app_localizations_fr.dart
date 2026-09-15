@@ -352,6 +352,25 @@ class AppLocalizationsFr extends AppLocalizations {
       'Pas en lecture page à page — la page y est ajustée à l\'écran.';
 
   @override
+  String get bookTextSize => 'Taille du texte';
+
+  @override
+  String get bookTextSizeExplained =>
+      'La taille des mots d\'un livre. Tous les livres sont composés à cette taille.';
+
+  @override
+  String textSizePoints(int size) {
+    return '$size pt';
+  }
+
+  @override
+  String get bookLineSpacing => 'Interligne';
+
+  @override
+  String get bookLineSpacingExplained =>
+      'L\'espace entre les lignes d\'un livre, en part de la taille des mots.';
+
+  @override
   String percent(int value) {
     return '$value %';
   }

@@ -554,7 +554,7 @@ abstract class AppLocalizations {
   /// **'{first}–{last} / {total}'**
   String pageSpreadCounter(int first, int last, int total);
 
-  /// Tooltip on the reader's top-bar cog, which opens the reading direction and the drag-to-magnify switch.
+  /// Tooltip on the reader's top-bar cog, which opens what there is to choose about what is being read: the reading direction for a chapter of pictures, the text size and the line spacing for a book.
   ///
   /// In en, this message translates to:
   /// **'Reader settings'**
@@ -595,6 +595,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not while paging — there a page is fitted to the screen.'**
   String get pageWidthInPaged;
+
+  /// Reader setting: how large the words of a book are set. Offered for a book, where the sheet offers no reading direction.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get bookTextSize;
+
+  /// Explains what the text size setting changes, and says where it applies.
+  ///
+  /// In en, this message translates to:
+  /// **'How large the words of a book are. Every book is set at this size.'**
+  String get bookTextSizeExplained;
+
+  /// A size of type, in points — the value the text size setting is shown at.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} pt'**
+  String textSizePoints(int size);
+
+  /// Reader setting: the room between a book's lines, as a share of the size of its words.
+  ///
+  /// In en, this message translates to:
+  /// **'Line spacing'**
+  String get bookLineSpacing;
+
+  /// Explains what the line spacing setting changes, and says where it applies.
+  ///
+  /// In en, this message translates to:
+  /// **'The room between a book\'s lines, as a share of the size of the words.'**
+  String get bookLineSpacingExplained;
 
   /// A value shown as a percentage of the whole.
   ///

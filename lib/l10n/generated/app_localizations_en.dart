@@ -351,6 +351,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Not while paging — there a page is fitted to the screen.';
 
   @override
+  String get bookTextSize => 'Text size';
+
+  @override
+  String get bookTextSizeExplained =>
+      'How large the words of a book are. Every book is set at this size.';
+
+  @override
+  String textSizePoints(int size) {
+    return '$size pt';
+  }
+
+  @override
+  String get bookLineSpacing => 'Line spacing';
+
+  @override
+  String get bookLineSpacingExplained =>
+      'The room between a book\'s lines, as a share of the size of the words.';
+
+  @override
   String percent(int value) {
     return '$value%';
   }

@@ -320,7 +320,7 @@
   },
   "readerSettings": "Reader settings",
   "@readerSettings": {
-    "description": "Tooltip on the reader's top-bar cog, which opens the reading direction and the drag-to-magnify switch."
+    "description": "Tooltip on the reader's top-bar cog, which opens what there is to choose about what is being read: the reading direction for a chapter of pictures, the text size and the line spacing for a book."
   },
   "dragToMagnify": "Drag to magnify",
   "@dragToMagnify": {
@@ -345,6 +345,29 @@
   "pageWidthInPaged": "Not while paging — there a page is fitted to the screen.",
   "@pageWidthInPaged": {
     "description": "Replaces pageWidthExplained in the reader's sheet when the chapter is being paged, where no strip is laid out at a width of its own."
+  },
+  "bookTextSize": "Text size",
+  "@bookTextSize": {
+    "description": "Reader setting: how large the words of a book are set. Offered for a book, where the sheet offers no reading direction."
+  },
+  "bookTextSizeExplained": "How large the words of a book are. Every book is set at this size.",
+  "@bookTextSizeExplained": {
+    "description": "Explains what the text size setting changes, and says where it applies."
+  },
+  "textSizePoints": "{size} pt",
+  "@textSizePoints": {
+    "description": "A size of type, in points — the value the text size setting is shown at.",
+    "placeholders": {
+      "size": {"type": "int"}
+    }
+  },
+  "bookLineSpacing": "Line spacing",
+  "@bookLineSpacing": {
+    "description": "Reader setting: the room between a book's lines, as a share of the size of its words."
+  },
+  "bookLineSpacingExplained": "The room between a book's lines, as a share of the size of the words.",
+  "@bookLineSpacingExplained": {
+    "description": "Explains what the line spacing setting changes, and says where it applies."
   },
   "percent": "{value}%",
   "@percent": {
