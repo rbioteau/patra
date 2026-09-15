@@ -1,24 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/generated/app_localizations.dart';
-import '../features/launch/launch_animation.dart';
+import '../branding/patra_mark.dart';
 import '../theme.dart';
-import 'patra_frond.dart';
 import 'patra_wordmark.dart';
 
 /// The lockup at the top of the two screens the app can open on — the picker
-/// and the sign-in form — and the place the launch animation lands.
+/// and the sign-in form.
 ///
-/// Both halves are slots, and the wordmark being one is the point: it is
-/// drawn at the splash's own size, so the word does not shrink into place, it
-/// travels — the splash's lockup simply becomes the screen's. The frond is
-/// the same five-blade mark as the header's, in the same proportion to the
-/// word beside it.
-///
-/// Shared rather than drawn twice, for the reason [PatraWordmark] is one
-/// definition: the animation lands its own lockup on whichever of these
-/// screens is up, and spacing that drifted between them would show as a shift
-/// at the one moment the two are compared directly.
+/// The same two halves, in the same proportion, as the home header's: the
+/// word beside the Latin signature. Shared rather than drawn twice because the
+/// two gate screens are seen back to back, and spacing that drifted between
+/// them would show.
 class PatraMasthead extends StatelessWidget {
   const PatraMasthead({super.key, this.showTagline = true});
 
@@ -31,15 +24,14 @@ class PatraMasthead extends StatelessWidget {
 
   static const _size = 40.0;
 
-  /// The header's lockup at this screen's scale: the mark stands a little
-  /// taller than the word so the five blades stay open.
-  static const _markHeight = _size * 24 / 22;
+  /// The word at [PatraWordmark.markEm] of the signature — the same ratio the
+  /// home header uses, because the two lockups are the same lockup.
+  static const _markHeight = _size * PatraWordmark.markEm;
 
-  /// The gap is **tighter** here than the header's 0.81em, and deliberately so
-  /// rather than by drift: spacing that reads as one lockup at 22pt opens into
-  /// a gulf when the same ratio is scaled to 40pt. The mark and the word have
-  /// to stay one thing at both sizes, which is the point being kept, not the
-  /// number.
+  /// Tighter than the header's 0.81em, and deliberately so rather than by
+  /// drift: spacing that reads as one lockup at 22pt opens into a gulf when
+  /// the same ratio is taken to 40pt. The word and the signature have to stay
+  /// one thing at both sizes, which is the point being kept, not the number.
   static const _gap = _size * 0.65;
 
   @override
@@ -51,9 +43,9 @@ class PatraMasthead extends StatelessWidget {
         const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LaunchLogoSlot(child: PatraFrond(height: _markHeight)),
+            PatraMark(height: _markHeight),
             SizedBox(width: _gap),
-            LaunchWordmarkSlot(child: PatraWordmark(size: _size)),
+            PatraWordmark(size: _size),
           ],
         ),
         if (showTagline) ...[

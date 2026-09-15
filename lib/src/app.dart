@@ -272,8 +272,8 @@ class PatraApp extends ConsumerWidget {
       themeMode: ThemeMode.dark,
       routerConfig: ref.watch(_routerProvider),
       // The launch animation wraps the whole app rather than being a route of
-      // its own: its last beat flies the frond into the home header, which has
-      // to be laid out underneath while the splash is still playing.
+      // its own: its last beat fades the assembled word into the screen
+      // underneath, which has to be laid out while the splash is still playing.
       builder: (_, child) => LaunchAnimation(
         // A handover builds the whole app again, and that is not a launch.
         play: ref.watch(isLaunchProvider),

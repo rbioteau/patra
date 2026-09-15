@@ -9,10 +9,11 @@ import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
-import 'package:patra/src/features/launch/launch_animation.dart';
+import 'package:patra/src/branding/patra_mark.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
 import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/dashed_border.dart';
+import 'package:patra/src/widgets/patra_wordmark.dart';
 
 import 'test_support.dart';
 
@@ -124,7 +125,7 @@ void main() {
     // Kavita's own colour for the account, as its web UI paints it.
     expect(_faceColor(tester, 'R'), const Color(0xFF4AC694));
     // An account the server gave no colour falls back to the app's identity
-    // purple rather than to nothing at all.
+    // accent rather than to nothing at all.
     expect(_faceColor(tester, 'L'), patraAccent);
   });
 
@@ -314,13 +315,12 @@ void main() {
     expect(entered, ['romain']);
   });
 
-  testWidgets('offers the launch animation its lockup', (tester) async {
+  testWidgets('greets with the mark and the signature', (tester) async {
     await _pump(tester, [_profile(), _profile(accountId: 2, username: 'lea')]);
 
-    // The presence of the slots is the whole condition: the splash lands its
-    // frond and its wordmark on whichever screen offers them, and needs to
-    // know nothing about which one this is.
-    expect(find.byType(LaunchLogoSlot), findsOneWidget);
-    expect(find.byType(LaunchWordmarkSlot), findsOneWidget);
+    // The word and the Latin signature, together: the lockup every screen
+    // that names the app draws.
+    expect(find.byType(PatraMark), findsOneWidget);
+    expect(find.byType(PatraWordmark), findsOneWidget);
   });
 }

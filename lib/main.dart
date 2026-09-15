@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'src/api/client_identity.dart';
 import 'src/app.dart';
+import 'src/branding/patra_font_licenses.dart';
 import 'src/auth/session.dart';
 import 'src/catalogue/catalogue_provider.dart';
 import 'src/catalogue/catalogue_store.dart';
@@ -18,6 +19,8 @@ import 'src/settings/reading_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Both bundled faces are OFL, and the notice travels with the font.
+  registerPatraFontLicenses();
   // One keychain, handed to every store that keeps a row in it. It is
   // overridden into the tree below as well, so `main()` and the app can never
   // disagree about which keychain that is — the provider's own default is the

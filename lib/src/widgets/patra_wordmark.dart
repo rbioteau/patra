@@ -22,6 +22,17 @@ class PatraWordmark extends StatelessWidget {
   /// same at the header's size as at the masthead's.
   static const _tracking = -0.0125;
 
+  /// How tall the word is drawn beside the signature, in ems of it.
+  ///
+  /// Not 1: the word's own extent runs from the shirorekha down through the
+  /// त्र conjunct, which is Devanagari's ascender-to-descender span, and a
+  /// signature's is its *point* size only in the abstract — set 1:1 the word
+  /// reads about a quarter too big next to it, its headline clearing the
+  /// Latin ascenders and its conjunct falling past the descender. 0.8 puts
+  /// the two spans on top of one another, which is what makes them one
+  /// lockup. One definition, or the header and the masthead drift apart.
+  static const markEm = 0.8;
+
   @override
   Widget build(BuildContext context) {
     final style = PatraText.serifTitle(size: size)

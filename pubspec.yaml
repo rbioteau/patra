@@ -23,7 +23,6 @@ dependencies:
   flutter_secure_storage: ^11.0.0
   flutter_slidable: ^4.0.3
   go_router: ^18.0.1
-  google_fonts: ^8.2.1
   intl: ^0.20.3
   local_auth: ^3.0.2
   package_info_plus: ^10.2.1
@@ -37,11 +36,35 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true
+  assets:
+    - assets/fonts/SpaceGrotesk-OFL.txt
+    - assets/fonts/SourceSerif4-OFL.txt
+  # Bundled rather than fetched: the app is a reader, and a reader is opened
+  # on a train. Both faces are variable, so one file answers every weight.
+  fonts:
+    - family: Space Grotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+          weight: 700
+    - family: Source Serif 4
+      fonts:
+        - asset: assets/fonts/SourceSerif4-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/SourceSerif4-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/SourceSerif4-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/SourceSerif4-Variable.ttf
+          weight: 700
 
-# App icons are generated from the two masters in assets/icon/ by
+# App icons are generated from the master in assets/icon/ by
 #   ./tool/gen_app_icons.sh
-# and not by flutter_launcher_icons, which rasterises a single master to every
-# size: the handoff renders anything at or under 72px from the *compact*
-# three-blade frond, because five blades close into a blob there. The script
-# also leaves the Android adaptive icon alone — its foreground is the vector
+# and not by flutter_launcher_icons. The script also leaves the Android
+# adaptive icon alone — its foreground is the vector
 # res/drawable/patra_mark.xml, shared with nothing and hand-kept. See CLAUDE.md.

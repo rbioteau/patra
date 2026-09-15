@@ -346,8 +346,8 @@ class _Face extends StatelessWidget {
 ///
 /// In [patraAccent] rather than [patraDanger]: nothing has gone wrong and
 /// nothing is being destroyed — the profile still opens, and what it costs is
-/// a password or four digits. Purple is identity here, which is exactly what
-/// is being asked for again.
+/// a password or four digits. The accent is identity here, which is exactly
+/// what is being asked for again.
 class _FaceBadge extends StatelessWidget {
   const _FaceBadge({required this.icon});
 
