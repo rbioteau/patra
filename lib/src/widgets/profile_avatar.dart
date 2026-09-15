@@ -98,7 +98,7 @@ class _Initial extends StatelessWidget {
           // assume a dark one: ask which of black or white reads on it.
           color: ThemeData.estimateBrightnessForColor(on) == Brightness.dark
               ? Colors.white
-              : patraInk,
+              : patraBg,
         ),
       ),
     );

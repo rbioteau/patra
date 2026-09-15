@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Regenerate every app-icon bitmap from the two masters in assets/icon/.
+# Regenerate every app-icon bitmap from the master in assets/icon/.
 #
-# The design handoff draws the palm frond in two variants and the choice
-# between them is a size rule, not a taste: below 72px the five blades and
-# their gaps fall under two pixels each and the fan closes into a blob, so
-# every icon at or under 72px is rendered from the three-blade *compact*
-# master instead. That rule is why `flutter_launcher_icons` no longer runs
-# here — it rasterises one master to every size and would quietly close the
-# fan on the settings and notification icons.
+# The rule that used to live here — render anything at or under 72px from a
+# three-blade *compact* master, because five blades close into a blob there —
+# went with the frond. The mark is a word: two solid glyphs with no gaps to
+# close, so one master answers every size and there is nothing to choose
+# between. That is also why `flutter_launcher_icons` is no longer needed.
 #
 # The Android *adaptive* icon is not produced here at all: its foreground is
 # the vector res/drawable/patra_mark.xml (see CLAUDE.md).
@@ -19,22 +17,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-FULL=assets/icon/patra-1024.png            # five blades
-COMPACT=assets/icon/patra-compact-1024.png # three blades, for <= 72px
+MASTER=assets/icon/patra-1024.png
 IOS=ios/Runner/Assets.xcassets/AppIcon.appiconset
 ANDROID=android/app/src/main/res
 
-# Below this the fan has to be the compact one.
-COMPACT_MAX=72
-
-command -v convert >/dev/null || { echo "ImageMagick (convert) is required" >&2; exit 1; }
-
-master_for() { [ "$1" -le "$COMPACT_MAX" ] && echo "$COMPACT" || echo "$FULL"; }
+command -v convert >/dev/null || { echo "ImageMagick (convert) is required" >/dev/null; exit 1; }
 
 # iOS icons are square and opaque: the OS applies its own mask, and App Store
 # Connect rejects an icon carrying an alpha channel.
 ios_icon() { # <px> <path>
-  convert "$(master_for "$1")" -resize "${1}x${1}" -alpha remove -alpha off \
+  convert "$MASTER" -resize "${1}x${1}" -alpha remove -alpha off \
     -strip PNG24:"$2"
 }
 
@@ -42,7 +34,7 @@ ios_icon() { # <px> <path>
 # they carry the platform's own 22.7% corner themselves.
 android_icon() { # <px> <path>
   local px=$1 out=$2 r=$(( ($1 * 227 + 500) / 1000 ))
-  convert "$(master_for "$px")" -resize "${px}x${px}" \
+  convert "$MASTER" -resize "${px}x${px}" \
     \( -size "${px}x${px}" xc:black -fill white \
        -draw "roundrectangle 0,0,$((px-1)),$((px-1)),$r,$r" -alpha off \) \
     -compose CopyOpacity -composite -strip "$out"
@@ -85,4 +77,4 @@ done <<'SIZES'
 192  xxxhdpi
 SIZES
 
-echo "Icons regenerated from $FULL and $COMPACT."
+echo "Icons regenerated from $MASTER."

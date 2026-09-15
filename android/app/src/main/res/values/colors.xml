@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand ink tile from the design handoff; the adaptive icon background. -->
-    <color name="patra_ink">#16141C</color>
+    <!-- Night blue: the page the app draws, the ground of the icon, and the
+         window the OS paints while the process starts — one colour, so the
+         launch animation reads as a lift out of it rather than a cut. -->
+    <color name="patra_ink">#111722</color>
     <!-- Alias: the name flutter_launcher_icons writes if it is ever re-run. -->
     <color name="ic_launcher_background">@color/patra_ink</color>
 </resources>

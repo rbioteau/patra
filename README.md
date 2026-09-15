@@ -43,6 +43,7 @@ reachable over `https://` or, for a server on your own network, `http://`.
 
 ## Architecture
 
+- `lib/src/branding/` — the mark as outlines, and the launch animation
 - `lib/src/api/` — thin hand-written client for the Kavita REST API
 - `lib/src/auth/` — remembered servers, session and token refresh
 - `lib/src/downloads/` — offline page storage

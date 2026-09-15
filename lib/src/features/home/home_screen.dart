@@ -9,13 +9,12 @@ import '../../catalogue/catalogue_reads.dart' as catalogue;
 import '../../downloads/downloads_provider.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
+import '../../branding/patra_mark.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
-import '../../widgets/patra_frond.dart';
 import '../../widgets/patra_wordmark.dart';
 import '../../widgets/profile_avatar.dart';
-import '../launch/launch_animation.dart';
 import '../library/library_screen.dart';
 import 'continue_hero.dart';
 
@@ -135,9 +134,7 @@ class HomeScreen extends ConsumerWidget {
     // (`test/offline_indicator_test.dart`).
     final offline = ref.watch(offlineProvider);
     final nothingCameBack =
-        hero == null &&
-        onDeck.isResolvedFailure &&
-        libraries.isResolvedFailure;
+        hero == null && onDeck.isResolvedFailure && libraries.isResolvedFailure;
 
     return Scaffold(
       appBar: AppBar(
@@ -188,9 +185,9 @@ class HomeScreen extends ConsumerWidget {
 /// What Home says when the server is out of reach and there is nothing to
 /// draw.
 ///
-/// The way out is drawn in `patraOffline`, because that is what teal means
-/// in this app: downloads and offline. Never the accent, which is reading progress and
-/// identity.
+/// The way out is drawn in `patraOffline`, because that is what the token
+/// means in this app: downloads and offline. Never the accent, which is
+/// reading progress and identity.
 ///
 /// The way out is offered **only where it leads somewhere** — a device with
 /// nothing saved is told plainly that there is nothing saved, rather than
@@ -254,32 +251,28 @@ class _OfflineHome extends ConsumerWidget {
   }
 }
 
-/// The app's own logo: the frond, then the lowercase serif wordmark with its
+/// The app's own logo: the word, then the lowercase serif signature with its
 /// accent period.
 ///
-/// The frond is the full five-blade fan — the same mark as the app icon and as
-/// the one the launch animation unfurls — and it is measured by the mark itself
-/// rather than by the tile it is drawn on. It is also the place that animation
-/// hands off to, so it is held back until the flying frond is on top of it —
-/// see [LaunchLogoSlot].
+/// The same two halves as the lockup the launch animation composes, at the
+/// header's own size — the animation builds the word at 113pt and simply
+/// fades, so there is nothing here for it to land on and no slot to keep.
 class _Wordmark extends StatelessWidget {
   const _Wordmark();
 
   static const _size = 22.0;
 
-  /// The mark stands taller than the wordmark's own letters, which is what it
-  /// takes for the five-blade fan to stay open: below about 20pt the blades and
-  /// the gaps between them close into a blob and the mark stops being the one
-  /// on the app icon. The gap is the lockup's, in ems of the wordmark.
-  static const _markHeight = 24.0;
+  /// Drawn at [PatraWordmark.markEm] of the signature, which is what makes
+  /// the two one lockup rather than a word with a badge in front of it.
+  static const _markHeight = _size * PatraWordmark.markEm;
   static const _gap = _size * 0.81;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return const Row(
       mainAxisSize: MainAxisSize.min,
-      children: const [
-        LaunchLogoSlot(child: PatraFrond(height: _markHeight)),
+      children: [
+        PatraMark(height: _markHeight),
         SizedBox(width: _gap),
         PatraWordmark(size: _size),
       ],

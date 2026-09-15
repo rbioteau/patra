@@ -24,8 +24,8 @@ import '../theme.dart';
 /// existing answer to "there is no picture of this thing" — the picker draws
 /// a profile's initial on the profile's own colour — so it is one idea used
 /// twice rather than a new one, and the serif because a series title is the
-/// title of a work, which is the one thing the serif is for. Not the frond:
-/// the frond is the app's identity, and stamping it on sixty tiles of
+/// title of a work, which is the one thing the serif is for. Not the word
+/// पत्र, which is the app's identity: stamping it on sixty tiles of
 /// somebody's library says *Patra* where the tile should say *this series*.
 class CoverPlaceholder extends StatelessWidget {
   const CoverPlaceholder({
@@ -84,9 +84,9 @@ class CoverPlaceholder extends StatelessWidget {
 /// hand (`#26262c`/`#202026`, `#252a22`/`#20241d`, `#2c2222`/`#261d1d`,
 /// `#34342a`/`#2d2d24`): a tenth of full saturation, lightness between .150
 /// and .185, and the second tone .025 below the first. These colours are
-/// this file's own and are deliberately not tokens — the same carve-out the
-/// frond's parchment has, for the same reason: they are the mark of a
-/// missing picture and must never appear in the UI as colours.
+/// this file's own and are deliberately not tokens — unlike the accent gold
+/// the word पत्र is drawn in: they are the mark of a missing picture and
+/// must never appear in the UI as colours.
 ///
 /// **What that palette can hold is 24 tiles, not 360.** At this darkness the
 /// whole pair spans about eight units of each channel, so hue on its own

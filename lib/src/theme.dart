@@ -1,32 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-/// Design tokens from the Claude Design handoff (`.claude/design/HANDOFF.md`).
+/// Design tokens for the Patra brand kit — gold on night blue.
 /// The app commits to a single dark look: the reader canvas is pure black and
 /// the whole chrome is built around it.
 
-const patraBg = Color(0xFF0E0E10);
-const patraSurface = Color(0xFF1A1A1E);
-const patraSurfaceHi = Color(0xFF222226);
-const patraChrome = Color(0xFF141416); // bars
+/// The two bundled faces, and the only two the app draws with. Both are
+/// variable, so one file answers every weight, and both ship with the app
+/// rather than being fetched: a reader is opened on a train.
+const _sans = 'Space Grotesk';
+const _serif = 'Source Serif 4';
 
-/// The brand ink tile: the ground of every app icon, of the window the OS
-/// paints while the process starts, and of the launch animation the app opens
-/// with. One shade warmer than [patraBg], which is what makes the handoff at
-/// the end of the launch read as a lift rather than a cut.
-const patraInk = Color(0xFF16141C);
+/// The page. Also the ground of every app icon and of the window the OS
+/// paints while the process starts, which is what makes the launch read as a
+/// lift out of the same colour rather than a cut to a different one.
+const patraBg = Color(0xFF111722);
+
+/// Cards, sheets, tiles — a surface raised off the page.
+const patraSurface = Color(0xFF1C293E);
+const patraSurfaceHi = Color(0xFF26354B);
+const patraChrome = Color(0xFF172131); // bars
 
 /// Reading progress + identity ONLY. Never for downloads.
-const patraAccent = Color(0xFF7C5CFF);
+const patraAccent = Color(0xFFD7B976);
+
+/// What goes on gold. Dark, not white: the accent is a light ink and text
+/// laid on it has to be read against it rather than through it.
+const patraOnAccent = Color(0xFF241D10);
 
 /// Downloads / offline ONLY. Never for progress.
-const patraOffline = Color(0xFF2DD4BF);
+const patraOffline = Color(0xFF8EACD8);
 
 const patraOnline = Color(0xFF3DDC84);
-const patraDanger = Color(0xFFFF7B92);
-const patraText = Color(0xFFE8E8EA);
-
-final patraTextMuted = patraText.withValues(alpha: .45);
+const patraDanger = Color(0xFFFFB4AB);
+const patraText = Color(0xFFF3EEE3);
+const patraTextMuted = Color(0xFFAFB8C7);
 
 /// The unfilled part of a progress track drawn on its own, away from a cover
 /// (where [CoverProgressBar] sits on the artwork and uses black instead).
@@ -36,7 +43,7 @@ final patraTrack = patraText.withValues(alpha: .14);
 /// is tuned against a flat dark panel and disappears on a page, which may be
 /// anything from black ink to bare white paper.
 final patraTextOnArt = patraText.withValues(alpha: .78);
-final patraBorder = Colors.white.withValues(alpha: .08);
+const patraBorder = Color(0xFF35445A);
 
 /// A control laid over a page, which is what the reader's chrome sits on.
 ///
@@ -107,46 +114,51 @@ bool isTabletLayout(BuildContext context) =>
 /// Text styles that the Material text theme cannot express on its own.
 abstract final class PatraText {
   /// Titles of works, wordmark, reader page numbers — the only serif uses.
-  static TextStyle serifTitle({double size = 21, Color? color}) =>
-      GoogleFonts.sourceSerif4(
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        color: color ?? patraText,
-        height: 1.25,
-      );
+  static TextStyle serifTitle({double size = 21, Color? color}) => TextStyle(
+    fontFamily: _serif,
+    fontSize: size,
+    fontWeight: FontWeight.w600,
+    color: color ?? patraText,
+    height: 1.25,
+  );
 
-  static TextStyle sectionLabel({Color? color}) => GoogleFonts.spaceGrotesk(
+  static TextStyle sectionLabel({Color? color}) => TextStyle(
+    fontFamily: _sans,
     fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 1.5,
     color: color ?? patraTextMuted,
   );
 
-  static TextStyle rowTitle({Color? color, double size = 13.5}) =>
-      GoogleFonts.spaceGrotesk(
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        color: color ?? patraText,
-      );
+  static TextStyle rowTitle({Color? color, double size = 13.5}) => TextStyle(
+    fontFamily: _sans,
+    fontSize: size,
+    fontWeight: FontWeight.w600,
+    color: color ?? patraText,
+  );
 
   static TextStyle body({Color? color}) =>
-      GoogleFonts.spaceGrotesk(fontSize: 14, color: color ?? patraText);
+      TextStyle(fontFamily: _sans, fontSize: 14, color: color ?? patraText);
 
-  static TextStyle metadata({Color? color, double size = 11}) =>
-      GoogleFonts.spaceGrotesk(fontSize: size, color: color ?? patraTextMuted);
+  static TextStyle metadata({Color? color, double size = 11}) => TextStyle(
+    fontFamily: _sans,
+    fontSize: size,
+    color: color ?? patraTextMuted,
+  );
 
   /// Bottom navigation label. Exposed so the shell can measure it and decide
   /// whether the labels fit before showing them.
-  static TextStyle navLabel({required bool selected}) =>
-      GoogleFonts.spaceGrotesk(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: selected ? patraAccent : patraTextMuted,
-      );
+  static TextStyle navLabel({required bool selected}) => TextStyle(
+    fontFamily: _sans,
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: selected ? patraAccent : patraTextMuted,
+  );
 
   /// Page numerals in the reader: serif, and always laid out left-to-right
   /// even when reading right-to-left.
-  static TextStyle pageNumeral({Color? color}) => GoogleFonts.sourceSerif4(
+  static TextStyle pageNumeral({Color? color}) => TextStyle(
+    fontFamily: _serif,
     fontSize: 13,
     fontWeight: FontWeight.w600,
     color: color ?? Colors.white,
@@ -158,24 +170,29 @@ ThemeData patraTheme() {
   final base = ThemeData.dark(useMaterial3: true);
   final colors = ColorScheme.dark(
     primary: patraAccent,
-    onPrimary: Colors.white,
+    onPrimary: patraOnAccent,
     secondary: patraOffline,
-    onSecondary: const Color(0xFF04322C),
+    onSecondary: const Color(0xFF10243E),
     surface: patraSurface,
     onSurface: patraText,
+    onSurfaceVariant: patraTextMuted,
+    surfaceContainer: patraSurface,
+    surfaceContainerHigh: patraSurfaceHi,
     surfaceContainerHighest: patraSurfaceHi,
     error: patraDanger,
-    onError: const Color(0xFF3A0512),
-    outline: Colors.white.withValues(alpha: .08),
+    onError: const Color(0xFF690005),
+    outline: const Color(0xFF79879B),
+    outlineVariant: patraBorder,
   );
 
   return base.copyWith(
     colorScheme: colors,
     scaffoldBackgroundColor: patraBg,
-    canvasColor: patraBg,
-    dividerColor: patraBorder,
-    textTheme: GoogleFonts.spaceGroteskTextTheme(base.textTheme)
-        .apply(bodyColor: patraText, displayColor: patraText),
+    textTheme: base.textTheme.apply(
+      fontFamily: _sans,
+      bodyColor: patraText,
+      displayColor: patraText,
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: patraChrome,
       surfaceTintColor: Colors.transparent,
@@ -183,7 +200,8 @@ ThemeData patraTheme() {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.spaceGrotesk(
+      titleTextStyle: TextStyle(
+        fontFamily: _sans,
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: patraText,
@@ -232,9 +250,10 @@ ThemeData patraTheme() {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: patraAccent,
-        foregroundColor: Colors.white,
+        foregroundColor: patraOnAccent,
         minimumSize: const Size.fromHeight(minHitTarget + 4),
-        textStyle: GoogleFonts.spaceGrotesk(
+        textStyle: const TextStyle(
+          fontFamily: _sans,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
@@ -248,7 +267,8 @@ ThemeData patraTheme() {
         foregroundColor: patraText,
         side: BorderSide(color: patraBorder),
         minimumSize: const Size.fromHeight(minHitTarget),
-        textStyle: GoogleFonts.spaceGrotesk(
+        textStyle: const TextStyle(
+          fontFamily: _sans,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),

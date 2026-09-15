@@ -1,60 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The palm frond, drawn as a vector so the launcher icon never upscales a
-     bitmap. Geometry is a transcription of the design handoff's
-     master/patra-frond.svg: five capsule blades fanned out of one pivot at
-     ±50°, ±26° and 0°, the centre one in the accent, the others parchment
-     fading outward, plus the short accent stem below the pivot.
+<!-- The word पत्र, drawn as a vector so the launcher icon never upscales a
+     bitmap. The two paths are the brand kit's own outlines — the two glyph
+     clusters, shaped by HarfBuzz off Tiro Devanagari Sanskrit — and the group
+     is its `assets/branding/patra-foreground.svg` transform, unchanged: it
+     places the word's bounding box dead centre on the 1024 canvas, which is
+     what keeps it inside the middle 66dp of the 108dp adaptive canvas that is
+     guaranteed visible.
 
-     The outer group is the whole sizing decision. The SVG draws the frond
-     full-bleed on its ink tile, but only the middle 66dp of an adaptive
-     icon's 108dp canvas is guaranteed visible, so the mark is scaled to
-     0.76 — which puts its bounding box's far corner 32.1dp from the centre,
-     just inside that 33dp radius — and the pivot is dropped to y=71.5 so the
-     box that results is centred on the canvas rather than the pivot being.
-
-     Regenerate rather than hand-edit, and regenerate patra_mark_mono.xml
-     with it: see CLAUDE.md. -->
+     Regenerate from the kit rather than hand-edit, and regenerate
+     patra_mark_mono.xml with it: the two are the same geometry and a launcher
+     that asked for one and got the other would show a different mark. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
     <group
-        android:translateX="54"
-        android:translateY="71.5"
-        android:scaleX="0.76"
-        android:scaleY="0.76">
-        <group android:rotation="-50">
-            <path
-                android:fillColor="#E9E2D0"
-                android:fillAlpha="0.34"
-                android:pathData="M-2.6,-35.4 A2.6,2.6 0 0 1 2.6,-35.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="-26">
-            <path
-                android:fillColor="#E9E2D0"
-                android:fillAlpha="0.58"
-                android:pathData="M-2.6,-43.4 A2.6,2.6 0 0 1 2.6,-43.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="0">
-            <path
-                android:fillColor="#7C5CFF"
-                android:pathData="M-2.6,-49.4 A2.6,2.6 0 0 1 2.6,-49.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="26">
-            <path
-                android:fillColor="#E9E2D0"
-                android:fillAlpha="0.46"
-                android:pathData="M-2.6,-43.4 A2.6,2.6 0 0 1 2.6,-43.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="50">
-            <path
-                android:fillColor="#E9E2D0"
-                android:fillAlpha="0.26"
-                android:pathData="M-2.6,-35.4 A2.6,2.6 0 0 1 2.6,-35.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
+        android:translateX="264.256"
+        android:translateY="205.603"
+        android:scaleX="4.377"
+        android:scaleY="4.377">
         <path
-            android:fillColor="#7C5CFF"
-            android:pathData="M-1.6,-0.4 A1.6,1.6 0 0 1 1.6,-0.4 L1.6,4.4 A1.6,1.6 0 0 1 -1.6,4.4 Z" />
+            android:fillColor="#D7B976"
+            android:pathData="M27.8 83.7Q23.9 83.7 20.3 81.9Q16.7 80.1 13.8 77.3Q10.9 74.5 9.2 71.4Q7.5 68.3 7.4 65.8Q7.3 64.4 7.3 63.2Q7.3 62 7.3 60.9Q7.3 57.7 7.35 53.8Q7.4 49.9 7.4 46H0.6L-2.8 39.5V38.5H55.1L58.5 45V46H46.8L47 101.5H46L38 96.3L38.1 80.5Q32.8 83.7 27.8 83.7ZM38.4 46H15.9L16.1 68Q16.1 72.8 18.3 75Q20.5 77.2 23 77.2Q26 77.2 29.75 75.3Q33.5 73.4 38.2 70.1Z" />
+        <path
+            android:fillColor="#D7B976"
+            android:pathData="M95.6 75.7 72 92 66.1 86.2 92.8 69.1Q87.9 65.4 85 64.05Q82.1 62.7 79.8 62.7Q78.1 62.7 75.4 63.5Q72.7 64.3 69.9 65.4Q67.1 66.5 64.9 67.4L59.6 60.5V60Q62.3 59 65.45 57.95Q68.6 56.9 71.6 56.15Q74.6 55.4 76.7 55.4Q79.5 55.4 81.75 56.3Q84 57.2 87.15 59.45Q90.3 61.7 95.7 66L95.9 46H56.3L52.9 39.5V38.5H112.6L116 45V46H104.3L104.5 101.5H103.5L95.5 96.3L95.7 75.7Z" />
     </group>
 </vector>

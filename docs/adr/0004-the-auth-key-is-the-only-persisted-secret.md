@@ -54,7 +54,7 @@ the design.
 ## Cost, accepted
 
 Entering a profile **online** needs one request before anything works. That
-round trip is hidden: the launch animation runs 7.8s and the app is already
+round trip is hidden: the launch animation runs 4.8s and the app is already
 mounted from the first frame precisely so its first requests are made and
 answered while the splash plays. Offline no request is made, because a profile
 entered offline reads only what it has saved.

@@ -1,53 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon variant of the frond (Android 13+). The system ignores the
-     colour and tints the shape from the wallpaper, but it honours alpha, so
-     the fan still reads: the centre blade stays solid and the others fall
-     away outward. The parchment steps are lifted off their brand values
-     (0.58/0.46/0.34/0.26 to 0.80/0.68/0.52/0.42) because a tinted line that
-     faint disappears on some wallpapers - the ordering is what carries the
-     fan, not the absolute values. Geometry is identical to patra_mark.xml:
-     regenerate both together. -->
+<!-- Themed-icon variant of the word (Android 13+). The system ignores the
+     colour and tints the shape from the wallpaper, so this is the same two
+     paths in white; there is nothing to fade outward the way the old frond's
+     blades did, the word being one solid mass.
+
+     Geometry is patra_mark.xml's exactly: regenerate the two together. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
     <group
-        android:translateX="54"
-        android:translateY="71.5"
-        android:scaleX="0.76"
-        android:scaleY="0.76">
-        <group android:rotation="-50">
-            <path
-                android:fillColor="#FFFFFF"
-                android:fillAlpha="0.52"
-                android:pathData="M-2.6,-35.4 A2.6,2.6 0 0 1 2.6,-35.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="-26">
-            <path
-                android:fillColor="#FFFFFF"
-                android:fillAlpha="0.80"
-                android:pathData="M-2.6,-43.4 A2.6,2.6 0 0 1 2.6,-43.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="0">
-            <path
-                android:fillColor="#FFFFFF"
-                android:pathData="M-2.6,-49.4 A2.6,2.6 0 0 1 2.6,-49.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="26">
-            <path
-                android:fillColor="#FFFFFF"
-                android:fillAlpha="0.68"
-                android:pathData="M-2.6,-43.4 A2.6,2.6 0 0 1 2.6,-43.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
-        <group android:rotation="50">
-            <path
-                android:fillColor="#FFFFFF"
-                android:fillAlpha="0.42"
-                android:pathData="M-2.6,-35.4 A2.6,2.6 0 0 1 2.6,-35.4 L2.6,-2.6 A2.6,2.6 0 0 1 -2.6,-2.6 Z" />
-        </group>
+        android:translateX="264.256"
+        android:translateY="205.603"
+        android:scaleX="4.377"
+        android:scaleY="4.377">
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M-1.6,-0.4 A1.6,1.6 0 0 1 1.6,-0.4 L1.6,4.4 A1.6,1.6 0 0 1 -1.6,4.4 Z" />
+            android:pathData="M27.8 83.7Q23.9 83.7 20.3 81.9Q16.7 80.1 13.8 77.3Q10.9 74.5 9.2 71.4Q7.5 68.3 7.4 65.8Q7.3 64.4 7.3 63.2Q7.3 62 7.3 60.9Q7.3 57.7 7.35 53.8Q7.4 49.9 7.4 46H0.6L-2.8 39.5V38.5H55.1L58.5 45V46H46.8L47 101.5H46L38 96.3L38.1 80.5Q32.8 83.7 27.8 83.7ZM38.4 46H15.9L16.1 68Q16.1 72.8 18.3 75Q20.5 77.2 23 77.2Q26 77.2 29.75 75.3Q33.5 73.4 38.2 70.1Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M95.6 75.7 72 92 66.1 86.2 92.8 69.1Q87.9 65.4 85 64.05Q82.1 62.7 79.8 62.7Q78.1 62.7 75.4 63.5Q72.7 64.3 69.9 65.4Q67.1 66.5 64.9 67.4L59.6 60.5V60Q62.3 59 65.45 57.95Q68.6 56.9 71.6 56.15Q74.6 55.4 76.7 55.4Q79.5 55.4 81.75 56.3Q84 57.2 87.15 59.45Q90.3 61.7 95.7 66L95.9 46H56.3L52.9 39.5V38.5H112.6L116 45V46H104.3L104.5 101.5H103.5L95.5 96.3L95.7 75.7Z" />
     </group>
 </vector>

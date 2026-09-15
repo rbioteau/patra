@@ -10,11 +10,11 @@ import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/branding/patra_launch.dart';
 import 'package:patra/src/session_scope.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/features/library/library_screen.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
-import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/offline_indicator.dart';
 
 import 'test_support.dart';
@@ -144,8 +144,7 @@ Directory _room(WidgetTester tester, String name) {
 
 /// Whether any of the splash is on screen: it paints the ink, and takes
 /// itself out of the tree rather than leaving a transparent overlay behind.
-Finder _splash() =>
-    find.byWidgetPredicate((w) => w is ColoredBox && w.color == patraInk);
+Finder _splash() => find.byKey(patraLaunchSplashKey);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -351,7 +350,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('lea'));
     // One frame, not a settle: the whole app is built again here, and the
-    // question is whether the frond starts unfurling itself in front of it.
+    // question is whether the word starts assembling itself in front of it.
     await tester.pump();
 
     expect(_splash(), findsNothing);
