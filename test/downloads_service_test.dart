@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 
 /// Serves fake page bytes, and can fail on a chosen page.
@@ -38,7 +39,7 @@ class _PageAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-KavitaClient _client(_PageAdapter adapter) {
+KavitaClient _client(HttpClientAdapter adapter) {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
@@ -65,6 +66,112 @@ const _chapter = SavedChapter(
 /// common.
 const _romain = 'https://kavita.example#1';
 const _lea = 'https://kavita.example#2';
+
+/// The bytes of every picture a page of the book names: three of them, which
+/// is not a picture any decoder would take and is all a stored page needs.
+const _picture = [7, 8, 9];
+
+/// One book, in the chapter the server hangs it on.
+const _bookId = 7;
+
+/// What the server says a page of the book is made of: words, and a picture
+/// named the way the file names it. The first two pages name the same one,
+/// which is the ordinary thing for a book to do.
+String _bookPageHtml(int page) =>
+    '<h1>Part ${page == 2 ? 'two' : 'one'}</h1>'
+    '<p>The spice must flow.</p>'
+    '<p><img src="OEBPS/images/${page == 2 ? 'cover' : 'worm'}.jpg"/></p>';
+
+/// A Kavita holding one book: `book-info` says how many pages it made of it,
+/// `book-page` hands one over at a time, and `book-resources` serves what a
+/// page named.
+class _BookAdapter implements HttpClientAdapter {
+  _BookAdapter({this.failOnPage, this.refusePictures = false});
+
+  /// A page the server cannot produce.
+  final int? failOnPage;
+
+  /// A server that hands over the words but not the pictures.
+  final bool refusePictures;
+
+  /// Every picture the app asked the server for, in order.
+  final requested = <String>[];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    final path = options.uri.path;
+    if (path == '/api/Book/$_bookId/book-info') {
+      return _json({
+        'bookTitle': 'Dune Messiah',
+        'seriesId': 3,
+        'volumeId': 4,
+        'libraryId': 1,
+        // How long a book is is the book's to say: `chapter-info` counts
+        // image pages, and a book has none.
+        'pages': 3,
+        'seriesName': 'Dune',
+        'seriesFormat': MangaFormat.epub.id,
+      });
+    }
+    if (path == '/api/Book/$_bookId/book-page') {
+      final page = int.parse('${options.uri.queryParameters['page']}');
+      if (page == failOnPage) return ResponseBody.fromBytes(const [], 500);
+      return ResponseBody.fromString(
+        _bookPageHtml(page),
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['text/html'],
+        },
+      );
+    }
+    if (path == '/api/Book/$_bookId/book-resources') {
+      final file = options.uri.queryParameters['file'] as String;
+      requested.add(file);
+      if (refusePictures) return ResponseBody.fromBytes(const [], 404);
+      return ResponseBody.fromBytes(
+        _picture,
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['image/jpeg'],
+        },
+      );
+    }
+    throw DioException(
+      requestOptions: options,
+      type: DioExceptionType.unknown,
+      error: 'nothing here answers $path',
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody _json(Object body) => ResponseBody.fromString(
+  jsonEncode(body),
+  200,
+  headers: {
+    Headers.contentTypeHeader: [Headers.jsonContentType],
+  },
+);
+
+/// A book as a row knows it: the chapter the server hangs the file on, whose
+/// own page count is of image pages and so is none at all.
+const _book = SavedChapter(
+  chapterId: _bookId,
+  seriesId: 3,
+  volumeId: 4,
+  libraryId: 1,
+  seriesName: 'Dune',
+  title: 'Book 1',
+  pages: 0,
+  bytes: 0,
+  format: MangaFormat.epub,
+);
 
 void main() {
   late Directory root;
@@ -283,5 +390,112 @@ void main() {
 
     expect((await lea.profileRoot()).existsSync(), isFalse);
     expect((await service.scan()).keys, [42]);
+  });
+
+  // A book is stored the way ADR-0009 says it must be: the pages the server
+  // rendered, each carrying its own pictures, and the total it was made with
+  // — because with no server there is nothing left to lay the words out or
+  // to fetch a picture from.
+  group('saving a book', () {
+    test('the copy is the pages the server rendered, self-contained', () async {
+      final adapter = _BookAdapter();
+
+      final saved = await service.download(
+        client: _client(adapter),
+        chapter: _book,
+        onProgress: (_) {},
+      );
+
+      // How long the book is is the book's to say, not the chapter's: the
+      // chapter counts image pages, and a book has none.
+      expect(saved.pages, 3);
+      expect(saved.content, ChapterContent.reflowable);
+      expect(saved.bytes, greaterThan(0));
+
+      // Every page the server made is here, and each carries the picture it
+      // named rather than the name it named it by.
+      for (var page = 0; page < 3; page++) {
+        final file = await service.pageFile(_bookId, page);
+        expect(file.existsSync(), isTrue, reason: 'page $page is stored');
+        final html = file.readAsStringSync();
+        expect(html, contains('The spice must flow.'));
+        expect(
+          html,
+          contains(base64Encode(_picture)),
+          reason: 'page $page carries its picture',
+        );
+        expect(html, isNot(contains('OEBPS/')), reason: 'and no name to fetch');
+      }
+
+      // A picture two pages name is fetched once.
+      expect(adapter.requested, [
+        'OEBPS/images/worm.jpg',
+        'OEBPS/images/cover.jpg',
+      ]);
+    });
+
+    test('a copy read back knows it is a book', () async {
+      await service.download(
+        client: _client(_BookAdapter()),
+        chapter: _book,
+        onProgress: (_) {},
+      );
+
+      final saved = (await service.scan())[_bookId]!;
+      expect(saved.content, ChapterContent.reflowable);
+      expect(saved.format, MangaFormat.epub);
+      expect(saved.pages, 3);
+    });
+
+    test('a page the server cannot produce leaves no copy', () async {
+      await expectLater(
+        service.download(
+          client: _client(_BookAdapter(failOnPage: 2)),
+          chapter: _book,
+          onProgress: (_) {},
+        ),
+        throwsA(isA<DioException>()),
+      );
+      expect((await service.chapterDir(_bookId)).existsSync(), isFalse);
+      expect(await service.scan(), isEmpty);
+    });
+
+    test('a picture the server refuses costs the page its picture', () async {
+      // Half of an illustrated book is not a reason to have no book: the
+      // words are the point, and a page that keeps the name it cannot fetch
+      // is one the server can still answer for when there is a server.
+      final adapter = _BookAdapter(refusePictures: true);
+      final saved = await service.download(
+        client: _client(adapter),
+        chapter: _book,
+        onProgress: (_) {},
+      );
+
+      expect(saved.pages, 3);
+      final html = (await service.pageFile(_bookId, 0)).readAsStringSync();
+      expect(html, contains('The spice must flow.'));
+      expect(html, contains('OEBPS/images/worm.jpg'));
+      expect(html, isNot(contains('data:')));
+      // And it is not asked for again on the page that names it too: a book
+      // whose pictures are all refused is not a book that fetches forever.
+      expect(adapter.requested, [
+        'OEBPS/images/worm.jpg',
+        'OEBPS/images/cover.jpg',
+      ]);
+    });
+
+    test('a copy stored before a book could be saved reads as pictures', () {
+      // What `meta.json` held until now: no `format`, and every copy there
+      // was a copy of pages that were pictures.
+      final saved = SavedChapter.fromJson({
+        'chapterId': 42,
+        'pages': 3,
+        'bytes': 6,
+        'pagesRead': 1,
+      })!;
+
+      expect(saved.content, ChapterContent.fixedPages);
+      expect(saved.format, MangaFormat.unknown);
+    });
   });
 }

@@ -39,7 +39,6 @@ const _addressedPicture =
     '<p><img src="//kavita.test/api/Book/7/book-resources'
     '?file=OEBPS/images/cover.jpg"/></p>';
 
-
 /// What the server says a book is made of: a part with two chapters under it,
 /// and a second part after them.
 ///
@@ -57,6 +56,11 @@ const _contents = [
   },
   {'title': 'Part two', 'page': 8, 'children': <Object>[]},
 ];
+
+/// A one-pixel PNG, base64: the smallest picture the decoder will take, which
+/// is what makes the picture in a stored page a picture rather than a fault.
+const _carried =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=';
 
 /// A Kavita holding one book, in a Book library.
 class _BookAdapter implements HttpClientAdapter {
@@ -196,6 +200,10 @@ List<String?> _postedAnchors(List<_Post> posted) => [
 /// the server says about where the reader was, which is what a book opens at.
 /// [server] is that server, where a test needs the same one twice — a book
 /// closed and opened again, which is the round trip.
+///
+/// [saved] seeds the device's store before the reader opens, for a copy that
+/// has already been saved for the train: it is handed the downloads root, and
+/// every fixture here goes through the service (`saveChapterFixture`).
 Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   WidgetTester tester, {
   int initialPage = 0,
@@ -205,12 +213,12 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   String? bookScrollId,
   _BookAdapter? server,
   List<Object>? contents,
+  Future<void> Function(Directory root)? saved,
 }) async {
   final dir = mockPathProvider();
-  final downloads = DownloadsService(
-    root: Directory('${dir.path}/downloads')..createSync(),
-    profileId: 'https://kavita.test#1',
-  );
+  final root = Directory('${dir.path}/downloads')..createSync();
+  final downloads = DownloadsService(root: root, profileId: _profileId);
+  if (saved != null) await saved(root);
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
@@ -252,6 +260,9 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   }
   return (adapter.requested, adapter.posted);
 }
+
+/// Whose store the reader reads: the profile its downloads were saved under.
+const _profileId = 'https://kavita.test#1';
 
 /// Where the page on screen is scrolled to, read out of the render tree
 /// rather than off anything the reader said about it.
@@ -609,6 +620,37 @@ void main() {
     expect(cached.cacheKey, imageCacheKey(cached.url));
   });
 
+  // A book saved for the train is read from the copy: the pages the server
+  // rendered the day it was saved are the only pages there are once there is
+  // no server, and they are the better answer even while there is one — the
+  // copy is what the reader asked for by saving it.
+  testWidgets('a saved book is read from the copy, and drawn whole', (
+    tester,
+  ) async {
+    final (requested, _) = await _pumpBook(
+      tester,
+      saved: (root) => saveChapterFixture(
+        root,
+        _profileId,
+        chapterId: 7,
+        title: 'Dune Messiah',
+        pages: 3,
+        format: MangaFormat.epub,
+        pageHtml:
+            '<p>The spice must flow.</p>'
+            '<p><img src="data:;base64,$_carried"/></p>',
+      ),
+    );
+
+    // Nothing was asked of the server for the page: the copy is the page.
+    expect(requested, isEmpty);
+    expect(find.text('The spice must flow.'), findsOneWidget);
+    // And the picture the copy carries is drawn from it, rather than fetched.
+    final pictures = tester.widgetList<Image>(find.byType(Image));
+    expect(pictures, hasLength(1));
+    expect(pictures.single.image, isA<MemoryImage>());
+  });
+
   group('the contents of a book', () {
     /// Choosing an entry in the contents, and waiting for the page it names
     /// to have been asked for and reported.
@@ -776,6 +818,53 @@ void main() {
     test('a page of nothing is not a page', () {
       expect(BookPage.fromHtml('').isEmpty, isTrue);
       expect(BookPage.fromHtml('<p>  </p>').isEmpty, isTrue);
+    });
+  });
+
+  // What makes a page storable: the picture a page names has to be able to
+  // travel inside it, because there is no server left to fetch one from
+  // (ADR-0009).
+  group('what a stored page carries', () {
+    const carried = 'data:;base64,QUJD';
+
+    test('a picture is named by its bytes instead', () {
+      final renamed = renameBookPictures(
+        '<p>Words.</p><img class="worm" src="OEBPS/worm.jpg"/>',
+        (src) => carried,
+      );
+
+      expect(renamed, '<p>Words.</p><img class="worm" src="$carried"/>');
+      // And it parses back to the picture the copy is carrying.
+      expect(BookPage.fromHtml(renamed).pictureSources, [carried]);
+    });
+
+    test('a picture the copy does not carry keeps the name it had', () {
+      // A picture the server would not hand over is not a reason to lose the
+      // page: it stays a name, and a server that can answer it still can.
+      expect(
+        renameBookPictures('<img src="OEBPS/worm.jpg"/>', (_) => null),
+        '<img src="OEBPS/worm.jpg"/>',
+      );
+    });
+
+    test('a picture named by an href is renamed by its href', () {
+      // Otherwise a page that named it that way would carry a second `src`
+      // beside the first, and the copy would fetch a name that is not there.
+      final renamed = renameBookPictures(
+        '<image href="a.jpg"/>',
+        (_) => carried,
+      );
+
+      expect(renamed, '<image href="$carried"/>');
+      expect(renamed, isNot(contains('src=')));
+    });
+
+    test('the bytes a name carries, and nothing else', () {
+      expect(carriedPictureBytes(carried), [65, 66, 67]);
+      // A name that is a path, and one that is a damaged copy: neither is
+      // something this device already has.
+      expect(carriedPictureBytes('OEBPS/worm.jpg'), isNull);
+      expect(carriedPictureBytes('data:;base64,!!!'), isNull);
     });
   });
 

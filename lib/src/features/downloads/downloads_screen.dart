@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../api/models.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../format.dart';
@@ -160,7 +161,7 @@ class _SavedRow extends ConsumerWidget {
               height: tablet ? rowCoverHeightTablet : rowCoverHeight,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radiusThumb),
-                child: _LocalThumb(dir: dir),
+                child: _LocalThumb(chapter: chapter, dir: dir),
               ),
             ),
             const SizedBox(width: 12),
@@ -280,21 +281,26 @@ final _readTagStyle = PatraText.metadata(
 ).copyWith(fontWeight: FontWeight.w600, letterSpacing: .5);
 
 class _LocalThumb extends StatelessWidget {
-  const _LocalThumb({required this.dir});
+  const _LocalThumb({required this.chapter, required this.dir});
 
+  final SavedChapter chapter;
   final Directory? dir;
 
   @override
   Widget build(BuildContext context) {
+    // A book is stored as the pages the server laid its words out into, so
+    // its first stored page is a page of HTML and not a picture to show.
+    if (chapter.content == ChapterContent.reflowable) return _noPicture;
     final directory = dir;
     if (directory == null) return const ColoredBox(color: patraSurface);
     final file = File('${directory.path}/${DownloadsService.pageFileName(0)}');
-    if (!file.existsSync()) {
-      return ColoredBox(
-        color: patraSurface,
-        child: Icon(Icons.menu_book_outlined, size: 18, color: patraTextMuted),
-      );
-    }
+    if (!file.existsSync()) return _noPicture;
     return Image.file(file, fit: BoxFit.cover, cacheWidth: 138);
   }
+
+  /// What stands in for a cover this device has no picture of.
+  Widget get _noPicture => ColoredBox(
+    color: patraSurface,
+    child: Icon(Icons.menu_book_outlined, size: 18, color: patraTextMuted),
+  );
 }

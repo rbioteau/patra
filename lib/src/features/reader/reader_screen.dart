@@ -67,13 +67,33 @@ typedef BookPageKey = ({int chapterId, int page});
 /// A family of the page as well as the chapter so a page the reader has been
 /// shown is not asked for again on the way back to it, and so a page it has
 /// left behind is forgotten with the screen.
+///
+/// Where the device already holds a copy, the copy is what is read: a saved
+/// book is the pages the server rendered (ADR-0009), and it is the only page
+/// there is once there is no server to ask. A copy that does not hold this
+/// one — the server has recounted the book since the copy was made (#78) —
+/// falls back to asking, exactly as a stored page of pictures does.
 final bookPageProvider = FutureProvider.autoDispose
     .family<BookPage, BookPageKey>(retry: serverRetry, (ref, key) async {
-      final html = await ref
-          .watch(kavitaClientProvider)
-          .bookPage(key.chapterId, key.page);
+      final client = ref.watch(kavitaClientProvider);
+      final stored = await _storedBookPage(ref, key);
+      if (stored != null) return stored;
+      final html = await client.bookPage(key.chapterId, key.page);
       return BookPage.fromHtml(html);
     });
+
+/// The page of a book the stored copy already holds, or null where there is
+/// no copy of this one.
+Future<BookPage?> _storedBookPage(Ref ref, BookPageKey key) async {
+  final saved = ref.watch(savedChapterProvider(key.chapterId));
+  if (saved == null || saved.content != ChapterContent.reflowable) return null;
+  final file = File(
+    '${(await ref.watch(chapterDirProvider(key.chapterId).future)).path}/'
+    '${DownloadsService.pageFileName(key.page)}',
+  );
+  if (!file.existsSync()) return null;
+  return BookPage.fromHtml(file.readAsStringSync());
+}
 
 /// What a book is made of, as the server lists it: a tree of parts and their
 /// children, each with the page it begins on.
@@ -453,7 +473,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _savedChapter = saved;
     _serverIsPreparing = info.value?.seriesFormat == MangaFormat.pdf;
 
-    // Offline, the stored metadata is enough to read a saved chapter.
+    // Offline, the stored metadata is enough to read a saved chapter — and
+    // what it is made of is part of it, or a saved book would open in the
+    // reader for pages that are pictures and show nothing.
     final chapter =
         info.value ??
         (saved == null
@@ -465,6 +487,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 pages: saved.pages,
                 seriesName: saved.seriesName,
                 title: saved.title,
+                seriesFormat: saved.format,
               ));
 
     return Scaffold(
@@ -754,14 +777,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// this session was built with. Handing one to `book-resources` as though
   /// it were a path inside the book answers 400, and a page whose only block
   /// is that picture is then drawn as nothing at all.
-  ///
-  /// Drawn with the client's headers, which is the one way a picture named
-  /// as a path can be fetched at all: unlike the other image endpoints,
-  /// `book-resources` takes no key in the query.
   Widget _bookPicture(String src) {
+    // A page that came from a stored copy carries its pictures with it: the
+    // bytes are in the name itself, since there is no server left to fetch
+    // one from (ADR-0009). Decoded once and kept, because `Image.memory` is
+    // its own cache key: a new list on every build is a new picture for the
+    // decoder, and reading a saved book rebuilds its page often.
+    final carried = _carried.putIfAbsent(src, () => carriedPictureBytes(src));
+    if (carried != null) {
+      return Image.memory(
+        carried,
+        // The width of the column of words it sits in, and its own height
+        // from that: a picture in a page of a book is as wide as the page's
+        // text.
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+      );
+    }
     final client = _client;
     if (client == null) return const SizedBox.shrink();
-    final url = _pictureUrl(client, src);
+    final url = client.bookPictureUrl(widget.chapterId, src);
     return Image(
       image: CachedNetworkImageProvider(
         url,
@@ -770,24 +805,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         cacheKey: imageCacheKey(url),
         headers: client.imageHeaders,
       ),
-      // The width of the column of words it sits in, and its own height from
-      // that: a picture in a page of a book is as wide as the page's text.
       width: double.infinity,
       fit: BoxFit.fitWidth,
     );
   }
 
-  /// Where the picture a page named is fetched from.
-  String _pictureUrl(KavitaClient client, String src) {
-    if (src.startsWith('http://') || src.startsWith('https://')) return src;
-    // A scheme-less address is completed from this session's own, which is
-    // what `//host/…` has always meant and the only thing the server it
-    // names will answer.
-    if (src.startsWith('//')) {
-      return Uri.parse(client.baseUrl).resolve(src).toString();
-    }
-    return client.bookResourceUrl(widget.chapterId, src);
-  }
+  /// The bytes of the pictures the pages being read carry, by the name the
+  /// page gave them. See [_bookPicture]. Dies with the chapter.
+  final Map<String, Uint8List?> _carried = {};
 
   /// What the cog's sheet asked for, whichever chapter it was opened on.
   void _onSettingsOutcome(

@@ -28,6 +28,7 @@ Chapter _chapter(
   int pagesRead = 0,
   bool isSpecial = false,
   String title = '',
+  MangaFormat format = MangaFormat.archive,
 }) => Chapter(
   id: id,
   title: title.isEmpty ? range : title,
@@ -38,7 +39,7 @@ Chapter _chapter(
   pagesRead: pagesRead,
   isSpecial: isSpecial,
   sortOrder: id,
-  format: MangaFormat.archive,
+  format: format,
 );
 
 /// One numbered volume of two chapters, plus Kavita's specials pseudo-volume:
@@ -299,6 +300,53 @@ void main() {
 
     expect(find.byType(Skeleton), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('a saved book is openable, and one that is not saved is not', (
+    tester,
+  ) async {
+    // The row is the other way into a saved book (#77), and what opens it is
+    // the same thing the Downloads tab uses: a copy that says it is made of
+    // words, since nothing here can be told that by a server.
+    await _pumpOffline(
+      tester,
+      fill: (store) async {
+        // One volume of two chapters, the first of them a book: the row that
+        // opens offline is the one whose copy is here, whichever of the two
+        // kinds of page it is made of.
+        await store.putVolumes(5, [
+          Volume(
+            id: 10,
+            name: '1',
+            minNumber: 1,
+            pages: 200,
+            pagesRead: 0,
+            chapters: [
+              _chapter(101, range: '1', format: MangaFormat.epub),
+              _chapter(102, range: '2'),
+            ],
+          ),
+        ]);
+        await store.putSeries(_series);
+        await store.putSeriesMetadata(5, _metadata);
+      },
+      save: (root) => saveChapterFixture(
+        root,
+        _profileId,
+        chapterId: 101,
+        seriesId: 5,
+        title: 'Chapter 1',
+        pages: 100,
+        format: MangaFormat.epub,
+        pageHtml: '<p>The spice must flow.</p>',
+      ),
+    );
+
+    expect(_rowOpens(tester, 'Chapter 1'), isTrue);
+    expect(rowOpacity(tester, 'Chapter 1'), 1);
+    // Its neighbour is a chapter of pictures with nothing stored for it.
+    expect(_rowOpens(tester, 'Chapter 2'), isFalse);
+    expect(rowOpacity(tester, 'Chapter 2'), 0.4);
   });
 
   test(

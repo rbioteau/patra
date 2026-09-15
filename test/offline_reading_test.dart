@@ -183,6 +183,51 @@ void main() {
     expect(find.text('1 / 3'), findsOneWidget);
   });
 
+  testWidgets('a book saved for the journey is read on the train', (
+    tester,
+  ) async {
+    // The same journey, with a book in the bag: the copy is the pages the
+    // server rendered, and what opens them is the reader that knows they are
+    // words — which nothing on this device can be told by a server that is
+    // not there.
+    final root = _room(tester);
+    await saveChapterFixture(
+      root,
+      _romain.id,
+      chapterId: 42,
+      seriesName: 'Dune',
+      title: 'Dune Messiah',
+      pages: 3,
+      format: MangaFormat.epub,
+      pageHtml: '<p>The spice must flow.</p>',
+    );
+
+    await tester.pumpWidget(_app(root, _UnreachableAdapter()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Downloads'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dune'), findsOneWidget);
+    expect(find.text('Dune Messiah'), findsOneWidget);
+    // Counted with everything else the device holds, and with its own size.
+    expect(find.text('1 saved chapter'), findsOneWidget);
+    expect(find.text('3 pages · 3 B'), findsOneWidget);
+    // A book has no page picture for the row to show: what it stored is the
+    // words the server laid out, and a file of HTML is not one.
+    expect(find.byType(Image), findsNothing);
+
+    await tester.tap(find.text('Dune Messiah'));
+    await _pumpUntil(tester, find.text('The spice must flow.'));
+
+    // Read from the copy, and counted by it: nothing answered, so there was
+    // nowhere else either could have come from.
+    expect(find.text('The spice must flow.'), findsOneWidget);
+    await tester.tapAt(tester.getCenter(find.byType(ReaderScreen)));
+    await _pumpUntil(tester, find.text('1 / 3'));
+  });
+
   testWidgets('the home screen stops asking rather than shimmering forever', (
     tester,
   ) async {
