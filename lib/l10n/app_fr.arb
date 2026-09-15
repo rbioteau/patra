@@ -61,6 +61,7 @@
   "pdfPreparing": "Préparation du PDF",
   "pdfPreparingBody": "Le serveur découpe ce PDF en pages. Seule la première ouverture attend.",
   "bookPageUnavailable": "Cette page n'a pas pu être chargée.",
+  "bookContents": "Sommaire",
   "homeHeroPagesLeft": "{count, plural, =1{1 page restante} other{{count} pages restantes}}",
   "seriesChapterCount": "{count, plural, =0{Aucun chapitre} =1{1 chapitre} other{{count} chapitres}}",
   "seriesVolumeCount": "{count, plural, =1{1 tome} other{{count} tomes}}",

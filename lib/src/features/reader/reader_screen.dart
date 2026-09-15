@@ -18,7 +18,9 @@ import '../../settings/cache_settings.dart';
 import '../../settings/profile_preferences.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
+import '../../widgets/chrome_pill.dart';
 import '../../widgets/reader_settings_sheet.dart';
+import 'book_contents.dart';
 import 'book_page.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
@@ -71,6 +73,23 @@ final bookPageProvider = FutureProvider.autoDispose
           .watch(kavitaClientProvider)
           .bookPage(key.chapterId, key.page);
       return BookPage.fromHtml(html);
+    });
+
+/// What a book is made of, as the server lists it: a tree of parts and their
+/// children, each with the page it begins on.
+///
+/// Asked for a book and nothing else, and only while a book is being read —
+/// a chapter of pictures is a list of pages with nothing to name them, and a
+/// book nobody looks at the contents of is not asked twice. It is watched by
+/// the reader rather than by the sheet it fills because whether there is a
+/// list at all is what decides whether the reader offers one: a book with no
+/// contents offers none, and says nothing about the absence.
+final bookContentsProvider = FutureProvider.autoDispose
+    .family<List<BookContentsEntry>, int>(retry: serverRetry, (
+      ref,
+      chapterId,
+    ) async {
+      return ref.watch(kavitaClientProvider).bookContents(chapterId);
     });
 
 /// The reading surface: pure black canvas, chrome as gradient overlays, and a
@@ -652,6 +671,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Widget _buildBookReader(BuildContext context, ChapterInfo chapter) {
     _openBook(chapter);
     _saveInitialProgress(chapter);
+    // What the book is made of, as only the server can say: it read the
+    // file's own navigation, and no client can reconstruct the shape of a
+    // book from the pages it was laid out into. Watched here rather than by
+    // the sheet it fills, because whether there is a list at all is what
+    // decides whether the reader offers one.
+    final contents =
+        ref.watch(bookContentsProvider(widget.chapterId)).value ??
+        const <BookContentsEntry>[];
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -686,10 +713,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             thumbQueue: _thumbs,
             thumbProvider: null,
             onSeek: (page) => _goTo(page, chapter),
+            // A book with no contents offers none, and says nothing about
+            // the absence: no control for one, and no sheet explaining it.
+            onContents: contents.isEmpty
+                ? null
+                : () => _showContents(chapter, contents),
           ),
         ],
       ],
     );
+  }
+
+  /// The contents of the book being read, and what choosing one of them does.
+  ///
+  /// Choosing an entry is a jump to the page the server named for it, and
+  /// progress is reported for that page exactly as it is for one turned to by
+  /// hand — a reader who has moved to a chapter has read their way to the
+  /// place it begins, and the server's own record is what opens the book
+  /// there next time (#72).
+  ///
+  /// The chrome goes when a choice is made, as it does for the cog's sheet:
+  /// what the reader came to the bar for is behind them.
+  Future<void> _showContents(
+    ChapterInfo chapter,
+    List<BookContentsEntry> contents,
+  ) async {
+    final page = await showBookContentsSheet(context, entries: contents);
+    if (!mounted || page == null) return;
+    _goTo(page, chapter);
+    _showChromeAndBars(false);
   }
 
   /// What a picture a book's page refers to is drawn with.
@@ -1730,44 +1782,34 @@ class _SettingsCog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: () async {
-          final outcome = await switch (settings) {
-            _PictureSettings(:final direction, :final libraryName) =>
-              showReaderSettingsSheet(
-                context,
-                direction: direction,
-                libraryName: libraryName,
-              ),
-            // A book's sheet has nothing to report: what it changes, it
-            // writes to the person reading as it is being changed.
-            _BookSettings() => showBookSettingsSheet(context).then((_) => null),
-          };
-          // The sheet outlives the chrome it was opened from, so what it
-          // reports may arrive with the cog already out of the tree.
-          if (outcome == null || !context.mounted) return;
-          switch (settings) {
-            case _PictureSettings(:final onOutcome):
-              onOutcome(outcome);
-            case _BookSettings():
-              return;
-          }
-        },
-        borderRadius: BorderRadius.circular(radiusPill),
-        child: Container(
-          height: 36,
-          width: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .12),
-            borderRadius: BorderRadius.circular(radiusPill),
-            border: Border.all(color: Colors.white.withValues(alpha: .18)),
-          ),
-          child: const Icon(Icons.settings, size: 21, color: Colors.white),
-        ),
-      ),
+    return ChromePill(
+      tooltip: tooltip,
+      // One glyph wide: the pill is a cog, and a pill is not a label.
+      width: 44,
+      padding: EdgeInsets.zero,
+      onTap: () async {
+        final outcome = await switch (settings) {
+          _PictureSettings(:final direction, :final libraryName) =>
+            showReaderSettingsSheet(
+              context,
+              direction: direction,
+              libraryName: libraryName,
+            ),
+          // A book's sheet has nothing to report: what it changes, it
+          // writes to the person reading as it is being changed.
+          _BookSettings() => showBookSettingsSheet(context).then((_) => null),
+        };
+        // The sheet outlives the chrome it was opened from, so what it
+        // reports may arrive with the cog already out of the tree.
+        if (outcome == null || !context.mounted) return;
+        switch (settings) {
+          case _PictureSettings(:final onOutcome):
+            onOutcome(outcome);
+          case _BookSettings():
+            return;
+        }
+      },
+      child: const Icon(Icons.settings, size: 21, color: Colors.white),
     );
   }
 }
@@ -1782,6 +1824,7 @@ class _BottomChrome extends StatelessWidget {
     required this.thumbQueue,
     required this.thumbProvider,
     required this.onSeek,
+    this.onContents,
   });
 
   /// How far the chrome reaches up the screen, in points — roughly where
@@ -1789,7 +1832,8 @@ class _BottomChrome extends StatelessWidget {
   /// restating it: `28pt` of headroom, about `18pt` for the numerals' own
   /// line (13pt set at the source serif's height), `8pt` below, and a few
   /// points of air so a handle at the very end of the rail never rides the
-  /// scrim.
+  /// scrim. A book's chrome is the ten points taller by the contents control
+  /// it may carry, and nothing measures it there: a book has no rail.
   static const double barHeight = 62.0;
 
   final ChapterInfo chapter;
@@ -1811,6 +1855,12 @@ class _BottomChrome extends StatelessWidget {
   final ImageProvider? Function(int page)? thumbProvider;
   final ValueChanged<int> onSeek;
 
+  /// Opens the book's contents, or null where there are none to open: only a
+  /// book is made of parts the server can name, and only a book it listed
+  /// some for. Drawn beside the counter, which stays in the middle of the
+  /// screen whatever the bar carries.
+  final VoidCallback? onContents;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -1818,6 +1868,9 @@ class _BottomChrome extends StatelessWidget {
     // a field is not promoted, but a page of a book has no thumbnails to
     // give it.
     final thumbs = thumbProvider;
+    // The same move for the contents: the row below wants the callback
+    // rather than the promise of one.
+    final contents = onContents;
     final last = (page + span - 1).clamp(0, chapter.pages - 1);
     final counter = span > 1 && last > page
         ? l10n.pageSpreadCounter(page + 1, last + 1, chapter.pages)
@@ -1892,7 +1945,27 @@ class _BottomChrome extends StatelessWidget {
                 ),
                 Directionality(
                   textDirection: TextDirection.ltr,
-                  child: Text(counter, style: PatraText.pageNumeral()),
+                  child: Row(
+                    children: [
+                      // Whatever the bar carries, the counter is in the
+                      // middle of the screen: the room beside it is matched
+                      // on both sides, so a page number a reader looks for
+                      // is where they found it last time.
+                      const Spacer(),
+                      Text(counter, style: PatraText.pageNumeral()),
+                      Expanded(
+                        child: contents == null
+                            ? const SizedBox.shrink()
+                            : Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  child: BookContentsButton(onTap: contents),
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

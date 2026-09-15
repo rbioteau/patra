@@ -240,6 +240,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookPageUnavailable => 'This page could not be loaded.';
 
   @override
+  String get bookContents => 'Contents';
+
+  @override
   String homeHeroPagesLeft(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

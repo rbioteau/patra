@@ -229,6 +229,10 @@
   "@bookPageUnavailable": {
     "description": "Shown in place of a page of a book the server could not produce"
   },
+  "bookContents": "Contents",
+  "@bookContents": {
+    "description": "A book's table of contents: the label on the control in the reader's bottom chrome that opens it, and the heading of the sheet it opens."
+  },
   "homeHeroPagesLeft": "{count, plural, =1{1 page left} other{{count} pages left}}",
   "@homeHeroPagesLeft": {
     "description": "Pages remaining in the chapter the home hero would resume",

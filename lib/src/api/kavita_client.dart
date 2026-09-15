@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -523,6 +525,32 @@ class KavitaClient {
   String bookResourceUrl(int chapterId, String file) =>
       '$baseUrl/api/Book/$chapterId/book-resources'
       '?file=${Uri.encodeQueryComponent(file)}';
+
+  /// What a book is made of, as the file's own navigation lists it: a tree of
+  /// parts and their children, each with the page it begins on.
+  ///
+  /// `GET /api/Book/{chapterId}/chapters` — Kavita's own summary of it is
+  /// "essentially building the table of contents".
+  ///
+  /// The answer arrives as a [String] as readily as a list: the spec offers
+  /// it as `text/plain` as well as JSON, and dio only decodes the second, so
+  /// a server that chose the first hands the array back as text.
+  Future<List<BookContentsEntry>> bookContents(int chapterId) async {
+    final res = await _dio.get<dynamic>('/api/Book/$chapterId/chapters');
+    final body = res.data;
+    final List<dynamic> list;
+    if (body is List<dynamic>) {
+      list = body;
+    } else if (body is String && body.isNotEmpty) {
+      list = jsonDecode(body) as List<dynamic>;
+    } else {
+      list = const [];
+    }
+    return [
+      for (final entry in list)
+        if (entry is Map<String, dynamic>) BookContentsEntry.fromJson(entry),
+    ];
+  }
 
   /// Marks one chapter read or unread.
   ///

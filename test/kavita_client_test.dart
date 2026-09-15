@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 
 /// Simulates a Kavita server whose current valid token is [validToken]:
 /// 401 on any authenticated call made with another token, and a login
@@ -427,6 +428,73 @@ void main() {
       expect(client.seriesCoverUrl(4), contains('apiKey=the-api-key'));
     });
   });
+
+  group('the contents of a book', () {
+    Future<List<BookContentsEntry>> contentsAs(String contentType) async {
+      final client = KavitaClient(
+        baseUrl: 'http://kavita.test',
+        token: 'token',
+        username: 'romain',
+        apiKey: 'key',
+      );
+      final adapter = _ContentsAdapter(contentType);
+      client.httpClient.httpClientAdapter = adapter;
+      client.bareHttpClient.httpClientAdapter = adapter;
+      return client.bookContents(7);
+    }
+
+    test('the hierarchy the server sent is kept', () async {
+      final contents = await contentsAs(Headers.jsonContentType);
+
+      expect(contents.single.title, 'Part one');
+      // A part's children are its own and not a flat list beside it: which
+      // chapter belongs to which part is the whole of what a contents is
+      // for, and it is the one thing only the file's navigation knows.
+      expect(contents.single.children.single.title, 'The worm');
+      expect(contents.single.children.single.page, 5);
+    });
+
+    test('an answer sent as plain text is read all the same', () async {
+      // The spec offers this endpoint's answer as `text/plain` as readily as
+      // JSON, and dio decodes only the second: a client that casts the body
+      // to a list is handed a string by a server that chose the first.
+      final contents = await contentsAs('text/plain');
+
+      expect(contents.single.children.single.page, 5);
+    });
+  });
+}
+
+/// Answers a book's contents as [contentType], whatever it is.
+class _ContentsAdapter implements HttpClientAdapter {
+  _ContentsAdapter(this.contentType);
+
+  final String contentType;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    if (options.path != '/api/Book/7/chapters') {
+      return ResponseBody.fromString('{}', 404);
+    }
+    return ResponseBody.fromString(
+      jsonEncode([
+        {
+          'title': 'Part one',
+          'page': 0,
+          'children': [
+            {'title': 'The worm', 'page': 5, 'children': <Object>[]},
+          ],
+        },
+      ]),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [contentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
 
 /// Captures the request that was sent, then answers something harmless.

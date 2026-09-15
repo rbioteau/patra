@@ -568,6 +568,48 @@ class BookInfo {
   );
 }
 
+/// One entry in the contents of a book: a part, or a child of one.
+///
+/// `BookChapterItem` — `GET /api/Book/{chapterId}/chapters`, which Kavita
+/// builds out of the file's own navigation and itself describes as
+/// "essentially building the table of contents". The list is a **tree**, so
+/// an entry holds entries.
+///
+/// [page] is one of the server's own page numbers — the same numbering
+/// `book-page` takes, and it counts from zero — so the page a reader is shown
+/// is one more. A part the server could not place anywhere carries the
+/// book's first page, which is what Kavita writes for it.
+///
+/// `part` is deliberately not read: it is the id of an anchor inside the
+/// book's own files (`01_values.xhtml#h_sVZPaxUSy/`), which only a reader
+/// that renders those files can scroll to. A page is what this one opens.
+class BookContentsEntry {
+  const BookContentsEntry({
+    required this.title,
+    required this.page,
+    this.children = const [],
+  });
+
+  final String title;
+
+  /// Where the entry begins, as a page the server counted from zero.
+  final int page;
+
+  /// What is nested under this entry, in the order the file's navigation
+  /// nests them.
+  final List<BookContentsEntry> children;
+
+  factory BookContentsEntry.fromJson(Map<String, dynamic> json) =>
+      BookContentsEntry(
+        title: json['title'] as String? ?? '',
+        page: json['page'] as int? ?? 0,
+        children: [
+          for (final child in json['children'] as List<dynamic>? ?? const [])
+            if (child is Map<String, dynamic>) BookContentsEntry.fromJson(child),
+        ],
+      );
+}
+
 /// Where the server says a reader is in a chapter: `ProgressDto` —
 /// `GET /api/Reader/get-progress`.
 ///
