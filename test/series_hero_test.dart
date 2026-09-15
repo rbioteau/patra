@@ -151,6 +151,7 @@ Future<void> _pumpSeries(
   List<Map<String, dynamic>> volumes, {
   bool refuse = false,
   LibraryType? libraryType,
+  Locale locale = const Locale('en'),
 }) async {
   final cacheDir = mockPathProvider();
   final client = KavitaClient(
@@ -181,6 +182,7 @@ Future<void> _pumpSeries(
       ],
       child: MaterialApp(
         theme: patraTheme(),
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const SeriesDetailScreen(
@@ -458,6 +460,33 @@ void main() {
             .imageUrl,
         contains('/api/Image/series-cover'),
       );
+    });
+
+    // The button names what it opens in the library's own vocabulary, and a
+    // Book library's is "livre" — never a chapter, which is the word a manga
+    // shelf uses for the same thing.
+    testWidgets('names the book, as the rows below do', (tester) async {
+      await _pumpSeries(
+        tester,
+        bookVolumes,
+        libraryType: LibraryType.book,
+      );
+
+      expect(find.text('Continue — Book 1'), findsOneWidget);
+      // A book has no chapter breakdown, so its row is the book too.
+      expect(find.text('Book 1'), findsOneWidget);
+    });
+
+    testWidgets('and in French calls it a livre', (tester) async {
+      await _pumpSeries(
+        tester,
+        bookVolumes,
+        libraryType: LibraryType.book,
+        locale: const Locale('fr'),
+      );
+
+      expect(find.text('Reprendre — livre 1'), findsOneWidget);
+      expect(find.text('Livre 1'), findsOneWidget);
     });
   });
 }
