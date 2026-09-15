@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
@@ -26,7 +27,7 @@ Map<String, dynamic> _chapter(int id, String range, int pages, int read) => {
 };
 
 class _SeriesAdapter implements HttpClientAdapter {
-  _SeriesAdapter(this.volumes, {this.refuse = false});
+  _SeriesAdapter(this.volumes, {this.refuse = false, this.libraryType});
 
   final List<Map<String, dynamic>> volumes;
 
@@ -34,6 +35,11 @@ class _SeriesAdapter implements HttpClientAdapter {
   /// see looks like, since Kavita scopes the lookup to the account and says
   /// the series does not exist.
   final bool refuse;
+
+  /// What the one library holds, which is what names a series' parts. Absent
+  /// where the test does not care: no answer at all leaves the type at its
+  /// manga fallback.
+  final LibraryType? libraryType;
 
   @override
   Future<ResponseBody> fetch(
@@ -50,6 +56,12 @@ class _SeriesAdapter implements HttpClientAdapter {
     );
     if (refuse) return ResponseBody.fromString('nope', 400);
     return switch (options.path) {
+      '/api/Library/libraries' => switch (libraryType) {
+        null => ResponseBody.fromBytes(const [], 404),
+        final type => json([
+          {'id': 1, 'name': 'Shelf', 'type': type.id},
+        ]),
+      },
       '/api/Series/5' => json({
         'id': 5,
         'name': 'Vinland Saga',
@@ -138,6 +150,7 @@ Future<void> _pumpSeries(
   WidgetTester tester,
   List<Map<String, dynamic>> volumes, {
   bool refuse = false,
+  LibraryType? libraryType,
 }) async {
   final cacheDir = mockPathProvider();
   final client = KavitaClient(
@@ -146,10 +159,15 @@ Future<void> _pumpSeries(
     username: 'romain',
     apiKey: 'key',
   );
-  client.httpClient.httpClientAdapter = _SeriesAdapter(volumes, refuse: refuse);
+  client.httpClient.httpClientAdapter = _SeriesAdapter(
+    volumes,
+    refuse: refuse,
+    libraryType: libraryType,
+  );
   client.bareHttpClient.httpClientAdapter = _SeriesAdapter(
     volumes,
     refuse: refuse,
+    libraryType: libraryType,
   );
 
   await tester.pumpWidget(
@@ -379,6 +397,67 @@ void main() {
         },
       ]);
       expect(hero(tester).url, contains('/api/Image/series-cover'));
+    });
+  });
+
+  // A book is one reading unit Kavita paginates itself (ADR-0008), and every
+  // number on this screen comes off the pages it counted: the ring on the
+  // cover is how far through the book is, as it is for a chapter.
+  group('a book on the series screen', () {
+    /// One book, 120 of 300 pages read, in a Book library — the shape Kavita
+    /// gives a file that is a whole book: a volume with a single placeholder
+    /// chapter standing in for it, carrying the format that makes its pages
+    /// the server's.
+    final bookVolumes = [
+      {
+        'id': 30,
+        'name': '1',
+        'minNumber': 1,
+        'pages': 300,
+        'pagesRead': 120,
+        'chapters': [
+          {
+            'id': 301,
+            'range': '-100000',
+            'minNumber': -100000,
+            'pages': 300,
+            'pagesRead': 120,
+            'format': MangaFormat.epub.id,
+          },
+        ],
+      },
+    ];
+
+    testWidgets('the cover carries the book\'s progress', (tester) async {
+      await _pumpSeries(
+        tester,
+        bookVolumes,
+        libraryType: LibraryType.book,
+      );
+
+      final cover = tester.widget<CoverImage>(find.byType(CoverImage).first);
+      // The book is 120 of 300, and the series' own tally is a different
+      // number (the adapter's 140 of 300): the bar follows the picture,
+      // which is the book's.
+      expect(cover.progress, closeTo(0.4, 0.001));
+    });
+    // A book has no page picture to draw, so what stands behind the hero is
+    // the cover rather than a request that can only come back empty.
+    testWidgets('draws the cover behind the hero, not a page', (tester) async {
+      await _pumpSeries(
+        tester,
+        bookVolumes,
+        libraryType: LibraryType.book,
+      );
+
+      expect(
+        tester
+            .widget<CachedNetworkImage>(
+              find.byKey(const ValueKey('heroBackdrop')),
+            )
+            .imageUrl,
+        contains('/api/Image/series-cover'),
+      );
     });
   });
 }

@@ -29,22 +29,26 @@ import '../../routes.dart';
 /// the server inverts into "last read more than a month ago". See
 /// `catalogue.onDeck`.
 ///
-/// What is left to decide here is only what the endpoint does not know: that
-/// a series made of [[Reflowable content]] is still passed over here (#73) —
-/// the reader opens one, but its progress is not what this screen is reading
-/// yet — and which of the candidates was read most recently. A series carrying no
-/// read date stays eligible; it simply cannot outrank one that says when it
-/// was read, so with no dates anywhere the shelf's own order stands.
+/// What is left to decide here is only what the endpoint does not know: which
+/// of the candidates was read most recently, and that a series is finished.
+/// A series carrying no read date stays eligible; it simply cannot outrank one
+/// that says when it was read, so with no dates anywhere the shelf's own order
+/// stands.
+///
+/// **What a series is made of is not asked, and never was anything but a
+/// gap.** A book is read on the pages the server laid its words out into
+/// (ADR-0008), and it is pages that Kavita counts, so a shelf that holds one
+/// is holding reading progress like any other. Passing over [[Reflowable
+/// content]] here was the reader's own limitation wearing this screen's
+/// clothes: the button opens one now, so there is nothing left to exclude.
 ///
 /// The finished guard is a belt-and-braces check for a server that hands back
 /// something already read.
+///
 Series? featuredSeries(List<Series> candidates) {
   Series? best;
   for (final series in candidates) {
     if (series.isRead) continue;
-    // Only a series of fixed pages can be opened again, which is the whole
-    // of what the hero's button offers.
-    if (series.content != ChapterContent.fixedPages) continue;
     if (best == null || _readMoreRecently(series, best)) best = series;
   }
   return best;
@@ -125,7 +129,9 @@ class ContinueHero extends ConsumerWidget {
     // screen, this card exists only to be resumed from, and a card with no
     // artwork at all is what refusing that page would cost.
     final underWay = entryUnderWay(data.point);
-
+    // A book has no page picture to draw behind the card — see
+    // [Chapter.hasPagePictures]. What stands in is the cover, which is what
+    // the backdrop already falls back to for a page that will not load.
     return Padding(
       padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, sectionGap),
       child: ClipRRect(
@@ -137,7 +143,10 @@ class ContinueHero extends ConsumerWidget {
               Positioned.fill(
                 child: PageBackdrop(
                   seriesId: series.id,
-                  chapterId: data.point?.entry.chapter.id,
+                  chapterId: switch (data.point?.entry.chapter) {
+                    final chapter? when chapter.hasPagePictures => chapter.id,
+                    _ => null,
+                  },
                   page: _resumePage,
                 ),
               ),
