@@ -191,6 +191,31 @@ class _PatraLaunchState extends State<PatraLaunch>
 double _interval(double ms, double start, double duration) =>
     ((ms - start) / duration).clamp(0.0, 1.0).toDouble();
 
+/// The accent period, in the wordmark's own 65.184 x 36.4 units.
+///
+/// The kit exports the signature **without** it — the lockup it ships is the
+/// word alone — so it is drawn here, measured off the outlines rather than
+/// eyed. The letters bottom out between 28.31 and 28.39 depending on whether
+/// they are flat or round, so that is the baseline to within a tenth of a
+/// unit; their x-height is 13.97, and Source Serif 4's is 486/1000 em, which
+/// puts the em at 28.7. A period is about .115em across, and the gap is its
+/// own left side bearing. A tenth of a unit is a tenth of a pixel at the size
+/// this is drawn, which is why the baseline can simply be 28.39.
+const _dotRadius = 1.7;
+const _dotGap = 2.2;
+
+/// Where the period's centre sits: on the baseline, a side bearing past the
+/// final "a".
+const _dotCentre = Offset(
+  PatraLogoPaths.wordmarkWidth + _dotGap + _dotRadius,
+  28.39 - _dotRadius,
+);
+
+/// The signature's width with the period on it. Centring on the word alone
+/// and appending the period hangs the lockup off to the right of the mark's
+/// own axis, so both are centred together.
+const _signatureWidth = PatraLogoPaths.wordmarkWidth + _dotGap + 2 * _dotRadius;
+
 class _LaunchPainter extends CustomPainter {
   const _LaunchPainter(this.ms);
 
@@ -227,16 +252,30 @@ class _LaunchPainter extends CustomPainter {
       );
     }
     final t = Curves.easeOutCubic.transform(_interval(ms, 2400, 800));
+    // The period lands a beat after the word, which is the beat it had on
+    // every other screen before the frond took the lockup with it.
+    final dot = Curves.easeOutBack.transform(_interval(ms, 2900, 400));
     if (t > 0) {
       canvas.save();
       canvas.translate(
-        (PatraLogoPaths.markWidth - PatraLogoPaths.wordmarkWidth) / 2,
+        (PatraLogoPaths.markWidth - _signatureWidth) / 2,
         145 + 7 * (1 - t),
       );
       canvas.drawPath(
         PatraLogoPaths.wordmark,
         Paint()..color = patraText.withValues(alpha: t),
       );
+      if (dot > 0) {
+        canvas.save();
+        canvas.translate(_dotCentre.dx, _dotCentre.dy);
+        canvas.scale(dot);
+        canvas.drawCircle(
+          Offset.zero,
+          _dotRadius,
+          Paint()..color = patraAccent.withValues(alpha: dot.clamp(0.0, 1.0)),
+        );
+        canvas.restore();
+      }
       canvas.restore();
     }
   }
