@@ -8,6 +8,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
+import '../../auth/session.dart';
 import '../../format.dart';
 import '../../theme.dart';
 
@@ -140,6 +141,11 @@ class _SavedRow extends ConsumerWidget {
     final dir = ref.watch(chapterDirProvider(chapter.chapterId)).value;
     // The same row the series screen shows, and it grows the same way.
     final tablet = isTabletLayout(context);
+    // What the server counts now, where that is not what this copy was made
+    // with: the number the copy is out of step with, and the one a refresh
+    // stores it again by.
+    final recounted = chapter.serverPages;
+    final offline = ref.watch(offlineProvider);
 
     return InkWell(
       // Resume where the reader left off: opening at page 0 would post
@@ -221,6 +227,27 @@ class _SavedRow extends ConsumerWidget {
                       ),
                     ),
                   ],
+                  // A copy keeps the pagination it was made with (ADR-0009),
+                  // so the count the server gives now is a fact about it:
+                  // where the two disagree the copy says so, and is offered
+                  // for another go — never silently refetched, and never
+                  // silently left to resume at the wrong page.
+                  if (recounted != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      l10n.copyOutOfDate(recounted),
+                      style: PatraText.metadata(
+                        size: tablet ? 12 : 11,
+                        color: patraDanger,
+                      ),
+                    ),
+                    // Only where it can be answered: storing a copy again is
+                    // the server's pages, and there are none without one.
+                    if (!offline) ...[
+                      const SizedBox(height: 7),
+                      _RefreshCopy(chapter: chapter),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -271,6 +298,76 @@ class _SavedRow extends ConsumerWidget {
       ),
     );
     return confirmed ?? false;
+  }
+}
+
+/// The refresh a copy out of step with the server is offered: stored again,
+/// with the pages the server counts now.
+///
+/// Worded rather than a glyph, and of a width of its own — a control that
+/// grew with the row would stop reading as a control. `patraOffline`, which
+/// is the token for downloads: making a copy again is one.
+class _RefreshCopy extends ConsumerWidget {
+  const _RefreshCopy({required this.chapter});
+
+  final SavedChapter chapter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final stored = ref.watch(
+      downloadsProvider.select(
+        (state) => state.value?.inFlight[chapter.chapterId],
+      ),
+    );
+
+    if (stored != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: patraOffline,
+              value: stored == 0 ? null : stored,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            l10n.refreshingCopy,
+            style: PatraText.metadata(color: patraOffline),
+          ),
+        ],
+      );
+    }
+    return InkWell(
+      onTap: () => ref.read(downloadsProvider.notifier).refresh(chapter),
+      borderRadius: BorderRadius.circular(radiusPill),
+      child: Container(
+        // Prototype metrics, like the pill on a chapter row: 30 tall, never
+        // narrower than 84 — the word and its icon, and no more.
+        constraints: const BoxConstraints(minHeight: 30, minWidth: 84),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: patraOffline.withValues(alpha: .14),
+          borderRadius: BorderRadius.circular(radiusPill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.refresh, size: 14, color: patraOffline),
+            const SizedBox(width: 7),
+            Text(
+              l10n.refreshCopy,
+              style: PatraText.metadata(color: patraOffline),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -1,0 +1,368 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/l10n/generated/app_localizations.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
+import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/features/downloads/downloads_screen.dart';
+import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/theme.dart';
+
+import 'test_support.dart';
+
+/// How many pages the copy on the device was made with.
+const _savedPages = 3;
+
+/// A chapter id the book endpoints are keyed by, as in every other book here.
+const _chapterId = 7;
+
+/// What every stored page says: the words the server laid out, which is what a
+/// saved book is made of (ADR-0009).
+const _pageHtml = '<p>The spice must flow.</p>';
+
+/// A page longer than the screen, which is the only case in which there is a
+/// place within a page for anybody to be.
+final _longPage = [
+  for (var i = 0; i < 40; i++) '<p>Paragraph $i of a long page.</p>',
+].join();
+
+/// A Kavita holding one book, which is either there or not — the two halves of
+/// a journey.
+class _BookServer implements HttpClientAdapter {
+  _BookServer({this.pages = _savedPages, this.reachable = true});
+
+  /// How many pages the server says the book is made of, which is its own to
+  /// recount: it lays the words out, and nothing asks it not to change its
+  /// mind.
+  final int pages;
+
+  /// Whether it answers at all. A train is not a refusal: what this turns off
+  /// is the connection, not the book.
+  bool reachable;
+
+  /// Every book page asked for, in order.
+  final requested = <int>[];
+
+  /// Every progress post: the page, and the place within it.
+  final posted = <({int pageNum, String? anchor})>[];
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    if (!reachable) {
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'no route to host',
+      );
+    }
+    switch (options.path) {
+      case '/api/Reader/progress':
+        final body = options.data as Map<String, dynamic>;
+        posted.add((
+          pageNum: body['pageNum'] as int,
+          anchor: body['bookScrollId'] as String?,
+        ));
+        return _answer('{}', json: true);
+      case '/api/Reader/get-progress':
+        return _answer({
+          'volumeId': 4,
+          'chapterId': _chapterId,
+          'seriesId': 3,
+          'libraryId': 1,
+          'pageNum': 0,
+          'bookScrollId': null,
+        }, json: true);
+      case '/api/Reader/chapter-info':
+        // A book has no image pages for this endpoint to count: how long it is
+        // has to be asked of the book.
+        return _answer({
+          'seriesId': 3,
+          'volumeId': 4,
+          'libraryId': 1,
+          'libraryType': LibraryType.book.id,
+          'pages': 0,
+          'seriesName': 'Dune',
+          'title': 'Dune',
+          'seriesFormat': MangaFormat.epub.id,
+        }, json: true);
+      case '/api/Book/$_chapterId/book-info':
+        return _answer({
+          'bookTitle': 'Dune Messiah',
+          'seriesId': 3,
+          'volumeId': 4,
+          'libraryId': 1,
+          'pages': pages,
+          'seriesName': 'Dune',
+          'seriesFormat': MangaFormat.epub.id,
+        }, json: true);
+      case '/api/Book/$_chapterId/book-page':
+        final page = options.queryParameters['page'] as int;
+        requested.add(page);
+        return _answer(_pageHtml);
+      case '/api/Book/$_chapterId/book-resources':
+        return _answer('');
+      case '/api/Book/$_chapterId/chapters':
+        return _answer(const <Object>[], json: true);
+    }
+    throw DioException(
+      requestOptions: options,
+      type: DioExceptionType.unknown,
+      error: 'nothing here answers ${options.path}',
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody _answer(Object body, {bool json = false}) =>
+    ResponseBody.fromString(
+      json ? jsonEncode(body) : body as String,
+      200,
+      headers: {
+        Headers.contentTypeHeader: [
+          if (json) Headers.jsonContentType else 'text/html',
+        ],
+      },
+    );
+
+/// Whose store the device is holding these copies for.
+const _profileId = 'https://kavita.test#1';
+
+/// Where this profile's saved chapters live, under a mocked `path_provider`.
+Directory _room() {
+  final dir = mockPathProvider();
+  return Directory('${dir.path}/downloads')..createSync();
+}
+
+/// The book, saved for the train before any of these tests begin.
+Future<void> _saved(
+  Directory room, {
+  int pages = _savedPages,
+  String pageHtml = _pageHtml,
+}) => saveChapterFixture(
+  room,
+  _profileId,
+  chapterId: _chapterId,
+  seriesName: 'Dune',
+  title: 'Dune Messiah',
+  pages: pages,
+  format: MangaFormat.epub,
+  pageHtml: pageHtml,
+);
+
+/// One run of the app: a screen, the device's store and a server.
+///
+/// The container is handed back because a test here builds two — a journey is
+/// two runs, and what the second one knows of the first is on the disk and
+/// nowhere else.
+Future<ProviderContainer> _pump(
+  WidgetTester tester,
+  Directory room,
+  _BookServer server,
+  Widget home,
+) async {
+  final client = KavitaClient(
+    baseUrl: 'http://kavita.test',
+    token: 'token',
+    username: 'romain',
+    apiKey: 'key',
+  );
+  client.httpClient.httpClientAdapter = server;
+  client.bareHttpClient.httpClientAdapter = server;
+  final container = ProviderContainer(
+    overrides: [
+      testKeychain(),
+      kavitaClientProvider.overrideWithValue(client),
+      downloadsServiceProvider.overrideWithValue(
+        DownloadsService(root: room, profileId: _profileId),
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: patraTheme(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: home,
+      ),
+    ),
+  );
+  await tester.pump();
+  for (var i = 0; i < 4; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  return container;
+}
+
+Future<ProviderContainer> _pumpReader(
+  WidgetTester tester,
+  Directory room,
+  _BookServer server, {
+  int initialPage = 0,
+}) => _pump(
+  tester,
+  room,
+  server,
+  ReaderScreen(chapterId: _chapterId, initialPage: initialPage),
+);
+
+Future<ProviderContainer> _pumpDownloads(
+  WidgetTester tester,
+  Directory room,
+  _BookServer server,
+) => _pump(tester, room, server, const DownloadsScreen());
+
+/// Pumps until [ready], rather than for a fixed number of frames: what these
+/// tests wait on is real filesystem IO, and a frame budget is a race a loaded
+/// machine loses.
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() ready, {
+  int frames = 80,
+}) async {
+  for (var i = 0; i < frames && !ready(); i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
+/// What the row says about a copy the server no longer counts the same way.
+String get _stale => 'Out of date — the server now counts 12 pages';
+
+void main() {
+  testWidgets('progress a journey took reaches the server when it answers', (
+    tester,
+  ) async {
+    final room = _room();
+    await _saved(room, pageHtml: _longPage);
+    final meta = File(
+      '${(await DownloadsService(root: room, profileId: _profileId).chapterDir(_chapterId)).path}/meta.json',
+    );
+    Map<String, dynamic> copy() =>
+        jsonDecode(meta.readAsStringSync()) as Map<String, dynamic>;
+    final train = _BookServer(reachable: false);
+
+    await _pumpReader(tester, room, train, initialPage: 1);
+    expect(find.text('Paragraph 0 of a long page.'), findsOneWidget);
+
+    // Read on, and down the page: where a reader is in a book is a page and a
+    // place within it, and both were recorded with nothing to tell.
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+
+    // Kept by the copy, which is the one thing here that outlives the app
+    // being closed on the train.
+    final kept = copy()['pending'] as Map<String, dynamic>?;
+    expect(
+      kept,
+      isNotNull,
+      reason: 'the copy holds what the server was never told',
+    );
+    expect(kept!['pageNum'], 1);
+    // Not the top of the page, which is where a page number on its own would
+    // open it again.
+    expect(kept['bookScrollId'], isNot('0.0000'));
+    expect(
+      train.posted,
+      isEmpty,
+      reason: 'nothing answered, so nothing was told',
+    );
+
+    // Home again: the same device, a server that answers, and nothing left
+    // running that remembers the journey. Reading the store is what sends it.
+    final home = _BookServer();
+    await _pumpDownloads(tester, room, home);
+    await _pumpUntil(tester, () => home.posted.isNotEmpty);
+
+    // The page and the place within it, together: half of it is a reader put
+    // back at words they had already read.
+    expect(home.posted, [
+      (pageNum: kept['pageNum'], anchor: kept['bookScrollId']),
+    ]);
+    await _pumpUntil(tester, () => copy()['pending'] == null);
+    expect(copy()['pending'], isNull, reason: 'taken, so nothing is held');
+  });
+
+  testWidgets('a copy the server has recounted says so, and is made again', (
+    tester,
+  ) async {
+    // Twelve where the copy was made with three: the server lays a book out
+    // and can recount it whenever it likes, and a copy keeps the pagination it
+    // was made with (ADR-0009).
+    final room = _room();
+    await _saved(room);
+    final server = _BookServer(pages: 12);
+
+    await _pumpReader(tester, room, server);
+    expect(find.text('The spice must flow.'), findsOneWidget);
+    expect(
+      server.posted,
+      isNotEmpty,
+      reason: 'an out-of-date copy still opens, and still records progress',
+    );
+
+    final recounting = _BookServer(pages: 12);
+    final home = await _pumpDownloads(tester, room, recounting);
+    await _pumpUntil(
+      tester,
+      () => home.read(savedChapterProvider(_chapterId))?.serverPages == 12,
+    );
+
+    // Named rather than silently refetched, and offered rather than left:
+    // resuming at the wrong page is the one failure that makes a saved copy
+    // look broken.
+    expect(find.text(_stale), findsOneWidget);
+    expect(find.text('Refresh'), findsOneWidget);
+
+    await tester.tap(find.text('Refresh'));
+    await _pumpUntil(tester, () => recounting.requested.length == 12);
+
+    // Every page the server counts now, and none of the three it counted when
+    // this copy was made.
+    expect(recounting.requested, [for (var page = 0; page < 12; page++) page]);
+    await _pumpUntil(
+      tester,
+      () => home.read(savedChapterProvider(_chapterId))?.pages == 12,
+    );
+
+    // Counted by what it holds now, and no longer saying otherwise.
+    expect(find.textContaining('12 pages'), findsOneWidget);
+    expect(find.textContaining('Out of date'), findsNothing);
+    expect(find.text('Refresh'), findsNothing);
+  });
+
+  testWidgets('a copy the server still counts the same is not marked', (
+    tester,
+  ) async {
+    // The same opening, with a server that has not recounted the book: the two
+    // agree, so there is nothing to say and nothing to offer.
+    final room = _room();
+    await _saved(room);
+    final server = _BookServer();
+
+    await _pumpReader(tester, room, server);
+    expect(find.text('The spice must flow.'), findsOneWidget);
+    await _pumpUntil(tester, () => server.posted.isNotEmpty);
+
+    final home = await _pumpDownloads(tester, room, _BookServer());
+    await _pumpUntil(tester, () => home.read(downloadsProvider).hasValue);
+    expect(home.read(savedChapterProvider(_chapterId))?.outOfDate, isFalse);
+    expect(find.textContaining('Out of date'), findsNothing);
+    expect(find.text('Refresh'), findsNothing);
+    // What it was made with, still.
+    expect(find.textContaining('3 pages'), findsOneWidget);
+  });
+}

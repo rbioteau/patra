@@ -13,7 +13,7 @@ Usable, still young. What works:
 - **Library** — filter pills per library, 3-column cover grid with reading progress
 - **Series** — volumes, chapters and specials as rows, with covers and per-chapter progress
 - **Books (EPUB)** — a book's row opens the reader on the pages Kavita laid out, with a table of contents, a text size and a line spacing of your own, and a copy you can save for the train
-- **Offline** — save chapters and books to the device and read them with no server reachable
+- **Offline** — save chapters and books to the device, read them with no server reachable, and have the progress you made on the train reach the server when you are back
 - English and French, following the system language
 
 ## Roadmap

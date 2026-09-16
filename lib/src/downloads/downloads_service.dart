@@ -9,6 +9,54 @@ import '../api/models.dart';
 import '../features/reader/book_page.dart';
 import '../profile_files.dart';
 
+/// Progress the device has recorded and the server has not been told: the
+/// page the reader is on, and — for a book — the place within it.
+///
+/// A saved copy is the only place progress made with no server can wait: it
+/// is what the reader mirrors its place into as it reads, and the one thing
+/// on the device that outlives the app being closed on a train. So what is
+/// posted travels through the copy — written down before the post is
+/// attempted, cleared once the server has taken it — and the anchor comes
+/// along with the number, because a book's page is longer than the screen
+/// and a page number on its own opens it again at words already read.
+class PendingProgress {
+  const PendingProgress({required this.pageNum, this.bookScrollId});
+
+  final int pageNum;
+
+  /// Where in the page the reader is, as the progress call has always carried
+  /// it. Null for a chapter of pictures, which has no place within a page to
+  /// be in.
+  final String? bookScrollId;
+
+  Map<String, dynamic> toJson() => {
+    'pageNum': pageNum,
+    'bookScrollId': bookScrollId,
+  };
+
+  static PendingProgress? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final pageNum = json['pageNum'];
+    if (pageNum is! int) return null;
+    return PendingProgress(
+      pageNum: pageNum,
+      bookScrollId: json['bookScrollId'] as String?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is PendingProgress &&
+      other.pageNum == pageNum &&
+      other.bookScrollId == bookScrollId;
+
+  @override
+  int get hashCode => Object.hash(pageNum, bookScrollId);
+
+  @override
+  String toString() => 'PendingProgress($pageNum, $bookScrollId)';
+}
+
 /// A chapter whose pages are stored on the device.
 class SavedChapter {
   const SavedChapter({
@@ -22,6 +70,8 @@ class SavedChapter {
     required this.bytes,
     this.pagesRead = 0,
     this.format = MangaFormat.unknown,
+    this.pending,
+    this.serverPages,
   });
 
   final int chapterId;
@@ -46,23 +96,57 @@ class SavedChapter {
   /// Mirrored locally so the Downloads tab can show progress with no server.
   final int pagesRead;
 
+  /// What the server has not been told: the page the reader is on — and, for
+  /// a book, the place within it — recorded while the server could not be
+  /// reached. Null where the two are in step.
+  final PendingProgress? pending;
+
+  /// What the server last said this chapter is made of, where that is not
+  /// what the copy holds. Null where the two agree.
+  ///
+  /// A copy keeps the pagination it was made with (ADR-0009), which is the
+  /// whole reason the two can disagree: the server can recount a book, and
+  /// nothing asks it not to. Kept rather than acted on — the copy is named as
+  /// out of date and offered for a refresh, and is read either way — and it
+  /// is the number a refresh refetches, so a copy is never made twice with
+  /// the count that left it out of step.
+  final int? serverPages;
+
   /// What the copy is made of, which is what decides how it is read back.
   ChapterContent get content => format.content;
 
   double get progress => pages == 0 ? 0 : (pagesRead / pages).clamp(0.0, 1.0);
   bool get isRead => pages > 0 && pagesRead >= pages;
 
-  SavedChapter copyWith({int? pagesRead, int? bytes}) => SavedChapter(
+  /// Whether the copy is out of step with the server: it was made with a
+  /// count of pages the server no longer gives.
+  bool get outOfDate => serverPages != null;
+
+  SavedChapter copyWith({
+    int? pages,
+    int? pagesRead,
+    int? bytes,
+    PendingProgress? pending,
+    bool clearPending = false,
+    int? serverPages,
+    bool clearServerPages = false,
+  }) => SavedChapter(
     chapterId: chapterId,
     seriesId: seriesId,
     volumeId: volumeId,
     libraryId: libraryId,
     seriesName: seriesName,
     title: title,
-    pages: pages,
+    pages: pages ?? this.pages,
     bytes: bytes ?? this.bytes,
     pagesRead: pagesRead ?? this.pagesRead,
     format: format,
+    // Two fields that are *cleared* rather than set, which is why they do
+    // not follow the keep-what-is-there rule: what the server has taken, and
+    // what it has come back into step about, are off the copy rather than
+    // overwritten with another value.
+    pending: clearPending ? null : pending ?? this.pending,
+    serverPages: clearServerPages ? null : serverPages ?? this.serverPages,
   );
 
   /// "Series — Volume 1": what a confirmation dialog needs to say which copy
@@ -81,6 +165,8 @@ class SavedChapter {
     'bytes': bytes,
     'pagesRead': pagesRead,
     'format': format.id,
+    'pending': pending?.toJson(),
+    'serverPages': serverPages,
   };
 
   static SavedChapter? fromJson(Object? json) {
@@ -99,6 +185,8 @@ class SavedChapter {
       bytes: json['bytes'] as int? ?? 0,
       pagesRead: json['pagesRead'] as int? ?? 0,
       format: MangaFormat.fromId(json['format'] as int?),
+      pending: PendingProgress.fromJson(json['pending']),
+      serverPages: json['serverPages'] as int?,
     );
   }
 }
@@ -161,6 +249,11 @@ class DownloadsService {
   static int? pageOfFileName(String name) =>
       name.startsWith('page_') ? int.tryParse(name.substring(5)) : null;
 
+  /// Where pages are written before they are a copy, inside the chapter's own
+  /// directory: `scan` only reads the profile root, so a download in progress
+  /// is invisible to it — and a failed one costs the copy nothing.
+  static const stagingDirName = 'staging';
+
   Future<File> pageFile(int chapterId, int page) async =>
       File('${(await chapterDir(chapterId)).path}/${pageFileName(page)}');
 
@@ -200,6 +293,14 @@ class DownloadsService {
   /// the pages come from: a chapter of pictures is one image per page, and a
   /// book is the pages the server laid its words out into (ADR-0008), stored
   /// as it rendered them and made to carry their own pictures (ADR-0009).
+  ///
+  /// The pages land **beside the copy they are replacing and are moved into
+  /// place once every one of them is on disk**, so a download that fails — or
+  /// that is cancelled, which leaving the screen does — costs nothing the
+  /// reader chose to keep. That is the whole difference between storing a
+  /// chapter and storing it *again*: a fresh one leaves a directory with no
+  /// `meta.json`, which the next `scan` sweeps, while a copy already there is
+  /// still exactly the copy it was.
   Future<SavedChapter> download({
     required KavitaClient client,
     required SavedChapter chapter,
@@ -207,10 +308,12 @@ class DownloadsService {
     CancelToken? cancelToken,
   }) async {
     final dir = await chapterDir(chapter.chapterId);
+    dir.createSync(recursive: true);
+    final staging = Directory('${dir.path}/$stagingDirName');
     // Start clean: a leftover partial download must not be mistaken for a
     // page of this one.
-    await _deleteQuietly(dir);
-    dir.createSync(recursive: true);
+    await _deleteQuietly(staging);
+    staging.createSync(recursive: true);
 
     final int pages;
     var bytes = 0;
@@ -224,7 +327,8 @@ class DownloadsService {
               page,
               cancelToken: cancelToken,
             );
-            File('${dir.path}/${pageFileName(page)}').writeAsBytesSync(data);
+            File('${staging.path}/${pageFileName(page)}')
+                .writeAsBytesSync(data);
             bytes += data.length;
             onProgress((page + 1) / pages);
           }
@@ -243,7 +347,7 @@ class DownloadsService {
           final carried = <String, String?>{};
           for (var page = 0; page < pages; page++) {
             bytes += await _storeBookPage(
-              dir,
+              staging,
               client: client,
               chapterId: chapter.chapterId,
               page: page,
@@ -255,10 +359,17 @@ class DownloadsService {
           }
       }
     } on Object {
-      await _deleteQuietly(dir);
+      await _deleteQuietly(staging);
+      // Storing a chapter *again* is the only way this finds a copy already
+      // there, and that copy is the reader's to keep: only a directory with
+      // no `meta.json` — one that never finished, and so was never a copy at
+      // all — is ours to take away.
+      final meta = File('${dir.path}/meta.json');
+      if (!meta.existsSync()) await _deleteQuietly(dir);
       rethrow;
     }
 
+    await _promote(dir, staging, pages);
     final saved = SavedChapter(
       chapterId: chapter.chapterId,
       seriesId: chapter.seriesId,
@@ -269,10 +380,35 @@ class DownloadsService {
       pages: pages,
       bytes: bytes,
       pagesRead: chapter.pagesRead,
+      // What the server has not been told survives being stored again: the
+      // copy is the outbox, and a refresh that emptied it would throw away a
+      // page — and a place within it — that were never posted.
+      pending: chapter.pending,
       format: chapter.format,
     );
     File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(saved.toJson()));
     return saved;
+  }
+
+  /// Puts [staging]'s pages in [dir]'s place, and drops what the copy used to
+  /// hold that is no longer a page of it.
+  ///
+  /// The leftovers are the whole reason this is a swap rather than a copy over
+  /// the top: a server that has recounted a book leaves pages behind that are
+  /// not pages of it any more, and a reader that found them would call the
+  /// copy longer than it is.
+  Future<void> _promote(Directory dir, Directory staging, int pages) async {
+    for (var page = 0; page < pages; page++) {
+      File('${staging.path}/${pageFileName(page)}')
+          .renameSync('${dir.path}/${pageFileName(page)}');
+    }
+    for (final entity in dir.listSync()) {
+      if (entity is! File) continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      final page = pageOfFileName(name);
+      if (page == null || page >= pages) entity.deleteSync();
+    }
+    await _deleteQuietly(staging);
   }
 
   /// Stores one page of a book: the HTML the server laid out, with every

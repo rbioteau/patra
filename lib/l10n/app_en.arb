@@ -487,6 +487,21 @@
       "title": {"type": "String"}
     }
   },
+  "copyOutOfDate": "Out of date — the server now counts {count, plural, =1{1 page} other{{count} pages}}",
+  "@copyOutOfDate": {
+    "description": "Downloads row for a saved copy the server no longer counts the same number of pages for; count is what the server says now, as against the number the copy was made with. The copy is still readable — this is the mark a refresh is offered against (ADR-0009)",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "refreshCopy": "Refresh",
+  "@refreshCopy": {
+    "description": "Button on an out-of-date saved copy: stores it again, with the pages the server counts now"
+  },
+  "refreshingCopy": "Refreshing…",
+  "@refreshingCopy": {
+    "description": "What the refresh button becomes while the copy is being stored again"
+  },
   "serverUnreachable": "Server unreachable",
   "offlineBanner": "Server unreachable — offline mode. Saved chapters remain readable.",
   "homeOfflineWithSaved": "The server is out of reach. What you saved is still here.",

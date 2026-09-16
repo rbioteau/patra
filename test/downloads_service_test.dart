@@ -241,6 +241,54 @@ void main() {
     expect(await service.scan(), isEmpty);
   });
 
+  test(
+    'a copy stored again keeps the pages it had while the new ones fail',
+    () async {
+      // Storing a chapter *again* is a refresh of one the reader chose to keep:
+      // the copy is theirs and not the download's to spend, so a run that fails
+      // has to leave exactly what it found — pages, metadata and all.
+      await service.download(
+        client: _client(_PageAdapter()),
+        chapter: _chapter,
+        onProgress: (_) {},
+      );
+      final before = File('${(await service.chapterDir(42)).path}/meta.json')
+          .readAsStringSync();
+
+      await expectLater(
+        service.download(
+          client: _client(_PageAdapter(failOnPage: 1)),
+          chapter: _chapter,
+          onProgress: (_) {},
+        ),
+        throwsA(isA<DioException>()),
+      );
+
+      for (var page = 0; page < 3; page++) {
+        expect(
+          (await service.pageFile(42, page)).existsSync(),
+          isTrue,
+          reason: 'page $page is still the one that was stored',
+        );
+      }
+      final dir = await service.chapterDir(42);
+      expect(
+        File('${dir.path}/meta.json').readAsStringSync(),
+        before,
+        reason: 'the copy is the copy it was',
+      );
+      // Nothing of the failed run is left lying in it either.
+      expect(
+        dir.listSync().where(
+          (entity) =>
+              entity is Directory &&
+              entity.path.endsWith(DownloadsService.stagingDirName),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test('scan deletes a partial download that has no metadata', () async {
     // A chapter directory with pages but no meta.json: an interrupted run.
     final dir = await service.chapterDir(99);

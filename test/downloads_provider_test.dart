@@ -17,6 +17,14 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   int served = 0;
   int rejected = 0;
 
+  /// Every progress post the device has sent: the chapter, the page and — for
+  /// a book — the place within it.
+  final posted = <({int chapterId, int pageNum, String? bookScrollId})>[];
+
+  /// Whether the server can be reached at all. A train is not a refusal: what
+  /// this turns off is the connection, not the answer.
+  bool unreachable = false;
+
   /// Holds every page request open, so a test can look at the state while
   /// downloads are still running.
   Future<void>? gate;
@@ -27,6 +35,27 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
     Stream<List<int>>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    if (unreachable) {
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'no route to host',
+      );
+    }
+    if (options.path == '/api/Reader/progress') {
+      final body = options.data as Map<String, dynamic>;
+      posted.add((
+        chapterId: body['chapterId'] as int,
+        pageNum: body['pageNum'] as int,
+        bookScrollId: body['bookScrollId'] as String?,
+      ));
+      return ResponseBody.fromString(
+        '{}',
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
     if (options.queryParameters['apiKey'] is! String ||
         (options.queryParameters['apiKey'] as String).isEmpty) {
       rejected++;
@@ -215,4 +244,101 @@ void main() {
     expect(rescanned[12]?.progress, closeTo(2 / 3, 0.001));
     expect(rescanned[12]?.isRead, isFalse);
   });
+
+  test('progress the server was not told waits in the copy', () async {
+    await container.read(downloadsProvider.future);
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    adapter.unreachable = true;
+
+    await container
+        .read(downloadsProvider.notifier)
+        .recordProgress(
+          12,
+          2,
+          pending: const PendingProgress(pageNum: 2, bookScrollId: '0.5000'),
+        );
+    await container.read(downloadsProvider.notifier).syncPendingProgress();
+
+    // Nothing answered, so the copy is still holding both halves of it: the
+    // page the reader is on, and the place within that page.
+    expect(adapter.posted, isEmpty);
+    expect((await _savedMeta(root, 12))['pending'], {
+      'pageNum': 2,
+      'bookScrollId': '0.5000',
+    });
+
+    // A server that answers was the whole of what was being waited for.
+    adapter.unreachable = false;
+    await container.read(downloadsProvider.notifier).syncPendingProgress();
+
+    expect(adapter.posted, [
+      (chapterId: 12, pageNum: 2, bookScrollId: '0.5000'),
+    ]);
+    expect(container.read(savedChapterProvider(12))?.pending, isNull);
+    expect((await _savedMeta(root, 12))['pending'], isNull);
+  });
+
+  test(
+    'a server coming back is what sends what the copies are holding',
+    () async {
+      // The reader is gone and no screen is watching: what is left to notice
+      // that the server answers again is the store, which listened for it.
+      await container.read(downloadsProvider.future);
+      await container.read(downloadsProvider.notifier).save(_chapter);
+      adapter.unreachable = true;
+      await container
+          .read(downloadsProvider.notifier)
+          .recordProgress(
+            12,
+            2,
+            pending: const PendingProgress(pageNum: 2, bookScrollId: '0.5000'),
+          );
+
+      adapter.unreachable = false;
+      container.read(offlineProvider.notifier).set(true);
+      container.read(offlineProvider.notifier).set(false);
+      await pumpEventQueue();
+
+      expect(adapter.posted, [
+        (chapterId: 12, pageNum: 2, bookScrollId: '0.5000'),
+      ]);
+      expect(container.read(savedChapterProvider(12))?.pending, isNull);
+    },
+  );
+
+  test(
+    'storing a copy again keeps what the server has not been told',
+    () async {
+      await container.read(downloadsProvider.future);
+      await container.read(downloadsProvider.notifier).save(_chapter);
+      await container
+          .read(downloadsProvider.notifier)
+          .recordProgress(
+            12,
+            2,
+            pending: const PendingProgress(pageNum: 2, bookScrollId: '0.5000'),
+          );
+
+      await container
+          .read(downloadsProvider.notifier)
+          .refresh(container.read(savedChapterProvider(12))!);
+
+      // A refresh is the answer to a copy being out of step, not a licence to
+      // empty its outbox: the page, and the place within it, are still owed.
+      expect(container.read(savedChapterProvider(12))?.pending?.pageNum, 2);
+      expect((await _savedMeta(root, 12))['pending'], {
+        'pageNum': 2,
+        'bookScrollId': '0.5000',
+      });
+    },
+  );
+}
+
+/// What a stored copy says about itself, which is what has to carry a journey
+/// across a closed app: a provider holding the same thing is not.
+Future<Map<String, dynamic>> _savedMeta(Directory root, int chapterId) async {
+  final service = DownloadsService(root: root, profileId: _profileId);
+  final dir = await service.chapterDir(chapterId);
+  return jsonDecode(File('${dir.path}/meta.json').readAsStringSync())
+      as Map<String, dynamic>;
 }
