@@ -39,8 +39,17 @@ flutter:
   assets:
     - assets/fonts/SpaceGrotesk-OFL.txt
     - assets/fonts/SourceSerif4-OFL.txt
+    - assets/fonts/Literata-OFL.txt
+    - assets/fonts/AtkinsonHyperlegibleNext-OFL.txt
   # Bundled rather than fetched: the app is a reader, and a reader is opened
-  # on a train. Both faces are variable, so one file answers every weight.
+  # on a train, and a book saved for one (#77) has to open in the face its
+  # reader chose with no server to ask. Every face is variable, so one file
+  # answers every weight — and the two added for a book ship with their
+  # italic, so a book's emphasis has somewhere to be set. Space Grotesk has
+  # no italic at all and Source Serif 4's is deliberately not bundled; see
+  # ReadingFace.canSetItalic.
+  # The two faces the *interface* is drawn in are the first two; the other
+  # two are a book's alone.
   fonts:
     - family: Space Grotesk
       fonts:
@@ -61,6 +70,50 @@ flutter:
         - asset: assets/fonts/SourceSerif4-Variable.ttf
           weight: 600
         - asset: assets/fonts/SourceSerif4-Variable.ttf
+          weight: 700
+    - family: Literata
+      fonts:
+        - asset: assets/fonts/Literata-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/Literata-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/Literata-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/Literata-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/Literata-Italic-Variable.ttf
+          style: italic
+          weight: 400
+        - asset: assets/fonts/Literata-Italic-Variable.ttf
+          style: italic
+          weight: 500
+        - asset: assets/fonts/Literata-Italic-Variable.ttf
+          style: italic
+          weight: 600
+        - asset: assets/fonts/Literata-Italic-Variable.ttf
+          style: italic
+          weight: 700
+    - family: Atkinson Hyperlegible Next
+      fonts:
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Italic-Variable.ttf
+          style: italic
+          weight: 400
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Italic-Variable.ttf
+          style: italic
+          weight: 500
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Italic-Variable.ttf
+          style: italic
+          weight: 600
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Italic-Variable.ttf
+          style: italic
           weight: 700
 
 # App icons are generated from the master in assets/icon/ by

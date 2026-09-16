@@ -395,12 +395,13 @@ class _WidthFactorRow extends ConsumerWidget {
 /// there is nothing for a detected direction to measure, nothing to pair into
 /// a spread, no strip to lay out at a width of its own, and no page for a
 /// magnifying gesture to carry — so the sheet a book's cog opens offers none
-/// of them (#75). What is left is the type: how large the words are, and how
-/// much room there is between the lines. Both are one number for **every**
-/// book, and both belong to the person reading rather than to the work,
-/// because what is being chosen is the size somebody reads at.
+/// of them (#75). What is left is the type: how large the words are, how much
+/// room there is between the lines, and the face they are set in (#92). All
+/// three are one choice for **every** book, and all three belong to the
+/// person reading rather than to the work, because what is being chosen is
+/// how somebody reads.
 ///
-/// Nothing comes back from it: both are written straight through to the
+/// Nothing comes back from it: all three are written straight through to the
 /// profile the way the width is, and the sheet stays open over the page it is
 /// changing.
 Future<void> showBookSettingsSheet(BuildContext context) =>
@@ -418,6 +419,8 @@ Future<void> showBookSettingsSheet(BuildContext context) =>
               _BookTextSizeRow(),
               Divider(height: 24, indent: gutter, endIndent: gutter),
               _BookLineSpacingRow(),
+              Divider(height: 24, indent: gutter, endIndent: gutter),
+              _BookReadingFaceRow(),
               SizedBox(height: 8),
             ],
           ),
@@ -598,6 +601,94 @@ class _BookLineSpacingRow extends ConsumerWidget {
       semantic: (value) => l10n.percent((value * 100).round()),
       onPreview: notifier.preview,
       onSet: notifier.set,
+    );
+  }
+}
+
+/// The face a book is set in, for whoever is reading: the third row a book's
+/// sheet offers, and the one that is not a number.
+///
+/// A face is picked rather than slid, so each of the four the app ships is
+/// offered as a row of its own — and each is **set in the face it offers**,
+/// which is the only way to choose between them without already knowing what
+/// they are called. Picking one writes it straight through to the profile and
+/// redraws the page behind the sheet, which stays open.
+///
+/// It is the one deliberate hole in the design system's serif rule: two of
+/// the four are serifs, and prose is what they are offered for. The rule's
+/// purpose is to keep the wordmark and the titles of works distinct from
+/// everything else, and a page of prose puts neither at risk — see the
+/// reader's rules, where the hole is written down as one.
+class _BookReadingFaceRow extends ConsumerWidget {
+  const _BookReadingFaceRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final face = ref.watch(bookReadingFaceProvider);
+    final chosen = face != defaultBookReadingFace;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          leading: Icon(
+            Icons.font_download,
+            size: 22,
+            color: chosen ? patraAccent : patraText,
+          ),
+          title: Text(
+            l10n.bookReadingFace,
+            style: PatraText.body(color: chosen ? patraAccent : patraText),
+          ),
+          subtitle: Text(
+            l10n.bookReadingFaceExplained,
+            style: PatraText.metadata(),
+          ),
+        ),
+        for (final offered in ReadingFace.values)
+          _FaceOption(
+            face: offered,
+            selected: offered == face,
+            onPick: () =>
+                ref.read(bookReadingFaceProvider.notifier).set(offered),
+          ),
+      ],
+    );
+  }
+}
+
+/// One of the faces a book can be set in, named in the face it is.
+class _FaceOption extends StatelessWidget {
+  const _FaceOption({
+    required this.face,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final ReadingFace face;
+  final bool selected;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListTile(
+      onTap: onPick,
+      // As wide as the header's own icon, so the four names line up under
+      // the row they belong to rather than under its leading edge.
+      leading: SizedBox(
+        width: 22,
+        child: selected
+            ? Icon(Icons.check, size: 18, color: patraAccent)
+            : null,
+      ),
+      title: Text(
+        face.label(l10n),
+        // Set in the face it is offering: choosing a face one cannot see is
+        // a choice made on its name alone.
+        style: PatraText.body(color: selected ? patraAccent : patraText)
+            .copyWith(fontFamily: face.family),
+      ),
     );
   }
 }

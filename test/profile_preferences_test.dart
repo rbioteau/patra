@@ -104,6 +104,7 @@ void main() {
       // about a person's eyes, not about one work.
       await store.setBookTextSize(_romain.id, 20);
       await store.setBookLineHeight(_romain.id, 1.9);
+      await store.setBookReadingFace(_romain.id, ReadingFace.literata);
       await store.setSeriesDirection(
         _romain.id,
         3,
@@ -118,6 +119,7 @@ void main() {
       expect(reopened.widthFactorFor(_romain.id), 0.6);
       expect(reopened.bookTextSizeFor(_romain.id), 20);
       expect(reopened.bookLineHeightFor(_romain.id), 1.9);
+      expect(reopened.bookReadingFaceFor(_romain.id), ReadingFace.literata);
       expect(
         reopened.seriesDirectionFor(_romain.id, 3),
         ReadingDirection.rightToLeft,
@@ -484,6 +486,7 @@ void main() {
       await store.setWidthFactor(_romain.id, 0.6);
       await store.setBookTextSize(_romain.id, 20);
       await store.setBookLineHeight(_romain.id, 1.9);
+      await store.setBookReadingFace(_romain.id, ReadingFace.literata);
       await store.setLanguage(_romain.id, const Locale('fr'));
       await store.setSeriesDirection(
         _romain.id,
@@ -499,7 +502,7 @@ void main() {
       expect(his.read(widthFactorProvider), 0.6);
       expect(his.read(bookTextSizeProvider), 20);
       expect(his.read(bookLineHeightProvider), 1.9);
-      expect(his.read(localeProvider), const Locale('fr'));
+      expect(his.read(bookReadingFaceProvider), ReadingFace.literata);
 
       // The next person to be handed the tablet, on a container of their own
       // — which is what `SessionScope` builds for them.
@@ -517,6 +520,11 @@ void main() {
       // not hers.
       expect(hers.read(bookTextSizeProvider), defaultBookTextSize);
       expect(hers.read(bookLineHeightProvider), defaultBookLineHeight);
+      expect(
+        hers.read(bookReadingFaceProvider),
+        defaultBookReadingFace,
+        reason: 'a book is set in the sans until somebody says otherwise',
+      );
       expect(hers.read(localeProvider), isNull);
     });
 
@@ -589,6 +597,42 @@ void main() {
       expect(store.widthFactorFor(_lea.id), 1.0);
       expect(store.bookTextSizeFor(_lea.id), defaultBookTextSize);
       expect(store.bookLineHeightFor(_lea.id), defaultBookLineHeight);
+    });
+
+    test('a face follows the person across a handover, not the device', () async {
+      // A handover builds the app on a container of its own, but the store is
+      // the device's — so what follows the person has to be read out of it
+      // again rather than held by the container that chose it.
+      final store = await preferencesStore();
+      await store.setBookReadingFace(_romain.id, ReadingFace.literata);
+      await store.setBookReadingFace(
+        _lea.id,
+        ReadingFace.atkinsonHyperlegibleNext,
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          testKeychain(),
+          profilePreferencesStoreProvider.overrideWithValue(store),
+          initialAuthStateProvider.overrideWithValue(
+            AuthState(profiles: [_romain, _lea], activeId: _romain.id),
+          ),
+          signInProvider.overrideWithValue(_signInAs(_lea)),
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(
+        container.read(bookReadingFaceProvider),
+        ReadingFace.literata,
+        reason: 'the face is his, and the tablet is not what chose it',
+      );
+
+      await container.read(authProvider.notifier).resume(_lea);
+      expect(
+        container.read(bookReadingFaceProvider),
+        ReadingFace.atkinsonHyperlegibleNext,
+        reason: 'the next reader’s books are set in the face they chose',
+      );
     });
 
     test('are not recomputed because a token moved', () async {

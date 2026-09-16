@@ -280,6 +280,26 @@ ScrollPosition _pagePosition(WidgetTester tester) => tester
     )
     .position;
 
+/// The style every run of words in [paragraphs] is set in.
+///
+/// A run, and not the `Text` that draws it: `Text` wraps the span it is
+/// given in one of its own carrying the app's default face, so what is being
+/// asked about here is the style on the words themselves.
+List<TextStyle> _runs(WidgetTester tester, Finder paragraphs) => [
+  for (final paragraph in tester.widgetList<RichText>(paragraphs))
+    ..._spanRuns(paragraph.text),
+];
+
+Iterable<TextStyle> _spanRuns(InlineSpan span) sync* {
+  if (span is! TextSpan) return;
+  if (span.text != null) {
+    if (span.style case final TextStyle style) yield style;
+  }
+  for (final child in span.children ?? const <InlineSpan>[]) {
+    yield* _spanRuns(child);
+  }
+}
+
 /// A page longer than the screen it is read on, which is the only case in
 /// which there is a place within a page to be asked about.
 ///
@@ -289,6 +309,13 @@ ScrollPosition _pagePosition(WidgetTester tester) => tester
 final String _longPage = [
   for (var i = 0; i < 40; i++) '<p>Paragraph $i of a long page.</p>',
 ].join();
+
+/// One of every kind of block a page is made of, which is what "the whole
+/// page is set in the chosen face" has to mean.
+const _everyBlock = '<h2>Book two</h2>'
+    '<p>The spice must flow, and the worm <b>follows</b>.</p>'
+    '<blockquote>A beginning is a very delicate time.</blockquote>'
+    '<ul><li>First.</li><li>Second.</li></ul>';
 
 /// The reader's chrome: a tap in the middle of the screen.
 Future<void> _showChrome(WidgetTester tester) async {
@@ -527,9 +554,11 @@ void main() {
     await tester.pumpAndSettle();
 
     // How a book is set is a question about words, and the only one there
-    // is: which way pages turn is a question about pictures.
+    // is: which way pages turn is a question about pictures. The face is
+    // the third of the three, and the last.
     expect(find.text('Text size'), findsOneWidget);
     expect(find.text('Line spacing'), findsOneWidget);
+    expect(find.text('Reading face'), findsOneWidget);
     expect(find.text('READING DIRECTION'), findsNothing);
     expect(find.text('Drag to magnify'), findsNothing);
     expect(find.text('Page width'), findsNothing);
@@ -889,6 +918,7 @@ void main() {
               child: BookPageBody(
                 textSize: defaultBookTextSize,
                 lineHeight: defaultBookLineHeight,
+                face: defaultBookReadingFace,
                 page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
                 picture: (_) =>
                     SizedBox(key: const Key('picture'), height: pictureHeight),
@@ -929,7 +959,11 @@ void main() {
   });
 
   group('how a page is set', () {
-    Future<void> pumpWords(WidgetTester tester, String html) async {
+    Future<void> pumpWords(
+      WidgetTester tester,
+      String html, {
+      ReadingFace face = defaultBookReadingFace,
+    }) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -945,6 +979,7 @@ void main() {
               child: BookPageBody(
                 textSize: defaultBookTextSize,
                 lineHeight: defaultBookLineHeight,
+                face: face,
                 page: BookPage.fromHtml(html),
                 picture: (_) => const SizedBox.shrink(),
               ),
@@ -955,7 +990,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('prose is justified, and a title is not', (tester) async {
+    testWidgets('prose is set ragged right, and not justified', (tester) async {
       await pumpWords(
         tester,
         '<h2>Book two</h2><p>One.</p>'
@@ -967,15 +1002,131 @@ void main() {
           .map((text) => text.textAlign ?? TextAlign.start)
           .toList();
       expect(aligns, [
-        // Both edges of the column are straight, which is what the eye reads
-        // a block of prose by — but a title is not prose and a list item is
-        // a line, and stretching either opens holes in a handful of words.
+        // Not one line of it justified. Measured on this engine: U+00AD is
+        // honoured as a break opportunity but the hyphen is not drawn at the
+        // break, so a narrow column has nothing to justify with and opens
+        // gaps instead — which reads as a rendering fault rather than as
+        // typography. The measurement is written down in the reader's rules,
+        // so this is not put back.
         TextAlign.start, // the title
-        TextAlign.justify, // the paragraph
-        TextAlign.justify, // the quotation
+        TextAlign.start, // the paragraph
+        TextAlign.start, // the quotation
         TextAlign.start, // the bullet
         TextAlign.start, // the item
       ]);
+    });
+
+    testWidgets('a page is set in the face chosen, and the counter is not', (
+      tester,
+    ) async {
+      // Tall enough for the whole sheet to be on screen: a face is picked
+      // from a list of four, and a sheet that has to be scrolled to reach
+      // one is a sheet that hides half of what it offers.
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final (requested, _) = await _pumpBook(tester, html: _everyBlock);
+      await _showChrome(tester);
+      await tester.tap(find.byIcon(Icons.settings));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Literata'));
+      await tester.pumpAndSettle();
+      // Every block of words on the page is set in it — prose, headings,
+      // quotations and list items alike — because a book set in a serif with
+      // sans intertitres reads as an interface rather than as a book.
+      final set = _runs(
+        tester,
+        find.descendant(
+          of: find.byType(BookPageBody),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(set, isNotEmpty, reason: 'the page is made of words');
+      expect(set.map((style) => style.fontFamily), everyElement(fontLiterata));
+      expect(
+        set.where((style) => style.fontSize == defaultBookTextSize + 3),
+        isNotEmpty,
+        reason: 'the heading is set in it too, and not left in the sans',
+      );
+
+      // The counter is the app's own furniture and stays in the serif: the
+      // choice is a book's and nothing else's, and a page of a book has been
+      // a mixture by design since the counter was first drawn.
+      expect(
+        tester.widget<Text>(find.text('1 / $_pages')).style?.fontFamily,
+        fontSourceSerif4,
+      );
+
+      // Nothing was asked of the server: a page set in another face is the
+      // page the reader is already holding, laid out again.
+      expect(requested, [0]);
+    });
+
+    testWidgets('a page set in another face keeps the place in it', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpBook(tester, html: _longPage);
+      await tester.drag(
+        find.byType(SingleChildScrollView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      final scrolled = _pagePosition(tester);
+      final read = scrolled.pixels / scrolled.maxScrollExtent;
+      expect(read, greaterThan(0), reason: 'the reader did scroll the page');
+
+      await _showChrome(tester);
+      await tester.tap(find.byIcon(Icons.settings));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Literata'));
+      await tester.pumpAndSettle();
+
+      // A face is a reflow like a size is: the words break somewhere else,
+      // so the page is longer or shorter and the reader must not be sent
+      // back to the top of it.
+      final after = _pagePosition(tester);
+      expect(
+        after.pixels / after.maxScrollExtent,
+        closeTo(read, .02),
+        reason: 'the reader is still where they were in the page',
+      );
+    });
+
+    testWidgets('emphasis is set in the italic the face ships', (tester) async {
+      Future<List<FontStyle?>> styles(ReadingFace face) async {
+        await pumpWords(
+          tester,
+          '<p>The worm <i>follows</i>.</p>',
+          face: face,
+        );
+        return [
+          for (final run in _runs(
+            tester,
+            find.descendant(
+              of: find.byType(BookPageBody),
+              matching: find.byType(RichText),
+            ),
+          ))
+            run.fontStyle,
+        ];
+      }
+
+      expect(
+        await styles(ReadingFace.literata),
+        contains(FontStyle.italic),
+        reason: 'Literata ships an italic, so a book’s emphasis is set in it',
+      );
+
+      // Space Grotesk has no italic at all, and a slant the engine drew is
+      // not a letterform anybody designed.
+      expect(
+        await styles(ReadingFace.spaceGrotesk),
+        everyElement(FontStyle.normal),
+        reason: 'it has none, so the emphasis stays in the roman',
+      );
     });
   });
 }

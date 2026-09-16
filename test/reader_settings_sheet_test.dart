@@ -321,13 +321,53 @@ void main() {
     // The sheet is the same surface for both, and what is in it is not: how
     // pages turn is a question about pictures, and a book has no page sizes
     // for anything to measure or to pair.
-    testWidgets('offers a text size and a line spacing', (tester) async {
+    testWidgets('offers the face a book is set in, and nothing else', (
+      tester,
+    ) async {
       await _openBookSheet(tester);
 
       expect(find.text('Text size'), findsOneWidget);
       expect(find.text('Line spacing'), findsOneWidget);
+      expect(find.text('Reading face'), findsOneWidget);
       expect(find.text('16 pt'), findsOneWidget);
       expect(find.text('155%'), findsOneWidget);
+      // Exactly the faces the app ships, each named as the family publishes
+      // it — a face is a proper noun and is never translated.
+      expect(find.text('Space Grotesk'), findsOneWidget);
+      expect(find.text('Source Serif 4'), findsOneWidget);
+      expect(find.text('Literata'), findsOneWidget);
+      expect(find.text('Atkinson Hyperlegible Next'), findsOneWidget);
+    });
+
+    testWidgets('the face is the third row, and the last', (tester) async {
+      await _openBookSheet(tester);
+
+      // Two sliders and no third: the face is picked from a list rather
+      // than slid, so what follows the line spacing is not a number.
+      expect(find.byType(Slider), findsNWidgets(2));
+      final spacing = tester.getCenter(find.text('Line spacing'));
+      final face = tester.getCenter(find.text('Reading face'));
+      expect(face.dy, greaterThan(spacing.dy));
+    });
+
+    testWidgets('picking a face leaves the two numbers alone', (tester) async {
+      await _openBookSheet(tester);
+
+      await tester.tap(find.text('Literata'));
+      await tester.pumpAndSettle();
+
+      // The check moves to the face that was picked, and the sheet stays
+      // open over the page it has just reset — which is why a face is not
+      // something the sheet comes back with.
+      expect(find.text('16 pt'), findsOneWidget);
+      expect(find.text('155%'), findsOneWidget);
+      final checked = tester.getCenter(find.byIcon(Icons.check));
+      expect(checked.dy, tester.getCenter(find.text('Literata')).dy);
+      expect(
+        find.byIcon(Icons.check),
+        findsOneWidget,
+        reason: 'exactly one of the four is in force',
+      );
     });
 
     testWidgets('offers nothing that is a question about pictures', (
@@ -373,6 +413,8 @@ void main() {
     expect(find.text('READING DIRECTION'), findsOneWidget);
     expect(find.text('Text size'), findsNothing);
     expect(find.text('Line spacing'), findsNothing);
+    // Nor a reading face: a chapter of pictures has no words to set in one.
+    expect(find.text('Reading face'), findsNothing);
   });
 }
 

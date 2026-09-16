@@ -17,6 +17,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../settings/reading_settings.dart';
 import '../../theme.dart';
 
 /// A run of words inside a block, and how the book set it.
@@ -27,11 +28,17 @@ class BookSpan {
   final bool bold;
   final bool italic;
 
-  InlineSpan toSpan(TextStyle base) => TextSpan(
+  /// [face] is the face the page is set in, and what decides whether this
+  /// run's emphasis has an italic to be set in: where it has none — Space
+  /// Grotesk has none at all — emphasis is set in the roman rather than in a
+  /// slant the engine drew (#92).
+  InlineSpan toSpan(TextStyle base, ReadingFace face) => TextSpan(
     text: text,
     style: base.copyWith(
       fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-      fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+      fontStyle: italic && face.canSetItalic
+          ? FontStyle.italic
+          : FontStyle.normal,
     ),
   );
 }
@@ -169,6 +176,7 @@ class BookPageBody extends StatefulWidget {
     required this.picture,
     required this.textSize,
     required this.lineHeight,
+    required this.face,
     this.anchor,
     this.onScroll,
   });
@@ -186,6 +194,16 @@ class BookPageBody extends StatefulWidget {
 
   /// The room between the lines, as a share of [textSize].
   final double lineHeight;
+
+  /// The face the words are set in: one of the four the app ships, and the
+  /// reader's own choice for every book (#92).
+  ///
+  /// Every block of words on the page is set in it — prose, headings,
+  /// quotations and list items alike — because a book set in a serif with
+  /// sans intertitres reads as an interface rather than as a book. What is
+  /// not set in it is the page counter, which is the app's own furniture and
+  /// stays in the serif whatever is chosen.
+  final ReadingFace face;
 
   /// Where in the page the reader was, when it is opened again: null, or the
   /// top, for a page with nowhere to be but its beginning.
@@ -209,6 +227,7 @@ class _BookPageBodyState extends State<BookPageBody> {
   /// not make: the place it lands on is the place the server already holds,
   /// so it is not told back until it has been made.
   var _placed = false;
+
   @override
   void initState() {
     super.initState();
@@ -218,13 +237,16 @@ class _BookPageBodyState extends State<BookPageBody> {
   @override
   void didUpdateWidget(BookPageBody old) {
     super.didUpdateWidget(old);
-    // A page set at another size is a different page to scroll through, and
-    // the place the reader is in it has to be carried across rather than
-    // left where the words used to be: an offset is a number of points, and
-    // the points are not the same words any more. So it is read as a
-    // fraction before the words move — which is the whole of why an anchor
-    // is a fraction — and put back once they have been laid out again.
-    if (old.textSize != widget.textSize || old.lineHeight != widget.lineHeight) {
+    // A page set at another size, or in another face, is a different page to
+    // scroll through, and the place the reader is in it has to be carried
+    // across rather than left where the words used to be: an offset is a
+    // number of points, and the points are not the same words any more. So
+    // it is read as a fraction before the words move — which is the whole of
+    // why an anchor is a fraction — and put back once they have been laid
+    // out again.
+    if (old.textSize != widget.textSize ||
+        old.lineHeight != widget.lineHeight ||
+        old.face != widget.face) {
       _place(_here());
     }
   }
@@ -275,7 +297,12 @@ class _BookPageBodyState extends State<BookPageBody> {
     _scroll.dispose();
     super.dispose();
   }
+
+  /// Every block of words on the page is set in the face the reader chose,
+  /// and the face is what the whole page is set in: a book set in a serif
+  /// with sans intertitres reads as an interface rather than as a book.
   TextStyle get _paragraph => PatraText.body().copyWith(
+    fontFamily: widget.face.family,
     fontSize: widget.textSize,
     height: widget.lineHeight,
     fontWeight: FontWeight.w400,
@@ -287,8 +314,13 @@ class _BookPageBodyState extends State<BookPageBody> {
     height: 1.3,
   );
 
-  TextStyle get _quotation =>
-      _paragraph.copyWith(color: patraTextMuted, fontStyle: FontStyle.italic);
+  /// Set in the italic of the chosen face where the app ships one, and in the
+  /// roman where it does not: Space Grotesk has no italic at all, and a slant
+  /// the engine drew is not a letterform anybody designed.
+  TextStyle get _quotation => _paragraph.copyWith(
+    color: patraTextMuted,
+    fontStyle: widget.face.canSetItalic ? FontStyle.italic : FontStyle.normal,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -343,19 +375,18 @@ class _BookPageBodyState extends State<BookPageBody> {
       BookBlockStyle.quotation => _quotation,
     };
     final words = Text.rich(
-      TextSpan(children: [for (final span in block.spans) span.toSpan(base)]),
-      // A page of a book is set justified, as the printed page it stands in
-      // for is: both edges of the column are straight, which is what the eye
-      // reads a block of prose by. Only the lines that break of their own
-      // accord are stretched, so the last line of a paragraph stays where a
-      // left-aligned one would be. A title is not prose and a list item is
-      // a line, so neither is justified: stretching either would open holes
-      // in a handful of words.
-      textAlign:
-          block.style == BookBlockStyle.paragraph ||
-              block.style == BookBlockStyle.quotation
-          ? TextAlign.justify
-          : TextAlign.start,
+      TextSpan(
+        children: [
+          for (final span in block.spans) span.toSpan(base, widget.face),
+        ],
+      ),
+      // A page of a book is set **ragged right**, and deliberately: the
+      // engine honours a soft hyphen as a break but does not draw the hyphen
+      // at the break, so justification has no hyphenation to open a narrow
+      // column with and opens gaps instead — which reads as a rendering
+      // fault rather than as typography. See the reader's rules; the
+      // measurement is recorded there so this is not "fixed" back.
+      textAlign: TextAlign.start,
     );
     return switch (block.style) {
       BookBlockStyle.item => Row(

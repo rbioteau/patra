@@ -632,6 +632,42 @@ abstract class AppLocalizations {
   /// **'The room between a book\'s lines, as a share of the size of the words.'**
   String get bookLineSpacingExplained;
 
+  /// Reader setting: the typeface a book's words are set in. Offered for a book, beside its text size and line spacing.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading face'**
+  String get bookReadingFace;
+
+  /// Explains what the reading face setting changes, and says where it applies.
+  ///
+  /// In en, this message translates to:
+  /// **'The face a book is set in. Every book is set in this face.'**
+  String get bookReadingFaceExplained;
+
+  /// The name of a typeface the app ships. A proper noun, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Space Grotesk'**
+  String get readingFaceSpaceGrotesk;
+
+  /// The name of a typeface the app ships. A proper noun, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Source Serif 4'**
+  String get readingFaceSourceSerif4;
+
+  /// The name of a typeface the app ships. A proper noun, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Literata'**
+  String get readingFaceLiterata;
+
+  /// The name of a typeface the app ships. A proper noun, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Atkinson Hyperlegible Next'**
+  String get readingFaceAtkinsonHyperlegibleNext;
+
   /// A value shown as a percentage of the whole.
   ///
   /// In en, this message translates to:

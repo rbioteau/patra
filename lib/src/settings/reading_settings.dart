@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/generated/app_localizations.dart';
 import '../keychain.dart';
+import '../theme.dart';
 
 /// How pages advance in the reader. One setting, not a mode plus a direction:
 /// vertical scrolling is a direction like the other two.
@@ -25,12 +26,73 @@ enum ReadingDirection {
   };
 }
 
-// How a book is set, and the range the two choices are offered over.
+// How a book is set, and the range the three choices are offered over.
 //
 // They are **reading** settings of the person's — with a device default
-// behind them like the others, and chosen in the reader's sheet (#75) — so
-// they are answered here rather than by the page that is set in them. The
-// page is drawn at whatever number these hold.
+// behind them like the others, and chosen in the reader's sheet (#75, #92)
+// — so they are answered here rather than by the page that is set in them.
+// The page is drawn at whatever these hold.
+
+/// The face a book is set in: one of the four reading faces the app ships.
+///
+/// Every face is bundled (`assets/fonts/`, one variable file per family) and
+/// nothing is fetched, which is what lets a saved book (#77) open in the
+/// face its reader chose with no server at all.
+///
+/// **The name is what is written down** — the persisted preference is a
+/// string, as it is for [ReadingDirection] — so a value renamed here has to
+/// keep its old name readable, or a device holding it falls back to
+/// [defaultBookReadingFace] without saying anything. [named] is what reads
+/// it back, and what a name it does not know costs is the default rather
+/// than the app.
+///
+/// Two of the four are the app's own two faces, offered for a book rather
+/// than only for the interface — the one deliberate hole in the design
+/// system's serif rule, since prose set in a serif puts neither the wordmark
+/// nor a title of a work at risk. See the reader's rules.
+enum ReadingFace {
+  spaceGrotesk,
+  sourceSerif4,
+  literata,
+  atkinsonHyperlegibleNext;
+
+  /// The family it is drawn with, as `pubspec.yaml` declares it.
+  String get family => switch (this) {
+    ReadingFace.spaceGrotesk => fontSpaceGrotesk,
+    ReadingFace.sourceSerif4 => fontSourceSerif4,
+    ReadingFace.literata => fontLiterata,
+    ReadingFace.atkinsonHyperlegibleNext => fontAtkinsonHyperlegibleNext,
+  };
+
+  /// Whether a book's emphasis can be set in an italic of this face.
+  ///
+  /// Not whether the family has one designed: **Space Grotesk has no italic
+  /// at all**, and Source Serif 4's is deliberately not bundled, so both
+  /// answer false and emphasis in either is set in the roman rather than in
+  /// a slant the engine drew. Where this is true the italic is in the bundle
+  /// beside the roman, and every weight the page asks for has one.
+  bool get canSetItalic => switch (this) {
+    ReadingFace.spaceGrotesk || ReadingFace.sourceSerif4 => false,
+    ReadingFace.literata || ReadingFace.atkinsonHyperlegibleNext => true,
+  };
+
+  /// Its own name, which is the name the family is published under and is
+  /// never translated — the rule a language is listed under its own name
+  /// by, since a face is a proper noun wherever it is offered.
+  String label(AppLocalizations l10n) => switch (this) {
+    ReadingFace.spaceGrotesk => l10n.readingFaceSpaceGrotesk,
+    ReadingFace.sourceSerif4 => l10n.readingFaceSourceSerif4,
+    ReadingFace.literata => l10n.readingFaceLiterata,
+    ReadingFace.atkinsonHyperlegibleNext =>
+      l10n.readingFaceAtkinsonHyperlegibleNext,
+  };
+
+  /// What [name] names, or null for a name this build does not know: the
+  /// stored preference is a string the device wrote, so an unknown one costs
+  /// the profile its face and never the app its page.
+  static ReadingFace? named(String? name) =>
+      values.where((face) => face.name == name).firstOrNull;
+}
 
 /// The size a book's words are set at, in points: one number for every book,
 /// and the size every book was set at before there was anything to choose.
@@ -48,6 +110,11 @@ const double defaultBookLineHeight = 1.55;
 // page of small print, and open enough to read with a finger under a line.
 const double minBookLineHeight = 1.2;
 const double maxBookLineHeight = 2.0;
+
+/// The face every book is set in until somebody chooses another: the sans a
+/// book has been set in all along, which is why a profile that has never
+/// chosen one sees no difference.
+const ReadingFace defaultBookReadingFace = ReadingFace.spaceGrotesk;
 
 /// The **device's** reading defaults, under the flat keys they have always
 /// been written to.

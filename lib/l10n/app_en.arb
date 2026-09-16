@@ -373,6 +373,30 @@
   "@bookLineSpacingExplained": {
     "description": "Explains what the line spacing setting changes, and says where it applies."
   },
+  "bookReadingFace": "Reading face",
+  "@bookReadingFace": {
+    "description": "Reader setting: the typeface a book's words are set in. Offered for a book, beside its text size and line spacing."
+  },
+  "bookReadingFaceExplained": "The face a book is set in. Every book is set in this face.",
+  "@bookReadingFaceExplained": {
+    "description": "Explains what the reading face setting changes, and says where it applies."
+  },
+  "readingFaceSpaceGrotesk": "Space Grotesk",
+  "@readingFaceSpaceGrotesk": {
+    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  },
+  "readingFaceSourceSerif4": "Source Serif 4",
+  "@readingFaceSourceSerif4": {
+    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  },
+  "readingFaceLiterata": "Literata",
+  "@readingFaceLiterata": {
+    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  },
+  "readingFaceAtkinsonHyperlegibleNext": "Atkinson Hyperlegible Next",
+  "@readingFaceAtkinsonHyperlegibleNext": {
+    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  },
   "percent": "{value}%",
   "@percent": {
     "description": "A value shown as a percentage of the whole.",
