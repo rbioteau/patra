@@ -140,7 +140,7 @@ A metadata label on one [[Series]] — Action, Science-Fiction — alongside its
 _Avoid_: category, type, tag (for a genre), library type
 
 **Reading progress**:
-How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says. For [[Reflowable content]] the pages are **the server's**: it counts them, and it can count them again differently, so a copy kept on the device keeps the count it was made with — and there is a second half a page count cannot hold, which is *where in the page* the reader had come to: a page longer than the screen is not a page reopened at its top. That place is a position in the words and not a distance down a screen of them, because the words move under another reading size and another window.
+How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says. For [[Reflowable content]] the pages are **the server's**: it counts them, and it can count them again differently, so a copy kept on the device keeps the count it was made with — and there is a second half a page count cannot hold, which is *where in the page* the reader had come to: a page longer than the screen is not a page reopened at its top. That place is **a fraction of the room there is to scroll**, not a distance down a screen of them: the words move under another reading size and another window, and an offset saved at one size opens at another place entirely at another.
 _Avoid_: completion, status, read state
 
 **Continue**:
@@ -157,7 +157,7 @@ _Avoid_: next up, recommended, suggestions, up next
 
 **Reflowable content**:
 What a [[Chapter]] is made of when it is words rather than pictures: **Kavita** lays the text out and hands the app one page at a time, so a page is a slice the server chose and not a picture with a size — change the text size or the screen and the same words break somewhere else. **The app draws that page itself**: the HTML Kavita scoped is taken apart into paragraphs, headings, quotations, list items and pictures, and those are set in this app's type on this app's background rather than handed to a browser (ADR-0010). Its [[Reading progress]] is therefore a page the server counted and may count again differently, and everything built on measuring pages — the [[Detected direction]], the [[Strip]], the [[Spread]], [[Magnifying]] — has nothing to measure and is never offered for it.
-_Avoid_: epub (that is one file format, and a [[Library type]] is a different thing entirely), book (that is what a chapter is *called* in a book library, not what it is made of), text (a chapter of words carries pictures too)
+_Avoid_: epub (that is one file format, and a [[Library type]] is a different thing entirely), book (that is what a chapter is *called* in a book library, not what it is made of), text (a chapter of words carries pictures too), zoom (there is no page to magnify and nothing to measure one against — the knobs a page of words has are the ones the reader chooses)
 
 **Fixed pages**:
 What a [[Chapter]] is made of when every page is one picture, whether it was archived as one or rasterised out of a PDF by Kavita. Every page has a size the app can measure before the page itself has loaded, which is what the [[Detected direction]], the [[Strip]], the [[Spread]] and [[Magnifying]] are all built on.
@@ -203,6 +203,10 @@ _Avoid_: double page (that is a wide page), pair
 A single page that is itself a double-page image. It takes a screen of its own and shifts the pairing of everything after it.
 _Avoid_: spread, landscape page
 
+**Reading face**:
+The typeface a book's pages are set in: the reader's choice among the faces the app ships — the sans it is drawn in everywhere, the serif, and the two added for a book, one drawn for reading long and one whose letters are drawn for low vision. A [[Preference]]: it belongs to the [[Profile]] and follows their eyes, like the text size and the line spacing, and the server is never told. It governs the whole page — prose, headings, quotations and list items — and not the page counter, which is the app's own furniture and stays in the serif whatever is chosen. A profile that has never chosen reads in the sans. It is the one deliberate hole in the serif rule: that rule keeps the wordmark and the titles of works distinct from everything else, and prose set in a serif puts neither at risk.
+_Avoid_: font (that is one file of a family, and each of ours ships as a single variable file)
+
 ### Off the server
 
 **Saved chapter**:
@@ -230,7 +234,7 @@ One question the [[Catalogue]] answers, with the request behind it: the device's
 _Avoid_: fetch (that is the request, which is half of one), query, provider, answer (that is what a read carries, not what it is)
 
 **Preference**:
-A setting somebody chose. Magnifying, the width a chapter opens at and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]]. **The [[Reading direction]] is the one reading preference that is not one of these** — it belongs to a work or to a [[Library]], never to a person, and it has no device default to fall back on.
+A setting somebody chose. Magnifying, the width a chapter opens at, the [[Reading face]] and the interface language belong to a person and follow their [[Profile]]; the image cache budget belongs to the device, because it is disk. None is ever sent to the server. A preference nobody has chosen is not stored: what stands in for it is the [[Device default]]. **The [[Reading direction]] is the one reading preference that is not one of these** — it belongs to a work or to a [[Library]], never to a person, and it has no device default to fall back on.
 _Avoid_: setting (that is the row it is changed on), option, config
 
 **Device default**:
@@ -254,7 +258,7 @@ The French vocabulary is fixed, and it is not a translator's choice: it matches 
 | specials  | hors-série   |
 | storyline | arc narratif |
 
-Four more are fixed by choice rather than by that test, because they name the app's own furniture rather than a part of a series:
+Five more are fixed by choice rather than by that test, because they name the app's own furniture rather than a part of a series:
 
 | English | French   |
 | ------- | -------- |
@@ -262,6 +266,7 @@ Four more are fixed by choice rather than by that test, because they name the ap
 | server  | serveur  |
 | lock    | verrou   |
 | PIN     | code     |
+| reading face | police de lecture |
 
 Two more name what a chapter is **made of** rather than a part of a series, and are ours because Kavita has no word for the pair:
 
