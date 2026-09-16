@@ -464,6 +464,23 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String copyOutOfDate(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pages',
+      one: '1 page',
+    );
+    return 'Obsolète — le serveur compte maintenant $_temp0';
+  }
+
+  @override
+  String get refreshCopy => 'Actualiser';
+
+  @override
+  String get refreshingCopy => 'Actualisation…';
+
+  @override
   String get serverUnreachable => 'Serveur inaccessible';
 
   @override

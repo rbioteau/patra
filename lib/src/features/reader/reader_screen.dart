@@ -148,6 +148,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// reader who has turned a page has said where they are.
   var _opened = false;
 
+  /// Whether the copy's page total has been put to the server's own count,
+  /// which is asked once and never from inside a build.
+  var _pageTotalNoted = false;
+
   /// Serializes progress posts so a slow request for an earlier page can't
   /// overwrite a later one, and swallows failures (a lost save is resent on
   /// the next page turn).
@@ -233,12 +237,27 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // page must report the total for the chapter to be marked read — the
     // official web reader does the same.
     final pageNum = page >= info.pages - 1 ? info.pages : page;
-    // Keep the stored copy's progress in step; it is what the Downloads tab
-    // reads, and it must survive being offline.
+    // Where in the page the reader is, for a book whose page can be longer
+    // than the screen: a page number alone opens it again at the top, which
+    // is words already read. A chapter of pictures has no place within a page
+    // to report.
+    final anchor = info.content == ChapterContent.reflowable
+        ? (_anchors[page] ?? BookAnchor.top).id
+        : null;
+    // Written into the copy *before* it is sent, so a journey is not a hole
+    // in what the server knows. The copy is the one thing on the device that
+    // outlives the app being closed with a page still to post, and what it
+    // is holding is sent the moment there is a server to send it to — the
+    // number and the place within the page together, which is the only shape
+    // in which a book's progress means anything.
     if (ref.read(savedChapterProvider(widget.chapterId)) != null) {
       ref
           .read(downloadsProvider.notifier)
-          .recordProgress(widget.chapterId, pageNum);
+          .recordProgress(
+            widget.chapterId,
+            pageNum,
+            pending: PendingProgress(pageNum: pageNum, bookScrollId: anchor),
+          );
     }
     final KavitaClient client;
     try {
@@ -247,22 +266,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return; // signed out mid-read
     }
     _progressQueue = _progressQueue
-        .then(
-          (_) => client.saveProgress(
+        .then((_) async {
+          await client.saveProgress(
             libraryId: info.libraryId,
             seriesId: info.seriesId,
             volumeId: info.volumeId,
             chapterId: widget.chapterId,
             pageNum: pageNum,
-            // Where in the page the reader is, for a book whose page can be
-            // longer than the screen: a page number alone opens it again at
-            // the top, which is words already read. A chapter of pictures
-            // has no place within a page to report.
-            bookScrollId: info.content == ChapterContent.reflowable
-                ? (_anchors[page] ?? BookAnchor.top).id
-                : null,
-          ),
-        )
+            bookScrollId: anchor,
+          );
+          // Taken, so the copy has nothing left to send. Where the reader has
+          // turned a page since, this is a no-op rather than a loss: the copy
+          // is holding the newer one, and only that one is cleared.
+          await ref
+              .read(downloadsProvider.notifier)
+              .clearPendingProgress(
+                widget.chapterId,
+                PendingProgress(pageNum: pageNum, bookScrollId: anchor),
+              );
+        })
         .catchError((Object _) {});
   }
 
@@ -466,6 +488,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _goTo(spread.firstOf(index), info);
   }
 
+  /// Puts the copy's page total to the server's own count, once: the number
+  /// [total] is what the server says the chapter is made of, and a copy was
+  /// made with a number of its own.
+  ///
+  /// Deferred a frame because it is reached from `build`, and it writes to a
+  /// provider — which is what Riverpod refuses outright while the tree is
+  /// building.
+  void _notePageTotal(int total) {
+    if (_pageTotalNoted) return;
+    _pageTotalNoted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(downloadsProvider.notifier)
+          .notePageTotal(widget.chapterId, total);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final info = ref.watch(chapterInfoProvider(widget.chapterId));
@@ -489,6 +529,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 title: saved.title,
                 seriesFormat: saved.format,
               ));
+
+    // A saved copy keeps the pagination it was made with (ADR-0009), so what
+    // the server counts now is a fact about the copy: where the two disagree
+    // it is named out of date and offered for a refresh, rather than being
+    // refetched behind the reader's back or left to resume at the wrong page
+    // in silence. Asked here because this is where the two are in one place —
+    // the copy on the device, and the count only the server gives.
+    if (saved != null && info.value != null) {
+      _notePageTotal(info.value!.pages);
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,

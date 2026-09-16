@@ -770,6 +770,24 @@ abstract class AppLocalizations {
   /// **'Remove the saved copy of {title}?'**
   String removeDownloadConfirm(String title);
 
+  /// Downloads row for a saved copy the server no longer counts the same number of pages for; count is what the server says now, as against the number the copy was made with. The copy is still readable — this is the mark a refresh is offered against (ADR-0009)
+  ///
+  /// In en, this message translates to:
+  /// **'Out of date — the server now counts {count, plural, =1{1 page} other{{count} pages}}'**
+  String copyOutOfDate(int count);
+
+  /// Button on an out-of-date saved copy: stores it again, with the pages the server counts now
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refreshCopy;
+
+  /// What the refresh button becomes while the copy is being stored again
+  ///
+  /// In en, this message translates to:
+  /// **'Refreshing…'**
+  String get refreshingCopy;
+
   /// No description provided for @serverUnreachable.
   ///
   /// In en, this message translates to:

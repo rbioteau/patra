@@ -206,7 +206,7 @@ _Avoid_: spread, landscape page
 ### Off the server
 
 **Saved chapter**:
-A chapter whose pages are stored on the device because a profile asked for them. Chosen deliberately, never evicted, and readable with no server at all. It belongs to the profile that saved it, so two people sharing a device do not share what each has saved. This is what the Downloads tab counts. For [[Reflowable content]] what is stored is the pages **as the server rendered them**, so a copy is a pagination frozen on the day it was made.
+A chapter whose pages are stored on the device because a profile asked for them. Chosen deliberately, never evicted, and readable with no server at all. It belongs to the profile that saved it, so two people sharing a device do not share what each has saved. This is what the Downloads tab counts. For [[Reflowable content]] what is stored is the pages **as the server rendered them**, so a copy is a pagination frozen on the day it was made. Two things follow from that freeze: a copy is where progress made with no server waits to be sent, and a server that has recounted the book since leaves it **out of date** — named, offered for another go, and still readable.
 _Avoid_: download (that is the act of fetching one), cached chapter, offline chapter
 
 **Image cache**:

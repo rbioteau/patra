@@ -20,8 +20,16 @@ a page number, being out of step means offering to resume at the wrong place.
 
 A saved copy stores the pages it was given, and the page total it was given with
 them. When the server is reachable again and reports a different total, the copy
-is **marked stale and offered for re-download**. It is not silently re-fetched,
-and it is not silently kept.
+is **marked out of date and offered for re-download**. It is not silently
+re-fetched, and it is not silently kept.
+
+The copy is also the **outbox** for progress the server has not been told:
+what a reader does with no server in reach is written into it *before* the post
+is attempted, and cleared only once the server has taken it. What goes out is
+the page **with the place within it** — the two together being the only shape in
+which a book's progress means anything — and it goes out as soon as there is a
+server to send it to. The copy is the outbox for the same reason it is the copy:
+it is the one thing on the device that outlives the app being closed mid-journey.
 
 ## Why
 
