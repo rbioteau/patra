@@ -800,6 +800,27 @@ void main() {
       );
     });
 
+    test('a soft hyphen is where a word may break, and not a word', () {
+      // The character an author or an editing tool puts where a word may be
+      // broken: invisible, and a break opportunity. &#173; — the same
+      // character written numerically — has always been decoded, so what
+      // the named spelling has to land on is exactly what that one lands
+      // on. A German book is full of it, so a page that read well in one
+      // library read broken in another, with nothing to say why.
+      String words(String html) {
+        final page = BookPage.fromHtml(html);
+        return (page.blocks.single as BookWords).spans.single.text;
+      }
+
+      final text = words('<p>Donaudampf&shy;schifffahrt</p>');
+      // The same character the numeric spelling has always decoded to, and
+      // not the five characters of its own name in the middle of the word.
+      expect(text, words('<p>Donaudampf&#173;schifffahrt</p>'));
+      // U+00AD itself, written as a code point: a character nobody can see
+      // should not be pasted into a test either.
+      expect(text.codeUnits, contains(0xAD));
+    });
+
     test('a picture is kept by the name the page gave it', () {
       final page = BookPage.fromHtml(
         '<p><img src="OEBPS/images/worm.jpg"/></p>',

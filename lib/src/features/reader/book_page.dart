@@ -429,6 +429,11 @@ const Map<String, String> _entities = {
   'quot': '"',
   'apos': "'",
   'nbsp': ' ',
+  // Where a word may be broken, and invisible. Written as a code point
+  // because a character nobody can see has no business being pasted into
+  // source; what the break costs — no hyphen is drawn at it — is measured
+  // in the reader's rules.
+  'shy': '\u00AD',
   'mdash': '—',
   'ndash': '–',
   'hellip': '…',
