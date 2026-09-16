@@ -1640,8 +1640,8 @@ class _BookViewState extends State<_BookView> {
   }
 }
 
-/// One page of a book, which is asked for when it is reached, and set at the
-/// size whoever is reading chose.
+/// One page of a book, which is asked for when it is reached, and set the way
+/// whoever is reading chose.
 ///
 /// A page is a family of its own rather than one document holding them all,
 /// so the reader asks for the page it is on and no other: a book is as long
@@ -1649,9 +1649,11 @@ class _BookViewState extends State<_BookView> {
 /// reader asking for the whole book to be laid out before a word of it is
 /// read.
 ///
-/// The two settings are watched **here** rather than by the reader above, so
-/// moving a slider rebuilds the page it is changing and nothing else — not
-/// the pager, not the chrome, not the bar.
+/// The three settings are watched **here** rather than by the reader above,
+/// so moving a slider or picking a face rebuilds the page it is changing and
+/// nothing else — not the pager, not the chrome, not the bar. And it is the
+/// page that carries the reader's place across the reflow, so changing the
+/// face asks the server for nothing.
 class _BookPage extends ConsumerWidget {
   const _BookPage({
     required this.chapterId,
@@ -1679,6 +1681,7 @@ class _BookPage extends ConsumerWidget {
     );
     final textSize = ref.watch(bookTextSizeProvider);
     final lineHeight = ref.watch(bookLineHeightProvider);
+    final face = ref.watch(bookReadingFaceProvider);
     return switch (content) {
       // Nothing to show, and nothing coming: a page the server could not
       // produce says so instead of being read as a page with no words in it.
@@ -1688,6 +1691,7 @@ class _BookPage extends ConsumerWidget {
         picture: picture,
         textSize: textSize,
         lineHeight: lineHeight,
+        face: face,
         anchor: anchor,
         onScroll: onScroll,
       ),

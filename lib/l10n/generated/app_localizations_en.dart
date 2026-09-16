@@ -373,6 +373,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'The room between a book\'s lines, as a share of the size of the words.';
 
   @override
+  String get bookReadingFace => 'Reading face';
+
+  @override
+  String get bookReadingFaceExplained =>
+      'The face a book is set in. Every book is set in this face.';
+
+  @override
+  String get readingFaceSpaceGrotesk => 'Space Grotesk';
+
+  @override
+  String get readingFaceSourceSerif4 => 'Source Serif 4';
+
+  @override
+  String get readingFaceLiterata => 'Literata';
+
+  @override
+  String get readingFaceAtkinsonHyperlegibleNext =>
+      'Atkinson Hyperlegible Next';
+
+  @override
   String percent(int value) {
     return '$value%';
   }

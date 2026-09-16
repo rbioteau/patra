@@ -4,11 +4,30 @@ import 'package:flutter/material.dart';
 /// The app commits to a single dark look: the reader canvas is pure black and
 /// the whole chrome is built around it.
 
-/// The two bundled faces, and the only two the app draws with. Both are
-/// variable, so one file answers every weight, and both ship with the app
-/// rather than being fetched: a reader is opened on a train.
-const _sans = 'Space Grotesk';
-const _serif = 'Source Serif 4';
+/// The four faces the app ships, and the only ones it draws with.
+///
+/// All four are bundled rather than fetched — a reader is opened on a train,
+/// and a book saved for one (#77) opens in the face its reader chose with no
+/// server to ask. Every one is **variable**, so one file answers every
+/// weight. Two of them ship with their italic as well; Space Grotesk has
+/// none at all and Source Serif 4's is deliberately not bundled (see
+/// [ReadingFace.canSetItalic]).
+///
+/// The first two are the **app's own** — the interface is drawn in the sans
+/// and the serif is reserved for titles of works, the wordmark and the
+/// reader's page numerals. The other two are a book's alone: they are
+/// offered nowhere but in the reader's sheet, and the only place the serif
+/// rule of this file is deliberately broken on purpose (see the reader's
+/// rules).
+const fontSpaceGrotesk = 'Space Grotesk';
+const fontSourceSerif4 = 'Source Serif 4';
+const fontLiterata = 'Literata';
+const fontAtkinsonHyperlegibleNext = 'Atkinson Hyperlegible Next';
+
+/// The two the interface is drawn in, by the only names the rest of this
+/// file needs to know them by.
+const _sans = fontSpaceGrotesk;
+const _serif = fontSourceSerif4;
 
 /// The page. Also the ground of every app icon and of the window the OS
 /// paints while the process starts, which is what makes the launch read as a

@@ -374,6 +374,26 @@ class AppLocalizationsFr extends AppLocalizations {
       'L\'espace entre les lignes d\'un livre, en part de la taille des mots.';
 
   @override
+  String get bookReadingFace => 'Police de lecture';
+
+  @override
+  String get bookReadingFaceExplained =>
+      'La police d\'un livre. Tous les livres sont composés dans cette police.';
+
+  @override
+  String get readingFaceSpaceGrotesk => 'Space Grotesk';
+
+  @override
+  String get readingFaceSourceSerif4 => 'Source Serif 4';
+
+  @override
+  String get readingFaceLiterata => 'Literata';
+
+  @override
+  String get readingFaceAtkinsonHyperlegibleNext =>
+      'Atkinson Hyperlegible Next';
+
+  @override
   String percent(int value) {
     return '$value %';
   }

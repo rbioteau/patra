@@ -2,9 +2,10 @@
 ///
 /// A family tablet is several profiles at one address (ADR-0003), and a
 /// setting is one of two kinds. **Reading direction, magnifying, the width a
-/// chapter opens at, the size a book is set at, the room between its lines and
-/// the interface language belong to a person**: they are how somebody reads,
-/// and two people sharing a tablet each get their own.
+/// chapter opens at, the size a book is set at, the room between its lines,
+/// the face those words are set in and the interface language belong to a
+/// person**: they are how somebody reads, and two people sharing a tablet
+/// each get their own.
 /// So does the direction one **series** or one **library** is read in, which
 /// is why it is kept here beside their other preferences rather than anywhere
 /// the server could see it — see `features/reader/reading_direction.dart` for
@@ -47,6 +48,7 @@ class ProfilePreferences {
     this.widthFactor,
     this.bookTextSize,
     this.bookLineHeight,
+    this.bookReadingFace,
     this.language,
     this.seriesDirections = const {},
     this.libraryDirections = const {},
@@ -72,6 +74,15 @@ class ProfilePreferences {
   /// The room between a book's lines, as a share of [bookTextSize]: the half
   /// of the same choice that decides whether dense text is readable.
   final double? bookLineHeight;
+
+  /// The face a book is set in: one of the four the app ships, and one for
+  /// **every** book — the other half of the same choice about a person's
+  /// eyes that [bookTextSize] and [bookLineHeight] are (#92).
+  ///
+  /// Written down as the name of the [ReadingFace], and read back through
+  /// [ReadingFace.named] so a name this build no longer knows costs the
+  /// profile its face rather than the app its page.
+  final ReadingFace? bookReadingFace;
 
   /// The language chosen, as a code — or the **empty string** for "follow the
   /// device", which is a choice a person can make and come back to. It is not
@@ -109,6 +120,7 @@ class ProfilePreferences {
     double? widthFactor,
     double? bookTextSize,
     double? bookLineHeight,
+    ReadingFace? bookReadingFace,
     String? language,
     Map<int, ReadingDirection>? seriesDirections,
     Map<int, ReadingDirection>? libraryDirections,
@@ -117,6 +129,7 @@ class ProfilePreferences {
     widthFactor: widthFactor ?? this.widthFactor,
     bookTextSize: bookTextSize ?? this.bookTextSize,
     bookLineHeight: bookLineHeight ?? this.bookLineHeight,
+    bookReadingFace: bookReadingFace ?? this.bookReadingFace,
     language: language ?? this.language,
     seriesDirections: seriesDirections ?? this.seriesDirections,
     libraryDirections: libraryDirections ?? this.libraryDirections,
@@ -127,6 +140,7 @@ class ProfilePreferences {
     if (widthFactor != null) 'widthFactor': widthFactor,
     if (bookTextSize != null) 'bookTextSize': bookTextSize,
     if (bookLineHeight != null) 'bookLineHeight': bookLineHeight,
+    if (bookReadingFace != null) 'bookReadingFace': bookReadingFace!.name,
     if (language != null) 'language': language,
     if (seriesDirections.isNotEmpty)
       'seriesDirections': _directionsJson(seriesDirections),
@@ -144,12 +158,16 @@ class ProfilePreferences {
     final widthFactor = json['widthFactor'];
     final bookTextSize = json['bookTextSize'];
     final bookLineHeight = json['bookLineHeight'];
+    final bookReadingFace = json['bookReadingFace'];
     final language = json['language'];
     return ProfilePreferences(
       magnify: magnify is bool ? magnify : null,
       widthFactor: widthFactor is num ? widthFactor.toDouble() : null,
       bookTextSize: bookTextSize is num ? bookTextSize.toDouble() : null,
       bookLineHeight: bookLineHeight is num ? bookLineHeight.toDouble() : null,
+      bookReadingFace: ReadingFace.named(
+        bookReadingFace is String ? bookReadingFace : null,
+      ),
       // A code this build no longer ships is not a choice it can honour, so
       // it reads as never having chosen and the device's default stands —
       // the same answer `supportedLocale` gives the device's own.
@@ -310,6 +328,7 @@ class ProfilePreferencesStore {
   /// device's default where they have never said.
   double widthFactorFor(String? profileId) =>
       of(profileId).widthFactor ?? deviceWidthFactor;
+
   /// The size [profileId]'s books are set at, falling through to the device's
   /// default where they have never said. One number for every book: this is a
   /// choice about a person's eyes, not about one work (#75).
@@ -331,6 +350,17 @@ class ProfilePreferencesStore {
         minBookLineHeight,
         maxBookLineHeight,
       );
+
+  /// The face [profileId]'s books are set in, falling through to the device's
+  /// default where they have never chosen: the sans a book has been set in
+  /// all along, so a profile that has never chosen one sees no difference
+  /// (#92).
+  ///
+  /// There is nothing to clamp — the sheet offers exactly the faces there
+  /// are, and a name this build does not know was already answered by
+  /// [ReadingFace.named] on the way in.
+  ReadingFace bookReadingFaceFor(String? profileId) =>
+      of(profileId).bookReadingFace ?? defaultBookReadingFace;
 
   /// The language [profileId] reads in. The empty string is a choice — follow
   /// the device — and must not fall through to [deviceLanguage]; only never
@@ -415,6 +445,10 @@ class ProfilePreferencesStore {
   Future<void> setBookLineHeight(String profileId, double height) =>
       _update(profileId, (was) => was.copyWith(bookLineHeight: height));
 
+  /// Every book is set in [face] from now on, for [profileId] alone.
+  Future<void> setBookReadingFace(String profileId, ReadingFace face) =>
+      _update(profileId, (was) => was.copyWith(bookReadingFace: face));
+
   /// [locale] null is a real choice — follow the device — and is stored as
   /// one, which is why it cannot go through [ProfilePreferences.copyWith].
   ///
@@ -429,6 +463,7 @@ class ProfilePreferencesStore {
       widthFactor: was.widthFactor,
       bookTextSize: was.bookTextSize,
       bookLineHeight: was.bookLineHeight,
+      bookReadingFace: was.bookReadingFace,
       language: locale?.languageCode ?? '',
       seriesDirections: was.seriesDirections,
       libraryDirections: was.libraryDirections,
@@ -793,3 +828,31 @@ class BookLineHeightNotifier extends Notifier<double> {
 final bookLineHeightProvider = NotifierProvider<BookLineHeightNotifier, double>(
   BookLineHeightNotifier.new,
 );
+
+/// The face a book is set in for whoever is reading: one of the four the app
+/// ships, and one for **every** book (#92).
+///
+/// A choice is a whole one, so there is no [preview] beside it the way there
+/// is for a size or a leading — nothing drags a face along a scale and lets
+/// go. The page is redrawn in it the moment it is picked, and the place the
+/// reader holds in the page is carried across the reflow by the page itself.
+class BookReadingFaceNotifier extends Notifier<ReadingFace> {
+  @override
+  ReadingFace build() => ref
+      .read(profilePreferencesStoreProvider)
+      .bookReadingFaceFor(ref.watch(readingProfileIdProvider));
+
+  Future<void> set(ReadingFace face) async {
+    state = face;
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) return;
+    await ref
+        .read(profilePreferencesStoreProvider)
+        .setBookReadingFace(id, face);
+  }
+}
+
+final bookReadingFaceProvider =
+    NotifierProvider<BookReadingFaceNotifier, ReadingFace>(
+      BookReadingFaceNotifier.new,
+    );
