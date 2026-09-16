@@ -193,6 +193,28 @@ List<String?> _postedAnchors(List<_Post> posted) => [
   for (final post in posted) post.anchor,
 ];
 
+/// What the reader asked for, sorted: which of a page and a neighbour beside
+/// it is fetched first is an implementation detail, and nothing here is
+/// asserted about the order they are asked in.
+List<int> _asked(List<int> requested) => requested.toList()..sort();
+
+/// Whether the reader is waiting on a page, where the reader can see it: the
+/// spinner a page draws while it is being fetched.
+///
+/// Off screen does not count. A page beside the one being read is fetched out
+/// of sight, which is the whole point of fetching it early — a spinner there
+/// is a spinner nobody is looking at, and what flickers is one over the words.
+bool _waiting(WidgetTester tester) {
+  final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+  for (final element in find.byType(CircularProgressIndicator).evaluate()) {
+    final box = element.renderObject;
+    if (box is! RenderBox || !box.hasSize) continue;
+    final at = box.localToGlobal(Offset.zero);
+    if (at.dx < size.width && at.dy < size.height) return true;
+  }
+  return false;
+}
+
 /// The reader on a book, and what it asked the server for.
 ///
 /// [initialPage] is the page the route named, which is what the series screen
@@ -338,7 +360,10 @@ void main() {
   testWidgets('a book opens on its first page', (tester) async {
     final (requested, posted) = await _pumpBook(tester);
 
-    expect(requested, [0], reason: 'the first page is the one asked for');
+    expect(_asked(requested), [
+      0,
+      1,
+    ], reason: 'the page it opens on, and the one beside it');
     expect(_postedPages(posted), [
       0,
     ], reason: 'opening a book says where it was opened');
@@ -351,7 +376,7 @@ void main() {
   testWidgets('a book opens where reading left off', (tester) async {
     final (requested, posted) = await _pumpBook(tester, progressPage: 4);
 
-    expect(requested, [4]);
+    expect(_asked(requested), [3, 4, 5]);
     expect(_postedPages(posted), [4]);
     await _showChrome(tester);
     expect(find.text('5 / $_pages'), findsOneWidget);
@@ -371,9 +396,11 @@ void main() {
       progressPage: 4,
     );
 
-    expect(fromLink, [4], reason: 'a link names no page at all');
-    expect(fromSeries, [
+    expect(_asked(fromLink), [3, 4, 5], reason: 'a link names no page at all');
+    expect(_asked(fromSeries), [
+      3,
       4,
+      5,
     ], reason: 'the page the route named is not the one a book opens at');
     expect(_postedPages(linkPosted), [4]);
   });
@@ -495,10 +522,44 @@ void main() {
 
     await _swipe(tester);
 
-    expect(requested, [0, 1]);
+    expect(_asked(requested), [0, 1, 2]);
     expect(_postedPages(posted), [0, 1]);
     await _showChrome(tester);
     expect(find.text('2 / $_pages'), findsOneWidget);
+  });
+
+  testWidgets('a page turned to is already in hand', (tester) async {
+    final (requested, _) = await _pumpBook(tester);
+
+    // The next page is fetched while the reader is at rest on this one, not
+    // when it is turned to: `PageView.builder` mounts a page as late as it
+    // can, so a page asked for only then is a page fetched under the
+    // reader's finger.
+    expect(_asked(requested), [0, 1]);
+
+    // The turn itself, frame by frame. What is drawn while a page is coming
+    // is a spinner over the whole screen, and that is the flicker: one frame
+    // of it here, where the fake server answers at once, and as long as the
+    // request takes on a real one.
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(_waiting(tester), isFalse, reason: 'frame $i of the turn waits');
+    }
+  });
+
+  testWidgets('a page turned back to is not asked for again', (tester) async {
+    final (requested, _) = await _pumpBook(tester);
+
+    await _swipe(tester);
+    await tester.drag(find.byType(PageView), const Offset(600, 0));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(seconds: 1));
+
+    // Three pages, each asked for once. A page the pager unmounts is a page
+    // an autoDispose provider forgets, and reading back used to re-fetch it —
+    // and to draw the spinner again while it came.
+    expect(_asked(requested), [0, 1, 2]);
   });
 
   testWidgets('the sides of the screen turn the page', (tester) async {
@@ -1059,7 +1120,7 @@ void main() {
 
       // Nothing was asked of the server: a page set in another face is the
       // page the reader is already holding, laid out again.
-      expect(requested, [0]);
+      expect(_asked(requested), [0, 1]);
     });
 
     testWidgets('a page set in another face keeps the place in it', (

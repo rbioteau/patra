@@ -752,6 +752,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final contents =
         ref.watch(bookContentsProvider(widget.chapterId)).value ??
         const <BookContentsEntry>[];
+    // The pages either side of this one are asked for **now**, while they are
+    // not being read. `PageView.builder` mounts a page as late as it can — the
+    // neighbour the moment a drag begins — so a page asked for only when it is
+    // mounted is a page fetched under the reader's finger, and what is drawn
+    // while it comes is a spinner over the whole screen. Asking while the
+    // reader is at rest puts the wait where nobody is watching it.
+    //
+    // Watching them is also what keeps them. `bookPageProvider` is
+    // autoDispose, so a page the pager has unmounted is a page forgotten and
+    // asked for again on the way back to it — reading back one page used to
+    // re-fetch it. A provider something is watching is not disposed, so the
+    // two beside this one stay in hand and the rest of the book is still
+    // forgotten with the screen, which is the point of the family.
+    for (var near = _page - 1; near <= _page + 1; near++) {
+      if (near < 0 || near >= chapter.pages || near == _page) continue;
+      ref.watch(bookPageProvider((chapterId: widget.chapterId, page: near)));
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1640,14 +1657,14 @@ class _BookViewState extends State<_BookView> {
   }
 }
 
-/// One page of a book, which is asked for when it is reached, and set the way
-/// whoever is reading chose.
+/// One page of a book, set the way whoever is reading chose.
 ///
-/// A page is a family of its own rather than one document holding them all,
-/// so the reader asks for the page it is on and no other: a book is as long
-/// as the server says it is, and a reader asking for all of it at once is a
+/// A page is a family of its own rather than one document holding them all, so
+/// the reader asks for the page it is on and no other: a book is as long as
+/// the server says it is, and a reader asking for all of it at once is a
 /// reader asking for the whole book to be laid out before a word of it is
-/// read.
+/// read. **And the two beside it, while it is at rest on this one** — see
+/// [_buildBookReader], which is where that is asked for and why.
 ///
 /// The three settings are watched **here** rather than by the reader above,
 /// so moving a slider or picking a face rebuilds the page it is changing and
