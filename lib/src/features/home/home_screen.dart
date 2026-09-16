@@ -9,11 +9,10 @@ import '../../catalogue/catalogue_reads.dart' as catalogue;
 import '../../downloads/downloads_provider.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
-import '../../branding/patra_mark.dart';
+import '../../branding/patra_lockup.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
-import '../../widgets/patra_wordmark.dart';
 import '../../widgets/profile_avatar.dart';
 import '../library/library_screen.dart';
 import 'continue_hero.dart';
@@ -138,7 +137,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const _Wordmark(),
+        title: const PatraLockup(size: 22),
         // The face last, on the very edge: being offline is a passing
         // status, and this is the one piece of furniture that says whose
         // app this is.
@@ -247,35 +246,6 @@ class _OfflineHome extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// The app's own logo: the word, then the lowercase serif signature with its
-/// accent period.
-///
-/// The same two halves as the lockup the launch animation composes, at the
-/// header's own size — the animation builds the word at 113pt and simply
-/// fades, so there is nothing here for it to land on and no slot to keep.
-class _Wordmark extends StatelessWidget {
-  const _Wordmark();
-
-  static const _size = 22.0;
-
-  /// Drawn at [PatraWordmark.markEm] of the signature, which is what makes
-  /// the two one lockup rather than a word with a badge in front of it.
-  static const _markHeight = _size * PatraWordmark.markEm;
-  static const _gap = _size * 0.81;
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        PatraMark(height: _markHeight),
-        SizedBox(width: _gap),
-        PatraWordmark(size: _size),
-      ],
     );
   }
 }

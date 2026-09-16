@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/generated/app_localizations.dart';
-import '../branding/patra_mark.dart';
+import '../branding/patra_lockup.dart';
 import '../theme.dart';
-import 'patra_wordmark.dart';
 
 /// The lockup at the top of the two screens the app can open on — the picker
 /// and the sign-in form.
@@ -24,15 +23,11 @@ class PatraMasthead extends StatelessWidget {
 
   static const _size = 40.0;
 
-  /// The word at [PatraWordmark.markEm] of the signature — the same ratio the
-  /// home header uses, because the two lockups are the same lockup.
-  static const _markHeight = _size * PatraWordmark.markEm;
-
-  /// Tighter than the header's 0.81em, and deliberately so rather than by
+  /// Tighter than [PatraLockup]'s default, and deliberately so rather than by
   /// drift: spacing that reads as one lockup at 22pt opens into a gulf when
   /// the same ratio is taken to 40pt. The word and the signature have to stay
   /// one thing at both sizes, which is the point being kept, not the number.
-  static const _gap = _size * 0.65;
+  static const _gateGapEm = 0.65;
 
   @override
   Widget build(BuildContext context) {
@@ -40,14 +35,7 @@ class PatraMasthead extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PatraMark(height: _markHeight),
-            SizedBox(width: _gap),
-            PatraWordmark(size: _size),
-          ],
-        ),
+        const PatraLockup(size: _size, gapEm: _gateGapEm),
         if (showTagline) ...[
           const SizedBox(height: 8),
           Text(

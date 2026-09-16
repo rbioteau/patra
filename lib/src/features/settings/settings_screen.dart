@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../auth/session.dart';
+import '../../branding/patra_lockup.dart';
 import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
@@ -14,7 +15,6 @@ import '../../settings/profile_preferences.dart';
 import '../../theme.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/profile_lock_sheet.dart';
-import '../../widgets/patra_wordmark.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -72,7 +72,7 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      const PatraWordmark(size: 18),
+                      const PatraLockup(size: 18),
                       const SizedBox(width: 10),
                       // The tagline is a sentence: it wraps here rather than
                       // running off the row.
