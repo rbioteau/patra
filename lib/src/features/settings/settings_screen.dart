@@ -555,6 +555,7 @@ class _StorageRows extends ConsumerWidget {
     final downloads = ref.watch(downloadsProvider).value;
     final cacheSize = ref.watch(imageCacheSizeProvider);
     final cacheLimit = ref.watch(imageCacheLimitProvider);
+    final batchSize = ref.watch(batchDownloadSizeProvider);
 
     return Column(
       children: [
@@ -577,6 +578,61 @@ class _StorageRows extends ConsumerWidget {
               Text(
                 formatBytes(l10n, downloads?.totalBytes ?? 0),
                 style: PatraText.metadata(),
+              ),
+            ],
+          ),
+        ),
+        // What one tap on a series saves for the road (#101). A person's,
+        // behind a device default of three — see `lib/src/settings/CLAUDE.md`
+        // — and under Storage rather than General because it is a choice
+        // about what goes on the disk. In the offline blue: it is about
+        // downloads, like the row above it.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 22,
+                child: Icon(
+                  Icons.playlist_add_check,
+                  size: 18,
+                  color: patraOffline,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      onTap: () => _pickBatchSize(context, ref, batchSize),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                l10n.batchDownloadSize,
+                                style: PatraText.body(),
+                              ),
+                            ),
+                            Text(
+                              l10n.batchDownloadSizeOption(batchSize.value),
+                              style: PatraText.metadata(color: patraAccent),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Text(
+                      l10n.batchDownloadSizeCaption,
+                      style: PatraText.metadata(),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -658,6 +714,44 @@ class _StorageRows extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// The same sheet as the budget's, over the four sizes #101 names.
+  Future<void> _pickBatchSize(
+    BuildContext context,
+    WidgetRef ref,
+    BatchDownloadSize current,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<BatchDownloadSize>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: _SheetColumn(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
+              child: SectionLabel(l10n.batchDownloadSize),
+            ),
+            for (final option in BatchDownloadSize.values)
+              ListTile(
+                title: Text(
+                  l10n.batchDownloadSizeOption(option.value),
+                  style: PatraText.body(
+                    color: option == current ? patraAccent : patraText,
+                  ),
+                ),
+                trailing: option == current
+                    ? const Icon(Icons.check, color: patraAccent, size: 18)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(option),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    await ref.read(batchDownloadSizeProvider.notifier).set(picked);
   }
 
   /// Picking a smaller budget has to bite right away, not on the next launch.

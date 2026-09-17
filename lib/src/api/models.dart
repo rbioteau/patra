@@ -368,6 +368,10 @@ class Volume {
   bool get isLooseLeaf => minNumber == looseLeafNumber;
   bool get isSpecials => minNumber == specialsNumber;
 
+  /// A real volume of the series, as against Kavita's two pseudo-volumes —
+  /// the one question every screen asks of a volume before naming it.
+  bool get isNumbered => !isLooseLeaf && !isSpecials;
+
   /// See [Library.toJson].
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -458,6 +462,13 @@ class Chapter {
   /// True for the placeholder chapter Kavita creates inside a volume with no
   /// chapter breakdown.
   bool get isVolumePlaceholder => minNumber == defaultNumber && !isSpecial;
+
+  /// Whether [range] is a number a label may say: non-empty, and below the
+  /// scale of Kavita's sentinels, which are bookkeeping rather than numbers.
+  /// Compared on magnitude, because the sentinels differ by sign.
+  bool get hasNumber =>
+      range.isNotEmpty &&
+      (num.tryParse(range)?.abs() ?? 0) < defaultNumber.abs();
 
   /// See [Library.toJson].
   Map<String, dynamic> toJson() => {
@@ -605,7 +616,8 @@ class BookContentsEntry {
         page: json['page'] as int? ?? 0,
         children: [
           for (final child in json['children'] as List<dynamic>? ?? const [])
-            if (child is Map<String, dynamic>) BookContentsEntry.fromJson(child),
+            if (child is Map<String, dynamic>)
+              BookContentsEntry.fromJson(child),
         ],
       );
 }

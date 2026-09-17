@@ -13,6 +13,7 @@ import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
+import '../../settings/batch_hint.dart';
 import '../../settings/profile_preferences.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
@@ -42,6 +43,41 @@ class ReadOverridesNotifier extends Notifier<Map<int, int>> {
 final readOverridesProvider =
     NotifierProvider.autoDispose<ReadOverridesNotifier, Map<int, int>>(
       ReadOverridesNotifier.new,
+    );
+
+/// How the rows under the hero are ordered — three answers, offered as pills.
+///
+/// [readingPosition] is the default and the prototype's argument for the
+/// screen: the chapter under way first, then what comes next, with everything
+/// already read folded away at the bottom, so the thing to read is above the
+/// fold whatever the series' length. [oldest] is the storyline as Kavita
+/// sections it — volumes, loose chapters, specials — and [newest] is the same
+/// sections read backwards, for a series one follows as it is published.
+enum ChapterSort { readingPosition, newest, oldest }
+
+/// What the list under the hero is showing: which order, and whether the
+/// finished chapters are unfolded.
+///
+/// Screen-scoped rather than a preference: it dies with the screen, so every
+/// visit opens at the reading position with the read folded away — which is
+/// the state the pills exist to make cheap to leave, not one worth carrying
+/// from one series to the next.
+typedef SeriesListView = ({ChapterSort sort, bool showRead});
+
+class SeriesListViewNotifier extends Notifier<SeriesListView> {
+  @override
+  SeriesListView build() =>
+      (sort: ChapterSort.readingPosition, showRead: false);
+
+  void sortBy(ChapterSort sort) =>
+      state = (sort: sort, showRead: state.showRead);
+
+  void toggleRead() => state = (sort: state.sort, showRead: !state.showRead);
+}
+
+final seriesListViewProvider =
+    NotifierProvider.autoDispose<SeriesListViewNotifier, SeriesListView>(
+      SeriesListViewNotifier.new,
     );
 
 /// The volumes as the screen shows them — three deep, and the order is the
@@ -124,7 +160,7 @@ _Buckets _split(List<Volume> volumes) {
   final loose = <Chapter>[];
   final specials = <Chapter>[];
   for (final volume in volumes) {
-    final numbered = !volume.isLooseLeaf && !volume.isSpecials;
+    final numbered = volume.isNumbered;
     if (numbered) numberedVolumes.add(volume);
     for (final chapter in volume.chapters) {
       if (chapter.isSpecial) {
@@ -267,129 +303,723 @@ class SeriesDetailScreen extends ConsumerWidget {
     LibraryType type,
     List<Volume> volumes,
   ) {
-    final buckets = _split(volumes);
+    final view = ref.watch(seriesListViewProvider);
+    final resume = resumePoint(volumes);
 
     Widget header(String text) => Padding(
       padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
       child: SectionLabel(text),
     );
 
-    Widget chapterRow(Chapter chapter, {String? label, String? coverUrl}) =>
-        _ChapterRow(
-          chapter: chapter,
-          label: label,
-          type: type,
-          coverUrl: coverUrl ?? client.chapterCoverUrl(chapter.id),
-          seriesId: seriesId,
-          seriesName: seriesName,
-          libraryId: libraryId,
-        );
-    /// Returns unread chapters in [volume] after the resume point.
-    List<Chapter> unreadInVolume(Volume volume, ResumePoint? resume) {
+    Widget chapterRow(
+      Chapter chapter, {
+      String? label,
+      String? coverUrl,
+      bool highlighted = false,
+    }) => _ChapterRow(
+      chapter: chapter,
+      label: label,
+      type: type,
+      coverUrl: coverUrl ?? client.chapterCoverUrl(chapter.id),
+      seriesId: seriesId,
+      seriesName: seriesName,
+      libraryId: libraryId,
+      highlighted: highlighted,
+    );
+
+    /// The rows one entry stands for, with the two choices the placeholder
+    /// volume forces made in one place: a volume with no chapter breakdown
+    /// is the reading unit, so it is one row named after the volume and
+    /// drawn by the volume's own cover.
+    Widget entryRow(ResumeEntry entry, {bool highlighted = false}) =>
+        entry.isWholeVolume
+        ? chapterRow(
+            entry.chapter,
+            label: type.volumeLabel(l10n, entry.volume.name),
+            coverUrl: client.volumeCoverUrl(entry.volume.id),
+            highlighted: highlighted,
+          )
+        : chapterRow(entry.chapter, highlighted: highlighted);
+
+    SavedChapter request(Volume volume, Chapter chapter) => SavedChapter(
+      chapterId: chapter.id,
+      seriesId: seriesId,
+      volumeId: volume.id,
+      libraryId: libraryId,
+      seriesName: seriesName,
+      title: type.chapterTitle(l10n, chapter),
+      pages: chapter.pages,
+      bytes: 0,
+      pagesRead: chapter.pagesRead,
+      format: chapter.format,
+    );
+
+    /// A header inside a section — a volume's name over its chapters, or
+    /// "Specials" where they follow the storyline inside a group — with room
+    /// on its trailing edge for one action.
+    Widget subHeader(String text, {Widget? action}) => Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Flexible, or a long volume name pushes the action off the row.
+        Flexible(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: PatraText.rowTitle(color: patraTextMuted),
+            ),
+          ),
+        ),
+        if (action != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 12, gutter, 4),
+            child: action,
+          ),
+      ],
+    );
+
+    /// The unread chapters of [volume] from the resume point on that are
+    /// not already on the device or on their way — what its header offers to
+    /// save whole (#101). Same rule as the card: a copy that is here is not
+    /// offered again, and a header whose every chapter is saved has nothing
+    /// to offer and shows no button.
+    final downloads = ref.watch(downloadsProvider).value;
+    List<Chapter> unsavedInVolume(Volume volume) {
       final chapters = _volumeChapters(volume);
-      if (resume == null) return chapters.where((c) => !c.isRead).toList();
-      final startIndex = chapters.indexWhere((c) => c.id == resume.entry.chapter.id);
-      if (startIndex < 0) return chapters.where((c) => !c.isRead).toList();
+      final startIndex = resume == null
+          ? -1
+          : chapters.indexWhere((c) => c.id == resume.entry.chapter.id);
       return chapters
-          .skip(startIndex)
-          .where((c) => !c.isRead)
+          .skip(startIndex < 0 ? 0 : startIndex)
+          .where(
+            (c) =>
+                !c.isRead &&
+                !(downloads?.saved.containsKey(c.id) ?? false) &&
+                !(downloads?.inFlight.containsKey(c.id) ?? false),
+          )
           .toList();
     }
 
-    /// Builds a volume header with optional batch download button.
-    Widget volumeHeader(Volume volume, ResumePoint? resume) {
-      final unread = unreadInVolume(volume, resume);
-      final hasBatch = unread.isNotEmpty;
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Flexible, or a long volume name pushes the button off the row.
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
-              child: Text(
-                type.volumeLabel(l10n, volume.name),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: PatraText.rowTitle(color: patraTextMuted),
-              ),
-            ),
-          ),
-          if (hasBatch)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 12, gutter, 4),
-              child: OutlinedButton(
+    /// [withAction] is false over rows already read: the header still says
+    /// which volume they belong to, but a button offering to fetch what is
+    /// left of the volume has no business over what is done with.
+    Widget volumeHeader(Volume volume, {bool withAction = true}) {
+      final unread = withAction ? unsavedInVolume(volume) : const <Chapter>[];
+      return subHeader(
+        type.volumeLabel(l10n, volume.name),
+        action: unread.isEmpty
+            ? null
+            : OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  // A height only: `Size.fromHeight` asks for an infinite
-                  // width, which a Row cannot give and the layout throws on.
+                  // `Size.fromHeight` carries an infinite minimum width,
+                  // which a ListView tile's unbounded width turns into an
+                  // invalid constraint the instant the button is laid out.
+                  // The height is the half that matters here; the width is
+                  // the label's, as in the Settings confirmation buttons.
                   minimumSize: const Size(0, 36),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
-                onPressed: () {
-                  final requests = unread.map((chapter) => SavedChapter(
-                    chapterId: chapter.id,
-                    seriesId: seriesId,
-                    volumeId: volume.id,
-                    libraryId: libraryId,
-                    seriesName: seriesName,
-                    title: type.chapterTitle(l10n, chapter),
-                    pages: chapter.pages,
-                    bytes: 0,
-                    pagesRead: chapter.pagesRead,
-                    format: chapter.format,
-                  )).toList();
-                  ref.read(downloadsProvider.notifier).saveBatch(requests);
-                },
+                onPressed: () => ref.read(downloadsProvider.notifier).saveBatch(
+                  [for (final c in unread) request(volume, c)],
+                ),
                 child: Text(
                   l10n.batchDownloadVolume,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-        ],
       );
     }
 
-    // Volumes and volumeless chapters are one story told in order — Kavita
-    // calls that the storyline, and hides it where it would lie: an issue run
-    // is not a storyline, and a book library has no chapter level. It only
-    // says anything when the series actually has both, so a run of volumes
-    // stays "Volumes".
-    final merged =
-        type.hasStoryline &&
-        buckets.numberedVolumes.isNotEmpty &&
-        buckets.loose.isNotEmpty;
+    /// Rows in the order given, with a sub-header wherever the rows change
+    /// container: a volume with a chapter breakdown names itself over its
+    /// chapters, the specials say what they are. Loose chapters and whole
+    /// volumes need none — their own label already says everything.
+    List<Widget> rowsWithSubHeaders(
+      List<ResumeEntry> entries, {
+      bool highlighted = false,
+      bool withActions = true,
+    }) {
+      final rows = <Widget>[];
+      Object? container;
+      for (final entry in entries) {
+        final (key, sub) = switch (entry) {
+          (:final chapter, volume: _) when chapter.isSpecial => (
+            #specials,
+            subHeader(type.specialsTitle(l10n)),
+          ),
+          _ when entry.isWholeVolume => (#volumes, null),
+          (:final volume, chapter: _) when volume.isNumbered => (
+            volume.id,
+            volumeHeader(volume, withAction: withActions),
+          ),
+          _ => (#loose, null),
+        };
+        if (key != container && sub != null) rows.add(sub);
+        container = key;
+        rows.add(entryRow(entry, highlighted: highlighted));
+      }
+      return rows;
+    }
+
+    /// The reading-position view: where you are, what comes next, and what
+    /// is done — folded, because a long series' finished chapters are the
+    /// bulk of it and never the reason the screen was opened.
+    List<Widget> grouped() {
+      final entries = orderedChapters(volumes);
+      final now = entryUnderWay(resume);
+      final next = [
+        for (final e in entries)
+          if (!e.chapter.isRead && e != now) e,
+      ];
+      // Most recently finished first, so the row just closed is the first
+      // one under the fold.
+      final done = [
+        for (final e in entries.reversed)
+          if (e.chapter.isRead) e,
+      ];
+      // A finished series has nothing above the fold: that group *is* the
+      // list, so it stays open and its header is a plain divider rather than
+      // a control that could only fold the whole screen away.
+      final wholeList = now == null && next.isEmpty;
+      final open = view.showRead || wholeList;
+      return [
+        if (now != null) ...[
+          _GroupHeader(l10n.groupReadingNow, color: patraAccent),
+          ...rowsWithSubHeaders([now], highlighted: true),
+        ],
+        if (next.isNotEmpty) ...[
+          _GroupHeader(
+            (resume?.started ?? false) ? l10n.groupUpNext : l10n.groupStartHere,
+          ),
+          ...rowsWithSubHeaders(next),
+        ],
+        if (done.isNotEmpty) ...[
+          _GroupHeader(
+            l10n.groupAlreadyRead(done.length),
+            open: wholeList ? null : open,
+            onToggle: wholeList
+                ? null
+                : ref.read(seriesListViewProvider.notifier).toggleRead,
+          ),
+          if (open) ...rowsWithSubHeaders(done, withActions: false),
+        ],
+      ];
+    }
+
+    /// The sections Kavita cuts a series into, in reading order or its
+    /// reverse: both are one list read from either end.
+    List<Widget> sectioned() {
+      final buckets = _split(volumes);
+      List<T> ordered<T>(List<T> ascending) => view.sort == ChapterSort.newest
+          ? ascending.reversed.toList()
+          : ascending;
+
+      // Volumes and volumeless chapters are one story told in order — Kavita
+      // calls that the storyline, and hides it where it would lie: an issue
+      // run is not a storyline, and a book library has no chapter level. It
+      // only says anything when the series actually has both, so a run of
+      // volumes stays "Volumes".
+      final merged =
+          type.hasStoryline &&
+          buckets.numberedVolumes.isNotEmpty &&
+          buckets.loose.isNotEmpty;
+
+      return [
+        if (buckets.numberedVolumes.isNotEmpty) ...[
+          header(merged ? type.storylineTitle(l10n) : type.volumesTitle(l10n)),
+          for (final volume in ordered(buckets.numberedVolumes))
+            if (_volumeChapters(volume).length == 1 &&
+                _volumeChapters(volume).single.isVolumePlaceholder)
+              // No chapter breakdown: the volume itself is the reading unit.
+              chapterRow(
+                _volumeChapters(volume).single,
+                label: type.volumeLabel(l10n, volume.name),
+                coverUrl: client.volumeCoverUrl(volume.id),
+              )
+            else ...[
+              volumeHeader(volume),
+              for (final chapter in ordered(_volumeChapters(volume)))
+                chapterRow(chapter),
+            ],
+        ],
+        if (buckets.loose.isNotEmpty) ...[
+          // Inside the storyline the loose chapters simply follow the
+          // volumes, exactly as Kavita orders them; they only get a header of
+          // their own when they are a list apart.
+          if (!merged) header(type.chaptersTitle(l10n)),
+          for (final chapter in ordered(buckets.loose)) chapterRow(chapter),
+        ],
+        if (buckets.specials.isNotEmpty) ...[
+          header(type.specialsTitle(l10n)),
+          for (final chapter in ordered(buckets.specials)) chapterRow(chapter),
+        ],
+      ];
+    }
+
+    // The batch is the next N unread from the resume point, across volumes,
+    // and N is the reader's own choice — but the card counts what is really
+    // there: a series with two left says two, never five.
+    final batch = nextUnreadChapters(
+      volumes,
+      ref.watch(batchDownloadSizeProvider).value,
+    );
 
     return [
-      if (buckets.numberedVolumes.isNotEmpty) ...[
-        header(merged ? type.storylineTitle(l10n) : type.volumesTitle(l10n)),
-        for (final volume in buckets.numberedVolumes)
-          if (_volumeChapters(volume).length == 1 &&
-              _volumeChapters(volume).single.isVolumePlaceholder)
-            // No chapter breakdown: the volume itself is the reading unit.
-            chapterRow(
-              _volumeChapters(volume).single,
-              label: type.volumeLabel(l10n, volume.name),
-              coverUrl: client.volumeCoverUrl(volume.id),
-            )
-          else ...[
-            volumeHeader(volume, resumePoint(volumes)),
-            for (final chapter in _volumeChapters(volume)) chapterRow(chapter),
-          ],
-      ],
-      if (buckets.loose.isNotEmpty) ...[
-        // Inside the storyline the loose chapters simply follow the volumes,
-        // exactly as Kavita orders them; they only get a header of their own
-        // when they are a list apart.
-        if (!merged) header(type.chaptersTitle(l10n)),
-        for (final chapter in buckets.loose) chapterRow(chapter),
-      ],
-      if (buckets.specials.isNotEmpty) ...[
-        header(type.specialsTitle(l10n)),
-        for (final chapter in buckets.specials) chapterRow(chapter),
-      ],
+      Padding(
+        // The prototype's rhythm: 14pt from the pills to the card under them.
+        // A pill's 44pt box already carries part of that around the 30pt it
+        // draws, so only the rest is padding here; above, the hero's own
+        // bottom gutter and the box's share are room enough.
+        padding: const EdgeInsets.fromLTRB(
+          gutter,
+          0,
+          gutter,
+          14 - _SortPill.boxInset,
+        ),
+        child: _SortPills(
+          sort: view.sort,
+          onPick: ref.read(seriesListViewProvider.notifier).sortBy,
+        ),
+      ),
+      // One chapter left is the row's own pill's job; the card is for the
+      // twenty taps a trip used to cost.
+      if (batch.length > 1)
+        _BatchCard(
+          entries: batch,
+          type: type,
+          onSave: (pending) => ref.read(downloadsProvider.notifier).saveBatch([
+            for (final e in pending) request(e.volume, e.chapter),
+          ]),
+        ),
+      ...switch (view.sort) {
+        ChapterSort.readingPosition => grouped(),
+        ChapterSort.newest || ChapterSort.oldest => sectioned(),
+      },
     ];
+  }
+}
+
+/// The three orders, as pills. The one in force is drawn in the accent, the
+/// way the shell marks its selected tab, and each carries its rule as a
+/// tooltip — the names are short enough to need one.
+class _SortPills extends StatelessWidget {
+  const _SortPills({required this.sort, required this.onPick});
+
+  final ChapterSort sort;
+  final void Function(ChapterSort sort) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    (String, String) words(ChapterSort sort) => switch (sort) {
+      ChapterSort.readingPosition => (
+        l10n.sortReadingPosition,
+        l10n.sortReadingPositionHint,
+      ),
+      ChapterSort.newest => (l10n.sortNewest, l10n.sortNewestHint),
+      ChapterSort.oldest => (l10n.sortOldest, l10n.sortOldestHint),
+    };
+    // A Wrap rather than a row: three French names under a large system font
+    // do not fit one line of a phone, and a pill that overflows is unreadable
+    // where a pill that wraps is merely on the next line.
+    return Wrap(
+      spacing: 7,
+      children: [
+        for (final option in ChapterSort.values)
+          _SortPill(
+            name: words(option).$1,
+            hint: words(option).$2,
+            selected: option == sort,
+            onTap: () => onPick(option),
+          ),
+      ],
+    );
+  }
+}
+
+class _SortPill extends StatelessWidget {
+  const _SortPill({
+    required this.name,
+    required this.hint,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final String hint;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// What the pill draws: a line of 11.5pt type with 7pt above and below.
+  static const height = 30.0;
+
+  /// The empty band above and below the drawn pill inside its 44pt box —
+  /// what the layout around the pills has to count as already spent.
+  static const boxInset = (minHitTarget - height) / 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? patraAccent : patraTextMuted;
+    return Tooltip(
+      message: hint,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(radiusPill),
+          // The pill is 30pt tall; its box is the 44 the app asks of every
+          // control, and the pill sits in the middle of it. The box is as
+          // wide as the pill and no wider — a `Container` with an alignment
+          // would take the whole run the Wrap offers, one pill per line.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: minHitTarget),
+            child: Center(
+              widthFactor: 1,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 13,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? patraAccent.withValues(alpha: .16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(radiusPill),
+                  border: Border.all(
+                    color: selected
+                        ? patraAccent.withValues(alpha: .55)
+                        : Colors.white.withValues(alpha: .14),
+                  ),
+                ),
+                child: Text(
+                  name,
+                  style: PatraText.rowTitle(color: color, size: 11.5),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The header of a group in the reading-position view: a tracked label, the
+/// fold control where the group has one, and a hairline running to the edge.
+///
+/// Not a [SectionLabel], though it wears the same style: that widget gives
+/// the label the whole row and hangs its trailing at the far edge, where this
+/// header wants the control beside the words and the hairline taking what is
+/// left. The *style* stays the one definition, `PatraText.sectionLabel`.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader(this.text, {this.color, this.open, this.onToggle});
+
+  final String text;
+
+  /// Muted unless the group is about reading progress — "Reading now" is in
+  /// the accent, like the Continue hero's eyebrow.
+  final Color? color;
+
+  /// Whether the group's rows are shown; null where the group cannot fold.
+  final bool? open;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final header = Row(
+      children: [
+        Text(text.toUpperCase(), style: PatraText.sectionLabel(color: color)),
+        if (open case final open?) ...[
+          const SizedBox(width: 10),
+          // Worded, never the chevron alone: a glyph says nothing to a screen
+          // reader, and "Show" is what the tap does.
+          Text(
+            open ? l10n.hideReadChapters : l10n.showReadChapters,
+            style: PatraText.rowTitle(color: patraAccent, size: 11),
+          ),
+          Icon(
+            open ? Icons.expand_less : Icons.expand_more,
+            size: 14,
+            color: patraAccent,
+          ),
+        ],
+        const SizedBox(width: 10),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: .07),
+          ),
+        ),
+      ],
+    );
+    if (onToggle == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
+        child: header,
+      );
+    }
+    // The same place on the page as the plain header: the tap target's own
+    // padding is taken off the top here and given back inside it.
+    const inset = 8.0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, sectionGap - inset, gutter, 0),
+      child: InkWell(
+        onTap: onToggle,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: minHitTarget),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: inset),
+            child: header,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The batch, as a card: the next N unread chapters saved in one tap, and
+/// then a report of how that is going.
+///
+/// It is the row's save pill writ large, so it borrows the pill's three
+/// worded states and the offline blue that every download wears. The count
+/// in its title is what the batch really holds, which is the reader's N or
+/// however many are left, whichever is smaller — and because the window is
+/// the next N *unread*, finishing one of a saved batch moves it on by one and
+/// the card offers the newcomer: "4 already saved" is that moment worded.
+///
+/// Offline it is drawn only when the whole batch is on the device, for the
+/// same reason the row's pill goes: a card offering a fetch that cannot be
+/// made is the screen disagreeing with itself, where one reporting five
+/// chapters ready is exactly what a reader on a train opened it to see.
+///
+/// It runs the full width at the gutter, like the rows under it, and that is
+/// a deliberate answer to the rule that a button must never scale with the
+/// screen: this is a **row**, not a button — an icon, a title and a
+/// subtitle laid out like a chapter row, tappable the way a row is — and a
+/// row capped at 280 in a list of rows that are not would read as a stray
+/// card. What must not grow with the screen is its type and its icon, and
+/// neither does.
+class _BatchCard extends ConsumerWidget {
+  const _BatchCard({
+    required this.entries,
+    required this.type,
+    required this.onSave,
+  });
+
+  final List<ResumeEntry> entries;
+  final LibraryType type;
+
+  /// Asked to save only what is not already here or on its way.
+  final void Function(List<ResumeEntry> pending) onSave;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final downloads = ref.watch(downloadsProvider).value;
+    final offline = ref.watch(offlineProvider);
+
+    final saved = <ResumeEntry>[];
+    final inFlight = <ResumeEntry, double>{};
+    final pending = <ResumeEntry>[];
+    for (final entry in entries) {
+      final id = entry.chapter.id;
+      if (downloads?.saved.containsKey(id) ?? false) {
+        saved.add(entry);
+      } else if (downloads?.inFlight[id] case final progress?) {
+        inFlight[entry] = progress;
+      } else {
+        // A failed or interrupted copy is pending too: the queue resumes it
+        // from the pages it kept.
+        pending.add(entry);
+      }
+    }
+    final count = entries.length;
+    final allSaved = saved.length == count;
+    final running = inFlight.isNotEmpty;
+    if (offline && !allSaved) return const SizedBox.shrink();
+
+    // What is running is what a tap asked for, not the window as it stands:
+    // the setting may have moved since — three asked for, ten chosen in
+    // Settings on the way back — and a card counting the window would report
+    // ten under way while the queue holds three. So the report counts what
+    // is really here or on its way, and the window is only what a *next*
+    // tap would fetch.
+    final underway = saved.length + inFlight.length;
+    final progress =
+        (saved.length + inFlight.values.fold(0.0, (a, b) => a + b)) /
+        (running ? underway : count);
+    final (title, subtitle) = allSaved
+        ? (l10n.batchAllSaved(count), l10n.batchReadyOffline)
+        : running
+        ? (
+            l10n.batchDownloading(underway),
+            l10n.batchDownloadingProgress(saved.length, underway),
+          )
+        : (
+            // No number in the title — how many is a setting, and the first
+            // tap says so — and none counted under it either: the range
+            // names what a tap will fetch, which is what a reader has to
+            // know before making it.
+            l10n.batchDownload,
+            [
+              _range(l10n),
+              if (saved.isNotEmpty) l10n.batchAlreadySaved(saved.length),
+            ].where((s) => s.isNotEmpty).join(' · '),
+          );
+
+    final lit = allSaved || running;
+    final foreground = lit ? patraOffline : patraText;
+    final border = lit
+        ? patraOffline.withValues(alpha: .45)
+        : Colors.white.withValues(alpha: .08);
+
+    return Padding(
+      // Nothing under it: the header that follows brings the section gap,
+      // which is the rhythm every section on this screen keeps.
+      padding: const EdgeInsets.symmetric(horizontal: gutter),
+      child: Material(
+        color: allSaved
+            ? patraOffline.withValues(alpha: .10)
+            : running
+            ? patraOffline.withValues(alpha: .07)
+            : patraSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusCard),
+          side: BorderSide(color: border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: pending.isEmpty
+              ? null
+              : () {
+                  onSave(pending);
+                  _hintOnce(context, ref, count);
+                },
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: border, width: 1.5),
+                      ),
+                      child: Icon(
+                        allSaved ? Icons.check : Icons.save_alt,
+                        size: 16,
+                        color: foreground,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: PatraText.rowTitle(
+                              color: foreground,
+                              size: 13,
+                            ),
+                          ),
+                          if (subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: PatraText.metadata(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (running)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 2,
+                    backgroundColor: Colors.white.withValues(alpha: .06),
+                    valueColor: const AlwaysStoppedAnimation(patraOffline),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Once per device, on the first tap: the number is a setting, and this is
+  /// the one moment anybody wonders why it is what it is. Worded, with the
+  /// way to the setting as the action — see [BatchSizeHintStore].
+  Future<void> _hintOnce(BuildContext context, WidgetRef ref, int count) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.maybeOf(context);
+    final store = ref.read(batchSizeHintProvider);
+    if (await store.wasShown()) return;
+    await store.markShown();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.batchSizeHint(count)),
+        // Longer than a passing sentence: there is a way out to take.
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: l10n.navSettings,
+          onPressed: () => router?.go('/settings'),
+        ),
+      ),
+    );
+  }
+
+  /// "Chapters 3 to 5": the first and last of the batch, the unit said once
+  /// where both ends are numbered in the same one. Where they are not — a run
+  /// ending on a special, say — each end is named on its own ("Chapter 7 –
+  /// Omake"), and where a library gives them nothing to say, nothing.
+  String _range(AppLocalizations l10n) {
+    final first = entries.first;
+    final last = entries.last;
+    if (entries.length == 1) {
+      return type.terseTitle(l10n, first.volume, first.chapter);
+    }
+    if (first.isWholeVolume && last.isWholeVolume) {
+      return type.volumeRange(l10n, first.volume.name, last.volume.name);
+    }
+    bool numbered(ResumeEntry e) =>
+        !e.chapter.isSpecial && !e.isWholeVolume && e.chapter.hasNumber;
+    if (numbered(first) && numbered(last)) {
+      return type.numberedChapterRange(
+        l10n,
+        first.chapter.range,
+        last.chapter.range,
+      );
+    }
+    final from = type.terseTitle(l10n, first.volume, first.chapter);
+    final to = type.terseTitle(l10n, last.volume, last.chapter);
+    if (from.isEmpty || to.isEmpty) return '';
+    return '$from – $to';
   }
 }
 
@@ -436,12 +1066,6 @@ class _SeriesHero extends ConsumerWidget {
     return list == null ? null : resumePoint(list);
   }
 
-  /// The unread chapters that would be included in a batch download.
-  List<ResumeEntry> _batchChapters(int batchSize) {
-    final list = volumes.value;
-    return list == null ? const [] : nextUnreadChapters(list, batchSize);
-  }
-
   /// What to call the thing the button opens, in the library's own unit.
   ///
   /// Only what is *numbered* gets named — a volume, a chapter, an issue, a
@@ -458,9 +1082,7 @@ class _SeriesHero extends ConsumerWidget {
     // A volume with no chapter breakdown is named after the volume: its
     // placeholder chapter carries Kavita's -100000 sentinel, which must never
     // reach the label.
-    if (chapter.isVolumePlaceholder &&
-        !entry.volume.isLooseLeaf &&
-        !entry.volume.isSpecials) {
+    if (entry.isWholeVolume) {
       return type.continueVolumeLabel(l10n, entry.volume.name);
     }
     // Anything at sentinel scale is Kavita bookkeeping, not a chapter number.
@@ -486,11 +1108,6 @@ class _SeriesHero extends ConsumerWidget {
     final metadata = metadataAsync.value;
     final target = _target();
 
-    // Batch download size for this profile.
-    final batchSize = ref.watch(batchDownloadSizeProvider).value;
-    final batchChapters = target != null ? _batchChapters(batchSize) : const <ResumeEntry>[];
-    final hasBatch = batchChapters.isNotEmpty;
-
     // "Author · Genre", dropping whichever half the server does not have.
     final credits = [
       if (metadata != null && metadata.writers.isNotEmpty)
@@ -501,10 +1118,9 @@ class _SeriesHero extends ConsumerWidget {
     // "4 chapters" reads as wrong to anyone looking at the list below.
     final tally = switch (volumes.value) {
       null => null,
-      final list when list.any((v) => !v.isLooseLeaf && !v.isSpecials) =>
-        l10n.seriesVolumeCount(
-          list.where((v) => !v.isLooseLeaf && !v.isSpecials).length,
-        ),
+      final list when list.any((v) => v.isNumbered) => l10n.seriesVolumeCount(
+        list.where((v) => v.isNumbered).length,
+      ),
       final list => l10n.seriesChapterCount(orderedChapters(list).length),
     };
     final stats = [
@@ -603,11 +1219,19 @@ class _SeriesHero extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text(
-                        seriesName,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: PatraText.serifTitle(size: tablet ? 25 : 21),
+                      // The column is pinned to the cover's height, so a
+                      // title that needs more room than the button row leaves
+                      // it must clip rather than overflow: the hero is not
+                      // scrollable, and an overflow paints the title over
+                      // the screen below. The title is the only child that
+                      // can grow — the lines under it all ellipsize to one.
+                      Flexible(
+                        child: Text(
+                          seriesName,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: PatraText.serifTitle(size: tablet ? 25 : 21),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       if (credits.isNotEmpty)
@@ -660,50 +1284,6 @@ class _SeriesHero extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      if (hasBatch) ...[
-                        const SizedBox(height: 8),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: controlMaxWidth,
-                          ),
-                          child: SizedBox(
-                            height: 44,
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(44),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                              onPressed: () {
-                                final requests = batchChapters.map((entry) {
-                                  final chapter = entry.chapter;
-                                  final volume = entry.volume;
-                                  return SavedChapter(
-                                    chapterId: chapter.id,
-                                    seriesId: seriesId,
-                                    volumeId: volume.id,
-                                    libraryId: libraryId,
-                                    seriesName: seriesName,
-                                    title: type.chapterTitle(l10n, chapter),
-                                    pages: chapter.pages,
-                                    bytes: 0,
-                                    pagesRead: chapter.pagesRead,
-                                    format: chapter.format,
-                                  );
-                                }).toList();
-                                ref.read(downloadsProvider.notifier).saveBatch(requests);
-                              },
-                              child: Text(
-                                l10n.batchDownload(batchChapters.length),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -725,10 +1305,15 @@ class _ChapterRow extends ConsumerWidget {
     required this.seriesName,
     required this.libraryId,
     this.label,
+    this.highlighted = false,
   });
 
   final Chapter chapter;
   final String coverUrl;
+
+  /// Tinted in the accent, faintly: the row of the chapter under way, which
+  /// the reading-position view sets apart from what follows it.
+  final bool highlighted;
 
   /// Names the row in the library's own vocabulary.
   final LibraryType type;
@@ -949,11 +1534,18 @@ class _ChapterRow extends ConsumerWidget {
         // Builder so the tap can ask the Slidable above it whether it is open.
         builder: (rowContext) => InkWell(
           onTap: openable ? () => _tap(rowContext, ref) : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: gutter),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: minHitTarget),
-              child: row,
+          // Edge to edge, gutters included: a tint that stopped at the cover
+          // would read as the cover's, not the row's.
+          child: ColoredBox(
+            color: highlighted
+                ? patraAccent.withValues(alpha: .06)
+                : Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: minHitTarget),
+                child: row,
+              ),
             ),
           ),
         ),

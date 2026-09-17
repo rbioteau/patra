@@ -653,8 +653,35 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String batchDownload(int count) {
-    return 'Download next $count unread';
+  String get batchDownload => 'Download what\'s next';
+
+  @override
+  String volumeRangeLabel(String from, String to) {
+    return 'Volumes $from to $to';
+  }
+
+  @override
+  String chapterRangeLabel(String from, String to) {
+    return 'Chapters $from to $to';
+  }
+
+  @override
+  String issueRangeLabel(String from, String to) {
+    return 'Issues #$from to #$to';
+  }
+
+  @override
+  String bookRangeLabel(String from, String to) {
+    return 'Books $from to $to';
+  }
+
+  @override
+  String get batchDownloadSizeCaption =>
+      'How many unread chapters one tap on a series saves, from where you are, across volumes.';
+
+  @override
+  String batchSizeHint(int count) {
+    return 'Downloading the next $count. That number is yours to choose in Settings › Storage.';
   }
 
   @override
@@ -666,5 +693,73 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String batchDownloadSizeOption(int count) {
     return '$count chapters';
+  }
+
+  @override
+  String get sortReadingPosition => 'Reading position';
+
+  @override
+  String get sortReadingPositionHint =>
+      'Where you are first, then what comes next';
+
+  @override
+  String get sortNewest => 'Newest';
+
+  @override
+  String get sortNewestHint => 'Latest first';
+
+  @override
+  String get sortOldest => 'Oldest';
+
+  @override
+  String get sortOldestHint => 'From the beginning';
+
+  @override
+  String get groupReadingNow => 'Reading now';
+
+  @override
+  String get groupUpNext => 'Up next';
+
+  @override
+  String get groupStartHere => 'Start here';
+
+  @override
+  String groupAlreadyRead(int count) {
+    return 'Already read · $count';
+  }
+
+  @override
+  String get showReadChapters => 'Show';
+
+  @override
+  String get hideReadChapters => 'Hide';
+
+  @override
+  String batchDownloading(int count) {
+    return 'Downloading next $count…';
+  }
+
+  @override
+  String batchDownloadingProgress(int done, int count) {
+    return '$done of $count saved';
+  }
+
+  @override
+  String batchAllSaved(int count) {
+    return 'Next $count saved';
+  }
+
+  @override
+  String get batchReadyOffline => 'Ready to read offline';
+
+  @override
+  String batchAlreadySaved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count already saved',
+      one: '1 already saved',
+    );
+    return '$_temp0';
   }
 }

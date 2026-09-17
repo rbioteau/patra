@@ -300,7 +300,10 @@ void main() {
   testWidgets('volumes and volumeless chapters read as one storyline', (
     tester,
   ) async {
+    // The sections are the sectioned view's: the screen opens grouped by
+    // reading position, and `showSections` is the pill that asks for them.
     await _pump(tester, _mixedSeries);
+    await showSections(tester);
 
     // Volumes plus loose chapters is exactly what Kavita calls the storyline,
     // so the block takes that name and the chapters need no header of theirs.
@@ -328,6 +331,7 @@ void main() {
 
   testWidgets('a run of volumes alone stays a run of volumes', (tester) async {
     await _pump(tester, _volumesOnly);
+    await showSections(tester);
 
     expect(find.text('VOLUMES'), findsOneWidget);
     expect(find.text('STORYLINE'), findsNothing);
@@ -335,6 +339,7 @@ void main() {
 
   testWidgets('a comic has issues and never a storyline', (tester) async {
     await _pump(tester, _mixedSeries, type: LibraryType.comic);
+    await showSections(tester);
 
     expect(find.text('STORYLINE'), findsNothing);
     expect(find.text('VOLUMES'), findsOneWidget);
@@ -344,6 +349,7 @@ void main() {
 
   testWidgets('a book library counts books', (tester) async {
     await _pump(tester, _volumesOnly, type: LibraryType.book);
+    await showSections(tester);
 
     expect(find.text('BOOKS'), findsOneWidget);
     expect(find.text('Volume 1'), findsNothing);
@@ -351,6 +357,7 @@ void main() {
 
   testWidgets('the French glossary reaches the screen', (tester) async {
     await _pump(tester, _mixedSeries, locale: const Locale('fr'));
+    await showSections(tester);
 
     expect(find.text('ARC NARRATIF'), findsOneWidget);
     expect(find.text('HORS-SÉRIE'), findsOneWidget);
@@ -365,6 +372,7 @@ void main() {
       type: LibraryType.comicVine,
       locale: const Locale('fr'),
     );
+    await showSections(tester);
 
     expect(find.text('NUMÉROS'), findsOneWidget);
     expect(find.text('Numéro #12'), findsOneWidget);
@@ -932,6 +940,7 @@ void main() {
           'chapters': [_chapter(104, '7')],
         },
       ]);
+      await showSections(tester);
 
       expect(find.text('Chapter 7'), findsOneWidget);
       expect(find.text('CHAPTERS'), findsOneWidget);
@@ -952,6 +961,7 @@ void main() {
           ],
         },
       ]);
+      await showSections(tester);
 
       expect(find.text('SPECIALS'), findsOneWidget);
       expect(find.text('Omake'), findsOneWidget);

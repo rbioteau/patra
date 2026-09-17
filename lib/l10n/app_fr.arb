@@ -174,9 +174,38 @@
   "sizeBytes": "{count} o",
   "sizeMegabytes": "{count} Mo",
   "sizeGigabytes": "{count} Go",
-  "batchDownload": "Télécharger les {count, plural, =1{prochain} other{{count} prochains}} non lus",
-  "@batchDownload": {
-    "description": "Bouton pour mettre en file d'attente les N prochains chapitres non lus ; count est la taille de lot choisie par l'utilisateur",
+  "batchDownload": "Télécharger la suite",
+  "volumeRangeLabel": "Tomes {from} à {to}",
+  "@volumeRangeLabel": {
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "chapterRangeLabel": "Chapitres {from} à {to}",
+  "@chapterRangeLabel": {
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "issueRangeLabel": "Numéros #{from} à #{to}",
+  "@issueRangeLabel": {
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "bookRangeLabel": "Livres {from} à {to}",
+  "@bookRangeLabel": {
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "batchDownloadSizeCaption": "Combien de chapitres non lus un appui sur une série enregistre, à partir d'où vous en êtes, d'un tome à l'autre.",
+  "batchSizeHint": "Les {count} prochains sont en cours. Ce nombre se règle dans Réglages › Stockage.",
+  "@batchSizeHint": {
     "placeholders": {
       "count": {"type": "int"}
     }
@@ -192,6 +221,50 @@
   "batchDownloadSizeOption": "{count} chapitres",
   "@batchDownloadSizeOption": {
     "description": "Option dans le sélecteur de taille de lot ; count vaut 3, 5, 10 ou 20",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "sortReadingPosition": "Position de lecture",
+  "sortReadingPositionHint": "Là où vous en êtes d'abord, puis la suite",
+  "sortNewest": "Plus récents",
+  "sortNewestHint": "Les derniers d'abord",
+  "sortOldest": "Plus anciens",
+  "sortOldestHint": "Depuis le début",
+  "groupReadingNow": "En cours",
+  "groupUpNext": "À suivre",
+  "groupStartHere": "Commencer ici",
+  "groupAlreadyRead": "Déjà lus · {count}",
+  "@groupAlreadyRead": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "showReadChapters": "Afficher",
+  "hideReadChapters": "Masquer",
+  "batchDownloading": "Téléchargement des {count} prochains…",
+  "@batchDownloading": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchDownloadingProgress": "{done} sur {count} enregistrés",
+  "@batchDownloadingProgress": {
+    "placeholders": {
+      "done": {"type": "int"},
+      "count": {"type": "int"}
+    }
+  },
+  "batchAllSaved": "Les {count} prochains sont enregistrés",
+  "@batchAllSaved": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchReadyOffline": "Prêts à lire hors ligne",
+  "batchAlreadySaved": "{count, plural, =1{1 déjà enregistré} other{{count} déjà enregistrés}}",
+  "@batchAlreadySaved": {
     "placeholders": {
       "count": {"type": "int"}
     }

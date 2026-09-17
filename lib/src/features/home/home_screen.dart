@@ -359,26 +359,12 @@ class _Shelf extends ConsumerWidget {
                     ),
                   );
                 }
-                final s = items[index];
-                final progress = showProgress && s.pages > 0
-                    ? s.pagesRead / s.pages
-                    : 0.0;
                 return SizedBox(
                   width: tileWidth,
-                  child: CoverTile(
-                    url: client.seriesCoverUrl(s.id),
-                    headers: client.imageHeaders,
-                    seriesId: s.id,
-                    title: s.name,
-                    serifTitle: true,
-                    progress: progress,
-                    onTap: () async {
-                      await context.push(seriesLocation(s));
-                      // Reading changes progress, and which series is
-                      // promoted follows from it — so the hero's chapter has
-                      // to be asked about again too, not just the shelves.
-                      await onReturn();
-                    },
+                  child: _ShelfTile(
+                    series: items[index],
+                    showProgress: showProgress,
+                    onReturn: onReturn,
                   ),
                 );
               },
@@ -386,6 +372,68 @@ class _Shelf extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One tile of the shelf: a series, pictured by the chapter it resumes at.
+///
+/// The same rule as the hero, and the same predicate. A shelf of series
+/// under way is a shelf of *places in* them, and a tile drawn with the series
+/// cover said the same thing about every visit: it is `entryPictured` — the
+/// resume target whenever the series is started and unfinished, the
+/// untouched next volume included — that says which volume you are on. The
+/// bar follows the picture, as it does everywhere: the chapter's progress
+/// under the chapter's cover, the series' under the series'. Until the
+/// volumes are known, or where nothing is under way, the series stands.
+///
+/// The volumes are the catalogue's, as the hero's are, so a device that has
+/// been here before draws the right cover with no server; and a tile is
+/// built only when the shelf scrolls it into view, so twenty series on deck
+/// ask for the few that are on screen.
+class _ShelfTile extends ConsumerWidget {
+  const _ShelfTile({
+    required this.series,
+    required this.showProgress,
+    required this.onReturn,
+  });
+
+  final Series series;
+  final bool showProgress;
+  final Future<void> Function() onReturn;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(kavitaClientProvider);
+    final volumes = ref.watch(catalogue.volumes(series.id).provider).value;
+    final pictured = volumes == null
+        ? null
+        : entryPictured(resumePoint(volumes));
+    final progress = !showProgress
+        ? 0.0
+        : switch (pictured) {
+            final entry? =>
+              entry.chapter.pages == 0
+                  ? 0.0
+                  : entry.chapter.pagesRead / entry.chapter.pages,
+            null => series.pages > 0 ? series.pagesRead / series.pages : 0.0,
+          };
+    return CoverTile(
+      url: pictured == null
+          ? client.seriesCoverUrl(series.id)
+          : entryCoverUrl(client, pictured),
+      headers: client.imageHeaders,
+      seriesId: series.id,
+      title: series.name,
+      serifTitle: true,
+      progress: progress,
+      onTap: () async {
+        await context.push(seriesLocation(series));
+        // Reading changes progress, and which series is promoted follows
+        // from it — so the hero's chapter has to be asked about again too,
+        // not just the shelves.
+        await onReturn();
+      },
     );
   }
 }

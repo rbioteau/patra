@@ -1070,11 +1070,47 @@ abstract class AppLocalizations {
   /// **'{count} GB'**
   String sizeGigabytes(String count);
 
-  /// Button to enqueue the next N unread chapters as a batch; count is the user's chosen batch size
+  /// Batch card title when there is something to fetch. No number: how many is a setting (batchDownloadSize), and the subtitle names the range instead
   ///
   /// In en, this message translates to:
-  /// **'Download next {count} unread'**
-  String batchDownload(int count);
+  /// **'Download what\'s next'**
+  String get batchDownload;
+
+  /// A run of whole volumes on the batch card, the unit said once; from and to are Kavita's volume numbers
+  ///
+  /// In en, this message translates to:
+  /// **'Volumes {from} to {to}'**
+  String volumeRangeLabel(String from, String to);
+
+  /// A run of numbered chapters on the batch card, in a manga or image library
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters {from} to {to}'**
+  String chapterRangeLabel(String from, String to);
+
+  /// A run of issues on the batch card, in a comic library
+  ///
+  /// In en, this message translates to:
+  /// **'Issues #{from} to #{to}'**
+  String issueRangeLabel(String from, String to);
+
+  /// A run of books on the batch card, in a book or light novel library
+  ///
+  /// In en, this message translates to:
+  /// **'Books {from} to {to}'**
+  String bookRangeLabel(String from, String to);
+
+  /// Caption under the batch download size row in Settings › Storage
+  ///
+  /// In en, this message translates to:
+  /// **'How many unread chapters one tap on a series saves, from where you are, across volumes.'**
+  String get batchDownloadSizeCaption;
+
+  /// SnackBar shown once per device, on the first tap of the batch card, with an action leading to Settings; count is the batch size in force
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the next {count}. That number is yours to choose in Settings › Storage.'**
+  String batchSizeHint(int count);
 
   /// Button on a volume section header to enqueue all unread chapters in that volume
   ///
@@ -1093,6 +1129,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} chapters'**
   String batchDownloadSizeOption(int count);
+
+  /// Sort pill on the series screen: the chapter under way first, then what comes next, with everything already read folded away at the bottom. The default
+  ///
+  /// In en, this message translates to:
+  /// **'Reading position'**
+  String get sortReadingPosition;
+
+  /// Tooltip on the Reading position pill: its rule in one line
+  ///
+  /// In en, this message translates to:
+  /// **'Where you are first, then what comes next'**
+  String get sortReadingPositionHint;
+
+  /// Sort pill on the series screen: the sections in reverse reading order, highest number first
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get sortNewest;
+
+  /// Tooltip on the Newest pill
+  ///
+  /// In en, this message translates to:
+  /// **'Latest first'**
+  String get sortNewestHint;
+
+  /// Sort pill on the series screen: the sections in reading order, from the beginning
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest'**
+  String get sortOldest;
+
+  /// Tooltip on the Oldest pill
+  ///
+  /// In en, this message translates to:
+  /// **'From the beginning'**
+  String get sortOldestHint;
+
+  /// Group header over the one chapter under way, in the reading-position view. Drawn in the accent, since it is about reading progress
+  ///
+  /// In en, this message translates to:
+  /// **'Reading now'**
+  String get groupReadingNow;
+
+  /// Group header over the unread chapters that follow, in the reading-position view, once the series has been started
+  ///
+  /// In en, this message translates to:
+  /// **'Up next'**
+  String get groupUpNext;
+
+  /// Group header over the unread chapters when nothing in the series has been read yet
+  ///
+  /// In en, this message translates to:
+  /// **'Start here'**
+  String get groupStartHere;
+
+  /// Group header over the finished chapters, folded away by default; count is how many there are
+  ///
+  /// In en, this message translates to:
+  /// **'Already read · {count}'**
+  String groupAlreadyRead(int count);
+
+  /// Control on the Already read header that unfolds the finished chapters
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get showReadChapters;
+
+  /// Control on the Already read header that folds the finished chapters away again
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get hideReadChapters;
+
+  /// Batch card title while at least one of the next N unread chapters is being fetched; count is how many the batch covers
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading next {count}…'**
+  String batchDownloading(int count);
+
+  /// Batch card subtitle while it runs: how many of the batch are already on the device
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {count} saved'**
+  String batchDownloadingProgress(int done, int count);
+
+  /// Batch card title once every one of the next N unread chapters is on the device
+  ///
+  /// In en, this message translates to:
+  /// **'Next {count} saved'**
+  String batchAllSaved(int count);
+
+  /// Batch card subtitle once the whole batch is saved
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to read offline'**
+  String get batchReadyOffline;
+
+  /// Appended to the batch card subtitle when part of the batch is already on the device — which is what the card looks like after one of a saved batch has been finished and the window has moved on by one
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 already saved} other{{count} already saved}}'**
+  String batchAlreadySaved(int count);
 }
 
 class _AppLocalizationsDelegate

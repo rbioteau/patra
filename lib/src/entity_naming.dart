@@ -40,6 +40,24 @@ extension LibraryTypeNaming on LibraryType {
         _ => l10n.chapterLabel(range),
       };
 
+  /// A run of numbered chapters, one word for both ends: "Chapters 3 to 5",
+  /// "Issues #3 to #5", "Books 3 to 5". Where "Chapter 3 – Chapter 5" said
+  /// the unit twice.
+  String numberedChapterRange(AppLocalizations l10n, String from, String to) =>
+      switch (this) {
+        LibraryType.comic ||
+        LibraryType.comicVine => l10n.issueRangeLabel(from, to),
+        LibraryType.book ||
+        LibraryType.lightNovel => l10n.bookRangeLabel(from, to),
+        _ => l10n.chapterRangeLabel(from, to),
+      };
+
+  /// A run of whole volumes, the same way: "Volumes 1 to 3", or books where
+  /// the library calls a volume a book.
+  String volumeRange(AppLocalizations l10n, String from, String to) => usesBooks
+      ? l10n.bookRangeLabel(from, to)
+      : l10n.volumeRangeLabel(from, to);
+
   /// The hero button, which names what it will open in the same vocabulary.
   String continueChapterLabel(AppLocalizations l10n, String range) =>
       switch (this) {
@@ -73,19 +91,28 @@ extension LibraryTypeNaming on LibraryType {
   /// chapter: a volume with no chapter breakdown is known by the volume, and
   /// its placeholder chapter carries Kavita's -100000 sentinel, which must
   /// never reach a label. Empty where there is nothing honest to say.
-  String resumeTitle(AppLocalizations l10n, Volume volume, Chapter chapter) {
+  String resumeTitle(AppLocalizations l10n, Volume volume, Chapter chapter) =>
+      _numberedTitle(l10n, volume, chapter, terse: false);
+
+  /// [resumeTitle] with the chapter's own title left off — the name a chapter
+  /// goes by where two of them share one line, as the ends of a range do. A
+  /// special keeps its title, having nothing else to be known by.
+  String terseTitle(AppLocalizations l10n, Volume volume, Chapter chapter) =>
+      _numberedTitle(l10n, volume, chapter, terse: true);
+
+  String _numberedTitle(
+    AppLocalizations l10n,
+    Volume volume,
+    Chapter chapter, {
+    required bool terse,
+  }) {
     if (chapter.isSpecial) return chapterTitle(l10n, chapter);
     if (chapter.isVolumePlaceholder) {
-      return volume.isLooseLeaf || volume.isSpecials
-          ? ''
-          : volumeLabel(l10n, volume.name);
+      return volume.isNumbered ? volumeLabel(l10n, volume.name) : '';
     }
-    // Anything at sentinel scale is Kavita bookkeeping, not a number. Compared
-    // on magnitude: the sentinels differ by sign, this check does not.
-    final number = num.tryParse(chapter.range)?.abs() ?? 0;
-    if (chapter.range.isEmpty || number >= Chapter.defaultNumber.abs()) {
-      return '';
-    }
-    return chapterTitle(l10n, chapter);
+    if (!chapter.hasNumber) return '';
+    return terse
+        ? numberedChapterLabel(l10n, chapter.range)
+        : chapterTitle(l10n, chapter);
   }
 }

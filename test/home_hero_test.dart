@@ -352,9 +352,7 @@ void main() {
     // finished, so a book that has been read through is no longer under way.
     test('a finished book is not promoted', () {
       expect(
-        featuredSeries([
-          _series(1, pages: 100, read: 100, format: 3),
-        ]),
+        featuredSeries([_series(1, pages: 100, read: 100, format: 3)]),
         isNull,
       );
     });
@@ -878,15 +876,22 @@ void main() {
       _iPad(tester);
       await _pumpHome(tester, _oneInProgress());
       expect(tester.getSize(find.byType(ContinueHero)).width, 820);
-      // One gutter in from the edge, like every other screen.
-      expect(tester.getTopLeft(cover()).dx, gutter + 18);
+      // The band runs edge to edge; its contents keep the gutter, so the
+      // cover stands where the shelf's label and first tile do below it.
+      expect(tester.getTopLeft(cover()).dx, gutter);
     });
 
     // Give a button a whole iPad to fill and it reads as a banner.
-    testWidgets('the button stops at 280', (tester) async {
+    testWidgets('the button stops at 280, in the middle of the band', (
+      tester,
+    ) async {
       _iPad(tester);
       await _pumpHome(tester, _oneInProgress());
-      expect(tester.getSize(find.byType(FilledButton)).width, 280);
+      final button = tester.getRect(find.byType(FilledButton));
+      expect(button.width, 280);
+      // Centred, or a 280pt button in an 820pt band leaves its right half
+      // empty.
+      expect(button.center.dx, closeTo(820 / 2, 0.5));
     });
 
     // A bar that runs the whole width of a tablet stops reading as progress
@@ -919,7 +924,7 @@ void main() {
       final art = tester.getRect(_backdrop());
       expect(art.width, lessThan(card.width / 2));
       // Hung on the trailing edge, not floating in the middle.
-      expect(art.right, closeTo(card.right - gutter, 0.5));
+      expect(art.right, closeTo(card.right, 0.5));
     });
 
     testWidgets('and still spans the card in portrait', (tester) async {
@@ -927,7 +932,7 @@ void main() {
       await _pumpHome(tester, _oneInProgress());
       final art = tester.getRect(_backdrop());
       final card = tester.getRect(find.byType(ContinueHero));
-      expect(art.width, closeTo(card.width - gutter * 2, 0.5));
+      expect(art.width, closeTo(card.width, 0.5));
     });
   });
 
@@ -1021,8 +1026,9 @@ void main() {
       expect(cover(tester).url, contains('/api/Image/series-cover'));
     });
 
-    // The details stand off the cover by a gutter of their own; a cover the
-    // title butts up against is a card with no layout at all.
+    // The details stand off the cover by the gap a chapter row keeps between
+    // its cover and its title; a cover the title butts up against is a card
+    // with no layout at all, and the prototype's 16 read as too much here.
     testWidgets('stands clear of the details beside it', (tester) async {
       await _pumpHome(tester, _oneInProgress());
       final coverRect = tester.getRect(
@@ -1032,7 +1038,7 @@ void main() {
         ),
       );
       final title = tester.getRect(find.text('Vinland Saga'));
-      expect(title.left - coverRect.right, 16);
+      expect(title.left - coverRect.right, 12);
     });
   });
 
@@ -1052,15 +1058,20 @@ void main() {
       expect(find.text('100 pages left'), findsOneWidget);
       expect(
         tester
-            .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+            .widget<LinearProgressIndicator>(
+              find.byType(LinearProgressIndicator),
+            )
             .value,
         closeTo(2 / 3, 0.001),
       );
     });
 
     // On deck is the one answer the hero is promoted from, so a book that is
-    // not the one being promoted is still on the shelf, carrying its own
-    // progress the way any series there does.
+    // not the one being promoted is still on the shelf — pictured, like the
+    // hero, by the chapter it resumes at, and carrying that chapter's
+    // progress under that chapter's cover. (The adapter answers the same
+    // volumes for every series, so the shelf's book is at the same place
+    // as the hero's: 200 of 300 pages.)
     testWidgets('a book that is not promoted stays on the shelf', (
       tester,
     ) async {
@@ -1069,9 +1080,37 @@ void main() {
       await _pumpHome(tester, adapter);
 
       expect(find.text('Dune Messiah'), findsOneWidget);
+      final tile = tester.widgetList<CoverTile>(find.byType(CoverTile)).single;
       expect(
-        tester.widgetList<CoverTile>(find.byType(CoverTile)).single.progress,
-        closeTo(1 / 3, 0.001),
+        tile.url,
+        allOf(contains('/api/Image/chapter-cover'), contains('chapterId=101')),
+      );
+      expect(tile.progress, closeTo(200 / 300, 0.001));
+    });
+
+    // A tile is drawn as soon as its series is known, and fills the chapter
+    // in behind: until then it is the series cover over the series' own
+    // progress, the two facts that are known.
+    testWidgets('a shelf tile is the series until its chapter is known', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final adapter = _oneBookInProgress()..volumesGate = gate;
+      adapter.onDeck = [...adapter.onDeck, _otherBookOnDeck];
+      await _pumpHome(tester, adapter);
+
+      final tile = tester.widgetList<CoverTile>(find.byType(CoverTile)).single;
+      expect(
+        tile.url,
+        allOf(contains('/api/Image/series-cover'), contains('seriesId=6')),
+      );
+      expect(tile.progress, closeTo(1 / 3, 0.001));
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widgetList<CoverTile>(find.byType(CoverTile)).single.url,
+        contains('/api/Image/chapter-cover'),
       );
     });
 

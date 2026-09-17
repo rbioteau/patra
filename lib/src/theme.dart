@@ -329,6 +329,11 @@ ThemeData patraTheme() {
     snackBarTheme: SnackBarThemeData(
       backgroundColor: patraSurfaceHi,
       contentTextStyle: PatraText.body(),
+      // The action is the one thing in the bar to tap, and the accent is what
+      // marks a text control here (the fold's Show/Hide, a setting's value).
+      // Left unset, Material 3 takes `inversePrimary`, a darkened gold that
+      // cannot be read on the raised surface.
+      actionTextColor: patraAccent,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusCover),

@@ -197,6 +197,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     await _pumpOffline(tester, fill: _fillAll);
+    await showSections(tester);
 
     // The hero: the title, who made it, and the tally with the library name —
     // the series' own row, which is a second stored fetch.
@@ -226,6 +227,8 @@ void main() {
     addTearDown(tester.view.reset);
 
     await _pumpOffline(tester, fill: _fillAll);
+    // Chapter 1 is read, and the reading-position view folds it away.
+    await showSections(tester);
 
     // The screen is informative even where nothing opens: it says what
     // exists and how far through it you are, and the dimming tells the truth
@@ -263,6 +266,7 @@ void main() {
         pagesRead: 60,
       ),
     );
+    await showSections(tester);
 
     // Overlaid, never absorbed: the saved copy is the newer word about its
     // own row, and the catalogue is deliberately never told.
@@ -305,6 +309,10 @@ void main() {
   testWidgets('a saved book is openable, and one that is not saved is not', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1100, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
     // The row is the other way into a saved book (#77), and what opens it is
     // the same thing the Downloads tab uses: a copy that says it is made of
     // words, since nothing here can be told that by a server.

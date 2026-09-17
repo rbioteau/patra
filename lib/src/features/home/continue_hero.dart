@@ -133,63 +133,76 @@ class ContinueHero extends ConsumerWidget {
     // A book has no page picture to draw behind the card — see
     // [Chapter.hasPagePictures]. What stands in is the cover, which is what
     // the backdrop already falls back to for a page that will not load.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, sectionGap),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radiusCard),
-        child: ColoredBox(
-          color: patraSurface,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: PageBackdrop(
-                  seriesId: series.id,
-                  chapterId: switch (data.point?.entry.chapter) {
-                    final chapter? when chapter.hasPagePictures => chapter.id,
-                    _ => null,
-                  },
-                  page: _resumePage,
-                ),
+    // Edge to edge, like the shelves under it: with the brand kit's surface
+    // now plainly lighter than the page, a card inset by a gutter read as
+    // narrower than the shelf that scrolls under both screen edges below it.
+    // The band has no corners to round; its contents keep the gutter so they
+    // stand at the same left edge as the shelf's label and first tile. And
+    // nothing under it: the shelf that follows brings the section gap, as
+    // every section of Home does, and a gap of the band's own doubled it.
+    return ClipRect(
+      child: ColoredBox(
+        color: patraSurface,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: PageBackdrop(
+                seriesId: series.id,
+                chapterId: switch (data.point?.entry.chapter) {
+                  final chapter? when chapter.hasPagePictures => chapter.id,
+                  _ => null,
+                },
+                page: _resumePage,
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        GestureDetector(
-                          onTap: () => _open(context, _seriesLocation),
-                          child: SizedBox(
-                            width: coverWidth,
-                            height: coverWidth / coverAspectRatio,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(radiusCover),
-                              child: CoverImage(
-                                url: pictured == null
-                                    ? client.seriesCoverUrl(series.id)
-                                    : entryCoverUrl(client, pictured),
-                                headers: client.imageHeaders,
-                                seriesId: series.id,
-                                seriesName: series.name,
-                              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 18),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _open(context, _seriesLocation),
+                        child: SizedBox(
+                          width: coverWidth,
+                          height: coverWidth / coverAspectRatio,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(radiusCover),
+                            child: CoverImage(
+                              url: pictured == null
+                                  ? client.seriesCoverUrl(series.id)
+                                  : entryCoverUrl(client, pictured),
+                              headers: client.imageHeaders,
+                              seriesId: series.id,
+                              seriesName: series.name,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _Details(
-                            data: data,
-                            onOpenSeries: () => _open(context, _seriesLocation),
-                          ),
+                      ),
+                      // The chapter rows' own gap between a cover and its
+                      // words, rather than the prototype's 16: on a band
+                      // this wide the larger gap read as the details
+                      // standing off the cover, not beside it.
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _Details(
+                          data: data,
+                          onOpenSeries: () => _open(context, _seriesLocation),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 18),
+                  // Centred: the button stops at 280 whatever the band's
+                  // width, and left in the corner it left the band's right
+                  // half empty — on a phone by 70pt, on a tablet by most
+                  // of the row.
+                  child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
                         maxWidth: controlMaxWidth,
@@ -214,10 +227,10 @@ class ContinueHero extends ConsumerWidget {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

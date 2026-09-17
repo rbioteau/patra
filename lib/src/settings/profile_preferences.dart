@@ -1,4 +1,5 @@
 library;
+
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -20,7 +21,9 @@ enum BatchDownloadSize {
 
   final int value;
 
-  static const defaultSize = BatchDownloadSize.five;
+  /// Three: light on the disk of somebody who has never chosen, and the
+  /// first tap on a series says the number is theirs to change.
+  static const defaultSize = BatchDownloadSize.three;
 
   static BatchDownloadSize fromValue(int value) => switch (value) {
     3 => BatchDownloadSize.three,
@@ -97,8 +100,9 @@ class ProfilePreferences {
   final double? bookLineHeight;
 
   /// How many unread chapters to include in a batch download. Offered as
-  /// 3, 5, 10, or 20; default is 5.
+  /// 3, 5, 10, or 20; default is 3.
   final BatchDownloadSize? batchDownloadSize;
+
   /// device", which is a choice a person can make and come back to. It is not
   /// the same as never having chosen: that is null, and the device's default
   /// stands. `MaterialApp` already reads a null `locale` as "resolve against
@@ -157,7 +161,8 @@ class ProfilePreferences {
     if (bookLineHeight != null) 'bookLineHeight': bookLineHeight,
     if (bookReadingFace != null) 'bookReadingFace': bookReadingFace!.name,
     if (language != null) 'language': language,
-    if (batchDownloadSize != null) 'batchDownloadSize': batchDownloadSize!.value,
+    if (batchDownloadSize != null)
+      'batchDownloadSize': batchDownloadSize!.value,
     if (seriesDirections.isNotEmpty)
       'seriesDirections': _directionsJson(seriesDirections),
     if (libraryDirections.isNotEmpty)
@@ -193,10 +198,9 @@ class ProfilePreferences {
               (language.isEmpty || supportedLocale(language) != null)
           ? language
           : null,
-      batchDownloadSize:
-          batchDownloadSize is int
-              ? BatchDownloadSize.fromValue(batchDownloadSize)
-              : null,
+      batchDownloadSize: batchDownloadSize is int
+          ? BatchDownloadSize.fromValue(batchDownloadSize)
+          : null,
       seriesDirections: _directions(json['seriesDirections']),
       libraryDirections: _directions(json['libraryDirections']),
     );
@@ -279,7 +283,7 @@ class ProfilePreferencesStore {
   final double deviceBookLineHeight;
 
   /// How many unread chapters to include in a batch download for a profile
-  /// that has never chosen. Defaults to 5.
+  /// that has never chosen. Defaults to 3.
   final BatchDownloadSize deviceBatchDownloadSize;
 
   /// The language of the **gate**, which is drawn before anybody has been
@@ -342,6 +346,7 @@ class ProfilePreferencesStore {
     }
     return byProfile;
   }
+
   /// rung of the chain, and the only one a person can drop.
   ReadingDirection? seriesDirectionFor(String? profileId, int seriesId) =>
       of(profileId).seriesDirections[seriesId];
@@ -393,19 +398,15 @@ class ProfilePreferencesStore {
     final chosen = of(profileId).language;
     return chosen == null ? deviceLanguage : supportedLocale(chosen);
   }
+
   /// How many unread chapters to include in a batch download for [profileId],
   /// falling through to the device's default where they have never said.
   BatchDownloadSize batchDownloadSizeFor(String? profileId) =>
       of(profileId).batchDownloadSize ?? deviceBatchDownloadSize;
 
   /// [size] is the batch download size from now on, for [profileId] alone.
-  Future<void> setBatchDownloadSize(
-    String profileId,
-    BatchDownloadSize size,
-  ) => _update(
-    profileId,
-    (was) => was.copyWith(batchDownloadSize: size),
-  );
+  Future<void> setBatchDownloadSize(String profileId, BatchDownloadSize size) =>
+      _update(profileId, (was) => was.copyWith(batchDownloadSize: size));
 
   /// [seriesId] is read in [direction] from now on, for [profileId] alone.
   ///
@@ -717,8 +718,9 @@ final libraryDirectionsProvider =
 /// hands are what this file is about, so it follows the person too.
 class MagnifyNotifier extends Notifier<bool> {
   @override
-  bool build() =>
-      ref.read(profilePreferencesStoreProvider).magnifyFor(ref.watch(readingProfileIdProvider));
+  bool build() => ref
+      .read(profilePreferencesStoreProvider)
+      .magnifyFor(ref.watch(readingProfileIdProvider));
 
   Future<void> set(bool enabled) async {
     state = enabled;
@@ -746,8 +748,9 @@ final magnifyProvider = NotifierProvider<MagnifyNotifier, bool>(
 /// live adjustment on top of this and leaves it where it was (#50).
 class WidthFactorNotifier extends Notifier<double> {
   @override
-  double build() =>
-      ref.read(profilePreferencesStoreProvider).widthFactorFor(ref.watch(readingProfileIdProvider));
+  double build() => ref
+      .read(profilePreferencesStoreProvider)
+      .widthFactorFor(ref.watch(readingProfileIdProvider));
 
   /// The width while a finger is still on the slider: what the chapter in
   /// front of the reader is drawn at, but not yet a choice.
@@ -783,8 +786,9 @@ final widthFactorProvider = NotifierProvider<WidthFactorNotifier, double>(
 /// The language the app is shown in. Null follows the device.
 class LocaleNotifier extends Notifier<Locale?> {
   @override
-  Locale? build() =>
-      ref.read(profilePreferencesStoreProvider).languageFor(ref.watch(readingProfileIdProvider));
+  Locale? build() => ref
+      .read(profilePreferencesStoreProvider)
+      .languageFor(ref.watch(readingProfileIdProvider));
 
   /// Writes the choice **twice**, and that is the one asymmetry in this file.
   ///
@@ -888,13 +892,14 @@ class BookReadingFaceNotifier extends Notifier<ReadingFace> {
         .setBookReadingFace(id, face);
   }
 }
+
 final bookReadingFaceProvider =
     NotifierProvider<BookReadingFaceNotifier, ReadingFace>(
       BookReadingFaceNotifier.new,
     );
 
 /// How many unread chapters to include in a batch download, for whoever is
-/// reading. Offered as 3, 5, 10, or 20; default is 5.
+/// reading. Offered as 3, 5, 10, or 20; default is 3.
 class BatchDownloadSizeNotifier extends Notifier<BatchDownloadSize> {
   @override
   BatchDownloadSize build() => ref

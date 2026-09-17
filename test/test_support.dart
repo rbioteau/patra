@@ -289,6 +289,20 @@ class UnreachableServer implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+/// Switches the series screen to its sectioned view — the storyline as
+/// Kavita cuts it, volumes then chapters then specials, in reading order.
+///
+/// The screen opens in the reading-position view, which groups the rows by
+/// what is left to read and folds the finished ones away, so a test that pins
+/// the sections or a row already read has to ask for them. In either language.
+Future<void> showSections(WidgetTester tester) async {
+  final oldest = find.text('Oldest').evaluate().isEmpty
+      ? find.text('Plus anciens')
+      : find.text('Oldest');
+  await tester.tap(oldest);
+  await tester.pumpAndSettle();
+}
+
 /// The nearest [Opacity] above the row labelled [label] — 0.4 is the dimming
 /// that says a row cannot be opened.
 ///

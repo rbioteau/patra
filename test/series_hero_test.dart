@@ -27,7 +27,12 @@ Map<String, dynamic> _chapter(int id, String range, int pages, int read) => {
 };
 
 class _SeriesAdapter implements HttpClientAdapter {
-  _SeriesAdapter(this.volumes, {this.refuse = false, this.libraryType});
+  _SeriesAdapter(
+    this.volumes, {
+    this.refuse = false,
+    this.libraryType,
+    this.seriesName = 'Vinland Saga',
+  });
 
   final List<Map<String, dynamic>> volumes;
 
@@ -40,6 +45,10 @@ class _SeriesAdapter implements HttpClientAdapter {
   /// where the test does not care: no answer at all leaves the type at its
   /// manga fallback.
   final LibraryType? libraryType;
+
+  /// The series' name, which the hero and the app bar both draw; a long one
+  /// is what a title that wraps past the cover's height is made of.
+  final String seriesName;
 
   @override
   Future<ResponseBody> fetch(
@@ -64,7 +73,7 @@ class _SeriesAdapter implements HttpClientAdapter {
       },
       '/api/Series/5' => json({
         'id': 5,
-        'name': 'Vinland Saga',
+        'name': seriesName,
         'libraryId': 1,
         'libraryName': 'Manga',
         'pages': 300,
@@ -152,6 +161,7 @@ Future<void> _pumpSeries(
   bool refuse = false,
   LibraryType? libraryType,
   Locale locale = const Locale('en'),
+  String seriesName = 'Vinland Saga',
 }) async {
   final cacheDir = mockPathProvider();
   final client = KavitaClient(
@@ -164,11 +174,13 @@ Future<void> _pumpSeries(
     volumes,
     refuse: refuse,
     libraryType: libraryType,
+    seriesName: seriesName,
   );
   client.bareHttpClient.httpClientAdapter = _SeriesAdapter(
     volumes,
     refuse: refuse,
     libraryType: libraryType,
+    seriesName: seriesName,
   );
 
   await tester.pumpWidget(
@@ -185,9 +197,9 @@ Future<void> _pumpSeries(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const SeriesDetailScreen(
+        home: SeriesDetailScreen(
           seriesId: 5,
-          seriesName: 'Vinland Saga',
+          seriesName: seriesName,
           libraryId: 1,
         ),
       ),
@@ -213,9 +225,42 @@ void main() {
     expect(find.text('Makoto Yukimura · Seinen'), findsOneWidget);
     // Counted in volumes, because that is how the list below is organised.
     expect(find.text('2 volumes · Manga'), findsOneWidget);
-    // Chapter 3 is started but unfinished: that is where reading resumes.
+    // Chapter 3 is started but unfinished: that is where reading resumes —
+    // and the list under the hero opens on it too.
     expect(find.text('Continue — Ch. 3'), findsOneWidget);
-    expect(find.text('VOLUMES'), findsOneWidget);
+    expect(find.text('READING NOW'), findsOneWidget);
+  });
+
+  testWidgets('a title taller than the cover clips rather than overflows', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1100, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    // The title is serif and three lines deep, and it shares a column pinned
+    // to the cover's height with the resume button below it. A title that
+    // needs more than the button leaves it used to spill past the hero onto
+    // the list beneath — a RenderFlex overflow, "content that cannot be seen"
+    // — until the title was given the shrinking end of the column. The pump
+    // settling at all is the assertion for that half; the title remaining
+    // visible and the button unmoved is the other.
+    await _pumpSeries(
+      tester,
+      _volumesWithChapters,
+      seriesName: 'The Long and Winding Title of a Series That Truly Goes On',
+    );
+
+    // In the hero and in the app bar.
+    expect(
+      find.text('The Long and Winding Title of a Series That Truly Goes On'),
+      findsNWidgets(2),
+    );
+    // The button the title shares the column with is untouched.
+    expect(find.text('Continue — Ch. 3'), findsOneWidget);
+    // And with one chapter left there is no batch card under the hero: that
+    // is the row's own pill's job.
+    expect(find.text("Download what's next"), findsNothing);
   });
 
   testWidgets('a refused fetch stops the hero shimmering', (tester) async {
@@ -459,11 +504,7 @@ void main() {
     ];
 
     testWidgets('the cover carries the book\'s progress', (tester) async {
-      await _pumpSeries(
-        tester,
-        bookVolumes,
-        libraryType: LibraryType.book,
-      );
+      await _pumpSeries(tester, bookVolumes, libraryType: LibraryType.book);
 
       final cover = tester.widget<CoverImage>(find.byType(CoverImage).first);
       // The book is 120 of 300, and the series' own tally is a different
@@ -474,11 +515,7 @@ void main() {
     // A book has no page picture to draw, so what stands behind the hero is
     // the cover rather than a request that can only come back empty.
     testWidgets('draws the cover behind the hero, not a page', (tester) async {
-      await _pumpSeries(
-        tester,
-        bookVolumes,
-        libraryType: LibraryType.book,
-      );
+      await _pumpSeries(tester, bookVolumes, libraryType: LibraryType.book);
 
       expect(
         tester
@@ -494,11 +531,7 @@ void main() {
     // Book library's is "livre" — never a chapter, which is the word a manga
     // shelf uses for the same thing.
     testWidgets('names the book, as the rows below do', (tester) async {
-      await _pumpSeries(
-        tester,
-        bookVolumes,
-        libraryType: LibraryType.book,
-      );
+      await _pumpSeries(tester, bookVolumes, libraryType: LibraryType.book);
 
       expect(find.text('Continue — Book 1'), findsOneWidget);
       // A book has no chapter breakdown, so its row is the book too.

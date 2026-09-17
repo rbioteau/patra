@@ -67,11 +67,17 @@ ResumeEntry? entryPictured(ResumePoint? point) => switch (point) {
 /// the placeholder chapter's cover instead would fetch and store a second
 /// copy of the picture already on the row it opens.
 String entryCoverUrl(KavitaClient client, ResumeEntry entry) =>
-    entry.chapter.isVolumePlaceholder &&
-        !entry.volume.isLooseLeaf &&
-        !entry.volume.isSpecials
+    entry.isWholeVolume
     ? client.volumeCoverUrl(entry.volume.id)
     : client.chapterCoverUrl(entry.chapter.id);
+
+extension ResumeEntryShape on ResumeEntry {
+  /// Whether the entry stands for a whole volume: its chapter is Kavita's
+  /// placeholder for a volume with no chapter breakdown, inside a real
+  /// volume. That is the reading unit there — named after the volume, drawn
+  /// by the volume's cover, one row on the series screen.
+  bool get isWholeVolume => chapter.isVolumePlaceholder && volume.isNumbered;
+}
 
 int bySortOrder(Chapter a, Chapter b) => a.sortOrder.compareTo(b.sortOrder);
 
@@ -86,7 +92,7 @@ List<ResumeEntry> orderedChapters(List<Volume> volumes) {
   final loose = <ResumeEntry>[];
   final specials = <ResumeEntry>[];
   for (final volume in volumes) {
-    final numbered = !volume.isLooseLeaf && !volume.isSpecials;
+    final numbered = volume.isNumbered;
     for (final chapter in sortedChapters(volume.chapters)) {
       final entry = (volume: volume, chapter: chapter);
       if (chapter.isSpecial) {

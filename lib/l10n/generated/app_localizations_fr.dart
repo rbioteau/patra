@@ -654,14 +654,35 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String batchDownload(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count prochains',
-      one: 'prochain',
-    );
-    return 'Télécharger les $_temp0 non lus';
+  String get batchDownload => 'Télécharger la suite';
+
+  @override
+  String volumeRangeLabel(String from, String to) {
+    return 'Tomes $from à $to';
+  }
+
+  @override
+  String chapterRangeLabel(String from, String to) {
+    return 'Chapitres $from à $to';
+  }
+
+  @override
+  String issueRangeLabel(String from, String to) {
+    return 'Numéros #$from à #$to';
+  }
+
+  @override
+  String bookRangeLabel(String from, String to) {
+    return 'Livres $from à $to';
+  }
+
+  @override
+  String get batchDownloadSizeCaption =>
+      'Combien de chapitres non lus un appui sur une série enregistre, à partir d\'où vous en êtes, d\'un tome à l\'autre.';
+
+  @override
+  String batchSizeHint(int count) {
+    return 'Les $count prochains sont en cours. Ce nombre se règle dans Réglages › Stockage.';
   }
 
   @override
@@ -673,5 +694,73 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String batchDownloadSizeOption(int count) {
     return '$count chapitres';
+  }
+
+  @override
+  String get sortReadingPosition => 'Position de lecture';
+
+  @override
+  String get sortReadingPositionHint =>
+      'Là où vous en êtes d\'abord, puis la suite';
+
+  @override
+  String get sortNewest => 'Plus récents';
+
+  @override
+  String get sortNewestHint => 'Les derniers d\'abord';
+
+  @override
+  String get sortOldest => 'Plus anciens';
+
+  @override
+  String get sortOldestHint => 'Depuis le début';
+
+  @override
+  String get groupReadingNow => 'En cours';
+
+  @override
+  String get groupUpNext => 'À suivre';
+
+  @override
+  String get groupStartHere => 'Commencer ici';
+
+  @override
+  String groupAlreadyRead(int count) {
+    return 'Déjà lus · $count';
+  }
+
+  @override
+  String get showReadChapters => 'Afficher';
+
+  @override
+  String get hideReadChapters => 'Masquer';
+
+  @override
+  String batchDownloading(int count) {
+    return 'Téléchargement des $count prochains…';
+  }
+
+  @override
+  String batchDownloadingProgress(int done, int count) {
+    return '$done sur $count enregistrés';
+  }
+
+  @override
+  String batchAllSaved(int count) {
+    return 'Les $count prochains sont enregistrés';
+  }
+
+  @override
+  String get batchReadyOffline => 'Prêts à lire hors ligne';
+
+  @override
+  String batchAlreadySaved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count déjà enregistrés',
+      one: '1 déjà enregistré',
+    );
+    return '$_temp0';
   }
 }

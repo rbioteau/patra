@@ -659,9 +659,49 @@
       "count": {"type": "String"}
     }
   },
-  "batchDownload": "Download next {count} unread",
+  "batchDownload": "Download what's next",
   "@batchDownload": {
-    "description": "Button to enqueue the next N unread chapters as a batch; count is the user's chosen batch size",
+    "description": "Batch card title when there is something to fetch. No number: how many is a setting (batchDownloadSize), and the subtitle names the range instead"
+  },
+  "volumeRangeLabel": "Volumes {from} to {to}",
+  "@volumeRangeLabel": {
+    "description": "A run of whole volumes on the batch card, the unit said once; from and to are Kavita's volume numbers",
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "chapterRangeLabel": "Chapters {from} to {to}",
+  "@chapterRangeLabel": {
+    "description": "A run of numbered chapters on the batch card, in a manga or image library",
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "issueRangeLabel": "Issues #{from} to #{to}",
+  "@issueRangeLabel": {
+    "description": "A run of issues on the batch card, in a comic library",
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "bookRangeLabel": "Books {from} to {to}",
+  "@bookRangeLabel": {
+    "description": "A run of books on the batch card, in a book or light novel library",
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"}
+    }
+  },
+  "batchDownloadSizeCaption": "How many unread chapters one tap on a series saves, from where you are, across volumes.",
+  "@batchDownloadSizeCaption": {
+    "description": "Caption under the batch download size row in Settings › Storage"
+  },
+  "batchSizeHint": "Downloading the next {count}. That number is yours to choose in Settings › Storage.",
+  "@batchSizeHint": {
+    "description": "SnackBar shown once per device, on the first tap of the batch card, with an action leading to Settings; count is the batch size in force",
     "placeholders": {
       "count": {"type": "int"}
     }
@@ -677,6 +717,91 @@
   "batchDownloadSizeOption": "{count} chapters",
   "@batchDownloadSizeOption": {
     "description": "Option in the batch download size picker; count is 3, 5, 10, or 20",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "sortReadingPosition": "Reading position",
+  "@sortReadingPosition": {
+    "description": "Sort pill on the series screen: the chapter under way first, then what comes next, with everything already read folded away at the bottom. The default"
+  },
+  "sortReadingPositionHint": "Where you are first, then what comes next",
+  "@sortReadingPositionHint": {
+    "description": "Tooltip on the Reading position pill: its rule in one line"
+  },
+  "sortNewest": "Newest",
+  "@sortNewest": {
+    "description": "Sort pill on the series screen: the sections in reverse reading order, highest number first"
+  },
+  "sortNewestHint": "Latest first",
+  "@sortNewestHint": {
+    "description": "Tooltip on the Newest pill"
+  },
+  "sortOldest": "Oldest",
+  "@sortOldest": {
+    "description": "Sort pill on the series screen: the sections in reading order, from the beginning"
+  },
+  "sortOldestHint": "From the beginning",
+  "@sortOldestHint": {
+    "description": "Tooltip on the Oldest pill"
+  },
+  "groupReadingNow": "Reading now",
+  "@groupReadingNow": {
+    "description": "Group header over the one chapter under way, in the reading-position view. Drawn in the accent, since it is about reading progress"
+  },
+  "groupUpNext": "Up next",
+  "@groupUpNext": {
+    "description": "Group header over the unread chapters that follow, in the reading-position view, once the series has been started"
+  },
+  "groupStartHere": "Start here",
+  "@groupStartHere": {
+    "description": "Group header over the unread chapters when nothing in the series has been read yet"
+  },
+  "groupAlreadyRead": "Already read · {count}",
+  "@groupAlreadyRead": {
+    "description": "Group header over the finished chapters, folded away by default; count is how many there are",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "showReadChapters": "Show",
+  "@showReadChapters": {
+    "description": "Control on the Already read header that unfolds the finished chapters"
+  },
+  "hideReadChapters": "Hide",
+  "@hideReadChapters": {
+    "description": "Control on the Already read header that folds the finished chapters away again"
+  },
+  "batchDownloading": "Downloading next {count}…",
+  "@batchDownloading": {
+    "description": "Batch card title while at least one of the next N unread chapters is being fetched; count is how many the batch covers",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchDownloadingProgress": "{done} of {count} saved",
+  "@batchDownloadingProgress": {
+    "description": "Batch card subtitle while it runs: how many of the batch are already on the device",
+    "placeholders": {
+      "done": {"type": "int"},
+      "count": {"type": "int"}
+    }
+  },
+  "batchAllSaved": "Next {count} saved",
+  "@batchAllSaved": {
+    "description": "Batch card title once every one of the next N unread chapters is on the device",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchReadyOffline": "Ready to read offline",
+  "@batchReadyOffline": {
+    "description": "Batch card subtitle once the whole batch is saved"
+  },
+  "batchAlreadySaved": "{count, plural, =1{1 already saved} other{{count} already saved}}",
+  "@batchAlreadySaved": {
+    "description": "Appended to the batch card subtitle when part of the batch is already on the device — which is what the card looks like after one of a saved batch has been finished and the window has moved on by one",
     "placeholders": {
       "count": {"type": "int"}
     }
