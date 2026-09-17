@@ -525,7 +525,6 @@ class _SeriesHero extends ConsumerWidget {
       (allRead: true, entry: _, started: _) => l10n.seriesReadAgain,
       _ => l10n.seriesStartReading,
     };
-
     // Only when a chapter is genuinely under way. Where the button starts the
     // series, or offers it again, there is no page you are on — and the first
     // page of something unread is a spoiler with nothing behind it. The rule
@@ -533,6 +532,14 @@ class _SeriesHero extends ConsumerWidget {
     // front of it and the home screen's own card all name one chapter.
     final underWay = entryUnderWay(target);
     final onPage = underWay?.chapter;
+
+    // The cover pictures the chapter the button opens (the resume target)
+    // when the series has been started but not finished. Where the button
+    // starts the series (nothing read) or offers it again (all read), the
+    // series cover is shown. The backdrop refuses page 0 as a spoiler.
+    final coverEntry = (target?.started == true && target?.allRead == false)
+        ? target?.entry
+        : null;
 
     // Muted grey is tuned against a flat panel; over a page it is the first
     // thing to go.
@@ -543,7 +550,7 @@ class _SeriesHero extends ConsumerWidget {
     // whichever of the two this cover turned out to be, and must never fall
     // back across that line: a series' progress under a chapter's picture is
     // a number about something else.
-    final coverProgress = switch (underWay) {
+    final coverProgress = switch (coverEntry) {
       final entry? =>
         entry.chapter.pages == 0
             ? 0.0
@@ -576,9 +583,9 @@ class _SeriesHero extends ConsumerWidget {
                 width: coverWidth,
                 height: coverHeight,
                 child: CoverImage(
-                  url: underWay == null
+                  url: coverEntry == null
                       ? client.seriesCoverUrl(seriesId)
-                      : entryCoverUrl(client, underWay),
+                      : entryCoverUrl(client, coverEntry),
                   headers: client.imageHeaders,
                   seriesId: seriesId,
                   seriesName: seriesName,
