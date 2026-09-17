@@ -272,7 +272,9 @@ void main() {
     // own row, and the catalogue is deliberately never told.
     expect(find.text('Page 60 / 100'), findsOneWidget);
     expect(
-      find.text('100 pages'),
+      // Read, so its line carries the word — the count is still the
+      // catalogue's, which is the point.
+      find.text('Read · 100 pages'),
       findsOneWidget,
       reason: 'the unsaved chapter, whose row is the catalogue\'s',
     );

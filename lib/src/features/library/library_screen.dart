@@ -446,6 +446,8 @@ class _SeriesGrid extends ConsumerWidget {
             itemCount: items.length,
             itemBuilder: (context, index) {
               final s = items[index];
+              // A read series runs its bar full — that is the only mark a
+              // tile carries, and [Series.isRead] is exactly `progress >= 1`.
               final progress = s.pages > 0 ? s.pagesRead / s.pages : 0.0;
               return CoverTile(
                 url: client.seriesCoverUrl(s.id),
@@ -454,7 +456,6 @@ class _SeriesGrid extends ConsumerWidget {
                 title: s.name,
                 serifTitle: true,
                 progress: progress,
-                read: s.isRead,
                 onTap: () async {
                   await context.push(seriesLocation(s));
                   // Progress may have changed while reading.

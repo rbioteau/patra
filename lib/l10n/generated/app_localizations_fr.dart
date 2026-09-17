@@ -307,7 +307,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get seriesReadAgain => 'Relire';
 
   @override
-  String get readTag => 'LU';
+  String readPageCount(int count) {
+    return 'Lu · $count pages';
+  }
 
   @override
   String pageCount(int count) {

@@ -11,6 +11,7 @@ import '../../downloads/downloads_service.dart';
 import '../../auth/session.dart';
 import '../../format.dart';
 import '../../theme.dart';
+import '../../widgets/read_mark.dart';
 
 class DownloadsScreen extends ConsumerWidget {
   const DownloadsScreen({super.key});
@@ -154,117 +155,119 @@ class _SavedRow extends ConsumerWidget {
         '/reader/${chapter.chapterId}'
         '${chapter.isRead ? '' : '?page=${chapter.pagesRead}'}',
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: gutter,
-          vertical: tablet ? 9 : 6,
-        ),
-        child: Row(
-          children: [
-            // The first stored page doubles as the thumbnail: no server needed.
-            SizedBox(
-              width: tablet ? rowCoverWidthTablet : rowCoverWidth,
-              height: tablet ? rowCoverHeightTablet : rowCoverHeight,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radiusThumb),
-                child: _LocalThumb(chapter: chapter, dir: dir),
+      child: ReadRail(
+        read: chapter.isRead,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: gutter,
+            vertical: tablet ? 9 : 6,
+          ),
+          child: Row(
+            children: [
+              // The first stored page doubles as the thumbnail: no server needed.
+              SizedBox(
+                width: tablet ? rowCoverWidthTablet : rowCoverWidth,
+                height: tablet ? rowCoverHeightTablet : rowCoverHeight,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radiusThumb),
+                  child: _LocalThumb(chapter: chapter, dir: dir),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // The work leads; the volume is the detail underneath.
-                  Text(
-                    chapter.seriesName.isEmpty
-                        ? chapter.title
-                        : chapter.seriesName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
-                  ),
-                  if (chapter.seriesName.isNotEmpty &&
-                      chapter.title.isNotEmpty) ...[
-                    const SizedBox(height: 3),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // The work leads; the volume is the detail underneath.
                     Text(
-                      chapter.title,
-                      maxLines: 1,
+                      chapter.seriesName.isEmpty
+                          ? chapter.title
+                          : chapter.seriesName,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: PatraText.metadata(size: tablet ? 12 : 11),
+                      style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
                     ),
-                  ],
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          '${l10n.pageCount(chapter.pages)} · '
-                          '${formatBytes(l10n, chapter.bytes)}',
-                          style: PatraText.metadata(size: tablet ? 12 : 11),
+                    if (chapter.seriesName.isNotEmpty &&
+                        chapter.title.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        chapter.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: PatraText.metadata(size: tablet ? 12 : 11),
+                      ),
+                    ],
+                    const SizedBox(height: 3),
+                    // The same line and the same words the series screen's
+                    // rows carry, with the copy's own size after them — in
+                    // the muted tone, because how big a file is says nothing
+                    // about reading progress.
+                    PageCountLine(
+                      pages: chapter.pages,
+                      read: chapter.isRead,
+                      size: tablet ? 12 : 11,
+                      trailing: formatBytes(l10n, chapter.bytes),
+                    ),
+                    // Progress is what tells you which volumes are done with
+                    // and can go.
+                    if (!chapter.isRead && chapter.progress > 0) ...[
+                      const SizedBox(height: 7),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(1),
+                          child: LinearProgressIndicator(
+                            value: chapter.progress,
+                            minHeight: 2,
+                            backgroundColor: Colors.white.withValues(
+                              alpha: .07,
+                            ),
+                            valueColor: const AlwaysStoppedAnimation(
+                              patraAccent,
+                            ),
+                          ),
                         ),
                       ),
-                      if (chapter.isRead) ...[
-                        const SizedBox(width: 8),
-                        Text(l10n.readTag, style: _readTagStyle),
+                    ],
+                    // A copy keeps the pagination it was made with (ADR-0009),
+                    // so the count the server gives now is a fact about it:
+                    // where the two disagree the copy says so, and is offered
+                    // for another go — never silently refetched, and never
+                    // silently left to resume at the wrong page.
+                    if (recounted != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.copyOutOfDate(recounted),
+                        style: PatraText.metadata(
+                          size: tablet ? 12 : 11,
+                          color: patraDanger,
+                        ),
+                      ),
+                      // Only where it can be answered: storing a copy again is
+                      // the server's pages, and there are none without one.
+                      if (!offline) ...[
+                        const SizedBox(height: 7),
+                        _RefreshCopy(chapter: chapter),
                       ],
                     ],
-                  ),
-                  // Progress is what tells you which volumes are done with
-                  // and can go.
-                  if (!chapter.isRead && chapter.progress > 0) ...[
-                    const SizedBox(height: 7),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 180),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(1),
-                        child: LinearProgressIndicator(
-                          value: chapter.progress,
-                          minHeight: 2,
-                          backgroundColor: Colors.white.withValues(alpha: .07),
-                          valueColor: const AlwaysStoppedAnimation(patraAccent),
-                        ),
-                      ),
-                    ),
                   ],
-                  // A copy keeps the pagination it was made with (ADR-0009),
-                  // so the count the server gives now is a fact about it:
-                  // where the two disagree the copy says so, and is offered
-                  // for another go — never silently refetched, and never
-                  // silently left to resume at the wrong page.
-                  if (recounted != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      l10n.copyOutOfDate(recounted),
-                      style: PatraText.metadata(
-                        size: tablet ? 12 : 11,
-                        color: patraDanger,
-                      ),
-                    ),
-                    // Only where it can be answered: storing a copy again is
-                    // the server's pages, and there are none without one.
-                    if (!offline) ...[
-                      const SizedBox(height: 7),
-                      _RefreshCopy(chapter: chapter),
-                    ],
-                  ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: l10n.removeDownload,
-              icon: const Icon(Icons.delete_outline, size: 20),
-              color: patraTextMuted,
-              onPressed: () async {
-                if (await _confirmRemove(context, l10n)) {
-                  await ref
-                      .read(downloadsProvider.notifier)
-                      .remove(chapter.chapterId);
-                }
-              },
-            ),
-          ],
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: l10n.removeDownload,
+                icon: const Icon(Icons.delete_outline, size: 20),
+                color: patraTextMuted,
+                onPressed: () async {
+                  if (await _confirmRemove(context, l10n)) {
+                    await ref
+                        .read(downloadsProvider.notifier)
+                        .remove(chapter.chapterId);
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -370,12 +373,6 @@ class _RefreshCopy extends ConsumerWidget {
     );
   }
 }
-
-/// Same quiet accent mark the series rows use for a finished chapter.
-final _readTagStyle = PatraText.metadata(
-  color: patraAccent,
-  size: 10.5,
-).copyWith(fontWeight: FontWeight.w600, letterSpacing: .5);
 
 class _LocalThumb extends StatelessWidget {
   const _LocalThumb({required this.chapter, required this.dir});

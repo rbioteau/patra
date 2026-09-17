@@ -16,6 +16,7 @@ import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/cover.dart';
+import 'package:patra/src/widgets/read_mark.dart';
 import 'package:patra/src/widgets/save_pill.dart';
 
 import 'test_support.dart';
@@ -77,6 +78,13 @@ final _volumesOnly = <Map<String, dynamic>>[
     'chapters': [_chapter(101, '1')],
   },
 ];
+
+/// What a finished row says, in the words it says it in.
+///
+/// The mark used to be a `READ` tag pinned beside the title and a check badge
+/// on the cover; it is now the row's own metadata line, in the accent. Every
+/// chapter of these fixtures is 100 pages long.
+const _read = 'Read · 100 pages';
 
 class _Adapter implements HttpClientAdapter {
   _Adapter(
@@ -490,8 +498,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Read, without a second visit: the bar that was there is gone, and the
-    // row says what it is.
-    expect(find.text('READ'), findsOneWidget);
+    // row says so in its own words.
+    expect(find.text(_read), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
@@ -531,11 +539,11 @@ void main() {
       await tester.pump();
 
       // The server has not answered — and will not until the gate opens.
-      expect(find.text('READ'), findsOneWidget);
+      expect(find.text(_read), findsOneWidget);
 
       gate.complete();
       await tester.pumpAndSettle();
-      expect(find.text('READ'), findsOneWidget);
+      expect(find.text(_read), findsOneWidget);
     });
 
     testWidgets('and posts the book to the server, both ways', (tester) async {
@@ -826,6 +834,69 @@ void main() {
     });
   });
 
+  // Read is a positive signal here, in the accent that already means reading
+  // progress: a rail on the row's leading edge and the word in the row's own
+  // metadata. Nothing is added to the row and nothing recedes — a lowered
+  // opacity already means *unavailable* in this app, which says the opposite.
+  group('a finished row is marked, not erased', () {
+    final mixed = <Map<String, dynamic>>[
+      {
+        'id': 10,
+        'name': '1',
+        'minNumber': 1,
+        'pages': 100,
+        'chapters': [_chapter(101, '1', pagesRead: 100)],
+      },
+      {
+        'id': 11,
+        'name': '2',
+        'minNumber': 2,
+        'pages': 100,
+        'chapters': [_chapter(102, '2', pagesRead: 0)],
+      },
+    ];
+
+    Finder rails() =>
+        find.byWidgetPredicate((widget) => widget is ReadRail && widget.read);
+
+    testWidgets('the read row carries the rail, and only it', (tester) async {
+      await _pump(tester, mixed);
+      await showSections(tester);
+
+      expect(find.text(_read), findsOneWidget);
+      expect(rails(), findsOneWidget);
+      // The mark the rail replaces, on the cover and beside the title.
+      expect(find.byIcon(Icons.check), findsNothing);
+      expect(find.text('READ'), findsNothing);
+    });
+
+    // The word is inside the sentence rather than concatenated onto the
+    // count, so French orders it its own way rather than English's.
+    testWidgets('and says it in French too', (tester) async {
+      await _pump(tester, mixed, locale: const Locale('fr'));
+      await showSections(tester);
+
+      expect(find.text('Lu · 100 pages'), findsOneWidget);
+      expect(find.text('LU'), findsNothing);
+    });
+
+    testWidgets('its title is not muted, and its cover has not moved', (
+      tester,
+    ) async {
+      await _pump(tester, mixed);
+      await showSections(tester);
+
+      final read = tester.widget<Text>(find.text('Chapter 1'));
+      expect(read.style?.color, patraText);
+
+      // The rail is taken out of the gutter: the two rows line up.
+      expect(
+        tester.getTopLeft(find.text('Chapter 1')).dx,
+        tester.getTopLeft(find.text('Chapter 2')).dx,
+      );
+    });
+  });
+
   group('the row does not wait for the server', () {
     Future<void> swipeAndMark(WidgetTester tester) async {
       await tester.drag(find.text('Chapter 1'), const Offset(400, 0));
@@ -849,16 +920,16 @@ void main() {
       final gate = Completer<void>();
       await _pump(tester, unread, postGate: gate.future);
 
-      expect(find.text('READ'), findsNothing);
+      expect(find.text(_read), findsNothing);
       await swipeAndMark(tester);
       await tester.pump();
 
       // The server has not answered — and will not until the gate opens.
-      expect(find.text('READ'), findsOneWidget);
+      expect(find.text(_read), findsOneWidget);
 
       gate.complete();
       await tester.pumpAndSettle();
-      expect(find.text('READ'), findsOneWidget);
+      expect(find.text(_read), findsOneWidget);
     });
 
     testWidgets('a refused write puts the row back', (tester) async {
@@ -867,12 +938,12 @@ void main() {
 
       await swipeAndMark(tester);
       await tester.pump();
-      expect(find.text('READ'), findsOneWidget);
+      expect(find.text(_read), findsOneWidget);
 
       gate.complete();
       await tester.pumpAndSettle();
       // The server refused, so the screen goes back to what it knows.
-      expect(find.text('READ'), findsNothing);
+      expect(find.text(_read), findsNothing);
     });
   });
 

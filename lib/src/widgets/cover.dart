@@ -5,8 +5,13 @@ import '../api/kavita_client.dart';
 import '../theme.dart';
 import 'cover_placeholder.dart';
 
-/// A 2:3 cover with the reading-progress bar pinned to its bottom edge and an
-/// optional read badge in the top-right corner.
+/// A 2:3 cover with the reading-progress bar pinned to its bottom edge.
+///
+/// Read is not a state of its own here: a finished cover is one whose
+/// [progress] has reached 1, and [CoverProgressBar] draws that as a full bar.
+/// The check badge this used to pin in the corner is gone — a mark added to
+/// artwork is furniture on a grid meant to be scanned, and the bar was
+/// already saying the same thing everywhere short of the end.
 class CoverImage extends StatelessWidget {
   const CoverImage({
     super.key,
@@ -15,7 +20,6 @@ class CoverImage extends StatelessWidget {
     required this.seriesId,
     required this.seriesName,
     this.progress = 0,
-    this.read = false,
     this.radius = radiusCover,
     this.memCacheWidth,
   });
@@ -30,9 +34,8 @@ class CoverImage extends StatelessWidget {
   final int seriesId;
   final String seriesName;
 
-  /// 0..1 reading progress; the bar only shows strictly between the two.
+  /// 0..1 reading progress; 1 is a full bar, and read is what that means.
   final double progress;
-  final bool read;
   final double radius;
   final int? memCacheWidth;
 
@@ -64,21 +67,6 @@ class CoverImage extends StatelessWidget {
             errorWidget: (_, _, _) => placeholder,
           ),
         ),
-        if (read)
-          Positioned(
-            top: 4,
-            right: 4,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: .55),
-                shape: BoxShape.circle,
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(2),
-                child: Icon(Icons.check, size: 13, color: patraAccent),
-              ),
-            ),
-          ),
         ClipRRect(
           borderRadius: BorderRadius.circular(radius),
           child: Stack(
@@ -101,7 +89,6 @@ class CoverTile extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.progress = 0,
-    this.read = false,
     this.serifTitle = false,
   });
 
@@ -114,7 +101,6 @@ class CoverTile extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
   final double progress;
-  final bool read;
   final bool serifTitle;
 
   @override
@@ -133,7 +119,6 @@ class CoverTile extends StatelessWidget {
               seriesId: seriesId,
               seriesName: title,
               progress: progress,
-              read: read,
             ),
           ),
           const SizedBox(height: 8),

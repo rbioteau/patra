@@ -530,11 +530,11 @@ abstract class AppLocalizations {
   /// **'Read again'**
   String get seriesReadAgain;
 
-  /// Short uppercase tag marking a finished chapter
+  /// A finished row's metadata line, drawn in the accent. The word is part of the sentence rather than a tag beside the title, so a translation is free to order it its own way
   ///
   /// In en, this message translates to:
-  /// **'READ'**
-  String get readTag;
+  /// **'Read · {count} pages'**
+  String readPageCount(int count);
 
   /// No description provided for @pageCount.
   ///

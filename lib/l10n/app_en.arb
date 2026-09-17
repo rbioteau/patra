@@ -288,9 +288,12 @@
   },
   "seriesStartReading": "Start reading",
   "seriesReadAgain": "Read again",
-  "readTag": "READ",
-  "@readTag": {
-    "description": "Short uppercase tag marking a finished chapter"
+  "readPageCount": "Read · {count} pages",
+  "@readPageCount": {
+    "description": "A finished row's metadata line, drawn in the accent. The word is part of the sentence rather than a tag beside the title, so a translation is free to order it its own way",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
   },
   "pageCount": "{count} pages",
   "@pageCount": {

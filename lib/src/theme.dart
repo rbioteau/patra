@@ -101,6 +101,12 @@ const controlMaxWidth = 280.0;
 /// A progress track drawn on its own, away from a cover.
 const radiusTrack = 2.0;
 
+/// The rail a read row wears on its leading edge. The widget that draws it —
+/// and the line that carries the word beside it — is `ReadRail` /
+/// `PageCountLine` in `widgets/read_mark.dart`, one mark for the two screens
+/// that draw this row.
+const readRailWidth = 2.0;
+
 /// Covers are always 2:3.
 const coverAspectRatio = 2 / 3;
 
@@ -373,12 +379,16 @@ class SectionLabel extends StatelessWidget {
 class CoverProgressBar extends StatelessWidget {
   const CoverProgressBar({super.key, required this.progress});
 
-  /// 0..1; nothing is drawn outside that open interval.
+  /// 0..1; nothing is drawn where nothing has been read, and a **full** bar
+  /// once everything has. It used to erase itself at 1 as well, so the one
+  /// signal that carried meaning disappeared at the moment it was complete —
+  /// and on a library tile, which has no metadata line and no rail, that bar
+  /// is the whole of how a read series is marked.
   final double progress;
 
   @override
   Widget build(BuildContext context) {
-    if (progress <= 0 || progress >= 1) return const SizedBox.shrink();
+    if (progress <= 0) return const SizedBox.shrink();
     return Positioned(
       left: 0,
       right: 0,

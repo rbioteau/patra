@@ -15,6 +15,7 @@ import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/downloads/downloads_screen.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/read_mark.dart';
 
 import 'test_support.dart';
 
@@ -430,5 +431,50 @@ void main() {
     expect(find.text('Refresh'), findsNothing);
     // What it was made with, still.
     expect(find.textContaining('3 pages'), findsOneWidget);
+  });
+
+  // The Downloads row and the series screen's chapter row are the same row,
+  // and a finished one is marked the same way on both: a rail on the leading
+  // edge and the word inside the metadata line, in the accent. Neither of
+  // them dims anything — a lowered opacity means *unavailable* here.
+  testWidgets('a finished copy wears the rail and says so in its line', (
+    tester,
+  ) async {
+    final room = _room();
+    await saveChapterFixture(
+      room,
+      _profileId,
+      chapterId: _chapterId,
+      seriesName: 'Dune',
+      title: 'Dune Messiah',
+      pages: _savedPages,
+      pagesRead: _savedPages,
+      format: MangaFormat.epub,
+      pageHtml: _pageHtml,
+    );
+
+    final home = await _pumpDownloads(tester, room, _BookServer());
+    await _pumpUntil(tester, () => home.read(downloadsProvider).hasValue);
+
+    expect(
+      find.byWidgetPredicate((widget) => widget is ReadRail && widget.read),
+      findsOneWidget,
+    );
+    // The accent stops where the sentence about reading does: how big the
+    // copy is says nothing about progress, and gold is spoken for.
+    // `Text.rich` nests what it was given under a span carrying the default
+    // style, so the two halves of the line are one level down.
+    final line = tester.widget<RichText>(
+      find.textContaining('Read · 3 pages', findRichText: true),
+    );
+    final spans =
+        ((line.text as TextSpan).children!.single as TextSpan).children!;
+    final read = spans.first as TextSpan;
+    final size = spans.last as TextSpan;
+    expect(read.text, 'Read · 3 pages');
+    expect(read.style?.color, patraAccent);
+    expect(size.text, contains('·'));
+    expect(size.style?.color, isNot(patraAccent));
+    expect(find.text('READ'), findsNothing);
   });
 }

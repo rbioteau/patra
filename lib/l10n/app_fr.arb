@@ -72,7 +72,7 @@
   "seriesContinuePlain": "Reprendre",
   "seriesStartReading": "Commencer la lecture",
   "seriesReadAgain": "Relire",
-  "readTag": "LU",
+  "readPageCount": "Lu · {count} pages",
   "pageCount": "{count} pages",
   "pageProgress": "Page {current} / {total}",
   "pageCounter": "{current} / {total}",

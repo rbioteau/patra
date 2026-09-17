@@ -17,6 +17,7 @@ import '../../settings/batch_hint.dart';
 import '../../settings/profile_preferences.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
+import '../../widgets/read_mark.dart';
 import '../../widgets/page_backdrop.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/save_pill.dart';
@@ -1423,34 +1424,6 @@ class _ChapterRow extends ConsumerWidget {
                     color: Colors.black.withValues(alpha: .35),
                   ),
                 ),
-                if (read)
-                  Positioned(
-                    top: tablet ? 4 : 3,
-                    right: tablet ? 4 : 3,
-                    child: Container(
-                      // The badge sits *on* the cover: left at 16 it goes
-                      // back to being a pea on the bigger one.
-                      width: tablet ? 20 : 16,
-                      height: tablet ? 20 : 16,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: patraAccent,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: .6),
-                            blurRadius: 4,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.check,
-                        size: tablet ? 13 : 10,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -1459,32 +1432,29 @@ class _ChapterRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        _label(l10n),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: PatraText.rowTitle(
-                          color: read ? patraTextMuted : patraText,
-                          size: tablet ? 15 : 13.5,
-                        ),
-                      ),
-                    ),
-                    if (read) ...[
-                      const SizedBox(width: 8),
-                      Text(l10n.readTag, style: _readTagStyle),
-                    ],
-                  ],
+                // A read row is not muted: read is a positive signal, said
+                // by the rail and by the accent on the line below.
+                Text(
+                  _label(l10n),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  inProgress
-                      ? l10n.pageProgress(chapter.pagesRead, chapter.pages)
-                      : l10n.pageCount(chapter.pages),
-                  style: PatraText.metadata(size: tablet ? 12 : 11),
-                ),
+                // Where the row is read the word is in the line rather than
+                // beside the title as a tag — the state is spoken because it
+                // is written. A row under way says where it is instead.
+                if (inProgress)
+                  Text(
+                    l10n.pageProgress(chapter.pagesRead, chapter.pages),
+                    style: PatraText.metadata(size: tablet ? 12 : 11),
+                  )
+                else
+                  PageCountLine(
+                    pages: chapter.pages,
+                    read: read,
+                    size: tablet ? 12 : 11,
+                  ),
                 // Progress belongs to the chapter being read, and only to it.
                 if (inProgress) ...[
                   const SizedBox(height: 7),
@@ -1540,11 +1510,14 @@ class _ChapterRow extends ConsumerWidget {
             color: highlighted
                 ? patraAccent.withValues(alpha: .06)
                 : Colors.transparent,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: gutter),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: minHitTarget),
-                child: row,
+            child: ReadRail(
+              read: read,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: gutter),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: minHitTarget),
+                  child: row,
+                ),
               ),
             ),
           ),
@@ -1769,14 +1742,6 @@ class _SqueezedByPane extends StatelessWidget {
     );
   }
 }
-
-/// The READ mark: tracked text beside a finished chapter's title, in the
-/// accent — the same colour as the badge on its cover, since both say the
-/// same thing about reading progress.
-final _readTagStyle = PatraText.metadata(
-  color: patraAccent,
-  size: 10.5,
-).copyWith(fontWeight: FontWeight.w600, letterSpacing: .5);
 
 class _RowsSkeleton extends StatelessWidget {
   const _RowsSkeleton();
