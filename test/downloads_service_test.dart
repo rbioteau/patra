@@ -86,13 +86,17 @@ String _bookPageHtml(int page) =>
 /// `book-page` hands one over at a time, and `book-resources` serves what a
 /// page named.
 class _BookAdapter implements HttpClientAdapter {
-  _BookAdapter({this.failOnPage, this.refusePictures = false});
+  _BookAdapter({this.failOnPage, this.refusePictures = false, this.pages = 3});
 
   /// A page the server cannot produce.
   final int? failOnPage;
 
   /// A server that hands over the words but not the pictures.
   final bool refusePictures;
+  final int pages;
+
+  /// Every rendered page the app asked the server for, in order.
+  final requestedPages = <int>[];
 
   /// Every picture the app asked the server for, in order.
   final requested = <String>[];
@@ -112,13 +116,14 @@ class _BookAdapter implements HttpClientAdapter {
         'libraryId': 1,
         // How long a book is is the book's to say: `chapter-info` counts
         // image pages, and a book has none.
-        'pages': 3,
+        'pages': pages,
         'seriesName': 'Dune',
         'seriesFormat': MangaFormat.epub.id,
       });
     }
     if (path == '/api/Book/$_bookId/book-page') {
       final page = int.parse('${options.uri.queryParameters['page']}');
+      requestedPages.add(page);
       if (page == failOnPage) return ResponseBody.fromBytes(const [], 500);
       return ResponseBody.fromString(
         _bookPageHtml(page),
@@ -189,15 +194,25 @@ void main() {
   test('downloading stores every page plus metadata', () async {
     final adapter = _PageAdapter();
     final progress = <double>[];
+    final dir = await service.chapterDir(42);
+    final meta = File('${dir.path}/meta.json');
 
     final saved = await service.download(
       client: _client(adapter),
       chapter: _chapter,
-      onProgress: (completed, total) => progress.add(completed / total),
+      onProgress: (completed, total) {
+        expect(
+          meta.existsSync(),
+          isFalse,
+          reason: 'metadata is absent until every page is committed',
+        );
+        progress.add(completed / total);
+      },
     );
 
     expect(adapter.requests, 3);
     expect(progress, [closeTo(1 / 3, 0.001), closeTo(2 / 3, 0.001), 1.0]);
+    expect(meta.existsSync(), isTrue);
     // 1 + 2 + 3 bytes.
     expect(saved.bytes, 6);
     expect(saved.pages, 3);
@@ -207,7 +222,6 @@ void main() {
       expect(file.existsSync(), isTrue, reason: 'page $page is stored');
       expect(file.lengthSync(), page + 1);
     }
-    final meta = File('${(await service.chapterDir(42)).path}/meta.json');
     expect(jsonDecode(meta.readAsStringSync())['seriesName'], 'Blame!');
   });
 
@@ -225,7 +239,7 @@ void main() {
     expect(saved[42]!.bytes, 6);
   });
 
-  test('a failed download leaves nothing behind', () async {
+  test('an unqueued failed download is swept on the next scan', () async {
     final adapter = _PageAdapter(failOnPage: 1);
 
     await expectLater(
@@ -237,8 +251,10 @@ void main() {
       throwsA(isA<DioException>()),
     );
 
-    expect((await service.chapterDir(42)).existsSync(), isFalse);
+    final dir = await service.chapterDir(42);
+    expect(dir.existsSync(), isTrue, reason: 'the partial can be retried');
     expect(await service.scan(), isEmpty);
+    expect(dir.existsSync(), isFalse, reason: 'nothing queued owns it');
   });
 
   test(
@@ -277,14 +293,19 @@ void main() {
         before,
         reason: 'the copy is the copy it was',
       );
-      // Nothing of the failed run is left lying in it either.
+      // The failed refresh remains staged for a retry without touching the
+      // saved copy the reader can still open.
       expect(
-        dir.listSync().where(
-          (entity) =>
-              entity is Directory &&
-              entity.path.endsWith(DownloadsService.stagingDirName),
-        ),
-        isEmpty,
+        Directory('${dir.path}/${DownloadsService.stagingDirName}')
+            .existsSync(),
+        isTrue,
+      );
+      expect((await service.scan()).keys, [42]);
+      expect(
+        Directory('${dir.path}/${DownloadsService.stagingDirName}')
+            .existsSync(),
+        isFalse,
+        reason: 'no queue entry owns the failed refresh',
       );
     },
   );
@@ -300,6 +321,88 @@ void main() {
     expect(dir.existsSync(), isFalse);
   });
 
+  test('scan keeps only partial downloads named by the queue', () async {
+    final dir = await service.chapterDir(42);
+    final staging = Directory('${dir.path}/${DownloadsService.stagingDirName}')
+      ..createSync(recursive: true);
+    final page = File('${staging.path}/${DownloadsService.pageFileName(0)}')
+      ..writeAsBytesSync(const [1, 2, 3]);
+    await service.writeQueue({
+      42: const DownloadQueueRecord(
+        request: _chapter,
+        status: DownloadQueueStatus.failed,
+        priority: 0,
+        completedPages: 1,
+        totalPages: 3,
+      ),
+    });
+
+    expect(await service.scan(), isEmpty);
+    expect(page.existsSync(), isTrue, reason: 'the failed entry can retry');
+
+    await service.writeQueue({});
+    expect(await service.scan(), isEmpty);
+    expect(dir.existsSync(), isFalse, reason: 'an unqueued partial is garbage');
+  });
+
+  test('scan keeps partials when queue ownership is unreadable', () async {
+    final dir = await service.chapterDir(42);
+    final staging = Directory('${dir.path}/${DownloadsService.stagingDirName}')
+      ..createSync(recursive: true);
+    final page = File('${staging.path}/${DownloadsService.pageFileName(0)}')
+      ..writeAsBytesSync(const [1, 2, 3]);
+    final profile = await service.profileRoot();
+    File('${profile.path}/queue.json').writeAsStringSync('{not json');
+
+    expect(await service.scan(), isEmpty);
+    expect(page.existsSync(), isTrue, reason: 'ambiguity keeps reader data');
+
+    await service.writeQueue({});
+    final restarted = DownloadsService(root: root, profileId: _romain);
+    expect(await restarted.scan(), isEmpty);
+    expect(
+      page.existsSync(),
+      isTrue,
+      reason: 'a later queue write must preserve ambiguous ownership',
+    );
+  });
+
+  test('scan treats a missing queue record list as ambiguous', () async {
+    final dir = await service.chapterDir(42);
+    final staging = Directory('${dir.path}/${DownloadsService.stagingDirName}')
+      ..createSync(recursive: true);
+    final page = File('${staging.path}/${DownloadsService.pageFileName(0)}')
+      ..writeAsBytesSync(const [1, 2, 3]);
+    final profile = await service.profileRoot();
+    File('${profile.path}/queue.json').writeAsStringSync('{"version":1}');
+
+    expect(await service.scan(), isEmpty);
+    expect(
+      page.existsSync(),
+      isTrue,
+      reason: 'an incomplete queue proves nothing',
+    );
+  });
+
+  test('download resumes pages committed before metadata', () async {
+    final dir = await service.chapterDir(42);
+    dir.createSync(recursive: true);
+    final first = File('${dir.path}/${DownloadsService.pageFileName(0)}')
+      ..writeAsBytesSync(const [7]);
+    final firstWrite = first.lastModifiedSync();
+    final adapter = _PageAdapter();
+
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await service.download(
+      client: _client(adapter),
+      chapter: _chapter,
+      onProgress: (_, _) {},
+    );
+
+    expect(adapter.requests, 2);
+    expect(first.lastModifiedSync(), firstWrite);
+  });
+
   test('removing deletes the stored pages', () async {
     await service.download(
       client: _client(_PageAdapter()),
@@ -313,7 +416,7 @@ void main() {
     expect(await service.scan(), isEmpty);
   });
 
-  test('a cancelled download is cleaned up too', () async {
+  test('discarding a cancelled download removes its resumable bytes', () async {
     final cancelToken = CancelToken();
     final adapter = _PageAdapter();
 
@@ -327,6 +430,8 @@ void main() {
     );
 
     await expectLater(download, throwsA(isA<DioException>()));
+    expect((await service.chapterDir(42)).existsSync(), isTrue);
+    await service.discardPartial(42);
     expect((await service.chapterDir(42)).existsSync(), isFalse);
   });
 
@@ -495,7 +600,7 @@ void main() {
       expect(saved.pages, 3);
     });
 
-    test('a page the server cannot produce leaves no copy', () async {
+    test('an unqueued failed book is swept on the next scan', () async {
       await expectLater(
         service.download(
           client: _client(_BookAdapter(failOnPage: 2)),
@@ -504,8 +609,41 @@ void main() {
         ),
         throwsA(isA<DioException>()),
       );
-      expect((await service.chapterDir(_bookId)).existsSync(), isFalse);
+      final dir = await service.chapterDir(_bookId);
+      expect(dir.existsSync(), isTrue, reason: 'the partial can be retried');
       expect(await service.scan(), isEmpty);
+      expect(dir.existsSync(), isFalse, reason: 'nothing queued owns it');
+    });
+
+    test('a retried book keeps its first attempt pagination', () async {
+      final first = _BookAdapter(failOnPage: 2);
+      final firstProgress = <(int, int)>[];
+      await expectLater(
+        service.download(
+          client: _client(first),
+          chapter: _book,
+          onProgress: (completed, total) {
+            firstProgress.add((completed, total));
+          },
+        ),
+        throwsA(isA<DioException>()),
+      );
+      expect(first.requestedPages, [0, 1, 2]);
+      expect(firstProgress.first, (
+        0,
+        3,
+      ), reason: 'pagination is durable before the first page is written');
+
+      final changedServer = _BookAdapter(pages: 4);
+      final saved = await service.download(
+        client: _client(changedServer),
+        chapter: _book,
+        onProgress: (_, _) {},
+        knownTotalPages: 3,
+      );
+
+      expect(changedServer.requestedPages, [2]);
+      expect(saved.pages, 3, reason: 'the copy keeps its original pagination');
     });
 
     test('a picture the server refuses costs the page its picture', () async {

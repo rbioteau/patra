@@ -287,6 +287,11 @@ typedef DownloadProgressCallback = FutureOr<void> Function(
   int totalPages,
 );
 
+typedef _QueueSnapshot = ({
+  Map<int, DownloadQueueRecord> records,
+  bool authoritative,
+});
+
 /// Stores reader pages under the app's documents directory, filed by the
 /// profile that saved them.
 ///
@@ -311,6 +316,7 @@ class DownloadsService {
   Directory? _root;
 
   Future<void> _queueWrites = Future<void>.value();
+  var _protectAllPartials = false;
 
   static const _queueVersion = 1;
   static const _queueFileName = 'queue.json';
@@ -351,13 +357,17 @@ class DownloadsService {
       name.startsWith('page_') ? int.tryParse(name.substring(5)) : null;
 
   /// Reads this profile's queue and reconciles it with finished copies made
-  /// before the queue existed. A process can disappear without running
-  /// disposal, so anything left queued or downloading becomes interrupted on
-  /// the next read and waits for an explicit retry.
+  /// before the queue existed. Queue state is read before the filesystem is
+  /// swept: queued, downloading, interrupted and failed records all keep their
+  /// partial bytes alive. A process can disappear without running disposal,
+  /// so anything left queued or downloading becomes interrupted and waits for
+  /// an explicit retry.
   Future<Map<int, DownloadQueueRecord>> loadQueue() async {
     await _queueWrites;
-    final copies = await scan();
-    final records = await _readQueue();
+    final queue = await _readQueue();
+    final records = queue.records;
+    final livePartials = _livePartialChapterIds(queue);
+    final copies = await _scan(livePartials);
     var changed = false;
     var nextPriority = records.values.fold<int>(
       0,
@@ -401,9 +411,20 @@ class DownloadsService {
       );
       changed = true;
     }
-    if (changed) await writeQueue(records);
+    // An unreadable queue cannot prove a partial is garbage. Do not replace
+    // that evidence with a new queue that would delete it on the next scan.
+    if (changed && queue.authoritative) await writeQueue(records);
     return records;
   }
+
+  static Set<int>? _livePartialChapterIds(_QueueSnapshot queue) =>
+      queue.authoritative
+      ? {
+          for (final record in queue.records.values)
+            if (record.status != DownloadQueueStatus.saved)
+              record.request.chapterId,
+        }
+      : null;
 
   /// Atomically replaces this profile's queue. Writes are serialized so two
   /// taps that arrive together cannot let the older snapshot land last.
@@ -414,21 +435,42 @@ class DownloadsService {
     return write;
   }
 
-  Future<Map<int, DownloadQueueRecord>> _readQueue() async {
+  Future<_QueueSnapshot> _readQueue() async {
     try {
       final file = File('${(await profileRoot()).path}/$_queueFileName');
-      if (!file.existsSync()) return {};
-      final json = jsonDecode(file.readAsStringSync());
-      if (json is! Map || json['version'] != _queueVersion) return {};
-      final records = <int, DownloadQueueRecord>{};
-      for (final value in json['records'] as List<dynamic>? ?? const []) {
-        final record = DownloadQueueRecord.fromJson(value);
-        if (record != null) records[record.request.chapterId] = record;
+      if (!file.existsSync()) {
+        _protectAllPartials = false;
+        return (records: <int, DownloadQueueRecord>{}, authoritative: true);
       }
-      return records;
+      final json = jsonDecode(file.readAsStringSync());
+      if (json is! Map || json['version'] != _queueVersion) {
+        return _ambiguousQueue();
+      }
+      final values = json['records'];
+      final protection = json['protectPartials'];
+      if (values is! List || (protection != null && protection is! bool)) {
+        return _ambiguousQueue();
+      }
+      final records = <int, DownloadQueueRecord>{};
+      var authoritative = protection != true;
+      for (final value in values) {
+        final record = DownloadQueueRecord.fromJson(value);
+        if (record == null) {
+          authoritative = false;
+        } else {
+          records[record.request.chapterId] = record;
+        }
+      }
+      _protectAllPartials = !authoritative;
+      return (records: records, authoritative: authoritative);
     } on Object {
-      return {};
+      return _ambiguousQueue();
     }
+  }
+
+  _QueueSnapshot _ambiguousQueue() {
+    _protectAllPartials = true;
+    return (records: <int, DownloadQueueRecord>{}, authoritative: false);
   }
 
   Future<void> _writeQueue(Map<int, DownloadQueueRecord> records) async {
@@ -440,128 +482,155 @@ class DownloadsService {
       jsonEncode({
         'version': _queueVersion,
         'records': [for (final record in records.values) record.toJson()],
+        if (_protectAllPartials) 'protectPartials': true,
       }),
     );
     temp.renameSync(file.path);
   }
 
   /// Where pages are written before they are a copy, inside the chapter's own
-  /// directory: `scan` only reads the profile root, so a download in progress
-  /// is invisible to it — and a failed one costs the copy nothing.
+  /// directory. [scan] sees the directory, but the queue decides whether the
+  /// partial is alive; a failed refresh leaves its finished copy untouched.
   static const stagingDirName = 'staging';
 
   Future<File> pageFile(int chapterId, int page) async =>
       File('${(await chapterDir(chapterId)).path}/${pageFileName(page)}');
 
-  /// Saved chapters, keyed by chapter id. Partial downloads are deleted, and
-  /// so is anything the flat layout left in the downloads root.
+  /// Saved chapters, keyed by chapter id. A partial is garbage only when a
+  /// readable queue has no live entry for it. If the queue cannot be read,
+  /// ambiguity resolves toward keeping the bytes.
   Future<Map<int, SavedChapter>> scan() async {
+    await _queueWrites;
+    final queue = await _readQueue();
+    final livePartials = _livePartialChapterIds(queue);
+    return _scan(livePartials);
+  }
+
+  Future<Map<int, SavedChapter>> _scan(Set<int>? livePartials) async {
     await _sweepFlatLayout();
     final root = await profileRoot();
     if (!root.existsSync()) return {};
     final result = <int, SavedChapter>{};
     for (final entity in root.listSync()) {
       if (entity is! Directory) continue;
-      final meta = File('${entity.path}/meta.json');
-      if (!meta.existsSync()) {
-        await _deleteQuietly(entity);
-        continue;
-      }
-      try {
-        final saved = SavedChapter.fromJson(
-          jsonDecode(meta.readAsStringSync()),
-        );
-        if (saved == null) {
-          await _deleteQuietly(entity);
-          continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      final chapterId = int.tryParse(name);
+      final saved = _readSavedChapter(entity);
+      if (saved != null) {
+        if (livePartials != null && !livePartials.contains(saved.chapterId)) {
+          await _deleteQuietly(Directory('${entity.path}/$stagingDirName'));
         }
         result[saved.chapterId] = saved;
-      } on Exception {
-        await _deleteQuietly(entity);
+        continue;
       }
+      if (livePartials == null ||
+          (chapterId != null && livePartials.contains(chapterId))) {
+        continue;
+      }
+      await _deleteQuietly(entity);
     }
     return result;
   }
 
-  /// Downloads every page of [chapter]. [onProgress] receives 0..1.
+  /// Downloads every page of [chapter]. [onProgress] receives completed and
+  /// total pages; a book reports zero first so its pagination is durable
+  /// before its first rendered page is written.
   ///
   /// What a page is differs by what the chapter is made of, and so does where
   /// the pages come from: a chapter of pictures is one image per page, and a
   /// book is the pages the server laid its words out into (ADR-0008), stored
   /// as it rendered them and made to carry their own pictures (ADR-0009).
   ///
-  /// The pages land **beside the copy they are replacing and are moved into
-  /// place once every one of them is on disk**, so a download that fails — or
-  /// that is cancelled, which leaving the screen does — costs nothing the
-  /// reader chose to keep. That is the whole difference between storing a
-  /// chapter and storing it *again*: a fresh one leaves a directory with no
-  /// `meta.json`, which the next `scan` sweeps, while a copy already there is
-  /// still exactly the copy it was.
+  /// Pages land beside the copy they replace and move into place only after
+  /// every page is present. A failed attempt keeps that staging directory: a
+  /// retry reuses each complete page and fetches only what is missing. The
+  /// durable queue decides whether that partial remains live when [scan]
+  /// next reconciles the profile.
   Future<SavedChapter> download({
     required KavitaClient client,
     required SavedChapter chapter,
     required DownloadProgressCallback onProgress,
+    int? knownTotalPages,
     CancelToken? cancelToken,
   }) async {
     final dir = await chapterDir(chapter.chapterId);
     dir.createSync(recursive: true);
     final staging = Directory('${dir.path}/$stagingDirName');
-    // Start clean: a leftover partial download must not be mistaken for a
-    // page of this one.
-    await _deleteQuietly(staging);
+    // A failed attempt leaves complete pages here. The queue is the authority
+    // that decides whether this staging directory is still a live download.
     staging.createSync(recursive: true);
+    _adoptUncommittedPages(dir, staging);
 
     final int pages;
     var bytes = 0;
+    var completed = 0;
     try {
       switch (chapter.content) {
         case ChapterContent.fixedPages:
           pages = chapter.pages;
+          final stored = <File>[];
           for (var page = 0; page < pages; page++) {
+            final file = File('${staging.path}/${pageFileName(page)}');
+            stored.add(file);
+            if (_isCompletePage(file)) {
+              completed++;
+              bytes += file.lengthSync();
+            }
+          }
+          if (completed > 0) await onProgress(completed, pages);
+          for (var page = 0; page < pages; page++) {
+            final file = stored[page];
+            if (_isCompletePage(file)) continue;
             final data = await client.readerImageBytes(
               chapter.chapterId,
               page,
               cancelToken: cancelToken,
             );
-            File('${staging.path}/${pageFileName(page)}')
-                .writeAsBytesSync(data);
+            _writePage(file, data);
             bytes += data.length;
-            await onProgress(page + 1, pages);
+            completed++;
+            await onProgress(completed, pages);
           }
         case ChapterContent.reflowable:
-          // How long a book is is the server's to say, and `book-info` is the
-          // only place it says it: the chapter's own page count is of image
-          // pages, and a book has none. The copy keeps the total it was made
-          // with, which is what tells a later reader whether the two still
-          // agree (#78).
-          final book = await client.bookInfo(
-            chapter.chapterId,
-            cancelToken: cancelToken,
-          );
-          pages = book.pages;
-          // A picture named on several pages is fetched once.
+          // Once a rendered page exists, its page count is part of the copy:
+          // Kavita may repaginate the book between attempts (ADR-0009).
+          pages =
+              knownTotalPages ??
+              (await client.bookInfo(
+                chapter.chapterId,
+                cancelToken: cancelToken,
+              )).pages;
+          if (knownTotalPages == null) await onProgress(0, pages);
+          final stored = <File>[];
+          for (var page = 0; page < pages; page++) {
+            final file = File('${staging.path}/${pageFileName(page)}');
+            stored.add(file);
+            if (_isCompletePage(file)) {
+              completed++;
+              bytes += file.lengthSync();
+            }
+          }
+          if (completed > 0) await onProgress(completed, pages);
+          // A picture named on several newly fetched pages is fetched once.
           final carried = <String, String?>{};
           for (var page = 0; page < pages; page++) {
+            if (_isCompletePage(stored[page])) continue;
             bytes += await _storeBookPage(
               staging,
               client: client,
               chapterId: chapter.chapterId,
               page: page,
-              pages: pages,
-              onProgress: onProgress,
               cancelToken: cancelToken,
               carried: carried,
             );
+            completed++;
+            await onProgress(completed, pages);
           }
       }
     } on Object {
-      await _deleteQuietly(staging);
-      // Storing a chapter *again* is the only way this finds a copy already
-      // there, and that copy is the reader's to keep: only a directory with
-      // no `meta.json` — one that never finished, and so was never a copy at
-      // all — is ours to take away.
-      final meta = File('${dir.path}/meta.json');
-      if (!meta.existsSync()) await _deleteQuietly(dir);
+      // The queue record already describes whether this partial failed,
+      // stopped with the process, or was cancelled by the reader. Leave the
+      // bytes in place until that authority either retries or discards them.
       rethrow;
     }
 
@@ -584,6 +653,38 @@ class DownloadsService {
     );
     File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(saved.toJson()));
     return saved;
+  }
+
+  static SavedChapter? _readSavedChapter(Directory dir) {
+    try {
+      final meta = File('${dir.path}/meta.json');
+      if (!meta.existsSync()) return null;
+      return SavedChapter.fromJson(jsonDecode(meta.readAsStringSync()));
+    } on Object {
+      return null;
+    }
+  }
+
+  static void _adoptUncommittedPages(Directory dir, Directory staging) {
+    if (_readSavedChapter(dir) != null) return;
+    for (final entity in dir.listSync()) {
+      if (entity is! File || !_isCompletePage(entity)) continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      if (pageOfFileName(name) == null) continue;
+      final staged = File('${staging.path}/$name');
+      if (_isCompletePage(staged)) continue;
+      if (staged.existsSync()) staged.deleteSync();
+      entity.renameSync(staged.path);
+    }
+  }
+
+  static bool _isCompletePage(File file) =>
+      file.existsSync() && file.lengthSync() > 0;
+
+  static void _writePage(File file, List<int> bytes) {
+    final temp = File('${file.path}.tmp');
+    temp.writeAsBytesSync(bytes);
+    temp.renameSync(file.path);
   }
 
   /// Puts [staging]'s pages in [dir]'s place, and drops what the copy used to
@@ -616,8 +717,6 @@ class DownloadsService {
     required KavitaClient client,
     required int chapterId,
     required int page,
-    required int pages,
-    required DownloadProgressCallback onProgress,
     required Map<String, String?> carried,
     CancelToken? cancelToken,
   }) async {
@@ -634,8 +733,7 @@ class DownloadsService {
       }
     }
     final stored = utf8.encode(renameBookPictures(html, (src) => carried[src]));
-    File('${dir.path}/${pageFileName(page)}').writeAsBytesSync(stored);
-    await onProgress(page + 1, pages);
+    _writePage(File('${dir.path}/${pageFileName(page)}'), stored);
     return stored.length;
   }
 
@@ -659,6 +757,19 @@ class DownloadsService {
       if (error.type == DioExceptionType.cancel) rethrow;
       return null;
     }
+  }
+
+  /// Drops only the resumable bytes of an attempt. A refresh may have a saved
+  /// copy beside its staging directory; cancellation never spends that copy.
+  Future<void> discardPartial(int chapterId) async {
+    final dir = await chapterDir(chapterId);
+    if (!dir.existsSync()) return;
+    final saved = _readSavedChapter(dir);
+    if (saved != null) {
+      await _deleteQuietly(Directory('${dir.path}/$stagingDirName'));
+      return;
+    }
+    await _deleteQuietly(dir);
   }
 
   /// Rewrites `meta.json` in place, for progress recorded while reading.
