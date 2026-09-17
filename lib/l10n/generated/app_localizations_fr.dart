@@ -699,6 +699,14 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get sortSheetTitle => 'Trier';
+
+  @override
+  String sortTooltip(String order) {
+    return 'Trier : $order';
+  }
+
+  @override
   String get sortReadingPosition => 'Position de lecture';
 
   @override

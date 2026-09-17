@@ -252,25 +252,63 @@ void main() {
       expect(find.text('VOLUMES'), findsNothing);
     });
 
-    testWidgets('the three pills share one line', (tester) async {
+    testWidgets('the orders are in a sheet, not in the header row', (
+      tester,
+    ) async {
       await _pump(tester, _underWay());
 
-      // Each pill is sized to its words: a box that took the run's whole
-      // width would stack them one per line.
-      final top = tester.getTopLeft(find.text('Reading position')).dy;
-      expect(tester.getTopLeft(find.text('Newest')).dy, top);
-      expect(tester.getTopLeft(find.text('Oldest')).dy, top);
+      // Nothing of the three names is on the row: what the header carries is
+      // the unit and one control, so no translation can break it.
+      expect(find.text('Reading position'), findsNothing);
+      expect(find.text('Newest'), findsNothing);
+      expect(find.text('Oldest'), findsNothing);
+
+      // The control is the 44pt target the app asks of every control, and
+      // says which order is in force where a name would have.
+      final trigger = find.byIcon(Icons.swap_vert);
       expect(
-        tester.getTopLeft(find.text('Newest')).dx,
-        greaterThan(tester.getTopRight(find.text('Reading position')).dx),
+        tester
+            .widget<Tooltip>(
+              find.ancestor(of: trigger, matching: find.byType(Tooltip)).first,
+            )
+            .message,
+        'Sort: Reading position',
       );
-      // And each is the 44pt target the app asks of every control.
-      final pill = tester.getSize(
-        find
-            .ancestor(of: find.text('Oldest'), matching: find.byType(InkWell))
-            .first,
+      expect(
+        tester
+            .getSize(
+              find.ancestor(of: trigger, matching: find.byType(InkWell)).first,
+            )
+            .height,
+        minHitTarget,
       );
-      expect(pill.height, minHitTarget);
+
+      await tester.tap(trigger);
+      await tester.pumpAndSettle();
+
+      // In the sheet each order gets its name and the rule behind it, and
+      // the one in force is ticked.
+      expect(find.text('SORT'), findsOneWidget);
+      expect(find.text('Reading position'), findsOneWidget);
+      expect(
+        find.text('Where you are first, then what comes next'),
+        findsOneWidget,
+      );
+      expect(find.text('Newest'), findsOneWidget);
+      expect(find.text('Latest first'), findsOneWidget);
+      expect(find.text('Oldest'), findsOneWidget);
+      expect(find.text('From the beginning'), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('Reading position')).style?.color,
+        patraAccent,
+      );
+
+      // Picking closes it and takes the list with it.
+      await tester.tap(find.text('Newest'));
+      await tester.pumpAndSettle();
+      expect(find.text('SORT'), findsNothing);
+      expect(find.text('VOLUMES'), findsOneWidget);
     });
 
     testWidgets('the row under way is tinted, and only it', (tester) async {
@@ -366,15 +404,21 @@ void main() {
     testWidgets('speaks French', (tester) async {
       await _pump(tester, _underWay(), locale: const Locale('fr'));
 
-      expect(find.text('Position de lecture'), findsOneWidget);
-      expect(find.text('Plus récents'), findsOneWidget);
-      expect(find.text('Plus anciens'), findsOneWidget);
       expect(find.text('EN COURS'), findsOneWidget);
       expect(find.text('À SUIVRE'), findsOneWidget);
       expect(find.text('DÉJÀ LUS · 2'), findsOneWidget);
       expect(find.text('Afficher'), findsOneWidget);
       expect(find.text('Télécharger la suite'), findsOneWidget);
       expect(find.text('Chapitres 3 à 5'), findsOneWidget);
+
+      // And the orders speak it too, in the sheet the header row's one
+      // control opens.
+      await tester.tap(find.byIcon(Icons.swap_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('TRIER'), findsOneWidget);
+      expect(find.text('Position de lecture'), findsOneWidget);
+      expect(find.text('Plus récents'), findsOneWidget);
+      expect(find.text('Plus anciens'), findsOneWidget);
     });
   });
 
@@ -382,8 +426,7 @@ void main() {
     testWidgets('Oldest is the storyline in reading order', (tester) async {
       await _pump(tester, _underWay());
 
-      await tester.tap(find.text('Oldest'));
-      await tester.pumpAndSettle();
+      await showSections(tester);
 
       expect(find.text('VOLUMES'), findsOneWidget);
       expect(find.text('SPECIALS'), findsOneWidget);
@@ -397,6 +440,8 @@ void main() {
     testWidgets('Newest is the same sections read backwards', (tester) async {
       await _pump(tester, _underWay());
 
+      await tester.tap(find.byIcon(Icons.swap_vert));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Newest'));
       await tester.pumpAndSettle();
 

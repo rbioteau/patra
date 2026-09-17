@@ -570,19 +570,29 @@ class SeriesDetailScreen extends ConsumerWidget {
 
     return [
       Padding(
-        // The prototype's rhythm: 14pt from the pills to the card under them.
-        // A pill's 44pt box already carries part of that around the 30pt it
-        // draws, so only the rest is padding here; above, the hero's own
-        // bottom gutter and the box's share are room enough.
+        // The prototype's rhythm: 14pt from the control to the card under
+        // it. The trigger's 44pt box already carries part of that around the
+        // 30pt it draws, so only the rest is padding here; above, the hero's
+        // own bottom gutter and the box's share are room enough.
         padding: const EdgeInsets.fromLTRB(
           gutter,
           0,
           gutter,
-          14 - _SortPill.boxInset,
+          14 - _SortButton.boxInset,
         ),
-        child: _SortPills(
-          sort: view.sort,
-          onPick: ref.read(seriesListViewProvider.notifier).sortBy,
+        // The trigger alone, on the trailing edge. The prototype anchors it
+        // with a "Chapters" header and a count, and neither survives the
+        // move: the hero above already tallies the series, and the list
+        // below heads its own sections — so a header here says "Chapters"
+        // directly above a "Chapters", and says "Issues" twice in a comic
+        // library. What the control is stays worded all the same: its
+        // tooltip and its semantics label both name the order in force.
+        child: Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: _SortButton(
+            sort: view.sort,
+            onPick: ref.read(seriesListViewProvider.notifier).sortBy,
+          ),
         ),
       ),
       // One chapter left is the row's own pill's job; the card is for the
@@ -603,19 +613,10 @@ class SeriesDetailScreen extends ConsumerWidget {
   }
 }
 
-/// The three orders, as pills. The one in force is drawn in the accent, the
-/// way the shell marks its selected tab, and each carries its rule as a
-/// tooltip — the names are short enough to need one.
-class _SortPills extends StatelessWidget {
-  const _SortPills({required this.sort, required this.onPick});
-
-  final ChapterSort sort;
-  final void Function(ChapterSort sort) onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    (String, String) words(ChapterSort sort) => switch (sort) {
+/// The name of an order and the rule behind it, in one place: the trigger
+/// says the first in a tooltip, the sheet draws both.
+(String, String) _sortWords(AppLocalizations l10n, ChapterSort sort) =>
+    switch (sort) {
       ChapterSort.readingPosition => (
         l10n.sortReadingPosition,
         l10n.sortReadingPositionHint,
@@ -623,82 +624,77 @@ class _SortPills extends StatelessWidget {
       ChapterSort.newest => (l10n.sortNewest, l10n.sortNewestHint),
       ChapterSort.oldest => (l10n.sortOldest, l10n.sortOldestHint),
     };
-    // A Wrap rather than a row: three French names under a large system font
-    // do not fit one line of a phone, and a pill that overflows is unreadable
-    // where a pill that wraps is merely on the next line.
-    return Wrap(
-      spacing: 7,
-      children: [
-        for (final option in ChapterSort.values)
-          _SortPill(
-            name: words(option).$1,
-            hint: words(option).$2,
-            selected: option == sort,
-            onTap: () => onPick(option),
-          ),
-      ],
-    );
-  }
-}
 
-class _SortPill extends StatelessWidget {
-  const _SortPill({
-    required this.name,
-    required this.hint,
-    required this.selected,
-    required this.onTap,
-  });
+/// The three orders, behind one control: a pill on the trailing edge of the
+/// row under the hero that opens a sheet.
+///
+/// They used to be three pills side by side, and the phrases are what broke
+/// that: an order is only useful if its name says what it does, and three
+/// such names in French under a large system font take more than a row of a
+/// phone — the pills wrapped to two lines and pushed the list down before a
+/// single chapter was drawn. With the names in a sheet no translation can
+/// break the row, and each order gets the sentence explaining it rather than
+/// a tooltip nobody on a phone can reach.
+///
+/// Icon-only, deliberately: the list underneath is what says which order is
+/// in force, and a trigger carrying the name would be the same phrase back
+/// in the row we just took it out of. The name is still spoken — it is the
+/// tooltip and the semantics label both.
+class _SortButton extends StatelessWidget {
+  const _SortButton({required this.sort, required this.onPick});
 
-  final String name;
-  final String hint;
-  final bool selected;
-  final VoidCallback onTap;
+  final ChapterSort sort;
+  final void Function(ChapterSort sort) onPick;
 
-  /// What the pill draws: a line of 11.5pt type with 7pt above and below.
+  /// What the trigger draws: a 30pt pill, the height the pills had.
   static const height = 30.0;
 
-  /// The empty band above and below the drawn pill inside its 44pt box —
-  /// what the layout around the pills has to count as already spent.
+  /// The empty band above and below it inside its 44pt box — what the layout
+  /// around it has to count as already spent.
   static const boxInset = (minHitTarget - height) / 2;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? patraAccent : patraTextMuted;
+    final l10n = AppLocalizations.of(context);
+    final label = l10n.sortTooltip(_sortWords(l10n, sort).$1);
     return Tooltip(
-      message: hint,
+      message: label,
       child: Semantics(
         button: true,
-        selected: selected,
+        label: label,
         child: InkWell(
-          onTap: onTap,
+          onTap: () => _pickSort(context, sort, onPick),
           borderRadius: BorderRadius.circular(radiusPill),
-          // The pill is 30pt tall; its box is the 44 the app asks of every
-          // control, and the pill sits in the middle of it. The box is as
-          // wide as the pill and no wider — a `Container` with an alignment
-          // would take the whole run the Wrap offers, one pill per line.
+          // The box is the 44 the app asks of every control, with the pill
+          // in the middle of it and no wider than what it draws.
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: minHitTarget),
             child: Center(
               widthFactor: 1,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 7,
-                ),
+                height: height,
+                padding: const EdgeInsets.symmetric(horizontal: 9),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? patraAccent.withValues(alpha: .16)
-                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(radiusPill),
                   border: Border.all(
-                    color: selected
-                        ? patraAccent.withValues(alpha: .55)
-                        : Colors.white.withValues(alpha: .14),
+                    color: Colors.white.withValues(alpha: .14),
                   ),
                 ),
-                child: Text(
-                  name,
-                  style: PatraText.rowTitle(color: color, size: 11.5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.swap_vert,
+                      size: 15,
+                      color: patraTextMuted,
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.expand_more,
+                      size: 12,
+                      color: patraTextMuted.withValues(alpha: .75),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -707,6 +703,53 @@ class _SortPill extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The sheet the trigger opens: the three orders, each with the rule it
+/// follows, the one in force ticked and drawn in the accent — the app's own
+/// picker, the same one Settings offers a language and a batch size in.
+Future<void> _pickSort(
+  BuildContext context,
+  ChapterSort current,
+  void Function(ChapterSort sort) onPick,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final picked = await showModalBottomSheet<ChapterSort>(
+    context: context,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
+            child: SectionLabel(l10n.sortSheetTitle),
+          ),
+          for (final option in ChapterSort.values)
+            Builder(
+              builder: (context) {
+                final (name, hint) = _sortWords(l10n, option);
+                final selected = option == current;
+                return ListTile(
+                  title: Text(
+                    name,
+                    style: PatraText.rowTitle(
+                      color: selected ? patraAccent : patraText,
+                    ),
+                  ),
+                  subtitle: Text(hint, style: PatraText.metadata()),
+                  trailing: selected
+                      ? const Icon(Icons.check, color: patraAccent, size: 18)
+                      : null,
+                  selected: selected,
+                  onTap: () => Navigator.of(sheetContext).pop(option),
+                );
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+  if (picked != null) onPick(picked);
 }
 
 /// The header of a group in the reading-position view: a tracked label, the

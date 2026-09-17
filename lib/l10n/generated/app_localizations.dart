@@ -1130,37 +1130,49 @@ abstract class AppLocalizations {
   /// **'{count} chapters'**
   String batchDownloadSizeOption(int count);
 
-  /// Sort pill on the series screen: the chapter under way first, then what comes next, with everything already read folded away at the bottom. The default
+  /// Header of the sheet the sort control on the series screen opens, over the three orders it offers
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get sortSheetTitle;
+
+  /// Tooltip and screen-reader label of the sort control on the series screen, naming the order in force. The control itself is an icon, so this is the only place its name is said
+  ///
+  /// In en, this message translates to:
+  /// **'Sort: {order}'**
+  String sortTooltip(String order);
+
+  /// An order in the sort sheet on the series screen: the chapter under way first, then what comes next, with everything already read folded away at the bottom. The default
   ///
   /// In en, this message translates to:
   /// **'Reading position'**
   String get sortReadingPosition;
 
-  /// Tooltip on the Reading position pill: its rule in one line
+  /// The rule behind Reading position, in one line, under its name in the sort sheet
   ///
   /// In en, this message translates to:
   /// **'Where you are first, then what comes next'**
   String get sortReadingPositionHint;
 
-  /// Sort pill on the series screen: the sections in reverse reading order, highest number first
+  /// An order in the sort sheet on the series screen: the sections in reverse reading order, highest number first
   ///
   /// In en, this message translates to:
   /// **'Newest'**
   String get sortNewest;
 
-  /// Tooltip on the Newest pill
+  /// The rule behind Newest, under its name in the sort sheet
   ///
   /// In en, this message translates to:
   /// **'Latest first'**
   String get sortNewestHint;
 
-  /// Sort pill on the series screen: the sections in reading order, from the beginning
+  /// An order in the sort sheet on the series screen: the sections in reading order, from the beginning
   ///
   /// In en, this message translates to:
   /// **'Oldest'**
   String get sortOldest;
 
-  /// Tooltip on the Oldest pill
+  /// The rule behind Oldest, under its name in the sort sheet
   ///
   /// In en, this message translates to:
   /// **'From the beginning'**

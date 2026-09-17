@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -294,8 +295,13 @@ class UnreachableServer implements HttpClientAdapter {
 ///
 /// The screen opens in the reading-position view, which groups the rows by
 /// what is left to read and folds the finished ones away, so a test that pins
-/// the sections or a row already read has to ask for them. In either language.
+/// the sections or a row already read has to ask for them. Two taps now: the
+/// orders live in a sheet, and the control that opens it is an icon — which
+/// is what makes the first tap language-independent where the second one,
+/// the order's own name, is not.
 Future<void> showSections(WidgetTester tester) async {
+  await tester.tap(find.byIcon(Icons.swap_vert));
+  await tester.pumpAndSettle();
   final oldest = find.text('Oldest').evaluate().isEmpty
       ? find.text('Plus anciens')
       : find.text('Oldest');

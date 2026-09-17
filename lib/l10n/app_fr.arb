@@ -226,6 +226,8 @@
     }
   },
 
+  "sortSheetTitle": "Trier",
+  "sortTooltip": "Trier : {order}",
   "sortReadingPosition": "Position de lecture",
   "sortReadingPositionHint": "Là où vous en êtes d'abord, puis la suite",
   "sortNewest": "Plus récents",

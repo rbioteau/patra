@@ -698,6 +698,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get sortSheetTitle => 'Sort';
+
+  @override
+  String sortTooltip(String order) {
+    return 'Sort: $order';
+  }
+
+  @override
   String get sortReadingPosition => 'Reading position';
 
   @override
