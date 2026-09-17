@@ -165,6 +165,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// (base URL, api key) only changes with the session, and changing the
   /// session leaves the reader.
   KavitaClient? _client;
+  DownloadsNotifier? _downloads;
 
   @override
   void didChangeDependencies() {
@@ -185,6 +186,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void initState() {
     super.initState();
     _page = widget.initialPage;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final downloads = ref.read(downloadsProvider.notifier);
+      _downloads = downloads;
+      downloads.prioritizeReadingChapter(widget.chapterId);
+    });
     // Which direction the chapter opens in is the chain's to answer and the
     // chain's alone (`reading_direction.dart`): it is a function of the
     // series, of whoever is reading and of what they have stored, so the
@@ -197,6 +204,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    _downloads?.clearReadingChapterPriority(widget.chapterId);
     // The clock belongs to the rest of the app: hand it back on the way out.
     // `edgeToEdge` is what every other screen runs under — it is Flutter's
     // default on iOS and on the Android SDK level we target.

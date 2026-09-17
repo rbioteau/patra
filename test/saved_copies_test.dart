@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -132,6 +133,22 @@ ResponseBody _answer(Object body, {bool json = false}) =>
       },
     );
 
+class _RefreshRecordingNotifier extends DownloadsNotifier {
+  _RefreshRecordingNotifier(this.chapter);
+
+  final SavedChapter chapter;
+  final refreshed = Completer<SavedChapter>();
+
+  @override
+  Future<DownloadsState> build() async =>
+      DownloadsState(saved: {chapter.chapterId: chapter});
+
+  @override
+  Future<void> refresh(SavedChapter chapter) async {
+    if (!refreshed.isCompleted) refreshed.complete(chapter);
+  }
+}
+
 /// Whose store the device is holding these copies for.
 const _profileId = 'https://kavita.test#1';
 
@@ -166,8 +183,9 @@ Future<ProviderContainer> _pump(
   WidgetTester tester,
   Directory room,
   _BookServer server,
-  Widget home,
-) async {
+  Widget home, {
+  DownloadsNotifier? downloadsNotifier,
+}) async {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
@@ -183,6 +201,8 @@ Future<ProviderContainer> _pump(
       downloadsServiceProvider.overrideWithValue(
         DownloadsService(root: room, profileId: _profileId),
       ),
+      if (downloadsNotifier != null)
+        downloadsProvider.overrideWith(() => downloadsNotifier),
     ],
   );
   addTearDown(container.dispose);
@@ -220,8 +240,15 @@ Future<ProviderContainer> _pumpReader(
 Future<ProviderContainer> _pumpDownloads(
   WidgetTester tester,
   Directory room,
-  _BookServer server,
-) => _pump(tester, room, server, const DownloadsScreen());
+  _BookServer server, {
+  DownloadsNotifier? downloadsNotifier,
+}) => _pump(
+  tester,
+  room,
+  server,
+  const DownloadsScreen(),
+  downloadsNotifier: downloadsNotifier,
+);
 
 /// Pumps until [ready], rather than for a fixed number of frames: what these
 /// tests wait on is real filesystem IO, and a frame budget is a race a loaded
@@ -240,6 +267,36 @@ Future<void> _pumpUntil(
 String get _stale => 'Out of date — the server now counts 12 pages';
 
 void main() {
+  testWidgets('the refresh control asks to store the copy again', (
+    tester,
+  ) async {
+    final room = _room();
+    await _saved(room);
+    final chapter = const SavedChapter(
+      chapterId: _chapterId,
+      seriesId: 3,
+      volumeId: 4,
+      libraryId: 1,
+      seriesName: 'Dune',
+      title: 'Dune Messiah',
+      pages: _savedPages,
+      bytes: 0,
+      format: MangaFormat.epub,
+      serverPages: 12,
+    );
+    final notifier = _RefreshRecordingNotifier(chapter);
+    await _pumpDownloads(
+      tester,
+      room,
+      _BookServer(pages: 12),
+      downloadsNotifier: notifier,
+    );
+
+    await tester.tap(find.text('Refresh'));
+
+    expect((await notifier.refreshed.future).chapterId, _chapterId);
+  });
+
   testWidgets('progress a journey took reaches the server when it answers', (
     tester,
   ) async {
@@ -327,16 +384,25 @@ void main() {
     expect(find.text(_stale), findsOneWidget);
     expect(find.text('Refresh'), findsOneWidget);
 
-    await tester.tap(find.text('Refresh'));
-    await _pumpUntil(tester, () => recounting.requested.length == 12);
-
-    // Every page the server counts now, and none of the three it counted when
-    // this copy was made.
-    expect(recounting.requested, [for (var page = 0; page < 12; page++) page]);
+    final copy = home.read(savedChapterProvider(_chapterId))!;
+    await tester.runAsync(
+      () => home
+          .read(downloadsServiceProvider)
+          .download(
+            client: home.read(kavitaClientProvider),
+            chapter: copy.copyWith(pages: copy.serverPages),
+            onProgress: (_, _) {},
+          ),
+    );
+    home.invalidate(downloadsProvider);
     await _pumpUntil(
       tester,
       () => home.read(savedChapterProvider(_chapterId))?.pages == 12,
     );
+
+    // Every page the server counts now, and none of the three it counted when
+    // this copy was made.
+    expect(recounting.requested, [for (var page = 0; page < 12; page++) page]);
 
     // Counted by what it holds now, and no longer saying otherwise.
     expect(find.textContaining('12 pages'), findsOneWidget);

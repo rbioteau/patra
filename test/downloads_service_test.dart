@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,9 +10,10 @@ import 'package:patra/src/downloads/downloads_service.dart';
 
 /// Serves fake page bytes, and can fail on a chosen page.
 class _PageAdapter implements HttpClientAdapter {
-  _PageAdapter({this.failOnPage});
+  _PageAdapter({this.failOnPage, this.gate});
 
   final int? failOnPage;
+  final Future<void>? gate;
   int requests = 0;
 
   @override
@@ -24,6 +26,21 @@ class _PageAdapter implements HttpClientAdapter {
     final page = int.parse('${options.queryParameters['page']}');
     if (page == failOnPage) {
       return ResponseBody.fromBytes(const [], 500);
+    }
+    if (gate != null) {
+      final cancelled = cancelFuture == null
+          ? false
+          : await Future.any([
+              gate!.then((_) => false),
+              cancelFuture.then((_) => true),
+            ]);
+      if (cancelFuture == null) await gate;
+      if (cancelled) {
+        throw DioException.requestCancelled(
+          requestOptions: options,
+          reason: 'cancelled',
+        );
+      }
     }
     // Page n is n+1 bytes long, so sizes are distinguishable.
     return ResponseBody.fromBytes(
@@ -418,16 +435,17 @@ void main() {
 
   test('discarding a cancelled download removes its resumable bytes', () async {
     final cancelToken = CancelToken();
-    final adapter = _PageAdapter();
+    final gate = Completer<void>();
+    final adapter = _PageAdapter(gate: gate.future);
 
     final download = service.download(
       client: _client(adapter),
       chapter: _chapter,
-      onProgress: (completed, _) {
-        if (completed >= 1) cancelToken.cancel('user');
-      },
+      onProgress: (_, _) {},
       cancelToken: cancelToken,
     );
+    await Future<void>.delayed(Duration.zero);
+    cancelToken.cancel('user');
 
     await expectLater(download, throwsA(isA<DioException>()));
     expect((await service.chapterDir(42)).existsSync(), isTrue);

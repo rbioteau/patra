@@ -20,6 +20,10 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   int maxActive = 0;
   int? failOnPage;
   final requestedPages = <int>[];
+  final activeChapterRequests = <int, int>{};
+  int maxActiveChapters = 0;
+  final startedChapters = <int>[];
+  final chapterGates = <int, Future<void>>{};
 
   /// Every progress post the device has sent: the chapter, the page and — for
   /// a book — the place within it.
@@ -65,22 +69,30 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
       rejected++;
       return ResponseBody.fromBytes(const [], 400);
     }
+    final chapterId = int.parse('${options.queryParameters['chapterId']}');
     final page = int.parse('${options.queryParameters['page']}');
     requestedPages.add(page);
     if (page == failOnPage) {
       return ResponseBody.fromBytes(const [], 500);
     }
     active++;
+    final activeForChapter = activeChapterRequests[chapterId] ?? 0;
+    if (activeForChapter == 0) startedChapters.add(chapterId);
+    activeChapterRequests[chapterId] = activeForChapter + 1;
+    if (activeChapterRequests.length > maxActiveChapters) {
+      maxActiveChapters = activeChapterRequests.length;
+    }
     if (active > maxActive) maxActive = active;
     try {
-      if (gate != null) {
+      final requestGate = chapterGates[chapterId] ?? gate;
+      if (requestGate != null) {
         final cancelled = cancelFuture == null
             ? false
             : await Future.any([
-                gate!.then((_) => false),
+                requestGate.then((_) => false),
                 cancelFuture.then((_) => true),
               ]);
-        if (cancelFuture == null) await gate;
+        if (cancelFuture == null) await requestGate;
         if (cancelled) {
           throw DioException.requestCancelled(
             requestOptions: options,
@@ -98,6 +110,12 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
       );
     } finally {
       active--;
+      final remaining = activeChapterRequests[chapterId]! - 1;
+      if (remaining == 0) {
+        activeChapterRequests.remove(chapterId);
+      } else {
+        activeChapterRequests[chapterId] = remaining;
+      }
     }
   }
 
@@ -123,6 +141,17 @@ const _otherChapter = SavedChapter(
   libraryId: 2,
   seriesName: 'Akira',
   title: 'Volume 2',
+  pages: 3,
+  bytes: 0,
+);
+
+SavedChapter _chapterWithId(int chapterId) => SavedChapter(
+  chapterId: chapterId,
+  seriesId: 3,
+  volumeId: 1,
+  libraryId: 2,
+  seriesName: 'Akira',
+  title: 'Volume $chapterId',
   pages: 3,
   bytes: 0,
 );
@@ -153,6 +182,29 @@ ProviderContainer _downloadsContainer(
         DownloadsService(root: root, profileId: profileId),
       ),
     ],
+  );
+}
+
+Future<void> _waitFor(bool Function() predicate) async {
+  for (var attempt = 0; attempt < 1000; attempt++) {
+    if (predicate()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+  }
+  fail('condition was not reached');
+}
+
+({Completer<void> gate, Future<void> saving}) _enqueueGated(
+  ProviderContainer container,
+  _KavitaLikeAdapter adapter,
+  int chapterId,
+) {
+  final gate = Completer<void>();
+  adapter.chapterGates[chapterId] = gate.future;
+  return (
+    gate: gate,
+    saving: container
+        .read(downloadsProvider.notifier)
+        .save(_chapterWithId(chapterId)),
   );
 }
 
@@ -251,19 +303,121 @@ void main() {
     final second = container
         .read(downloadsProvider.notifier)
         .save(_otherChapter);
-    await pumpEventQueue();
+    await _waitFor(() => adapter.activeChapterRequests.length == 2);
 
     expect(
       container.read(downloadsProvider).value!.inFlight.keys,
       containsAll([12, 13]),
     );
-    expect(adapter.maxActive, 1, reason: 'only one chapter runs at a time');
+    expect(
+      adapter.maxActiveChapters,
+      2,
+      reason: 'both queued chapters may run within the configured cap',
+    );
 
     gate.complete();
     await Future.wait([first, second]);
     final state = container.read(downloadsProvider).value!;
     expect(state.saved.keys, containsAll([12, 13]));
     expect(state.inFlight, isEmpty);
+  });
+
+  test('pages of one chapter are fetched concurrently', () async {
+    final gate = Completer<void>();
+    adapter.gate = gate.future;
+
+    final saving = container.read(downloadsProvider.notifier).save(_chapter);
+    await _waitFor(() => adapter.maxActive > 1);
+
+    expect(adapter.maxActive, greaterThan(1));
+    gate.complete();
+    await saving;
+  });
+
+  test('chapter concurrency never exceeds its configured cap', () async {
+    final pending = {
+      for (var id = 1; id <= maxConcurrentChapterDownloads + 2; id++)
+        id: _enqueueGated(container, adapter, id),
+    };
+
+    await _waitFor(
+      () =>
+          adapter.activeChapterRequests.length == maxConcurrentChapterDownloads,
+    );
+
+    expect(adapter.maxActiveChapters, maxConcurrentChapterDownloads);
+    for (final item in pending.values) {
+      item.gate.complete();
+    }
+    await Future.wait([for (final item in pending.values) item.saving]);
+  });
+
+  test('latest request overtakes the queue and leaves the rest FIFO', () async {
+    final nextInFifo = maxConcurrentChapterDownloads + 1;
+    final latest = maxConcurrentChapterDownloads + 2;
+    final pending = <int, ({Completer<void> gate, Future<void> saving})>{};
+    for (var id = 1; id <= maxConcurrentChapterDownloads; id++) {
+      pending[id] = _enqueueGated(container, adapter, id);
+      await _waitFor(() => adapter.activeChapterRequests.length == id);
+    }
+    pending[nextInFifo] = _enqueueGated(container, adapter, nextInFifo);
+    pending[latest] = _enqueueGated(container, adapter, latest);
+    await _waitFor(
+      () =>
+          container.read(downloadsProvider).value!.inFlight.length ==
+          maxConcurrentChapterDownloads + 2,
+    );
+
+    pending[1]!.gate.complete();
+    await _waitFor(
+      () => adapter.startedChapters.length > maxConcurrentChapterDownloads,
+    );
+    expect(adapter.startedChapters[maxConcurrentChapterDownloads], latest);
+
+    pending[2]!.gate.complete();
+    await _waitFor(
+      () => adapter.startedChapters.length > maxConcurrentChapterDownloads + 1,
+    );
+    expect(
+      adapter.startedChapters[maxConcurrentChapterDownloads + 1],
+      nextInFifo,
+    );
+
+    for (final item in pending.values.where((item) => !item.gate.isCompleted)) {
+      item.gate.complete();
+    }
+    await Future.wait([for (final item in pending.values) item.saving]);
+  });
+
+  test('the chapter being read overtakes the latest request', () async {
+    final reading = maxConcurrentChapterDownloads + 1;
+    final latest = maxConcurrentChapterDownloads + 2;
+    final pending = <int, ({Completer<void> gate, Future<void> saving})>{};
+    for (var id = 1; id <= maxConcurrentChapterDownloads; id++) {
+      pending[id] = _enqueueGated(container, adapter, id);
+      await _waitFor(() => adapter.activeChapterRequests.length == id);
+    }
+    pending[reading] = _enqueueGated(container, adapter, reading);
+    pending[latest] = _enqueueGated(container, adapter, latest);
+    await _waitFor(
+      () =>
+          container.read(downloadsProvider).value!.inFlight.length ==
+          maxConcurrentChapterDownloads + 2,
+    );
+
+    container
+        .read(downloadsProvider.notifier)
+        .prioritizeReadingChapter(reading);
+    pending[1]!.gate.complete();
+    await _waitFor(
+      () => adapter.startedChapters.length > maxConcurrentChapterDownloads,
+    );
+
+    expect(adapter.startedChapters[maxConcurrentChapterDownloads], reading);
+    for (final item in pending.values.where((item) => !item.gate.isCompleted)) {
+      item.gate.complete();
+    }
+    await Future.wait([for (final item in pending.values) item.saving]);
   });
 
   test('a failed download is reported, not silently reverted', () async {
@@ -291,7 +445,7 @@ void main() {
     );
     expect(partial.existsSync(), isTrue);
     final firstWrite = partial.lastModifiedSync();
-    expect(adapter.requestedPages, [0, 1]);
+    expect(adapter.requestedPages, [0, 1, 2]);
     container.dispose();
     final restarted = _downloadsContainer(root, adapter);
     addTearDown(restarted.dispose);
@@ -306,7 +460,7 @@ void main() {
       ..requestedPages.clear();
     await restarted.read(downloadsProvider.notifier).save(_chapter);
 
-    expect(adapter.requestedPages, [1, 2]);
+    expect(adapter.requestedPages, [1]);
     expect((await service.pageFile(12, 0)).lastModifiedSync(), firstWrite);
     expect(restarted.read(downloadsProvider).value!.saved, contains(12));
   });
@@ -339,7 +493,11 @@ void main() {
     final gate = Completer<void>();
     adapter.gate = gate.future;
     final saving = container.read(downloadsProvider.notifier).save(_chapter);
-    await pumpEventQueue();
+    await _waitFor(
+      () =>
+          container.read(downloadsProvider).value?.inFlight.containsKey(12) ??
+          false,
+    );
     expect(container.read(downloadsProvider).value!.inFlight, contains(12));
     container.dispose();
 
@@ -466,7 +624,9 @@ void main() {
       adapter.unreachable = false;
       container.read(offlineProvider.notifier).set(true);
       container.read(offlineProvider.notifier).set(false);
-      await pumpEventQueue();
+      await _waitFor(
+        () => container.read(savedChapterProvider(12))?.pending == null,
+      );
 
       expect(adapter.posted, [
         (chapterId: 12, pageNum: 2, bookScrollId: '0.5000'),
