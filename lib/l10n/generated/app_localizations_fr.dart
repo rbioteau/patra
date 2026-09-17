@@ -652,4 +652,26 @@ class AppLocalizationsFr extends AppLocalizations {
   String sizeGigabytes(String count) {
     return '$count Go';
   }
+
+  @override
+  String batchDownload(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count prochains',
+      one: 'prochain',
+    );
+    return 'Télécharger les $_temp0 non lus';
+  }
+
+  @override
+  String get batchDownloadVolume => 'Télécharger le reste';
+
+  @override
+  String get batchDownloadSize => 'Taille du téléchargement par lot';
+
+  @override
+  String batchDownloadSizeOption(int count) {
+    return '$count chapitres';
+  }
 }

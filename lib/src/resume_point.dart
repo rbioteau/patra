@@ -106,3 +106,29 @@ ResumePoint? resumePoint(List<Volume> volumes) {
   }
   return (entry: entries.first, started: started, allRead: true);
 }
+
+/// The next [count] unread chapters after the resume point, spanning volumes.
+///
+/// Returns all unread chapters if fewer than [count] remain. Returns an empty
+/// list if the series has no chapters or all are read. The resume point is
+/// the first chapter not finished (or the first chapter if all are read), so
+/// the batch starts from there and continues across volume boundaries.
+List<ResumeEntry> nextUnreadChapters(List<Volume> volumes, int count) {
+  final entries = orderedChapters(volumes);
+  if (entries.isEmpty) return const [];
+
+  final resume = resumePoint(volumes);
+  if (resume == null) return const [];
+
+  final startIndex = entries.indexOf(resume.entry);
+  if (startIndex < 0) return const [];
+
+  final result = <ResumeEntry>[];
+  for (var i = startIndex; i < entries.length && result.length < count; i++) {
+    final entry = entries[i];
+    if (!entry.chapter.isRead) {
+      result.add(entry);
+    }
+  }
+  return result;
+}

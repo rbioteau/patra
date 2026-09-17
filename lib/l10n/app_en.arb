@@ -658,5 +658,27 @@
     "placeholders": {
       "count": {"type": "String"}
     }
+  },
+  "batchDownload": "Download next {count} unread",
+  "@batchDownload": {
+    "description": "Button to enqueue the next N unread chapters as a batch; count is the user's chosen batch size",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchDownloadVolume": "Download remaining",
+  "@batchDownloadVolume": {
+    "description": "Button on a volume section header to enqueue all unread chapters in that volume"
+  },
+  "batchDownloadSize": "Batch download size",
+  "@batchDownloadSize": {
+    "description": "Settings label for choosing how many unread chapters to include in a batch download"
+  },
+  "batchDownloadSizeOption": "{count} chapters",
+  "@batchDownloadSizeOption": {
+    "description": "Option in the batch download size picker; count is 3, 5, 10, or 20",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
   }
 }

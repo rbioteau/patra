@@ -1069,6 +1069,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} GB'**
   String sizeGigabytes(String count);
+
+  /// Button to enqueue the next N unread chapters as a batch; count is the user's chosen batch size
+  ///
+  /// In en, this message translates to:
+  /// **'Download next {count} unread'**
+  String batchDownload(int count);
+
+  /// Button on a volume section header to enqueue all unread chapters in that volume
+  ///
+  /// In en, this message translates to:
+  /// **'Download remaining'**
+  String get batchDownloadVolume;
+
+  /// Settings label for choosing how many unread chapters to include in a batch download
+  ///
+  /// In en, this message translates to:
+  /// **'Batch download size'**
+  String get batchDownloadSize;
+
+  /// Option in the batch download size picker; count is 3, 5, 10, or 20
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters'**
+  String batchDownloadSizeOption(int count);
 }
 
 class _AppLocalizationsDelegate
