@@ -28,15 +28,33 @@ typedef ResumePoint = ({ResumeEntry entry, bool started, bool allRead});
 /// The entry a hero is genuinely standing *inside*, or null where there is no
 /// page you are on — the button starts the series, or offers it again.
 ///
-/// Both heroes ask this of the same [ResumePoint], which is what keeps the
-/// page they draw behind themselves and the cover they draw in front of it
-/// naming one and the same chapter. `started` is a fact about the series and
+/// It decides the page a hero draws behind itself; the cover in front of it
+/// follows [entryPictured]. Both heroes ask both of the same [ResumePoint],
+/// which is what keeps the two screens naming one and the same chapter.
+/// `started` is a fact about the series and
 /// is implied here by the chapter's own progress; it is asked anyway, because
 /// the two are only equivalent by accident of what `resumePoint` returns.
 ResumeEntry? entryUnderWay(ResumePoint? point) => switch (point) {
   (:final entry, started: true, allRead: false)
       when entry.chapter.pagesRead > 0 =>
     entry,
+  _ => null,
+};
+
+/// The entry a hero *pictures*: the one its button opens, whenever the series
+/// is under way at all — started, and not everything read. Null where the
+/// button starts the series or offers it again, and the series cover stands.
+///
+/// Looser than [entryUnderWay] on purpose. The card is about the chapter it
+/// opens, and finishing a volume leaves the next one untouched: a hero that
+/// pictured only a chapter with pages read fell back to the *series* cover
+/// at exactly the moment somebody halfway through a series turned a volume's
+/// last page, and said nothing about which volume came next. A cover is not
+/// a spoiler the way a page is — it is what the row below already shows — so
+/// the two predicates part here: the page behind a hero waits for
+/// [entryUnderWay], the cover in front of it follows this.
+ResumeEntry? entryPictured(ResumePoint? point) => switch (point) {
+  (:final entry, started: true, allRead: false) => entry,
   _ => null,
 };
 

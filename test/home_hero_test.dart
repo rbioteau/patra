@@ -969,9 +969,11 @@ void main() {
       expect(cover(tester).url, contains('/api/Image/chapter-cover'));
     });
 
-    // A series under way whose next chapter has not been opened: there is no
-    // chapter you are inside, so the series is what the card pictures.
-    testWidgets('is the series cover when the next chapter is untouched', (
+    // A series under way whose next chapter has not been opened — the frame
+    // after a volume's last page. The card opens that chapter, so it is that
+    // chapter it pictures: the series cover here said nothing about which
+    // volume came next.
+    testWidgets('is the next chapter\'s cover when it is untouched', (
       tester,
     ) async {
       await _pumpHome(
@@ -991,7 +993,46 @@ void main() {
           ],
         ),
       );
+      expect(
+        cover(tester).url,
+        allOf(contains('/api/Image/chapter-cover'), contains('chapterId=102')),
+      );
+    });
+
+    // Nothing has been read at all: the button starts the series, and there
+    // is no chapter you are inside for the card to picture.
+    testWidgets('is the series cover when nothing has been read', (
+      tester,
+    ) async {
+      await _pumpHome(
+        tester,
+        _HomeAdapter(
+          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
+          volumes: [
+            {
+              'id': 1,
+              'name': '1',
+              'minNumber': 1,
+              'chapters': [_chapter(101, 1, pages: 30, read: 0)],
+            },
+          ],
+        ),
+      );
       expect(cover(tester).url, contains('/api/Image/series-cover'));
+    });
+
+    // The details stand off the cover by a gutter of their own; a cover the
+    // title butts up against is a card with no layout at all.
+    testWidgets('stands clear of the details beside it', (tester) async {
+      await _pumpHome(tester, _oneInProgress());
+      final coverRect = tester.getRect(
+        find.descendant(
+          of: find.byType(ContinueHero),
+          matching: find.byType(CoverImage),
+        ),
+      );
+      final title = tester.getRect(find.text('Vinland Saga'));
+      expect(title.left - coverRect.right, 16);
     });
   });
 

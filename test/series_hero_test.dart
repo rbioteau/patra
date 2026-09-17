@@ -370,7 +370,35 @@ void main() {
       );
     });
 
-    testWidgets('stays the series cover when nothing is under way', (
+    // A whole volume finished and the next untouched: the button resumes at
+    // that next volume, and the cover is its — where the backdrop, which
+    // refuses an unopened page, still draws nothing.
+    testWidgets('is the next volume\'s cover after finishing one', (
+      tester,
+    ) async {
+      await _pumpSeries(tester, [
+        {
+          'id': 10,
+          'name': '1',
+          'minNumber': 1,
+          'chapters': [_chapter(101, '1', 100, 100)],
+        },
+        {
+          'id': 11,
+          'name': '2',
+          'minNumber': 2,
+          'chapters': [_chapter(102, '2', 100, 0)],
+        },
+      ]);
+      expect(
+        hero(tester).url,
+        allOf(contains('/api/Image/chapter-cover'), contains('chapterId=102')),
+      );
+      expect(hero(tester).progress, 0.0);
+      expect(find.byKey(const ValueKey('heroBackdrop')), findsNothing);
+    });
+
+    testWidgets('stays the series cover when nothing has been read', (
       tester,
     ) async {
       await _pumpSeries(tester, [

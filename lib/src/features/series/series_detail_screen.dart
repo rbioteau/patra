@@ -303,11 +303,16 @@ class SeriesDetailScreen extends ConsumerWidget {
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
-            child: Text(
-              type.volumeLabel(l10n, volume.name),
-              style: PatraText.rowTitle(color: patraTextMuted),
+          // Flexible, or a long volume name pushes the button off the row.
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
+              child: Text(
+                type.volumeLabel(l10n, volume.name),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: PatraText.rowTitle(color: patraTextMuted),
+              ),
             ),
           ),
           if (hasBatch)
@@ -315,7 +320,9 @@ class SeriesDetailScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(0, 12, gutter, 4),
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(36),
+                  // A height only: `Size.fromHeight` asks for an infinite
+                  // width, which a Row cannot give and the layout throws on.
+                  minimumSize: const Size(0, 36),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
                 onPressed: () {
@@ -525,21 +532,17 @@ class _SeriesHero extends ConsumerWidget {
       (allRead: true, entry: _, started: _) => l10n.seriesReadAgain,
       _ => l10n.seriesStartReading,
     };
-    // Only when a chapter is genuinely under way. Where the button starts the
-    // series, or offers it again, there is no page you are on — and the first
-    // page of something unread is a spoiler with nothing behind it. The rule
-    // is `resume_point.dart`'s, so the page behind the hero, the cover in
-    // front of it and the home screen's own card all name one chapter.
+
+    // A page behind the hero only when a chapter is genuinely under way.
+    // Where the button starts the series, or offers it again, there is no
+    // page you are on — and the first page of something unread is a spoiler
+    // with nothing behind it. The cover in front follows the looser rule: it
+    // is the entry the button opens whenever the series is under way, the
+    // untouched next volume included. Both rules are `resume_point.dart`'s,
+    // so this hero and the home screen's card name one and the same chapter.
     final underWay = entryUnderWay(target);
     final onPage = underWay?.chapter;
-
-    // The cover pictures the chapter the button opens (the resume target)
-    // when the series has been started but not finished. Where the button
-    // starts the series (nothing read) or offers it again (all read), the
-    // series cover is shown. The backdrop refuses page 0 as a spoiler.
-    final coverEntry = (target?.started == true && target?.allRead == false)
-        ? target?.entry
-        : null;
+    final pictured = entryPictured(target);
 
     // Muted grey is tuned against a flat panel; over a page it is the first
     // thing to go.
@@ -550,7 +553,7 @@ class _SeriesHero extends ConsumerWidget {
     // whichever of the two this cover turned out to be, and must never fall
     // back across that line: a series' progress under a chapter's picture is
     // a number about something else.
-    final coverProgress = switch (coverEntry) {
+    final coverProgress = switch (pictured) {
       final entry? =>
         entry.chapter.pages == 0
             ? 0.0
@@ -583,9 +586,9 @@ class _SeriesHero extends ConsumerWidget {
                 width: coverWidth,
                 height: coverHeight,
                 child: CoverImage(
-                  url: coverEntry == null
+                  url: pictured == null
                       ? client.seriesCoverUrl(seriesId)
-                      : entryCoverUrl(client, coverEntry),
+                      : entryCoverUrl(client, pictured),
                   headers: client.imageHeaders,
                   seriesId: seriesId,
                   seriesName: seriesName,
