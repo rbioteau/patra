@@ -651,4 +651,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String sizeGigabytes(String count) {
     return '$count GB';
   }
+
+  @override
+  String batchDownload(int count) {
+    return 'Download next $count unread';
+  }
+
+  @override
+  String get batchDownloadVolume => 'Download remaining';
+
+  @override
+  String get batchDownloadSize => 'Batch download size';
+
+  @override
+  String batchDownloadSizeOption(int count) {
+    return '$count chapters';
+  }
 }

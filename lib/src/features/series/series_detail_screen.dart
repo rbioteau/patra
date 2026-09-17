@@ -13,6 +13,7 @@ import '../../downloads/downloads_service.dart';
 import '../../entity_naming.dart';
 import '../../resume_point.dart';
 import '../../routes.dart';
+import '../../settings/profile_preferences.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/page_backdrop.dart';
@@ -203,6 +204,7 @@ class SeriesDetailScreen extends ConsumerWidget {
                 type: type,
                 volumes: volumes,
                 onRead: (chapter) => _read(context, ref, chapter),
+                libraryId: libraryId,
               ),
               ...switch (volumes) {
                 AsyncData(:final value) => _buildSections(
@@ -282,6 +284,65 @@ class SeriesDetailScreen extends ConsumerWidget {
           seriesName: seriesName,
           libraryId: libraryId,
         );
+    /// Returns unread chapters in [volume] after the resume point.
+    List<Chapter> unreadInVolume(Volume volume, ResumePoint? resume) {
+      final chapters = _volumeChapters(volume);
+      if (resume == null) return chapters.where((c) => !c.isRead).toList();
+      final startIndex = chapters.indexWhere((c) => c.id == resume.entry.chapter.id);
+      if (startIndex < 0) return chapters.where((c) => !c.isRead).toList();
+      return chapters
+          .skip(startIndex)
+          .where((c) => !c.isRead)
+          .toList();
+    }
+
+    /// Builds a volume header with optional batch download button.
+    Widget volumeHeader(Volume volume, ResumePoint? resume) {
+      final unread = unreadInVolume(volume, resume);
+      final hasBatch = unread.isNotEmpty;
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
+            child: Text(
+              type.volumeLabel(l10n, volume.name),
+              style: PatraText.rowTitle(color: patraTextMuted),
+            ),
+          ),
+          if (hasBatch)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 12, gutter, 4),
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(36),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                onPressed: () {
+                  final requests = unread.map((chapter) => SavedChapter(
+                    chapterId: chapter.id,
+                    seriesId: seriesId,
+                    volumeId: volume.id,
+                    libraryId: libraryId,
+                    seriesName: seriesName,
+                    title: type.chapterTitle(l10n, chapter),
+                    pages: chapter.pages,
+                    bytes: 0,
+                    pagesRead: chapter.pagesRead,
+                    format: chapter.format,
+                  )).toList();
+                  ref.read(downloadsProvider.notifier).saveBatch(requests);
+                },
+                child: Text(
+                  l10n.batchDownloadVolume,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
 
     // Volumes and volumeless chapters are one story told in order — Kavita
     // calls that the storyline, and hides it where it would lie: an issue run
@@ -306,13 +367,7 @@ class SeriesDetailScreen extends ConsumerWidget {
               coverUrl: client.volumeCoverUrl(volume.id),
             )
           else ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
-              child: Text(
-                type.volumeLabel(l10n, volume.name),
-                style: PatraText.rowTitle(color: patraTextMuted),
-              ),
-            ),
+            volumeHeader(volume, resumePoint(volumes)),
             for (final chapter in _volumeChapters(volume)) chapterRow(chapter),
           ],
       ],
@@ -341,6 +396,7 @@ class _SeriesHero extends ConsumerWidget {
     required this.type,
     required this.volumes,
     required this.onRead,
+    required this.libraryId,
   });
 
   final int seriesId;
@@ -356,6 +412,9 @@ class _SeriesHero extends ConsumerWidget {
   final AsyncValue<List<Volume>> volumes;
   final void Function(Chapter chapter) onRead;
 
+  /// The library ID for saved chapters metadata.
+  final int libraryId;
+
   static const _coverWidth = 124.0;
   static const _coverHeight = 182.0;
 
@@ -368,6 +427,12 @@ class _SeriesHero extends ConsumerWidget {
   ResumePoint? _target() {
     final list = volumes.value;
     return list == null ? null : resumePoint(list);
+  }
+
+  /// The unread chapters that would be included in a batch download.
+  List<ResumeEntry> _batchChapters(int batchSize) {
+    final list = volumes.value;
+    return list == null ? const [] : nextUnreadChapters(list, batchSize);
   }
 
   /// What to call the thing the button opens, in the library's own unit.
@@ -414,13 +479,17 @@ class _SeriesHero extends ConsumerWidget {
     final metadata = metadataAsync.value;
     final target = _target();
 
+    // Batch download size for this profile.
+    final batchSize = ref.watch(batchDownloadSizeProvider).value;
+    final batchChapters = target != null ? _batchChapters(batchSize) : const <ResumeEntry>[];
+    final hasBatch = batchChapters.isNotEmpty;
+
     // "Author · Genre", dropping whichever half the server does not have.
     final credits = [
       if (metadata != null && metadata.writers.isNotEmpty)
         metadata.writers.take(2).join(', '),
       if (metadata != null && metadata.genres.isNotEmpty) metadata.genres.first,
     ].join(' · ');
-
     // A volume-organised series is counted in volumes: calling four volumes
     // "4 chapters" reads as wrong to anyone looking at the list below.
     final tally = switch (volumes.value) {
@@ -581,6 +650,50 @@ class _SeriesHero extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      if (hasBatch) ...[
+                        const SizedBox(height: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: controlMaxWidth,
+                          ),
+                          child: SizedBox(
+                            height: 44,
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(44),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                              ),
+                              onPressed: () {
+                                final requests = batchChapters.map((entry) {
+                                  final chapter = entry.chapter;
+                                  final volume = entry.volume;
+                                  return SavedChapter(
+                                    chapterId: chapter.id,
+                                    seriesId: seriesId,
+                                    volumeId: volume.id,
+                                    libraryId: libraryId,
+                                    seriesName: seriesName,
+                                    title: type.chapterTitle(l10n, chapter),
+                                    pages: chapter.pages,
+                                    bytes: 0,
+                                    pagesRead: chapter.pagesRead,
+                                    format: chapter.format,
+                                  );
+                                }).toList();
+                                ref.read(downloadsProvider.notifier).saveBatch(requests);
+                              },
+                              child: Text(
+                                l10n.batchDownload(batchChapters.length),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

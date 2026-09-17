@@ -173,6 +173,30 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     await _enqueue(chapter, saved: existing?.saved, resume: existing);
   }
 
+  /// Enqueues [chapters] as a batch. Chapters that already have a saved copy
+  /// or are already in flight are skipped. Returns a map of chapter id to
+  /// future that completes when that chapter finishes, fails or is cancelled.
+  Future<Map<int, Future<void>>> saveBatch(List<SavedChapter> chapters) async {
+    if (!await _ready()) return {};
+    final futures = <int, Future<void>>{};
+    for (final chapter in chapters) {
+      final existing = _records[chapter.chapterId];
+      if (existing?.isInFlight ?? false) {
+        futures[chapter.chapterId] = _waiters[chapter.chapterId]!.future;
+        continue;
+      }
+      if (existing?.saved != null &&
+          existing?.status == DownloadQueueStatus.saved) {
+        continue;
+      }
+      final completer = Completer<void>();
+      _waiters[chapter.chapterId] = completer;
+      futures[chapter.chapterId] = completer.future;
+      unawaited(_enqueue(chapter, saved: existing?.saved, resume: existing));
+    }
+    return futures;
+  }
+
   /// Stores [chapter] again over its existing copy. A failed or cancelled
   /// refresh leaves that copy intact.
   Future<void> refresh(SavedChapter chapter) async {

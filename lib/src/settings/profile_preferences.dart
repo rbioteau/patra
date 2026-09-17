@@ -1,9 +1,37 @@
+library;
+import 'dart:convert';
+
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../auth/session.dart';
+import '../keychain.dart';
+import 'locale_settings.dart';
+import 'reading_settings.dart';
+
+/// How many unread chapters to include in a batch download.
+enum BatchDownloadSize {
+  three(3),
+  five(5),
+  ten(10),
+  twenty(20);
+
+  const BatchDownloadSize(this.value);
+
+  final int value;
+
+  static const defaultSize = BatchDownloadSize.five;
+
+  static BatchDownloadSize fromValue(int value) => switch (value) {
+    3 => BatchDownloadSize.three,
+    5 => BatchDownloadSize.five,
+    10 => BatchDownloadSize.ten,
+    20 => BatchDownloadSize.twenty,
+    _ => defaultSize,
+  };
+}
+
 /// Which settings follow the person and which stay with the device.
-///
-/// A family tablet is several profiles at one address (ADR-0003), and a
-/// setting is one of two kinds. **Reading direction, magnifying, the width a
-/// chapter opens at, the size a book is set at, the room between its lines,
-/// the face those words are set in and the interface language belong to a
 /// person**: they are how somebody reads, and two people sharing a tablet
 /// each get their own.
 /// So does the direction one **series** or one **library** is read in, which
@@ -27,18 +55,8 @@
 /// defaults are the flat keys `ReadingSettingsStore` and `LocaleSettingsStore`
 /// have always written, which is what makes this an upgrade nobody notices:
 /// a device that was set before it held profiles keeps every setting it had,
+/// a device that was set before it held profiles keeps every setting it had,
 /// for everybody, until somebody chooses otherwise for themselves.
-library;
-
-import 'dart:convert';
-
-import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../auth/session.dart';
-import '../keychain.dart';
-import 'locale_settings.dart';
-import 'reading_settings.dart';
 
 /// What one profile has chosen for itself. A null field is a choice never
 /// made, and the device's own default stands in for it.
@@ -50,12 +68,15 @@ class ProfilePreferences {
     this.bookLineHeight,
     this.bookReadingFace,
     this.language,
+    this.batchDownloadSize,
     this.seriesDirections = const {},
     this.libraryDirections = const {},
   });
 
   static const none = ProfilePreferences();
+  final ReadingFace? bookReadingFace;
 
+  /// Whether a one-finger drag magnifies the page instead of turning it.
   final bool? magnify;
 
   /// How wide a chapter opens, as a fraction of the screen: `1.0` is the
@@ -75,16 +96,9 @@ class ProfilePreferences {
   /// of the same choice that decides whether dense text is readable.
   final double? bookLineHeight;
 
-  /// The face a book is set in: one of the four the app ships, and one for
-  /// **every** book — the other half of the same choice about a person's
-  /// eyes that [bookTextSize] and [bookLineHeight] are (#92).
-  ///
-  /// Written down as the name of the [ReadingFace], and read back through
-  /// [ReadingFace.named] so a name this build no longer knows costs the
-  /// profile its face rather than the app its page.
-  final ReadingFace? bookReadingFace;
-
-  /// The language chosen, as a code — or the **empty string** for "follow the
+  /// How many unread chapters to include in a batch download. Offered as
+  /// 3, 5, 10, or 20; default is 5.
+  final BatchDownloadSize? batchDownloadSize;
   /// device", which is a choice a person can make and come back to. It is not
   /// the same as never having chosen: that is null, and the device's default
   /// stands. `MaterialApp` already reads a null `locale` as "resolve against
@@ -114,7 +128,6 @@ class ProfilePreferences {
   /// mirrors, for the same reasons and in the same row: a choice about works
   /// never sent to a server, gone with the profile that made it.
   final Map<int, ReadingDirection> libraryDirections;
-
   ProfilePreferences copyWith({
     bool? magnify,
     double? widthFactor,
@@ -122,6 +135,7 @@ class ProfilePreferences {
     double? bookLineHeight,
     ReadingFace? bookReadingFace,
     String? language,
+    BatchDownloadSize? batchDownloadSize,
     Map<int, ReadingDirection>? seriesDirections,
     Map<int, ReadingDirection>? libraryDirections,
   }) => ProfilePreferences(
@@ -131,6 +145,7 @@ class ProfilePreferences {
     bookLineHeight: bookLineHeight ?? this.bookLineHeight,
     bookReadingFace: bookReadingFace ?? this.bookReadingFace,
     language: language ?? this.language,
+    batchDownloadSize: batchDownloadSize ?? this.batchDownloadSize,
     seriesDirections: seriesDirections ?? this.seriesDirections,
     libraryDirections: libraryDirections ?? this.libraryDirections,
   );
@@ -142,6 +157,7 @@ class ProfilePreferences {
     if (bookLineHeight != null) 'bookLineHeight': bookLineHeight,
     if (bookReadingFace != null) 'bookReadingFace': bookReadingFace!.name,
     if (language != null) 'language': language,
+    if (batchDownloadSize != null) 'batchDownloadSize': batchDownloadSize!.value,
     if (seriesDirections.isNotEmpty)
       'seriesDirections': _directionsJson(seriesDirections),
     if (libraryDirections.isNotEmpty)
@@ -160,6 +176,7 @@ class ProfilePreferences {
     final bookLineHeight = json['bookLineHeight'];
     final bookReadingFace = json['bookReadingFace'];
     final language = json['language'];
+    final batchDownloadSize = json['batchDownloadSize'];
     return ProfilePreferences(
       magnify: magnify is bool ? magnify : null,
       widthFactor: widthFactor is num ? widthFactor.toDouble() : null,
@@ -176,6 +193,10 @@ class ProfilePreferences {
               (language.isEmpty || supportedLocale(language) != null)
           ? language
           : null,
+      batchDownloadSize:
+          batchDownloadSize is int
+              ? BatchDownloadSize.fromValue(batchDownloadSize)
+              : null,
       seriesDirections: _directions(json['seriesDirections']),
       libraryDirections: _directions(json['libraryDirections']),
     );
@@ -220,6 +241,7 @@ class ProfilePreferencesStore {
     this.deviceWidthFactor = 1.0,
     this.deviceBookTextSize = defaultBookTextSize,
     this.deviceBookLineHeight = defaultBookLineHeight,
+    this.deviceBatchDownloadSize = BatchDownloadSize.defaultSize,
     Locale? deviceLanguage,
     // A private field cannot be a named parameter, so the lint's suggestion
     // is not available here.
@@ -256,6 +278,10 @@ class ProfilePreferencesStore {
   final double deviceBookTextSize;
   final double deviceBookLineHeight;
 
+  /// How many unread chapters to include in a batch download for a profile
+  /// that has never chosen. Defaults to 5.
+  final BatchDownloadSize deviceBatchDownloadSize;
+
   /// The language of the **gate**, which is drawn before anybody has been
   /// chosen and so cannot ask a profile.
   ///
@@ -268,6 +294,11 @@ class ProfilePreferencesStore {
   /// is a fact half of the app could be wrong about.
   Locale? get deviceLanguage => _deviceLanguage;
   Locale? _deviceLanguage;
+
+  /// What [profileId] has chosen, or nothing at all — which is also the
+  /// answer while nobody is reading, since the gate belongs to no profile.
+  ProfilePreferences of(String? profileId) =>
+      _byProfile[profileId] ?? ProfilePreferences.none;
 
   /// Makes [locale] what this device falls back to, in memory and in the
   /// keychain, which are the same decision and so are one call.
@@ -311,13 +342,6 @@ class ProfilePreferencesStore {
     }
     return byProfile;
   }
-
-  /// What [profileId] has chosen, or nothing at all — which is also the
-  /// answer while nobody is reading, since the gate belongs to no profile.
-  ProfilePreferences of(String? profileId) =>
-      _byProfile[profileId] ?? ProfilePreferences.none;
-
-  /// What [profileId] has chosen for [seriesId] alone, if anything: the first
   /// rung of the chain, and the only one a person can drop.
   ReadingDirection? seriesDirectionFor(String? profileId, int seriesId) =>
       of(profileId).seriesDirections[seriesId];
@@ -369,6 +393,19 @@ class ProfilePreferencesStore {
     final chosen = of(profileId).language;
     return chosen == null ? deviceLanguage : supportedLocale(chosen);
   }
+  /// How many unread chapters to include in a batch download for [profileId],
+  /// falling through to the device's default where they have never said.
+  BatchDownloadSize batchDownloadSizeFor(String? profileId) =>
+      of(profileId).batchDownloadSize ?? deviceBatchDownloadSize;
+
+  /// [size] is the batch download size from now on, for [profileId] alone.
+  Future<void> setBatchDownloadSize(
+    String profileId,
+    BatchDownloadSize size,
+  ) => _update(
+    profileId,
+    (was) => was.copyWith(batchDownloadSize: size),
+  );
 
   /// [seriesId] is read in [direction] from now on, for [profileId] alone.
   ///
@@ -851,8 +888,30 @@ class BookReadingFaceNotifier extends Notifier<ReadingFace> {
         .setBookReadingFace(id, face);
   }
 }
-
 final bookReadingFaceProvider =
     NotifierProvider<BookReadingFaceNotifier, ReadingFace>(
       BookReadingFaceNotifier.new,
+    );
+
+/// How many unread chapters to include in a batch download, for whoever is
+/// reading. Offered as 3, 5, 10, or 20; default is 5.
+class BatchDownloadSizeNotifier extends Notifier<BatchDownloadSize> {
+  @override
+  BatchDownloadSize build() => ref
+      .read(profilePreferencesStoreProvider)
+      .batchDownloadSizeFor(ref.watch(readingProfileIdProvider));
+
+  Future<void> set(BatchDownloadSize size) async {
+    state = size;
+    final id = ref.read(sessionProvider)?.id;
+    if (id == null) return;
+    await ref
+        .read(profilePreferencesStoreProvider)
+        .setBatchDownloadSize(id, size);
+  }
+}
+
+final batchDownloadSizeProvider =
+    NotifierProvider<BatchDownloadSizeNotifier, BatchDownloadSize>(
+      BatchDownloadSizeNotifier.new,
     );
