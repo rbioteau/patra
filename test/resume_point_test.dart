@@ -167,6 +167,47 @@ void main() {
     });
   });
 
+  // The cover in front of a hero follows a looser rule than the page behind
+  // it: it is the entry the button opens whenever the series is under way,
+  // whether or not that chapter has been opened yet.
+  group('the entry a hero pictures', () {
+    test('is the resumed chapter once it has been opened', () {
+      final point = resumePoint([
+        _volume(1, 1, [_chapter(10, number: 1, pages: 20, read: 8)]),
+      ]);
+      expect(entryPictured(point)!.chapter.id, 10);
+    });
+
+    // A whole volume finished, the next untouched: the series is under way,
+    // and the picture is the next volume's — where the page behind is none.
+    test('is the untouched next chapter after finishing a volume', () {
+      final point = resumePoint([
+        _volume(1, 1, [_chapter(10, number: 1, pages: 20, read: 20)]),
+        _volume(2, 2, [_chapter(11, number: 2, pages: 20, read: 0)]),
+      ]);
+      expect(entryPictured(point)!.chapter.id, 11);
+      expect(entryUnderWay(point), isNull);
+    });
+
+    test('is none where nothing has been read', () {
+      final point = resumePoint([
+        _volume(1, 1, [_chapter(10, number: 1, pages: 20, read: 0)]),
+      ]);
+      expect(entryPictured(point), isNull);
+    });
+
+    test('is none once the whole series is read', () {
+      final point = resumePoint([
+        _volume(1, 1, [_chapter(10, number: 1, pages: 20, read: 20)]),
+      ]);
+      expect(entryPictured(point), isNull);
+    });
+
+    test('is none while the volumes are still in flight', () {
+      expect(entryPictured(null), isNull);
+    });
+  });
+
   group('the cover that pictures a resume entry', () {
     final client = KavitaClient(
       baseUrl: 'http://kavita.test',
