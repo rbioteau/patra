@@ -10,6 +10,10 @@ import '../api/kavita_client.dart';
 import '../auth/session.dart';
 import 'downloads_service.dart';
 
+/// Chapters the queue may download at once. This starting value is bounded
+/// deliberately; it has not yet been tuned against a real Kavita server.
+const maxConcurrentChapterDownloads = 3;
+
 class DownloadsState {
   const DownloadsState({
     this.saved = const {},
@@ -120,7 +124,8 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   final _userCancelled = <int>{};
   late DownloadsService _service;
   var _nextPriority = 0;
-  var _draining = false;
+  int? _lastRequestedChapterId;
+  int? _readingChapterId;
   var _disposed = false;
 
   @override
@@ -151,8 +156,9 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   }
 
   /// Enqueues [chapter] after its queue record is safely on disk. The future
-  /// completes when this chapter finishes, fails or is cancelled; another
-  /// queued chapter never runs beside it.
+  /// completes when this chapter finishes, fails or is cancelled. The latest
+  /// request moves ahead without disturbing the FIFO order of everything
+  /// already queued.
   Future<void> save(SavedChapter chapter) async {
     if (!await _ready()) return;
     final existing = _records[chapter.chapterId];
@@ -190,6 +196,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     final id = chapter.chapterId;
     final waiter = Completer<void>();
     _waiters[id] = waiter;
+    _lastRequestedChapterId = id;
     _records[id] = DownloadQueueRecord(
       request: chapter,
       saved: saved,
@@ -204,26 +211,45 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     );
     await _persist();
     _writeState();
-    unawaited(_drain());
+    _drain();
     await waiter.future;
   }
 
-  Future<void> _drain() async {
-    if (_draining) return;
-    _draining = true;
-    try {
-      while (!_disposed) {
-        final queued =
-            _records.values
-                .where((record) => record.status == DownloadQueueStatus.queued)
-                .toList()
-              ..sort((a, b) => a.priority.compareTo(b.priority));
-        if (queued.isEmpty) return;
-        await _run(queued.first);
-      }
-    } finally {
-      _draining = false;
+  void _drain() {
+    if (_disposed) return;
+    final available = maxConcurrentChapterDownloads - _cancelTokens.length;
+    if (available <= 0) return;
+    final queued =
+        _records.values
+            .where((record) => record.status == DownloadQueueStatus.queued)
+            .toList()
+          ..sort(_compareQueued);
+    for (final record in queued.take(available)) {
+      unawaited(_run(record));
     }
+  }
+
+  int _compareQueued(DownloadQueueRecord a, DownloadQueueRecord b) {
+    final rank = _queueRank(a).compareTo(_queueRank(b));
+    return rank != 0 ? rank : a.priority.compareTo(b.priority);
+  }
+
+  int _queueRank(DownloadQueueRecord record) {
+    final id = record.request.chapterId;
+    if (id == _readingChapterId) return 0;
+    if (id == _lastRequestedChapterId) return 1;
+    return 2;
+  }
+
+  /// Pulls a queued chapter ahead while it is the reader's current chapter.
+  void prioritizeReadingChapter(int chapterId) {
+    _readingChapterId = chapterId;
+    _drain();
+  }
+
+  /// Clears the reader priority only if it still belongs to this chapter.
+  void clearReadingChapterPriority(int chapterId) {
+    if (_readingChapterId == chapterId) _readingChapterId = null;
   }
 
   Future<void> _run(DownloadQueueRecord queued) async {
@@ -246,7 +272,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
             completedPages: completedPages,
             totalPages: totalPages,
           );
-          await _persist();
+          await _persistProgress();
           _writeState();
         },
         knownTotalPages: queued.totalPages > 0 ? queued.totalPages : null,
@@ -285,6 +311,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       _cancelTokens.remove(id);
       _userCancelled.remove(id);
       _complete(id);
+      _drain();
     }
   }
 
@@ -420,6 +447,8 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   }
 
   Future<void> _persist() => _service.writeQueue(_records);
+  Future<void> _persistProgress() =>
+      _service.writeQueueAsynchronously(_records);
 
   void _writeState() {
     if (!_disposed) state = AsyncData(DownloadsState.fromQueue(_records));

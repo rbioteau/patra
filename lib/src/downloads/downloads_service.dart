@@ -287,6 +287,10 @@ typedef DownloadProgressCallback = FutureOr<void> Function(
   int totalPages,
 );
 
+/// Page requests one chapter may keep in flight. Bounded separately from the
+/// chapter queue so one long chapter cannot flood a Kavita server.
+const maxConcurrentPageDownloads = 4;
+
 typedef _QueueSnapshot = ({
   Map<int, DownloadQueueRecord> records,
   bool authoritative,
@@ -315,7 +319,7 @@ class DownloadsService {
   final Directory? _rootOverride;
   Directory? _root;
 
-  Future<void> _queueWrites = Future<void>.value();
+  Future<void>? _queueWrites;
   var _protectAllPartials = false;
 
   static const _queueVersion = 1;
@@ -363,7 +367,7 @@ class DownloadsService {
   /// so anything left queued or downloading becomes interrupted and waits for
   /// an explicit retry.
   Future<Map<int, DownloadQueueRecord>> loadQueue() async {
-    await _queueWrites;
+    if (_queueWrites case final pending?) await pending;
     final queue = await _readQueue();
     final records = queue.records;
     final livePartials = _livePartialChapterIds(queue);
@@ -428,9 +432,24 @@ class DownloadsService {
 
   /// Atomically replaces this profile's queue. Writes are serialized so two
   /// taps that arrive together cannot let the older snapshot land last.
-  Future<void> writeQueue(Map<int, DownloadQueueRecord> records) {
+  Future<void> writeQueue(Map<int, DownloadQueueRecord> records) =>
+      _scheduleQueueWrite(records, _writeQueue);
+
+  /// The same atomic queue replacement, using non-blocking filesystem calls.
+  /// Page completions use this path so their durability does not stall UI.
+  Future<void> writeQueueAsynchronously(
+    Map<int, DownloadQueueRecord> records,
+  ) => _scheduleQueueWrite(records, _writeQueueAsynchronously);
+
+  Future<void> _scheduleQueueWrite(
+    Map<int, DownloadQueueRecord> records,
+    Future<void> Function(Map<int, DownloadQueueRecord>) writer,
+  ) {
     final snapshot = Map<int, DownloadQueueRecord>.of(records);
-    final write = _queueWrites.then((_) => _writeQueue(snapshot));
+    final previous = _queueWrites;
+    final write = previous == null
+        ? writer(snapshot)
+        : previous.then((_) => writer(snapshot));
     _queueWrites = write.then<void>((_) {}, onError: (_, _) {});
     return write;
   }
@@ -488,6 +507,23 @@ class DownloadsService {
     temp.renameSync(file.path);
   }
 
+  Future<void> _writeQueueAsynchronously(
+    Map<int, DownloadQueueRecord> records,
+  ) async {
+    final root = await profileRoot();
+    await root.create(recursive: true);
+    final file = File('${root.path}/$_queueFileName');
+    final temp = File('${file.path}.tmp');
+    await temp.writeAsString(
+      jsonEncode({
+        'version': _queueVersion,
+        'records': [for (final record in records.values) record.toJson()],
+        if (_protectAllPartials) 'protectPartials': true,
+      }),
+    );
+    await temp.rename(file.path);
+  }
+
   /// Where pages are written before they are a copy, inside the chapter's own
   /// directory. [scan] sees the directory, but the queue decides whether the
   /// partial is alive; a failed refresh leaves its finished copy untouched.
@@ -500,7 +536,7 @@ class DownloadsService {
   /// readable queue has no live entry for it. If the queue cannot be read,
   /// ambiguity resolves toward keeping the bytes.
   Future<Map<int, SavedChapter>> scan() async {
-    await _queueWrites;
+    if (_queueWrites case final pending?) await pending;
     final queue = await _readQueue();
     final livePartials = _livePartialChapterIds(queue);
     return _scan(livePartials);
@@ -578,19 +614,19 @@ class DownloadsService {
             }
           }
           if (completed > 0) await onProgress(completed, pages);
-          for (var page = 0; page < pages; page++) {
+          await _runPageWorkers(pages, (page) async {
             final file = stored[page];
-            if (_isCompletePage(file)) continue;
+            if (_isCompletePage(file)) return;
             final data = await client.readerImageBytes(
               chapter.chapterId,
               page,
               cancelToken: cancelToken,
             );
-            _writePage(file, data);
+            await _writePage(file, data);
             bytes += data.length;
             completed++;
             await onProgress(completed, pages);
-          }
+          });
         case ChapterContent.reflowable:
           // Once a rendered page exists, its page count is part of the copy:
           // Kavita may repaginate the book between attempts (ADR-0009).
@@ -611,10 +647,11 @@ class DownloadsService {
             }
           }
           if (completed > 0) await onProgress(completed, pages);
-          // A picture named on several newly fetched pages is fetched once.
-          final carried = <String, String?>{};
-          for (var page = 0; page < pages; page++) {
-            if (_isCompletePage(stored[page])) continue;
+          // A picture named on several newly fetched pages is fetched once,
+          // including while those pages are being fetched concurrently.
+          final carried = <String, Future<String?>>{};
+          await _runPageWorkers(pages, (page) async {
+            if (_isCompletePage(stored[page])) return;
             bytes += await _storeBookPage(
               staging,
               client: client,
@@ -625,7 +662,7 @@ class DownloadsService {
             );
             completed++;
             await onProgress(completed, pages);
-          }
+          });
       }
     } on Object {
       // The queue record already describes whether this partial failed,
@@ -681,10 +718,42 @@ class DownloadsService {
   static bool _isCompletePage(File file) =>
       file.existsSync() && file.lengthSync() > 0;
 
-  static void _writePage(File file, List<int> bytes) {
+  static Future<void> _writePage(File file, List<int> bytes) async {
     final temp = File('${file.path}.tmp');
-    temp.writeAsBytesSync(bytes);
-    temp.renameSync(file.path);
+    await temp.writeAsBytes(bytes);
+    await temp.rename(file.path);
+  }
+
+  static Future<void> _runPageWorkers(
+    int pages,
+    Future<void> Function(int page) work,
+  ) async {
+    var nextPage = 0;
+    var stopped = false;
+    Object? firstError;
+    StackTrace? firstStack;
+
+    Future<void> worker() async {
+      while (!stopped) {
+        final page = nextPage++;
+        if (page >= pages) return;
+        try {
+          await work(page);
+        } on Object catch (error, stack) {
+          firstError ??= error;
+          firstStack ??= stack;
+          stopped = true;
+        }
+      }
+    }
+
+    final workers = pages < maxConcurrentPageDownloads
+        ? pages
+        : maxConcurrentPageDownloads;
+    await Future.wait([for (var i = 0; i < workers; i++) worker()]);
+    if (firstError case final error?) {
+      Error.throwWithStackTrace(error, firstStack!);
+    }
   }
 
   /// Puts [staging]'s pages in [dir]'s place, and drops what the copy used to
@@ -717,7 +786,7 @@ class DownloadsService {
     required KavitaClient client,
     required int chapterId,
     required int page,
-    required Map<String, String?> carried,
+    required Map<String, Future<String?>> carried,
     CancelToken? cancelToken,
   }) async {
     final html = await client.bookPage(
@@ -725,15 +794,19 @@ class DownloadsService {
       page,
       cancelToken: cancelToken,
     );
+    final resolved = <String, String?>{};
     for (final src in BookPage.fromHtml(html).pictureSources) {
       // Asked for once however many pages name it — including a picture the
-      // server refuses, which is why the memo is keyed and not the value.
-      if (!carried.containsKey(src)) {
-        carried[src] = await _carryPicture(client, chapterId, src, cancelToken);
-      }
+      // server refuses, which is why the in-flight future itself is memoized.
+      resolved[src] = await carried.putIfAbsent(
+        src,
+        () => _carryPicture(client, chapterId, src, cancelToken),
+      );
     }
-    final stored = utf8.encode(renameBookPictures(html, (src) => carried[src]));
-    _writePage(File('${dir.path}/${pageFileName(page)}'), stored);
+    final stored = utf8.encode(
+      renameBookPictures(html, (src) => resolved[src]),
+    );
+    await _writePage(File('${dir.path}/${pageFileName(page)}'), stored);
     return stored.length;
   }
 
