@@ -177,7 +177,6 @@ class ContinueHero extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
                         Expanded(
                           child: _Details(
                             data: data,
