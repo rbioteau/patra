@@ -16,6 +16,8 @@ import 'package:patra/src/downloads/downloads_service.dart';
 class _KavitaLikeAdapter implements HttpClientAdapter {
   int served = 0;
   int rejected = 0;
+  int active = 0;
+  int maxActive = 0;
 
   /// Every progress post the device has sent: the chapter, the page and — for
   /// a book — the place within it.
@@ -61,15 +63,35 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
       rejected++;
       return ResponseBody.fromBytes(const [], 400);
     }
-    if (gate != null) await gate;
-    served++;
-    return ResponseBody.fromBytes(
-      List<int>.filled(4, 9),
-      200,
-      headers: {
-        Headers.contentTypeHeader: ['image/jpeg'],
-      },
-    );
+    active++;
+    if (active > maxActive) maxActive = active;
+    try {
+      if (gate != null) {
+        final cancelled = cancelFuture == null
+            ? false
+            : await Future.any([
+                gate!.then((_) => false),
+                cancelFuture.then((_) => true),
+              ]);
+        if (cancelFuture == null) await gate;
+        if (cancelled) {
+          throw DioException.requestCancelled(
+            requestOptions: options,
+            reason: 'cancelled',
+          );
+        }
+      }
+      served++;
+      return ResponseBody.fromBytes(
+        List<int>.filled(4, 9),
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['image/jpeg'],
+        },
+      );
+    } finally {
+      active--;
+    }
   }
 
   @override
@@ -101,6 +123,31 @@ const _otherChapter = SavedChapter(
 /// Whose store these tests are: the provider is handed a service directly
 /// here, so the profile it belongs to is named rather than resolved.
 const _profileId = 'https://kavita.test#1';
+const _otherProfileId = 'https://kavita.test#2';
+
+ProviderContainer _downloadsContainer(
+  Directory root,
+  _KavitaLikeAdapter adapter, {
+  String apiKey = 'the-api-key',
+  String profileId = _profileId,
+}) {
+  final client = KavitaClient(
+    baseUrl: 'http://kavita.test',
+    token: 'token',
+    username: 'romain',
+    apiKey: apiKey,
+  );
+  client.httpClient.httpClientAdapter = adapter;
+  client.bareHttpClient.httpClientAdapter = adapter;
+  return ProviderContainer.test(
+    overrides: [
+      kavitaClientProvider.overrideWithValue(client),
+      downloadsServiceProvider.overrideWithValue(
+        DownloadsService(root: root, profileId: profileId),
+      ),
+    ],
+  );
+}
 
 void main() {
   late Directory root;
@@ -110,22 +157,7 @@ void main() {
   setUp(() {
     root = Directory.systemTemp.createTempSync('patra-downloads-provider');
     adapter = _KavitaLikeAdapter();
-    final client = KavitaClient(
-      baseUrl: 'http://kavita.test',
-      token: 'token',
-      username: 'romain',
-      apiKey: 'the-api-key',
-    );
-    client.httpClient.httpClientAdapter = adapter;
-    client.bareHttpClient.httpClientAdapter = adapter;
-    container = ProviderContainer.test(
-      overrides: [
-        kavitaClientProvider.overrideWithValue(client),
-        downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: root, profileId: _profileId),
-        ),
-      ],
-    );
+    container = _downloadsContainer(root, adapter);
   });
 
   tearDown(() {
@@ -151,6 +183,19 @@ void main() {
     expect(container.read(savedChapterProvider(12)), isNotNull);
   });
 
+  test('a saved chapter is still saved after a restart', () async {
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    container.dispose();
+
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+
+    final state = await restarted.read(downloadsProvider.future);
+    expect(state.saved[12]?.seriesName, 'Akira');
+    expect(state.failed, isEmpty);
+    expect(state.interrupted, isEmpty);
+  });
+
   test('a tap before the first scan finishes is not dropped', () async {
     // No prior read: the notifier is still scanning when save() is called.
     await container.read(downloadsProvider.notifier).save(_chapter);
@@ -159,6 +204,33 @@ void main() {
       container.read(downloadsProvider).value!.saved.containsKey(12),
       isTrue,
     );
+  });
+
+  test('a committed copy wins the crash before queue completion', () async {
+    final service = DownloadsService(root: root, profileId: _profileId);
+    await service.download(
+      client: container.read(kavitaClientProvider),
+      chapter: _chapter,
+      onProgress: (_, _) {},
+    );
+    await service.writeQueue({
+      12: const DownloadQueueRecord(
+        request: _chapter,
+        status: DownloadQueueStatus.downloading,
+        priority: 0,
+        completedPages: 3,
+        totalPages: 3,
+      ),
+    });
+    container.dispose();
+
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+    final state = await restarted.read(downloadsProvider.future);
+
+    expect(state.saved, contains(12));
+    expect(state.interrupted, isEmpty);
+    expect(state.failed, isEmpty);
   });
 
   test('two taps before the first scan do not forget each other', () async {
@@ -178,6 +250,7 @@ void main() {
       container.read(downloadsProvider).value!.inFlight.keys,
       containsAll([12, 13]),
     );
+    expect(adapter.maxActive, 1, reason: 'only one chapter runs at a time');
 
     gate.complete();
     await Future.wait([first, second]);
@@ -187,23 +260,7 @@ void main() {
   });
 
   test('a failed download is reported, not silently reverted', () async {
-    final client = KavitaClient(
-      baseUrl: 'http://kavita.test',
-      token: 'token',
-      username: 'romain',
-      // No API key: the server answers 400, like Kavita does.
-      apiKey: '',
-    );
-    client.httpClient.httpClientAdapter = adapter;
-    client.bareHttpClient.httpClientAdapter = adapter;
-    final failing = ProviderContainer.test(
-      overrides: [
-        kavitaClientProvider.overrideWithValue(client),
-        downloadsServiceProvider.overrideWithValue(
-          DownloadsService(root: root, profileId: _profileId),
-        ),
-      ],
-    );
+    final failing = _downloadsContainer(root, adapter, apiKey: '');
 
     await failing.read(downloadsProvider.future);
     await failing.read(downloadsProvider.notifier).save(_chapter);
@@ -213,6 +270,79 @@ void main() {
     expect(state.saved, isEmpty);
     expect(state.inFlight, isEmpty);
     expect(state.failed, contains(12), reason: 'the pill offers a retry');
+  });
+
+  test('a failed download is still failed after a restart', () async {
+    final failing = _downloadsContainer(root, adapter, apiKey: '');
+    await failing.read(downloadsProvider.future);
+    await failing.read(downloadsProvider.notifier).save(_chapter);
+    failing.dispose();
+
+    final restarted = _downloadsContainer(root, adapter, apiKey: '');
+    addTearDown(restarted.dispose);
+
+    final state = await restarted.read(downloadsProvider.future);
+    expect(state.failed, contains(12));
+    expect(state.inFlight, isEmpty);
+    final otherProfile = _downloadsContainer(
+      root,
+      adapter,
+      apiKey: '',
+      profileId: _otherProfileId,
+    );
+    addTearDown(otherProfile.dispose);
+    final otherState = await otherProfile.read(downloadsProvider.future);
+    expect(otherState.failed, isEmpty);
+    expect(otherState.interrupted, isEmpty);
+  });
+
+  test('an unfinished download is interrupted after a restart', () async {
+    final gate = Completer<void>();
+    adapter.gate = gate.future;
+    final saving = container.read(downloadsProvider.notifier).save(_chapter);
+    await pumpEventQueue();
+    expect(container.read(downloadsProvider).value!.inFlight, contains(12));
+    container.dispose();
+
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+
+    final state = await restarted.read(downloadsProvider.future);
+    expect(state.interrupted, contains(12));
+    expect(state.failed, isEmpty);
+    expect(state.inFlight, isEmpty);
+    gate.complete();
+    await saving;
+  });
+
+  test('cancelling removes the durable entry and partial files', () async {
+    final gate = Completer<void>();
+    adapter.gate = gate.future;
+    final saving = container.read(downloadsProvider.notifier).save(_chapter);
+    await pumpEventQueue();
+
+    await container.read(downloadsProvider.notifier).cancel(12);
+    await saving;
+
+    final state = container.read(downloadsProvider).value!;
+    expect(state.saved, isEmpty);
+    expect(state.inFlight, isEmpty);
+    expect(state.failed, isEmpty);
+    expect(state.interrupted, isEmpty);
+    expect(
+      (await DownloadsService(root: root, profileId: _profileId).chapterDir(12))
+          .existsSync(),
+      isFalse,
+    );
+
+    container.dispose();
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+    final restartedState = await restarted.read(downloadsProvider.future);
+    expect(restartedState.saved, isEmpty);
+    expect(restartedState.failed, isEmpty);
+    expect(restartedState.interrupted, isEmpty);
+    gate.complete();
   });
 
   test('removing a saved chapter clears it', () async {

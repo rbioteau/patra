@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -191,6 +192,101 @@ class SavedChapter {
   }
 }
 
+enum DownloadQueueStatus { queued, downloading, interrupted, failed, saved }
+
+/// One chapter's durable download state. The request is enough to retry it;
+/// [saved] is the finished copy, where one exists independently of the current
+/// attempt (a refresh can fail without spending the copy it was replacing).
+class DownloadQueueRecord {
+  const DownloadQueueRecord({
+    required this.request,
+    required this.status,
+    required this.priority,
+    this.completedPages = 0,
+    this.totalPages = 0,
+    this.saved,
+  });
+
+  factory DownloadQueueRecord.completed(
+    SavedChapter saved, {
+    required int priority,
+  }) => DownloadQueueRecord(
+    request: saved,
+    saved: saved,
+    status: DownloadQueueStatus.saved,
+    priority: priority,
+    completedPages: saved.pages,
+    totalPages: saved.pages,
+  );
+
+  final SavedChapter request;
+  final DownloadQueueStatus status;
+  final int priority;
+  final int completedPages;
+  final int totalPages;
+  final SavedChapter? saved;
+
+  double get progress =>
+      totalPages == 0 ? 0 : (completedPages / totalPages).clamp(0.0, 1.0);
+
+  bool get isInFlight =>
+      status == DownloadQueueStatus.queued ||
+      status == DownloadQueueStatus.downloading;
+
+  DownloadQueueRecord copyWith({
+    SavedChapter? request,
+    DownloadQueueStatus? status,
+    int? priority,
+    int? completedPages,
+    int? totalPages,
+    SavedChapter? saved,
+    bool clearSaved = false,
+  }) => DownloadQueueRecord(
+    request: request ?? this.request,
+    status: status ?? this.status,
+    priority: priority ?? this.priority,
+    completedPages: completedPages ?? this.completedPages,
+    totalPages: totalPages ?? this.totalPages,
+    saved: clearSaved ? null : saved ?? this.saved,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'request': request.toJson(),
+    'status': status.name,
+    'priority': priority,
+    'completedPages': completedPages,
+    'totalPages': totalPages,
+    'saved': saved?.toJson(),
+  };
+
+  static DownloadQueueRecord? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final request = SavedChapter.fromJson(json['request']);
+    final statusName = json['status'];
+    final priority = json['priority'];
+    if (request == null || statusName is! String || priority is! int) {
+      return null;
+    }
+    final status = DownloadQueueStatus.values
+        .where((one) => one.name == statusName)
+        .firstOrNull;
+    if (status == null) return null;
+    return DownloadQueueRecord(
+      request: request,
+      status: status,
+      priority: priority,
+      completedPages: json['completedPages'] as int? ?? 0,
+      totalPages: json['totalPages'] as int? ?? 0,
+      saved: SavedChapter.fromJson(json['saved']),
+    );
+  }
+}
+
+typedef DownloadProgressCallback = FutureOr<void> Function(
+  int completedPages,
+  int totalPages,
+);
+
 /// Stores reader pages under the app's documents directory, filed by the
 /// profile that saved them.
 ///
@@ -213,6 +309,11 @@ class DownloadsService {
 
   final Directory? _rootOverride;
   Directory? _root;
+
+  Future<void> _queueWrites = Future<void>.value();
+
+  static const _queueVersion = 1;
+  static const _queueFileName = 'queue.json';
 
   /// The downloads root, which the **device** owns: every profile's store is
   /// a directory inside it, and so is whatever the flat layout left behind.
@@ -248,6 +349,101 @@ class DownloadsService {
   /// — `meta.json`, most of all.
   static int? pageOfFileName(String name) =>
       name.startsWith('page_') ? int.tryParse(name.substring(5)) : null;
+
+  /// Reads this profile's queue and reconciles it with finished copies made
+  /// before the queue existed. A process can disappear without running
+  /// disposal, so anything left queued or downloading becomes interrupted on
+  /// the next read and waits for an explicit retry.
+  Future<Map<int, DownloadQueueRecord>> loadQueue() async {
+    await _queueWrites;
+    final copies = await scan();
+    final records = await _readQueue();
+    var changed = false;
+    var nextPriority = records.values.fold<int>(
+      0,
+      (next, record) => record.priority >= next ? record.priority + 1 : next,
+    );
+
+    for (final entry in records.entries.toList()) {
+      var record = entry.value;
+      final hadSavedCopy = record.saved != null;
+      if (record.isInFlight) {
+        record = record.copyWith(status: DownloadQueueStatus.interrupted);
+        changed = true;
+      }
+      final copy = copies.remove(entry.key);
+      if (copy != null) {
+        record = hadSavedCopy
+            ? record.copyWith(
+                saved: copy,
+                request: record.status == DownloadQueueStatus.saved
+                    ? copy
+                    : record.request,
+              )
+            : DownloadQueueRecord.completed(copy, priority: record.priority);
+        changed = true;
+      } else if (record.saved != null) {
+        record = record.copyWith(
+          status: DownloadQueueStatus.interrupted,
+          clearSaved: true,
+        );
+        changed = true;
+      }
+      records[entry.key] = record;
+    }
+
+    // Existing saved copies are not abandoned by the cutover. They become
+    // completed queue records the first time their profile is opened.
+    for (final copy in copies.values) {
+      records[copy.chapterId] = DownloadQueueRecord.completed(
+        copy,
+        priority: nextPriority++,
+      );
+      changed = true;
+    }
+    if (changed) await writeQueue(records);
+    return records;
+  }
+
+  /// Atomically replaces this profile's queue. Writes are serialized so two
+  /// taps that arrive together cannot let the older snapshot land last.
+  Future<void> writeQueue(Map<int, DownloadQueueRecord> records) {
+    final snapshot = Map<int, DownloadQueueRecord>.of(records);
+    final write = _queueWrites.then((_) => _writeQueue(snapshot));
+    _queueWrites = write.then<void>((_) {}, onError: (_, _) {});
+    return write;
+  }
+
+  Future<Map<int, DownloadQueueRecord>> _readQueue() async {
+    try {
+      final file = File('${(await profileRoot()).path}/$_queueFileName');
+      if (!file.existsSync()) return {};
+      final json = jsonDecode(file.readAsStringSync());
+      if (json is! Map || json['version'] != _queueVersion) return {};
+      final records = <int, DownloadQueueRecord>{};
+      for (final value in json['records'] as List<dynamic>? ?? const []) {
+        final record = DownloadQueueRecord.fromJson(value);
+        if (record != null) records[record.request.chapterId] = record;
+      }
+      return records;
+    } on Object {
+      return {};
+    }
+  }
+
+  Future<void> _writeQueue(Map<int, DownloadQueueRecord> records) async {
+    final root = await profileRoot();
+    root.createSync(recursive: true);
+    final file = File('${root.path}/$_queueFileName');
+    final temp = File('${file.path}.tmp');
+    temp.writeAsStringSync(
+      jsonEncode({
+        'version': _queueVersion,
+        'records': [for (final record in records.values) record.toJson()],
+      }),
+    );
+    temp.renameSync(file.path);
+  }
 
   /// Where pages are written before they are a copy, inside the chapter's own
   /// directory: `scan` only reads the profile root, so a download in progress
@@ -304,7 +500,7 @@ class DownloadsService {
   Future<SavedChapter> download({
     required KavitaClient client,
     required SavedChapter chapter,
-    required void Function(double progress) onProgress,
+    required DownloadProgressCallback onProgress,
     CancelToken? cancelToken,
   }) async {
     final dir = await chapterDir(chapter.chapterId);
@@ -330,7 +526,7 @@ class DownloadsService {
             File('${staging.path}/${pageFileName(page)}')
                 .writeAsBytesSync(data);
             bytes += data.length;
-            onProgress((page + 1) / pages);
+            await onProgress(page + 1, pages);
           }
         case ChapterContent.reflowable:
           // How long a book is is the server's to say, and `book-info` is the
@@ -421,7 +617,7 @@ class DownloadsService {
     required int chapterId,
     required int page,
     required int pages,
-    required void Function(double progress) onProgress,
+    required DownloadProgressCallback onProgress,
     required Map<String, String?> carried,
     CancelToken? cancelToken,
   }) async {
@@ -439,7 +635,7 @@ class DownloadsService {
     }
     final stored = utf8.encode(renameBookPictures(html, (src) => carried[src]));
     File('${dir.path}/${pageFileName(page)}').writeAsBytesSync(stored);
-    onProgress((page + 1) / pages);
+    await onProgress(page + 1, pages);
     return stored.length;
   }
 

@@ -15,29 +15,42 @@ class DownloadsState {
     this.saved = const {},
     this.inFlight = const {},
     this.failed = const {},
+    this.interrupted = const {},
   });
 
   /// Chapters fully stored on the device, keyed by chapter id.
   final Map<int, SavedChapter> saved;
 
-  /// Downloads in progress, chapter id → 0..1.
+  /// Downloads queued or running, chapter id → 0..1.
   final Map<int, double> inFlight;
 
   /// Chapters whose download failed, so the pill can offer a retry instead
   /// of silently going back to "Save". A cancel is not a failure.
   final Set<int> failed;
 
+  /// Work the process left unfinished. It waits for an explicit retry rather
+  /// than silently restarting requests during launch.
+  final Set<int> interrupted;
+
   int get totalBytes =>
       saved.values.fold(0, (total, chapter) => total + chapter.bytes);
 
-  DownloadsState copyWith({
-    Map<int, SavedChapter>? saved,
-    Map<int, double>? inFlight,
-    Set<int>? failed,
-  }) => DownloadsState(
-    saved: saved ?? this.saved,
-    inFlight: inFlight ?? this.inFlight,
-    failed: failed ?? this.failed,
+  factory DownloadsState.fromQueue(
+    Map<int, DownloadQueueRecord> records,
+  ) => DownloadsState(
+    saved: {for (final entry in records.entries) entry.key: ?entry.value.saved},
+    inFlight: {
+      for (final entry in records.entries)
+        if (entry.value.isInFlight) entry.key: entry.value.progress,
+    },
+    failed: {
+      for (final entry in records.entries)
+        if (entry.value.status == DownloadQueueStatus.failed) entry.key,
+    },
+    interrupted: {
+      for (final entry in records.entries)
+        if (entry.value.status == DownloadQueueStatus.interrupted) entry.key,
+    },
   );
 }
 
@@ -102,6 +115,12 @@ final downloadsServiceProvider = Provider<DownloadsService>(
 
 class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   final _cancelTokens = <int, CancelToken>{};
+  final _records = <int, DownloadQueueRecord>{};
+  final _waiters = <int, Completer<void>>{};
+  final _userCancelled = <int>{};
+  late DownloadsService _service;
+  var _nextPriority = 0;
+  var _draining = false;
   var _disposed = false;
 
   @override
@@ -111,152 +130,200 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       for (final token in _cancelTokens.values) {
         token.cancel('downloads disposed');
       }
-      _cancelTokens.clear();
     });
-    final saved = await ref.watch(downloadsServiceProvider).scan();
+    _service = ref.watch(downloadsServiceProvider);
+    _records
+      ..clear()
+      ..addAll(await _service.loadQueue());
+    _nextPriority = _records.values.fold<int>(
+      0,
+      (next, record) => record.priority >= next ? record.priority + 1 : next,
+    );
     // Progress the server has not been told waits in each copy, and a server
     // that answers is the moment to send it. Listened to rather than watched:
     // being offline must not put the store back to its loading state.
     ref.listen(offlineProvider, (_, offline) {
       if (!offline) unawaited(syncPendingProgress());
     });
-    // A server that is already answering is the same event as one coming
-    // back, and the one that matters most: it is how a journey the app was
-    // closed in the middle of reaches the server, since nothing else left
-    // running knows there is anything to send.
-    unawaited(syncPendingProgress(saved.values));
-    return DownloadsState(saved: saved);
+    final next = DownloadsState.fromQueue(_records);
+    unawaited(syncPendingProgress(next.saved.values));
+    return next;
   }
 
-  /// Downloads every page of [chapter] for offline reading. [chapter] carries
-  /// the metadata to store alongside the pages; its `bytes` is ignored.
+  /// Enqueues [chapter] after its queue record is safely on disk. The future
+  /// completes when this chapter finishes, fails or is cancelled; another
+  /// queued chapter never runs beside it.
   Future<void> save(SavedChapter chapter) async {
-    // The first scan may still be running when the pill is tapped; waiting
-    // beats dropping the tap on the floor.
-    var current = state.value;
-    if (current == null) {
-      try {
-        await future;
-      } on Object {
-        return;
-      }
-      // Re-read rather than keep what the scan returned: a second pill tapped
-      // during that same wait resumes first and writes its own entry, and
-      // building on the stale snapshot would drop it — leaving a download
-      // running that nothing on screen tracks any more.
-      current = state.value;
-      if (current == null) return;
-    }
-    if (current.saved.containsKey(chapter.chapterId) ||
-        current.inFlight.containsKey(chapter.chapterId)) {
+    if (!await _ready()) return;
+    final existing = _records[chapter.chapterId];
+    if (existing?.isInFlight ?? false) {
+      await _waiters[chapter.chapterId]?.future;
       return;
     }
-    await _store(chapter);
+    if (existing?.saved != null &&
+        existing?.status == DownloadQueueStatus.saved) {
+      return;
+    }
+    await _enqueue(chapter, saved: existing?.saved);
   }
 
-  /// Stores [chapter] again, over the copy that is already there: the answer
-  /// to a copy being out of step with the server, which is never silently
-  /// refetched (ADR-0009) and never silently kept.
-  ///
-  /// Refetched at the count the server gives now rather than the one the copy
-  /// was made with — for a book the service asks the server itself, and a
-  /// chapter of pictures is asked for its pages by the number it has today,
-  /// which is the only reason storing it again puts the two back in step.
-  /// Not [save], which is what refuses a chapter it already holds.
+  /// Stores [chapter] again over its existing copy. A failed or cancelled
+  /// refresh leaves that copy intact.
   Future<void> refresh(SavedChapter chapter) async {
-    final current = state.value;
-    if (current == null || current.inFlight.containsKey(chapter.chapterId)) {
-      return;
-    }
-    await _store(chapter.copyWith(pages: chapter.serverPages ?? chapter.pages));
+    if (!await _ready()) return;
+    final existing = _records[chapter.chapterId];
+    if (existing?.isInFlight ?? false) return;
+    final saved = existing?.saved ?? state.value?.saved[chapter.chapterId];
+    if (saved == null) return;
+    await _enqueue(
+      chapter.copyWith(pages: chapter.serverPages ?? chapter.pages),
+      saved: saved,
+    );
   }
 
-  /// The download itself, which [save] and [refresh] share: the two differ
-  /// only in whether a copy is already there.
-  Future<void> _store(SavedChapter chapter) async {
-    final current = state.value;
-    if (current == null) return;
-    final cancelToken = CancelToken();
-    _cancelTokens[chapter.chapterId] = cancelToken;
-    _write(
-      current.copyWith(
-        inFlight: {...current.inFlight, chapter.chapterId: 0},
-        failed: {...current.failed}..remove(chapter.chapterId),
-      ),
+  Future<void> _enqueue(
+    SavedChapter chapter, {
+    required SavedChapter? saved,
+  }) async {
+    final id = chapter.chapterId;
+    final waiter = Completer<void>();
+    _waiters[id] = waiter;
+    _records[id] = DownloadQueueRecord(
+      request: chapter,
+      saved: saved,
+      status: DownloadQueueStatus.queued,
+      priority: _nextPriority++,
     );
+    await _persist();
+    _writeState();
+    unawaited(_drain());
+    await waiter.future;
+  }
+
+  Future<void> _drain() async {
+    if (_draining) return;
+    _draining = true;
+    try {
+      while (!_disposed) {
+        final queued =
+            _records.values
+                .where((record) => record.status == DownloadQueueStatus.queued)
+                .toList()
+              ..sort((a, b) => a.priority.compareTo(b.priority));
+        if (queued.isEmpty) return;
+        await _run(queued.first);
+      }
+    } finally {
+      _draining = false;
+    }
+  }
+
+  Future<void> _run(DownloadQueueRecord queued) async {
+    final id = queued.request.chapterId;
+    final cancelToken = CancelToken();
+    final client = ref.read(kavitaClientProvider);
+    _cancelTokens[id] = cancelToken;
+    _records[id] = queued.copyWith(status: DownloadQueueStatus.downloading);
+    await _persist();
+    _writeState();
 
     try {
-      final saved = await ref
-          .read(downloadsServiceProvider)
-          .download(
-            client: ref.read(kavitaClientProvider),
-            chapter: chapter,
-            onProgress: (progress) => _setProgress(chapter.chapterId, progress),
-            cancelToken: cancelToken,
+      final saved = await _service.download(
+        client: client,
+        chapter: queued.request,
+        onProgress: (completedPages, totalPages) async {
+          final current = _records[id];
+          if (current == null || !current.isInFlight) return;
+          _records[id] = current.copyWith(
+            completedPages: completedPages,
+            totalPages: totalPages,
           );
-      _finish(chapter.chapterId, saved: saved);
+          await _persist();
+          _writeState();
+        },
+        cancelToken: cancelToken,
+      );
+      _records[id] = DownloadQueueRecord.completed(
+        saved,
+        priority: queued.priority,
+      );
+      await _persist();
+      _writeState();
     } on Object catch (error) {
-      // The service already removed the partial files. A deliberate cancel
-      // is not a failure and must not offer a retry.
+      final current = _records[id] ?? queued;
       final cancelled =
           error is DioException && error.type == DioExceptionType.cancel;
-      _finish(chapter.chapterId, failed: !cancelled);
+      if (cancelled && _userCancelled.contains(id)) {
+        if (current.saved case final saved?) {
+          _records[id] = DownloadQueueRecord.completed(
+            saved,
+            priority: current.priority,
+          );
+        } else {
+          _records.remove(id);
+        }
+      } else {
+        _records[id] = current.copyWith(
+          status: cancelled
+              ? DownloadQueueStatus.interrupted
+              : DownloadQueueStatus.failed,
+        );
+      }
+      await _persist();
+      _writeState();
     } finally {
-      _cancelTokens.remove(chapter.chapterId);
+      _cancelTokens.remove(id);
+      _userCancelled.remove(id);
+      _complete(id);
     }
   }
 
-  /// Mirrors reading progress into the stored copy, so the Downloads tab can
-  /// show what has been read even with no server in sight.
-  ///
-  /// [pending] is what the server has not been told: the number being sent
-  /// and, for a book, the place within the page. Left alone where it is not
-  /// given, because the server's own number arriving back down is not
-  /// progress anybody has to post — and posting it without the anchor would
-  /// cost a reader the words they had already read.
+  /// Mirrors reading progress into both durable records: the copy's metadata
+  /// and the queue entry every screen rebuilds its state from.
   Future<void> recordProgress(
     int chapterId,
     int pagesRead, {
     PendingProgress? pending,
   }) async {
-    final current = state.value;
-    final saved = current?.saved[chapterId];
-    if (current == null || saved == null) return;
+    final record = _records[chapterId];
+    final saved = record?.saved;
+    if (record == null || saved == null) return;
     if (saved.pagesRead == pagesRead && saved.pending == pending) return;
     final updated = saved.copyWith(pagesRead: pagesRead, pending: pending);
-    _write(current.copyWith(saved: {...current.saved, chapterId: updated}));
-    await ref.read(downloadsServiceProvider).writeMeta(updated);
+    await _writeSavedCopy(record, updated);
   }
 
-  /// The server has taken [sent]: the copy no longer holds it.
-  ///
-  /// Nothing to do where the copy has moved on since, which is the ordinary
-  /// case in a chapter being read: a page turned while a post was in flight
-  /// has already written a newer number over this one, and clearing that
-  /// would lose the newer one instead.
+  /// The server has taken [sent]; do not clear a newer page written meanwhile.
   Future<void> clearPendingProgress(int chapterId, PendingProgress sent) async {
-    final current = state.value;
-    final saved = current?.saved[chapterId];
-    if (current == null || saved == null || saved.pending != sent) return;
+    final record = _records[chapterId];
+    final saved = record?.saved;
+    if (record == null || saved == null || saved.pending != sent) return;
     final updated = saved.copyWith(clearPending: true);
-    _write(current.copyWith(saved: {...current.saved, chapterId: updated}));
-    await ref.read(downloadsServiceProvider).writeMeta(updated);
+    await _writeSavedCopy(record, updated);
   }
 
-  /// Sends progress the server has not been told: the page a reader is on,
-  /// with the place within it for a book, out of every copy holding some.
-  ///
-  /// [copies] is whose to send, and is named by a caller that holds them
-  /// before the state does — the store, which has just read them off disk.
-  /// Asked for when a server starts answering, and when the store is read:
-  /// the second is how a journey the app was closed in the middle of reaches
-  /// the server, since nothing else is left running that knows about it.
+  Future<void> _writeSavedCopy(
+    DownloadQueueRecord record,
+    SavedChapter updated,
+  ) async {
+    _records[updated.chapterId] = record.copyWith(
+      request: record.status == DownloadQueueStatus.saved
+          ? updated
+          : record.request,
+      saved: updated,
+    );
+    _writeState();
+    await _service.writeMeta(updated);
+    await _persist();
+  }
+
+  /// Sends progress the server has not been told out of every saved copy.
   Future<void> syncPendingProgress([Iterable<SavedChapter>? copies]) async {
     final KavitaClient client;
     try {
       client = ref.read(kavitaClientProvider);
     } on StateError {
-      return; // signed out: nobody to tell
+      return;
     }
     final holding =
         copies ?? state.value?.saved.values ?? const <SavedChapter>[];
@@ -274,86 +341,82 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         );
         await clearPendingProgress(chapter.chapterId, sending);
       } on DioException catch (error) {
-        // Gone away again: every copy behind this one keeps what it holds,
-        // and the next time the server answers is the next time sending it
-        // is worth trying.
         if (KavitaClient.isUnreachable(error)) return;
-        // Refused rather than out of reach — this one is not going to be
-        // taken, but the copies behind it still get their turn.
       }
     }
   }
 
-  /// What the server now says [chapterId] is made of: the number of pages it
-  /// counts, which a copy was made with a number of its own (ADR-0009).
-  ///
-  /// Where the two disagree the copy is named out of date — never silently
-  /// refetched, and never silently kept, because resuming at the wrong page
-  /// is the one failure that makes a saved copy look broken. It is still
-  /// opened, and still reads. Where the server comes back to the copy's own
-  /// count, the name comes off.
+  /// Records a server page count without silently refreshing the copy.
   Future<void> notePageTotal(int chapterId, int total) async {
-    final current = state.value;
-    final saved = current?.saved[chapterId];
-    if (current == null || saved == null) return;
+    final record = _records[chapterId];
+    final saved = record?.saved;
+    if (record == null || saved == null) return;
     final agree = saved.pages == total;
     if (agree ? !saved.outOfDate : saved.serverPages == total) return;
     final updated = agree
         ? saved.copyWith(clearServerPages: true)
         : saved.copyWith(serverPages: total);
-    _write(current.copyWith(saved: {...current.saved, chapterId: updated}));
-    await ref.read(downloadsServiceProvider).writeMeta(updated);
+    await _writeSavedCopy(record, updated);
   }
 
-  void cancel(int chapterId) {
-    _cancelTokens[chapterId]?.cancel('cancelled by user');
+  Future<void> cancel(int chapterId) async {
+    if (!await _ready()) return;
+    final record = _records[chapterId];
+    if (record == null || !record.isInFlight) return;
+    _userCancelled.add(chapterId);
+    final token = _cancelTokens[chapterId];
+    if (token != null) {
+      token.cancel('cancelled by user');
+      await _waiters[chapterId]?.future;
+      return;
+    }
+    _restoreOrRemove(record);
+    await _persist();
+    _writeState();
+    _userCancelled.remove(chapterId);
+    _complete(chapterId);
   }
 
   Future<void> remove(int chapterId) async {
-    await ref.read(downloadsServiceProvider).remove(chapterId);
-    final current = state.value;
-    if (current == null) return;
-    _write(
-      current.copyWith(
-        saved: {...current.saved}..remove(chapterId),
-        failed: {...current.failed}..remove(chapterId),
-      ),
-    );
+    final record = _records[chapterId];
+    if (record?.isInFlight ?? false) await cancel(chapterId);
+    await _service.remove(chapterId);
+    _records.remove(chapterId);
+    await _persist();
+    _writeState();
   }
 
-  void _setProgress(int chapterId, double progress) {
-    final current = state.value;
-    if (current == null || !current.inFlight.containsKey(chapterId)) return;
-    _write(
-      current.copyWith(inFlight: {...current.inFlight, chapterId: progress}),
-    );
-  }
-
-  void _finish(int chapterId, {SavedChapter? saved, bool failed = false}) {
-    final current = state.value;
-    if (current == null) return;
-    // Built with statements on purpose: `cond ? {...} : {...}..remove(id)`
-    // applies the cascade to *both* branches.
-    final nextFailed = {...current.failed};
-    if (failed) {
-      nextFailed.add(chapterId);
+  void _restoreOrRemove(DownloadQueueRecord record) {
+    final id = record.request.chapterId;
+    if (record.saved case final saved?) {
+      _records[id] = DownloadQueueRecord.completed(
+        saved,
+        priority: record.priority,
+      );
     } else {
-      nextFailed.remove(chapterId);
+      _records.remove(id);
     }
-    _write(
-      current.copyWith(
-        saved: saved == null
-            ? current.saved
-            : {...current.saved, chapterId: saved},
-        inFlight: {...current.inFlight}..remove(chapterId),
-        failed: nextFailed,
-      ),
-    );
   }
 
-  void _write(DownloadsState next) {
-    if (_disposed) return;
-    state = AsyncData(next);
+  Future<bool> _ready() async {
+    if (state.value != null) return true;
+    try {
+      await future;
+      return !_disposed;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<void> _persist() => _service.writeQueue(_records);
+
+  void _writeState() {
+    if (!_disposed) state = AsyncData(DownloadsState.fromQueue(_records));
+  }
+
+  void _complete(int chapterId) {
+    final waiter = _waiters.remove(chapterId);
+    if (waiter != null && !waiter.isCompleted) waiter.complete();
   }
 }
 
