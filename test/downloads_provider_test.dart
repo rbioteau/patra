@@ -18,6 +18,8 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   int rejected = 0;
   int active = 0;
   int maxActive = 0;
+  int? failOnPage;
+  final requestedPages = <int>[];
 
   /// Every progress post the device has sent: the chapter, the page and — for
   /// a book — the place within it.
@@ -62,6 +64,11 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
         (options.queryParameters['apiKey'] as String).isEmpty) {
       rejected++;
       return ResponseBody.fromBytes(const [], 400);
+    }
+    final page = int.parse('${options.queryParameters['page']}');
+    requestedPages.add(page);
+    if (page == failOnPage) {
+      return ResponseBody.fromBytes(const [], 500);
     }
     active++;
     if (active > maxActive) maxActive = active;
@@ -270,6 +277,38 @@ void main() {
     expect(state.saved, isEmpty);
     expect(state.inFlight, isEmpty);
     expect(state.failed, contains(12), reason: 'the pill offers a retry');
+  });
+
+  test('retry fetches only pages the failed partial is missing', () async {
+    adapter.failOnPage = 1;
+    await container.read(downloadsProvider.notifier).save(_chapter);
+
+    final service = DownloadsService(root: root, profileId: _profileId);
+    final partial = File(
+      '${(await service.chapterDir(12)).path}/'
+      '${DownloadsService.stagingDirName}/'
+      '${DownloadsService.pageFileName(0)}',
+    );
+    expect(partial.existsSync(), isTrue);
+    final firstWrite = partial.lastModifiedSync();
+    expect(adapter.requestedPages, [0, 1]);
+    container.dispose();
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+    expect(
+      (await restarted.read(downloadsProvider.future)).failed,
+      contains(12),
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    adapter
+      ..failOnPage = null
+      ..requestedPages.clear();
+    await restarted.read(downloadsProvider.notifier).save(_chapter);
+
+    expect(adapter.requestedPages, [1, 2]);
+    expect((await service.pageFile(12, 0)).lastModifiedSync(), firstWrite);
+    expect(restarted.read(downloadsProvider).value!.saved, contains(12));
   });
 
   test('a failed download is still failed after a restart', () async {

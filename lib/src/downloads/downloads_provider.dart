@@ -164,7 +164,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         existing?.status == DownloadQueueStatus.saved) {
       return;
     }
-    await _enqueue(chapter, saved: existing?.saved);
+    await _enqueue(chapter, saved: existing?.saved, resume: existing);
   }
 
   /// Stores [chapter] again over its existing copy. A failed or cancelled
@@ -178,12 +178,14 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     await _enqueue(
       chapter.copyWith(pages: chapter.serverPages ?? chapter.pages),
       saved: saved,
+      resume: existing,
     );
   }
 
   Future<void> _enqueue(
     SavedChapter chapter, {
     required SavedChapter? saved,
+    DownloadQueueRecord? resume,
   }) async {
     final id = chapter.chapterId;
     final waiter = Completer<void>();
@@ -193,6 +195,12 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       saved: saved,
       status: DownloadQueueStatus.queued,
       priority: _nextPriority++,
+      completedPages: resume?.status == DownloadQueueStatus.saved
+          ? 0
+          : resume?.completedPages ?? 0,
+      totalPages: resume?.status == DownloadQueueStatus.saved
+          ? 0
+          : resume?.totalPages ?? 0,
     );
     await _persist();
     _writeState();
@@ -241,6 +249,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
           await _persist();
           _writeState();
         },
+        knownTotalPages: queued.totalPages > 0 ? queued.totalPages : null,
         cancelToken: cancelToken,
       );
       _records[id] = DownloadQueueRecord.completed(
@@ -254,6 +263,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       final cancelled =
           error is DioException && error.type == DioExceptionType.cancel;
       if (cancelled && _userCancelled.contains(id)) {
+        await _service.discardPartial(id);
         if (current.saved case final saved?) {
           _records[id] = DownloadQueueRecord.completed(
             saved,
@@ -370,6 +380,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       await _waiters[chapterId]?.future;
       return;
     }
+    await _service.discardPartial(chapterId);
     _restoreOrRemove(record);
     await _persist();
     _writeState();
