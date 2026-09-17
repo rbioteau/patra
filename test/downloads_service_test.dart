@@ -193,7 +193,7 @@ void main() {
     final saved = await service.download(
       client: _client(adapter),
       chapter: _chapter,
-      onProgress: progress.add,
+      onProgress: (completed, total) => progress.add(completed / total),
     );
 
     expect(adapter.requests, 3);
@@ -215,7 +215,7 @@ void main() {
     await service.download(
       client: _client(_PageAdapter()),
       chapter: _chapter,
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
 
     final saved = await service.scan();
@@ -232,7 +232,7 @@ void main() {
       service.download(
         client: _client(adapter),
         chapter: _chapter,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       ),
       throwsA(isA<DioException>()),
     );
@@ -250,7 +250,7 @@ void main() {
       await service.download(
         client: _client(_PageAdapter()),
         chapter: _chapter,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       );
       final before = File('${(await service.chapterDir(42)).path}/meta.json')
           .readAsStringSync();
@@ -259,7 +259,7 @@ void main() {
         service.download(
           client: _client(_PageAdapter(failOnPage: 1)),
           chapter: _chapter,
-          onProgress: (_) {},
+          onProgress: (_, _) {},
         ),
         throwsA(isA<DioException>()),
       );
@@ -304,7 +304,7 @@ void main() {
     await service.download(
       client: _client(_PageAdapter()),
       chapter: _chapter,
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
 
     await service.remove(42);
@@ -320,8 +320,8 @@ void main() {
     final download = service.download(
       client: _client(adapter),
       chapter: _chapter,
-      onProgress: (progress) {
-        if (progress >= 1 / 3) cancelToken.cancel('user');
+      onProgress: (completed, _) {
+        if (completed >= 1) cancelToken.cancel('user');
       },
       cancelToken: cancelToken,
     );
@@ -334,7 +334,7 @@ void main() {
     await service.download(
       client: _client(_PageAdapter()),
       chapter: _chapter,
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
 
     final dir = await service.chapterDir(42);
@@ -348,12 +348,12 @@ void main() {
     await service.download(
       client: _client(_PageAdapter()),
       chapter: _chapter,
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
     await lea.download(
       client: _client(_PageAdapter()),
       chapter: _chapter.copyWith(pagesRead: 2),
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
 
     // Each reads their own copy back, with their own progress.
@@ -372,7 +372,7 @@ void main() {
       await each.download(
         client: _client(_PageAdapter()),
         chapter: _chapter,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       );
     }
 
@@ -399,7 +399,7 @@ void main() {
     await lea.download(
       client: _client(_PageAdapter()),
       chapter: _chapter,
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
 
     expect(await service.scan(), isEmpty);
@@ -411,7 +411,7 @@ void main() {
     await service.download(
       client: _client(_PageAdapter()),
       chapter: _chapter,
-      onProgress: (_) {},
+      onProgress: (_, _) {},
     );
 
     final mine = await service.savedTotals();
@@ -430,7 +430,7 @@ void main() {
       await each.download(
         client: _client(_PageAdapter()),
         chapter: _chapter,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       );
     }
 
@@ -451,7 +451,7 @@ void main() {
       final saved = await service.download(
         client: _client(adapter),
         chapter: _book,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       );
 
       // How long the book is is the book's to say, not the chapter's: the
@@ -486,7 +486,7 @@ void main() {
       await service.download(
         client: _client(_BookAdapter()),
         chapter: _book,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       );
 
       final saved = (await service.scan())[_bookId]!;
@@ -500,7 +500,7 @@ void main() {
         service.download(
           client: _client(_BookAdapter(failOnPage: 2)),
           chapter: _book,
-          onProgress: (_) {},
+          onProgress: (_, _) {},
         ),
         throwsA(isA<DioException>()),
       );
@@ -516,7 +516,7 @@ void main() {
       final saved = await service.download(
         client: _client(adapter),
         chapter: _book,
-        onProgress: (_) {},
+        onProgress: (_, _) {},
       );
 
       expect(saved.pages, 3);

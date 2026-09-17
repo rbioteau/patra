@@ -53,7 +53,9 @@ class SavePill extends ConsumerWidget {
     final downloads = ref.watch(downloadsProvider).value;
     final progress = downloads?.inFlight[request.chapterId];
     final saved = downloads?.saved.containsKey(request.chapterId) ?? false;
-    final failed = downloads?.failed.contains(request.chapterId) ?? false;
+    final retryable =
+        (downloads?.failed.contains(request.chapterId) ?? false) ||
+        (downloads?.interrupted.contains(request.chapterId) ?? false);
 
     if (progress != null) {
       return _Pill(
@@ -88,9 +90,9 @@ class SavePill extends ConsumerWidget {
     // A failed download says so and offers the retry, instead of quietly
     // reverting to "Save" as if nothing had happened.
     return _Pill(
-      label: failed ? l10n.retry : l10n.savePill,
-      icon: failed ? Icons.refresh : Icons.save_alt,
-      color: failed ? patraDanger : patraTextMuted,
+      label: retryable ? l10n.retry : l10n.savePill,
+      icon: retryable ? Icons.refresh : Icons.save_alt,
+      color: retryable ? patraDanger : patraTextMuted,
       onTap: () => ref.read(downloadsProvider.notifier).save(request),
     );
   }
