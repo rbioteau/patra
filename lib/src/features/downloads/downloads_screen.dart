@@ -280,14 +280,11 @@ class _DownloadingRow extends ConsumerWidget {
         children: [
           // The cover of what is being fetched, which is the whole of how a
           // reader recognises a row in a batch of five. It comes from the
-          // server, as the row's own does, and it carries the download's
-          // progress on its bottom edge the way every cover in the app
-          // carries the progress of what it pictures.
-          _CopyCover(
-            request: request,
-            progress: hasPageTotal ? progress : null,
-            color: patraOffline,
-          ),
+          // server, as the row's own does, and it is left clean: the row
+          // carries the download's progress on its trailing edge, where the
+          // heading above it is, and two bars for one fetch would only say
+          // the same thing twice.
+          _CopyCover(request: request),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -308,19 +305,21 @@ class _DownloadingRow extends ConsumerWidget {
                     style: PatraText.metadata(size: tablet ? 12 : 11),
                   ),
                 ],
-                const SizedBox(height: 7),
-                // A bar under a thing means how far through that thing one is
-                // — the rule every chapter row and library tile obeys — in the
-                // offline blue every download wears.
-                _CopyProgress(
-                  value: hasPageTotal ? progress : null,
-                  color: patraOffline,
-                  width: 180,
-                ),
               ],
             ),
           ),
           const SizedBox(width: 10),
+          // On the trailing edge, where the section heading above these rows
+          // is: a column of copies in flight is read down that one edge,
+          // rather than across rows whose bars begin wherever their titles
+          // happen to end. A width of its own, so every bar in the section
+          // ends on the same line however long the titles beside it are.
+          if (hasPageTotal)
+            _CopyProgress(
+              value: progress,
+              color: patraOffline,
+              width: tablet ? 120 : 72,
+            ),
           if (!hasPageTotal)
             Text(
               l10n.downloadsWaiting,
@@ -344,24 +343,16 @@ class _DownloadingRow extends ConsumerWidget {
 ///
 /// Fetched from the server, as the row's own cover is, and filed under the
 /// shared cache key, so a chapter being fetched and the same chapter already
-/// on the device are one picture on the disk rather than two. What is pinned
-/// to its bottom edge is the download's progress, in the offline blue every
-/// download wears — a bar on a cover says how far through the thing
-/// pictured it is, and here the thing pictured is the fetch.
+/// on the device are one picture on the disk rather than two. It carries no
+/// bar of its own: a download's progress is read on the trailing edge, where
+/// the heading above these rows is, and a bar pinned to the cover as well
+/// would say the same thing twice in two places.
 class _CopyCover extends ConsumerWidget {
-  const _CopyCover({
-    required this.request,
-    required this.progress,
-    required this.color,
-  });
+  const _CopyCover({required this.request});
 
-  /// The copy being fetched, which names the series and the chapter the
-  /// cover belongs to.
+  /// The copy not yet on the device, which names the series and the chapter
+  /// the cover belongs to.
   final SavedChapter request;
-
-  /// 0..1, or null where there is no page total to be a fraction of yet.
-  final double? progress;
-  final Color color;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -370,30 +361,12 @@ class _CopyCover extends ConsumerWidget {
     return SizedBox(
       width: tablet ? rowCoverWidthTablet : rowCoverWidth,
       height: tablet ? rowCoverHeightTablet : rowCoverHeight,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          CoverImage(
-            url: client.chapterCoverUrl(request.chapterId),
-            headers: client.imageHeaders,
-            seriesId: request.seriesId,
-            seriesName: request.seriesName,
-            radius: radiusThumb,
-          ),
-          // Nothing is drawn where there is nothing to report: a copy that
-          // has not started, or one waiting to be given another go, keeps its
-          // cover clean rather than wearing a bar that sweeps and says no
-          // more than the heading above it already does.
-          if (progress != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(radiusThumb),
-              child: _CopyProgress(
-                value: progress,
-                color: color,
-                width: double.infinity,
-              ),
-            ),
-        ],
+      child: CoverImage(
+        url: client.chapterCoverUrl(request.chapterId),
+        headers: client.imageHeaders,
+        seriesId: request.seriesId,
+        seriesName: request.seriesName,
+        radius: radiusThumb,
       ),
     );
   }
@@ -457,7 +430,7 @@ class _PendingRow extends ConsumerWidget {
           // The same cover the row would have once it has landed: what is
           // waiting to be given another go is recognisable or it is not
           // worth listing.
-          _CopyCover(request: request, progress: null, color: patraDanger),
+          _CopyCover(request: request),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

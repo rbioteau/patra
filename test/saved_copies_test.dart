@@ -345,9 +345,9 @@ void main() {
 
     expect(find.text('DOWNLOADING'), findsOneWidget);
     expect(find.text('1 of 4 · 44%'), findsOneWidget);
-    // Each queued copy is pictured: the cover of what is being fetched, not
-    // a spinner where its cover will be. Filed under the shared cache key, so
-    // the picture is the one the row will draw when it has landed.
+    // Each copy on its way is pictured: the cover of what is being fetched,
+    // not a spinner where its cover will be. Filed under the shared cache
+    // key, so the picture is the one the row will draw when it has landed.
     expect(
       tester
           .widgetList<CoverImage>(find.byType(CoverImage))
@@ -358,17 +358,29 @@ void main() {
         contains('/api/Image/chapter-cover?chapterId=10'),
       ],
     );
-    // Progress is drawn rather than spelled out: on the cover, and under the
-    // title, the same fraction twice for each copy on its way.
+    // Progress is read on the trailing edge, where the heading above these
+    // rows is: one bar per copy, to the right of the title rather than
+    // starting wherever the title happens to end, and every one of them
+    // ending on the same line — however unlike the titles beside them are.
+    final bars = tester
+        .widgetList<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator),
+        )
+        .toList();
+    expect(bars.map((bar) => bar.value), [0.5, 0.25]);
+    final ends = {
+      for (final bar in bars) tester.getTopRight(find.byWidget(bar)).dx,
+    };
     expect(
-      tester
-          .widgetList<LinearProgressIndicator>(
-            find.byType(LinearProgressIndicator),
-          )
-          .map((bar) => bar.value),
-      [0.5, 0.5, 0.25, 0.25],
+      ends,
+      hasLength(1),
+      reason: 'every bar in the section ends on the same line',
     );
-    expect(find.text('Children of Dune'), findsOneWidget);
+    expect(
+      ends.single,
+      greaterThan(tester.getTopRight(find.text('Children of Dune')).dx),
+      reason: 'the bar is on the trailing edge, past the title',
+    );
     expect(find.text('God Emperor of Dune'), findsOneWidget);
     expect(find.text('NEEDS ATTENTION'), findsOneWidget);
     expect(find.text('Heretics of Dune'), findsOneWidget);
