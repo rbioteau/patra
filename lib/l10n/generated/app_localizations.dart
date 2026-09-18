@@ -824,6 +824,48 @@ abstract class AppLocalizations {
   /// **'Refreshing…'**
   String get refreshingCopy;
 
+  /// Downloads tab section heading over the copies still being fetched
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get downloadsQueueSection;
+
+  /// Downloads tab section heading over copies that failed or stopped with the app, which stay listed until they are retried
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get downloadsPendingSection;
+
+  /// One line answering where a batch has got to: how many of its copies are on the device, and how far through the pages of the whole batch the work is. The percentage is over pages, not copies, which is why it can move without the count in front of it.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} · {percent}%'**
+  String downloadsBatchSummary(int done, int total, int percent);
+
+  /// What a queued copy says instead of a percentage: it has pages to fetch and none fetched yet, so there is nothing to count
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get downloadsWaiting;
+
+  /// What a copy the app was closed in the middle of says: it keeps the pages it had, and a retry fetches only what is missing
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get downloadsStoppedShort;
+
+  /// What a copy whose fetch was refused or failed says, beside its Retry control
+  ///
+  /// In en, this message translates to:
+  /// **'Could not finish'**
+  String get downloadsFailed;
+
+  /// Tooltip of the cancel control on one in-flight copy in the Downloads tab; worded with the title because the row carries no room for the word, and a glyph says nothing to a screen reader
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel {title}'**
+  String cancelDownload(String title);
+
   /// No description provided for @serverUnreachable.
   ///
   /// In en, this message translates to:

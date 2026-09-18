@@ -49,13 +49,29 @@ class SavePill extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Each of the three states is watched as the one fact it is about, and
+    // the percentage as the one number that moves: a page landing on any
+    // other chapter — or on this one — no longer hands every row on the
+    // screen a new state to rebuild from.
+    final progress = ref.watch(
+      downloadRecordProvider(request.chapterId).select(
+        (record) => record?.isInFlight ?? false ? record?.progress : null,
+      ),
+    );
+    final saved = ref.watch(
+      downloadMembershipProvider.select(
+        (m) => m.saved.contains(request.chapterId),
+      ),
+    );
+    final retryable = ref.watch(
+      downloadsProvider.select(
+        (state) =>
+            (state.value?.failed.contains(request.chapterId) ?? false) ||
+            (state.value?.interrupted.contains(request.chapterId) ?? false),
+      ),
+    );
+
     final l10n = AppLocalizations.of(context);
-    final downloads = ref.watch(downloadsProvider).value;
-    final progress = downloads?.inFlight[request.chapterId];
-    final saved = downloads?.saved.containsKey(request.chapterId) ?? false;
-    final retryable =
-        (downloads?.failed.contains(request.chapterId) ?? false) ||
-        (downloads?.interrupted.contains(request.chapterId) ?? false);
 
     if (progress != null) {
       return _Pill(

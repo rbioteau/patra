@@ -133,6 +133,13 @@
   "@refreshingCopy": {
     "description": "What the refresh button becomes while the copy is being stored again"
   },
+  "downloadsQueueSection": "En cours de téléchargement",
+  "downloadsPendingSection": "À reprendre",
+  "downloadsBatchSummary": "{done} sur {total} · {percent} %",
+  "downloadsWaiting": "En attente",
+  "downloadsStoppedShort": "Interrompu",
+  "downloadsFailed": "N'a pas pu finir",
+  "cancelDownload": "Annuler {title}",
   "serverUnreachable": "Serveur inaccessible",
   "offlineBanner": "Serveur inaccessible — mode hors ligne. Les chapitres enregistrés restent lisibles.",
   "homeOfflineWithSaved": "Le serveur est hors de portée. Ce que vous avez enregistré est toujours là.",
