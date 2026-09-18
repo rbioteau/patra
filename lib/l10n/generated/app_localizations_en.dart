@@ -522,6 +522,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadsFailed => 'Could not finish';
 
   @override
+  String get downloadsPaused => 'Paused';
+
+  @override
+  String get resumeDownload => 'Resume';
+
+  @override
+  String get resumeDownloadsTitle => 'Resume downloads?';
+
+  @override
+  String resumeDownloadsBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count downloads stopped when the app closed.',
+      one: 'One download stopped when the app closed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get resumeDownloadsLater => 'Not now';
+
+  @override
   String cancelDownload(String title) {
     return 'Cancel $title';
   }

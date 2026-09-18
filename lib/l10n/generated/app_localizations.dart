@@ -860,6 +860,36 @@ abstract class AppLocalizations {
   /// **'Could not finish'**
   String get downloadsFailed;
 
+  /// What a copy the app deliberately stopped says — it left the foreground, or the reader left their profile. It keeps the pages it has and goes on by itself when the app, or the profile, comes back
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get downloadsPaused;
+
+  /// Control on a paused copy that sends it on again from the pages it kept; also the answer that resumes everything a cold start found stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get resumeDownload;
+
+  /// Title of the one question a cold start asks, where the app was closed with copies still being fetched. Nothing is fetched until it is answered
+  ///
+  /// In en, this message translates to:
+  /// **'Resume downloads?'**
+  String get resumeDownloadsTitle;
+
+  /// The cold-start question, naming how many copies are involved; each one keeps the pages it already has
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{One download stopped when the app closed.} other{{count} downloads stopped when the app closed.}}'**
+  String resumeDownloadsBody(int count);
+
+  /// Dismisses the cold-start question: what was paused stops being resumable and waits for a retry, so nothing is fetched behind the reader's back
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get resumeDownloadsLater;
+
   /// Tooltip of the cancel control on one in-flight copy in the Downloads tab; worded with the title because the row carries no room for the word, and a glyph says nothing to a screen reader
   ///
   /// In en, this message translates to:

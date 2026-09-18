@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../l10n/generated/app_localizations.dart';
 import 'auth/session.dart';
 import 'features/downloads/downloads_screen.dart';
+import 'features/downloads/resume_prompt.dart';
 import 'features/home/home_screen.dart';
 import 'features/launch/launch_animation.dart';
 import 'features/library/library_screen.dart';
@@ -13,6 +14,7 @@ import 'features/profiles/profile_picker_screen.dart';
 import 'features/reader/reader_screen.dart';
 import 'features/series/series_detail_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'lifecycle.dart';
 import 'routes.dart';
 import 'settings/profile_preferences.dart';
 import 'theme.dart';
@@ -199,7 +201,10 @@ class _PatraShell extends StatelessWidget {
     final showLabels = _labelsFit(context, labels);
 
     return Scaffold(
-      body: shell,
+      // Around the shell rather than inside one tab: the one question a cold
+      // start asks belongs to the app, not to the tab that lists the copies —
+      // it has to be asked before the reader has done anything at all.
+      body: DownloadsResumePrompt(child: shell),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: patraBorder)),
@@ -247,11 +252,36 @@ class _PatraShell extends StatelessWidget {
   }
 }
 
-class PatraApp extends ConsumerWidget {
+class PatraApp extends ConsumerStatefulWidget {
   const PatraApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PatraApp> createState() => _PatraAppState();
+}
+
+class _PatraAppState extends ConsumerState<PatraApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// The only place the real lifecycle enters the app: everything downstream
+  /// reads [appLifecycleProvider], which a test reports into directly.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    ref.read(appLifecycleProvider.notifier).report(state);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Patra',
       // Off because the top-right corner is not free: that is where an app

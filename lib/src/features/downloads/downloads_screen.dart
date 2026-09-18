@@ -12,6 +12,7 @@ import '../../auth/session.dart';
 import '../../format.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
+import '../../widgets/download_stop.dart';
 import '../../widgets/read_mark.dart';
 
 class DownloadsScreen extends ConsumerWidget {
@@ -388,12 +389,15 @@ class _CopyCover extends ConsumerWidget {
   }
 }
 
-/// Copies that stopped before they were finished, which stay listed with a
-/// Retry instead of living in memory and disappearing.
+/// Copies that stopped before they were finished, which stay listed with the
+/// control that starts them again instead of living in memory and
+/// disappearing.
 ///
 /// A failure seen from anywhere but the series screen, or after a restart, is
 /// a failure the reader never saw — so it is named here, in the one tab that
-/// is about what is on the device.
+/// is about what is on the device. A paused copy is listed here too, in the
+/// app's own blue and worded as paused: it is not missing, and it is not a
+/// failure.
 class _PendingSection extends ConsumerWidget {
   const _PendingSection();
 
@@ -435,6 +439,11 @@ class _PendingRow extends ConsumerWidget {
     final request = record.request;
     final tablet = isTabletLayout(context);
     final title = request.resolvedTitle;
+    // What this copy stopped as: a pause is the app's own doing, where a
+    // failure and a process that died are two other facts. One place draws
+    // all three, so this row and the row's own pill cannot disagree.
+    final stop = DownloadStop.of(record.status, l10n);
+    if (stop == null) return const SizedBox.shrink();
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -446,7 +455,7 @@ class _PendingRow extends ConsumerWidget {
           // The same cover the row would have once it has landed: what is
           // waiting to be given another go is recognisable or it is not
           // worth listing. Left clean — nothing is moving on it.
-          _CopyCover(request: request, progress: null, color: patraDanger),
+          _CopyCover(request: request, progress: null, color: stop.color),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -468,16 +477,11 @@ class _PendingRow extends ConsumerWidget {
                   ),
                 ],
                 const SizedBox(height: 3),
-                // The two are different facts: one was refused or lost the
-                // server, the other lost the app. Both keep their pages and
-                // both are one tap from going on.
                 Text(
-                  record.status == DownloadQueueStatus.failed
-                      ? l10n.downloadsFailed
-                      : l10n.downloadsStoppedShort,
+                  stop.state,
                   style: PatraText.metadata(
                     size: tablet ? 12 : 11,
-                    color: patraDanger,
+                    color: stop.color,
                   ),
                 ),
               ],
@@ -497,17 +501,17 @@ class _PendingRow extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: patraDanger.withValues(alpha: .14),
+                color: stop.color.withValues(alpha: .14),
                 borderRadius: BorderRadius.circular(radiusPill),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.refresh, size: 14, color: patraDanger),
+                  Icon(stop.icon, size: 14, color: stop.color),
                   const SizedBox(width: 7),
                   Text(
-                    l10n.retry,
-                    style: PatraText.metadata(color: patraDanger),
+                    stop.action,
+                    style: PatraText.metadata(color: stop.color),
                   ),
                 ],
               ),
