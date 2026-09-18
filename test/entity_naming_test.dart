@@ -130,6 +130,28 @@ void main() {
     test('an untitled chapter is just its number', () {
       expect(LibraryType.manga.chapterTitle(fr, chapter()), 'Chapitre 12');
     });
+
+    test('a chapter with no number is known by its title alone', () {
+      // What a one-shot is: an album, a standalone novel, any file Kavita
+      // parsed no number out of. The unit used to be drawn around the
+      // number that is not there — "Chapter  - Le Combat ordinaire" — which
+      // is the same mistake a special would make without its own rule.
+      final oneShot = chapter(range: '', title: 'Le Combat ordinaire');
+      expect(
+        LibraryType.comic.chapterTitle(en, oneShot),
+        'Le Combat ordinaire',
+      );
+      expect(LibraryType.book.chapterTitle(fr, oneShot), 'Le Combat ordinaire');
+      // Kavita's own sentinel is not a number either, and never reaches a
+      // label.
+      expect(
+        LibraryType.manga.chapterTitle(
+          en,
+          chapter(range: '-100000', titleName: 'Le Combat ordinaire'),
+        ),
+        'Le Combat ordinaire',
+      );
+    });
   });
 
   group('naming what reading resumes at', () {

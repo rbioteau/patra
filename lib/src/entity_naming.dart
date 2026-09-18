@@ -73,7 +73,8 @@ extension LibraryTypeNaming on LibraryType {
       : l10n.seriesContinueVolume(name);
 
   /// The full name of one chapter, following Kavita's rules: a special is
-  /// known only by its title, and a title is *appended* to the number rather
+  /// known only by its title, so is anything else carrying no number of its
+  /// own, and where there is a number the title is *appended* to it rather
   /// than replacing it — but only when it adds something the number does not
   /// already say.
   String chapterTitle(AppLocalizations l10n, Chapter chapter) {
@@ -81,6 +82,15 @@ extension LibraryTypeNaming on LibraryType {
         ? chapter.titleName
         : chapter.title;
     if (chapter.isSpecial) return title;
+    // Nothing numbered to build on: a file Kavita parsed no number out of —
+    // a one-shot album, a standalone novel — is known by its title alone,
+    // the rule a special already follows. Without this the label was built
+    // around the number that is not there: "Chapter  - Le Combat ordinaire",
+    // the unit announcing a number and then not saying one. A title is what
+    // stands in its place, so a chapter carrying neither falls through to
+    // what it always said — a row has to be called something, and Kavita
+    // fills `title` for every file it has ever parsed.
+    if (!chapter.hasNumber && title.isNotEmpty) return title;
 
     final base = numberedChapterLabel(l10n, chapter.range);
     if (title.isEmpty || title == chapter.range || title == base) return base;
