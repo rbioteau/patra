@@ -15,6 +15,7 @@ import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/downloads/downloads_screen.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/read_mark.dart';
 
 import 'test_support.dart';
@@ -344,15 +345,28 @@ void main() {
 
     expect(find.text('DOWNLOADING'), findsOneWidget);
     expect(find.text('1 of 4 · 44%'), findsOneWidget);
-    // Progress is drawn rather than spelled out: the ring on the leading edge
-    // of each row and the bar under its title carry the same fraction.
+    // Each queued copy is pictured: the cover of what is being fetched, not
+    // a spinner where its cover will be. Filed under the shared cache key, so
+    // the picture is the one the row will draw when it has landed.
     expect(
       tester
-          .widgetList<CircularProgressIndicator>(
-            find.byType(CircularProgressIndicator),
+          .widgetList<CoverImage>(find.byType(CoverImage))
+          .map((cover) => cover.url),
+      [
+        contains('/api/Image/chapter-cover?chapterId=8'),
+        contains('/api/Image/chapter-cover?chapterId=9'),
+        contains('/api/Image/chapter-cover?chapterId=10'),
+      ],
+    );
+    // Progress is drawn rather than spelled out: on the cover, and under the
+    // title, the same fraction twice for each copy on its way.
+    expect(
+      tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
           )
-          .map((indicator) => indicator.value),
-      [0.5, 0.25],
+          .map((bar) => bar.value),
+      [0.5, 0.5, 0.25, 0.25],
     );
     expect(find.text('Children of Dune'), findsOneWidget);
     expect(find.text('God Emperor of Dune'), findsOneWidget);
