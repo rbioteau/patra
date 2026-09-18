@@ -523,6 +523,30 @@ class AppLocalizationsFr extends AppLocalizations {
   String get downloadsFailed => 'N\'a pas pu finir';
 
   @override
+  String get downloadsPaused => 'En pause';
+
+  @override
+  String get resumeDownload => 'Reprendre';
+
+  @override
+  String get resumeDownloadsTitle => 'Reprendre les téléchargements ?';
+
+  @override
+  String resumeDownloadsBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count téléchargements se sont arrêtés à la fermeture de l\'application.',
+      one: 'Un téléchargement s\'est arrêté à la fermeture de l\'application.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get resumeDownloadsLater => 'Plus tard';
+
+  @override
   String cancelDownload(String title) {
     return 'Annuler $title';
   }

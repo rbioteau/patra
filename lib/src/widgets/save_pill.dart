@@ -5,6 +5,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../downloads/downloads_provider.dart';
 import '../downloads/downloads_service.dart';
 import '../theme.dart';
+import 'download_stop.dart';
 
 /// Download control for one chapter, in three worded states (never icon-only):
 /// Save → percentage (tap cancels) → Saved (tap removes).
@@ -63,12 +64,13 @@ class SavePill extends ConsumerWidget {
         (m) => m.saved.contains(request.chapterId),
       ),
     );
-    final retryable = ref.watch(
-      downloadsProvider.select(
-        (state) =>
-            (state.value?.failed.contains(request.chapterId) ?? false) ||
-            (state.value?.interrupted.contains(request.chapterId) ?? false),
-      ),
+    // What the copy stopped as, where it stopped at all: a failure and a
+    // pause are both one tap from going on, but they are not the same fact,
+    // and a paused copy that offered a "Retry" would read as something that
+    // went wrong.
+    final stopped = ref.watch(
+      downloadRecordProvider(request.chapterId)
+          .select((record) => record?.status),
     );
 
     final l10n = AppLocalizations.of(context);
@@ -103,13 +105,16 @@ class SavePill extends ConsumerWidget {
         ),
       );
     }
-    // A failed download says so and offers the retry, instead of quietly
-    // reverting to "Save" as if nothing had happened.
+    // A stopped copy says which kind of stop it was and offers the tap that
+    // starts it again, instead of quietly reverting to "Save" as if nothing
+    // had happened.
+    void start() => ref.read(downloadsProvider.notifier).save(request);
+    final stop = DownloadStop.of(stopped, l10n);
     return _Pill(
-      label: retryable ? l10n.retry : l10n.savePill,
-      icon: retryable ? Icons.refresh : Icons.save_alt,
-      color: retryable ? patraDanger : patraTextMuted,
-      onTap: () => ref.read(downloadsProvider.notifier).save(request),
+      label: stop?.action ?? l10n.savePill,
+      icon: stop?.icon ?? Icons.save_alt,
+      color: stop?.color ?? patraTextMuted,
+      onTap: start,
     );
   }
 }

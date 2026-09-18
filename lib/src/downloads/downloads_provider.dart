@@ -3,11 +3,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/kavita_client.dart';
 
 import '../auth/session.dart';
+import '../features/launch/launch_animation.dart';
+import '../lifecycle.dart';
 import 'downloads_service.dart';
 
 /// Chapters the queue may download at once. This starting value is bounded
@@ -18,10 +21,12 @@ class DownloadsState {
   const DownloadsState({
     this.saved = const {},
     this.inFlight = const {},
+    this.paused = const {},
     this.failed = const {},
     this.interrupted = const {},
     this.records = const {},
     this.batchSummary,
+    this.awaitingResume = const {},
   });
 
   /// Chapters fully stored on the device, keyed by chapter id.
@@ -29,6 +34,11 @@ class DownloadsState {
 
   /// Downloads queued or running, chapter id → 0..1.
   final Map<int, double> inFlight;
+
+  /// Copies stopped deliberately — the app left the foreground, or the reader
+  /// left their profile — which keep every page they have and go on by
+  /// themselves when the app, or the profile, comes back.
+  final Set<int> paused;
 
   /// Chapters whose download failed, so a control can offer a retry instead
   /// of silently going back to "Save". A cancel is not a failure.
@@ -47,10 +57,22 @@ class DownloadsState {
   /// The latest batch that still has work or a failure to account for.
   final DownloadBatchSummary? batchSummary;
 
+  /// Copies a **launch** found stopped, waiting for the reader's word before
+  /// anything is fetched.
+  ///
+  /// Empty at every other moment. What is paused inside a running app goes on
+  /// by itself, and what a handover finds is resumed as the profile is
+  /// entered — the one case where the reader has to be asked is the one where
+  /// they have not seen a screen yet.
+  final Set<int> awaitingResume;
+
   int get totalBytes =>
       saved.values.fold(0, (total, chapter) => total + chapter.bytes);
 
-  factory DownloadsState.fromQueue(Map<int, DownloadQueueRecord> records) {
+  factory DownloadsState.fromQueue(
+    Map<int, DownloadQueueRecord> records, {
+    Set<int> awaitingResume = const {},
+  }) {
     final snapshot = Map<int, DownloadQueueRecord>.unmodifiable(records);
     final batches = <int, List<DownloadQueueRecord>>{};
     for (final record in snapshot.values) {
@@ -79,6 +101,10 @@ class DownloadsState {
         for (final entry in snapshot.entries)
           if (entry.value.isInFlight) entry.key: entry.value.progress,
       },
+      paused: {
+        for (final entry in snapshot.entries)
+          if (entry.value.status == DownloadQueueStatus.paused) entry.key,
+      },
       failed: {
         for (final entry in snapshot.entries)
           if (entry.value.status == DownloadQueueStatus.failed) entry.key,
@@ -90,6 +116,7 @@ class DownloadsState {
       batchSummary: latest == null
           ? null
           : DownloadBatchSummary.fromRecords(latest, batches[latest]!),
+      awaitingResume: Set.unmodifiable(awaitingResume),
     );
   }
 }
@@ -173,8 +200,8 @@ class DownloadMembership {
   final Set<int> saved;
   final Set<int> inFlight;
 
-  /// Copies that stopped short — failed, or left unfinished by the app. They
-  /// stay listed until they are retried or removed.
+  /// Copies that stopped short — failed, paused, or left unfinished by the
+  /// app. They stay listed until they are resumed, retried or removed.
   final Set<int> pending;
 
   @override
@@ -268,6 +295,16 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   int? _readingChapterId;
   var _disposed = false;
 
+  /// What a **launch** found stopped and has not yet been given an answer
+  /// about. Nothing in it is fetched: it is the whole of the difference
+  /// between the app opening and the app coming back.
+  final _awaitingResume = <int>{};
+
+  /// Whether this container has read its profile's queue once already. What a
+  /// launch found is the *first* read; a rebuild is the same app reading its
+  /// own work again, and not an opening.
+  var _read = false;
+
   @override
   Future<DownloadsState> build() async {
     ref.onDispose(() {
@@ -298,9 +335,158 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     ref.listen(offlineProvider, (_, offline) {
       if (!offline) unawaited(syncPendingProgress());
     });
-    final next = DownloadsState.fromQueue(_records);
+    // Leaving the foreground pauses every fetch in flight; coming back sends
+    // them on again without asking. `inactive` is not leaving: it is the app
+    // switcher sliding over a screen that is still there, and a copy paused
+    // for that would refetch a page for nothing.
+    ref.listen(appLifecycleProvider, (_, next) {
+      if (next == AppLifecycleState.resumed) {
+        unawaited(_resumePaused());
+      } else if (next != AppLifecycleState.inactive) {
+        _pause();
+      }
+    });
+    // Leaving a profile pauses its queue rather than destroying it. The
+    // container is thrown away when somebody else enters, so a batch that was
+    // running when the reader left has to be stopped, and written down as
+    // stopped, before the container that owns it goes: coming back to the
+    // profile is the reader returning to work they asked for, and it resumes
+    // where they left it.
+    ref.listen(sessionProvider, (_, next) {
+      if (next == null) {
+        _pause();
+      } else {
+        unawaited(_resumePaused());
+      }
+    });
+    // What this container found stopped, on its **first** read of the queue.
+    // A launch is the one case that asks first — the reader has not seen a
+    // screen yet, and going on would fire a batch at a data plan they have
+    // not agreed to spend. Entering a profile that was left with a batch
+    // running is the reader coming back to it, and it goes on by itself.
+    // A later read is neither: it is the same app re-reading its own queue,
+    // and what it finds there is work this process has already decided about.
+    if (!_read) {
+      _read = true;
+      final stopped = {
+        for (final record in _records.values)
+          if (record.status == DownloadQueueStatus.paused ||
+              record.status == DownloadQueueStatus.interrupted)
+            record.request.chapterId,
+      };
+      if (stopped.isNotEmpty) {
+        if (ref.read(isLaunchProvider)) {
+          _awaitingResume
+            ..clear()
+            ..addAll(stopped);
+        } else {
+          unawaited(_resumePaused());
+        }
+      }
+    }
+    final next = DownloadsState.fromQueue(
+      _records,
+      awaitingResume: _awaitingResume,
+    );
     unawaited(syncPendingProgress(next.saved.values));
     return next;
+  }
+
+  /// Stops every fetch in flight and writes each one down as **paused**.
+  ///
+  /// Nothing is discarded: a paused copy keeps every page it has, and a
+  /// resume fetches only what is missing. The requests themselves are
+  /// cancelled rather than left to land — the whole point of pausing is that
+  /// nothing is in flight when the OS takes the app away, or when the
+  /// container that owns the queue is thrown away with somebody else
+  /// entering.
+  void _pause() {
+    if (_disposed) return;
+    final stopped = [
+      for (final entry in _records.entries)
+        if (entry.value.isInFlight) entry.key,
+    ];
+    if (stopped.isEmpty) return;
+    for (final id in stopped) {
+      _records[id] = _records[id]!.copyWith(status: DownloadQueueStatus.paused);
+    }
+    _writeState();
+    unawaited(_persist());
+    for (final id in stopped) {
+      _cancelTokens[id]?.cancel('paused');
+    }
+  }
+
+  /// Sends every paused copy on again, from the pages it kept.
+  ///
+  /// Nothing is asked first: a pause is the app's own doing, and a reader who
+  /// comes back to a batch wants it running. What waits for a word is
+  /// [_awaitingResume], and only a launch fills that.
+  ///
+  /// Only while somebody is reading, though. A queue belongs to a profile,
+  /// and a device sitting on the picker has none: the app returning to the
+  /// foreground is not a reader returning to their batch, and firing one at
+  /// the server then would be the coin toss this whole rule exists to avoid.
+  /// A profile's queue goes on when that profile is entered, which is the
+  /// session listener's doing.
+  Future<void> _resumePaused() async {
+    if (_awaitingResume.isNotEmpty) return;
+    if (ref.read(sessionProvider) == null) return;
+    if (!await _ready()) return;
+    if (_awaitingResume.isNotEmpty) return;
+    final paused = [
+      for (final entry in _records.entries)
+        if (entry.value.status == DownloadQueueStatus.paused) entry.key,
+    ];
+    if (!_requeue(paused)) return;
+    await _persist();
+    _writeState();
+    _drain();
+  }
+
+  /// The reader's word on the question a launch asked: everything the app
+  /// left stopped goes again, from the pages it kept.
+  Future<void> resumeStopped() => _answerLaunchPrompt(resume: true);
+
+  /// The reader's "not now": what was paused stops being resumable and waits
+  /// for a retry like anything else that stopped with the app, so nothing
+  /// goes on fetching behind their back.
+  Future<void> leaveStopped() => _answerLaunchPrompt(resume: false);
+
+  Future<void> _answerLaunchPrompt({required bool resume}) async {
+    if (_awaitingResume.isEmpty) return;
+    final waiting = {..._awaitingResume};
+    _awaitingResume.clear();
+    if (!await _ready()) return;
+    if (resume) {
+      _requeue(waiting);
+    } else {
+      for (final id in waiting) {
+        final record = _records[id];
+        if (record?.status != DownloadQueueStatus.paused) continue;
+        _records[id] = record!.copyWith(
+          status: DownloadQueueStatus.interrupted,
+        );
+      }
+    }
+    await _persist();
+    _writeState();
+    if (resume) _drain();
+  }
+
+  /// Turns [ids] back into queued work, keeping each one's pages, its
+  /// priority and the batch it was asked for as part of. False where none of
+  /// them was still there to go again.
+  bool _requeue(Iterable<int> ids) {
+    var changed = false;
+    for (final id in ids) {
+      final record = _records[id];
+      if (record == null || record.isInFlight) continue;
+      if (record.status == DownloadQueueStatus.saved) continue;
+      _records[id] = record.copyWith(status: DownloadQueueStatus.queued);
+      changed = true;
+    }
+    return changed;
   }
 
   /// Enqueues [chapter] after its queue record is safely on disk. The future
@@ -517,11 +703,14 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
           _records.remove(id);
         }
       } else {
-        _records[id] = current.copyWith(
-          status: cancelled
-              ? DownloadQueueStatus.interrupted
-              : DownloadQueueStatus.failed,
-        );
+        // A copy that was paused on its way out stays paused: the cancelled
+        // request is how a pause takes effect, not a failure of its own.
+        final stopped = current.status == DownloadQueueStatus.paused
+            ? DownloadQueueStatus.paused
+            : cancelled
+            ? DownloadQueueStatus.interrupted
+            : DownloadQueueStatus.failed;
+        _records[id] = current.copyWith(status: stopped);
       }
       await _persist();
       _writeState();
@@ -670,7 +859,11 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       _service.writeQueueAsynchronously(_records);
 
   void _writeState() {
-    if (!_disposed) state = AsyncData(DownloadsState.fromQueue(_records));
+    if (!_disposed) {
+      state = AsyncData(
+        DownloadsState.fromQueue(_records, awaitingResume: _awaitingResume),
+      );
+    }
   }
 
   void _complete(int chapterId) {
@@ -711,7 +904,7 @@ final downloadMembershipProvider = Provider<DownloadMembership>((ref) {
   return DownloadMembership(
     saved: state?.saved.keys.toSet() ?? const {},
     inFlight: state?.inFlight.keys.toSet() ?? const {},
-    pending: {...?state?.failed, ...?state?.interrupted},
+    pending: {...?state?.failed, ...?state?.interrupted, ...?state?.paused},
   );
 });
 

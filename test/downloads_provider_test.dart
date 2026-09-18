@@ -3,12 +3,19 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/src/api/client_identity.dart';
 import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/features/launch/launch_animation.dart';
+import 'package:patra/src/lifecycle.dart';
+
+import 'test_support.dart';
 
 /// Mimics Kavita: `/api/Reader/image` binds `apiKey` as a non-nullable
 /// parameter, so a request without it is answered 400 — the bearer token is
@@ -42,6 +49,10 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   /// Holds every page request open, so a test can look at the state while
   /// downloads are still running.
   Future<void>? gate;
+
+  /// Which pages [gate] holds, where a test wants a copy to stop with some of
+  /// its pages already written. Null — the default — holds every one of them.
+  Set<int>? holdPages;
 
   @override
   Future<ResponseBody> fetch(
@@ -89,7 +100,9 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
     }
     if (active > maxActive) maxActive = active;
     try {
-      final requestGate = chapterGates[chapterId] ?? gate;
+      final requestGate =
+          chapterGates[chapterId] ??
+          (holdPages == null || holdPages!.contains(page) ? gate : null);
       if (requestGate != null) {
         final cancelled = cancelFuture == null
             ? false
@@ -166,11 +179,35 @@ SavedChapter _chapterWithId(int chapterId) => SavedChapter(
 const _profileId = 'https://kavita.test#1';
 const _otherProfileId = 'https://kavita.test#2';
 
+/// The face this device holds, for the tests about leaving a profile and
+/// coming back to it.
+const _profile = Profile(
+  baseUrl: 'https://kavita.test',
+  accountId: 1,
+  username: 'romain',
+  apiKey: 'the-api-key',
+);
+
+/// A sign-in that answers as [_profile], so re-entering it needs no network.
+SignIn _signInAs(Profile profile) =>
+    ({
+      required String baseUrl,
+      required String username,
+      required Credential credential,
+      ClientIdentity identity = const ClientIdentity.unknown(),
+    }) async => LoginResult(
+      username: profile.username,
+      token: signedToken(profile.accountId!),
+      apiKey: profile.apiKey,
+    );
+
 ProviderContainer _downloadsContainer(
   Directory root,
   _KavitaLikeAdapter adapter, {
   bool refuses = false,
   String profileId = _profileId,
+  Profile? session,
+  bool launching = true,
 }) {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
@@ -187,6 +224,17 @@ ProviderContainer _downloadsContainer(
       downloadsServiceProvider.overrideWithValue(
         DownloadsService(root: root, profileId: profileId),
       ),
+      // A session, for the tests about a profile being left and entered
+      // again: everything a real one needs to be written down is the
+      // keychain, and nothing else here reads it.
+      if (session != null) ...[
+        testKeychain(),
+        initialAuthStateProvider.overrideWithValue(
+          AuthState(profiles: [session], activeId: session.id),
+        ),
+        signInProvider.overrideWithValue(_signInAs(session)),
+      ],
+      if (!launching) isLaunchProvider.overrideWithValue(false),
     ],
   );
 }
@@ -848,6 +896,264 @@ void main() {
       });
     },
   );
+
+  /// A copy left running, which the app then leaves the foreground in the
+  /// middle of. What every lifecycle test below starts from.
+  ///
+  /// [holdPages] leaves some pages unheld, so the copy is stopped with those
+  /// pages already on the device — which is what "resumes from where it
+  /// stopped" has to mean.
+  Future<({Completer<void> gate, Future<void> saving})> beginRunning(
+    ProviderContainer reading, {
+    Set<int>? holdPages,
+  }) async {
+    final gate = Completer<void>();
+    adapter
+      ..gate = gate.future
+      ..holdPages = holdPages;
+    final saving = reading.read(downloadsProvider.notifier).save(_chapter);
+    await _waitFor(
+      () =>
+          reading.read(downloadsProvider).value?.inFlight.containsKey(12) ??
+          false,
+    );
+    if (holdPages != null) {
+      await _waitFor(
+        () =>
+            reading.read(downloadProgressProvider(12)) != null &&
+            reading.read(downloadProgressProvider(12))! > 0,
+      );
+    }
+    return (gate: gate, saving: saving);
+  }
+
+  test('leaving the foreground pauses what is running, and says so', () async {
+    final running = await beginRunning(container);
+
+    container
+        .read(appLifecycleProvider.notifier)
+        .report(AppLifecycleState.paused);
+    await _waitFor(
+      () =>
+          container.read(downloadsProvider).value?.paused.contains(12) ?? false,
+    );
+
+    final state = container.read(downloadsProvider).value!;
+    expect(state.inFlight, isEmpty);
+    expect(state.failed, isEmpty);
+    expect(state.interrupted, isEmpty, reason: 'a pause is not a failure');
+    // The pause is written down rather than held in memory: the app that
+    // comes up next has to be able to tell it from work that died.
+    container.dispose();
+    await pumpEventQueue();
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+    final read = await restarted.read(downloadsProvider.future);
+    expect(read.paused, contains(12));
+    expect(read.interrupted, isEmpty);
+
+    running.gate.complete();
+    await running.saving;
+  });
+
+  test('coming back to the foreground resumes it without asking', () async {
+    final mine = _downloadsContainer(root, adapter, session: _profile);
+    addTearDown(mine.dispose);
+    // Page 0 lands before the app leaves; the copy stops with it written.
+    final running = await beginRunning(mine, holdPages: {1, 2});
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+    await _waitFor(
+      () => mine.read(downloadsProvider).value?.paused.contains(12) ?? false,
+    );
+    running.gate.complete();
+    await running.saving;
+
+    adapter
+      ..gate = null
+      ..holdPages = null
+      ..requestedPages.clear();
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
+    await _waitFor(
+      () => mine.read(downloadsProvider).value?.saved.containsKey(12) ?? false,
+    );
+
+    // Nothing was asked, and nothing already on the device was fetched
+    // twice: the copy goes on from the page it stopped at, and no question
+    // stands between the reader and their batch.
+    expect(adapter.requestedPages, [1, 2]);
+    expect(mine.read(downloadsProvider).value!.awaitingResume, isEmpty);
+  });
+
+  test('a cold start waits for the reader, and fires nothing first', () async {
+    final running = await beginRunning(container, holdPages: {1, 2});
+    container
+        .read(appLifecycleProvider.notifier)
+        .report(AppLifecycleState.paused);
+    await _waitFor(
+      () =>
+          container.read(downloadsProvider).value?.paused.contains(12) ?? false,
+    );
+    running.gate.complete();
+    await running.saving;
+    container.dispose();
+    await pumpEventQueue();
+
+    adapter.requestedPages.clear();
+    final launched = _downloadsContainer(root, adapter);
+    addTearDown(launched.dispose);
+    final state = await launched.read(downloadsProvider.future);
+
+    expect(state.awaitingResume, contains(12));
+    expect(state.paused, contains(12));
+    expect(state.saved, isEmpty);
+    // Not one page, however long the app sits there: the question is the
+    // whole of what stands between a launch and a batch on somebody's data
+    // plan.
+    await pumpEventQueue();
+    expect(adapter.requestedPages, isEmpty);
+
+    await launched.read(downloadsProvider.notifier).resumeStopped();
+    expect(launched.read(downloadsProvider).value!.awaitingResume, isEmpty);
+    await _waitFor(
+      () =>
+          launched.read(downloadsProvider).value?.saved.containsKey(12) ??
+          false,
+    );
+    // The page the previous run had already written is not fetched again.
+    expect(adapter.requestedPages, [1, 2]);
+  });
+
+  test('the reader’s “not now” leaves the copies stopped', () async {
+    final running = await beginRunning(container);
+    container
+        .read(appLifecycleProvider.notifier)
+        .report(AppLifecycleState.paused);
+    await _waitFor(
+      () =>
+          container.read(downloadsProvider).value?.paused.contains(12) ?? false,
+    );
+    running.gate.complete();
+    await running.saving;
+    container.dispose();
+    await pumpEventQueue();
+
+    adapter.requestedPages.clear();
+    final launched = _downloadsContainer(root, adapter);
+    addTearDown(launched.dispose);
+    await launched.read(downloadsProvider.future);
+
+    await launched.read(downloadsProvider.notifier).leaveStopped();
+    final state = launched.read(downloadsProvider).value!;
+    expect(state.awaitingResume, isEmpty, reason: 'the question was answered');
+    expect(state.paused, isEmpty);
+    expect(state.interrupted, contains(12));
+
+    // And it stays stopped through the next trip out of the foreground:
+    // "not now" is a decision, not a postponement of the same question.
+    launched
+        .read(appLifecycleProvider.notifier)
+        .report(AppLifecycleState.paused);
+    launched
+        .read(appLifecycleProvider.notifier)
+        .report(AppLifecycleState.resumed);
+    await pumpEventQueue();
+    expect(adapter.requestedPages, isEmpty);
+    expect(launched.read(downloadsProvider).value!.interrupted, contains(12));
+  });
+
+  test(
+    'leaving a profile pauses its queue, and returning resumes it',
+    () async {
+      final mine = _downloadsContainer(root, adapter, session: _profile);
+      addTearDown(mine.dispose);
+      final gate = Completer<void>();
+      adapter.gate = gate.future;
+      final saving = mine.read(downloadsProvider.notifier).save(_chapter);
+      await _waitFor(
+        () =>
+            mine.read(downloadsProvider).value?.inFlight.containsKey(12) ??
+            false,
+      );
+
+      // The face on the Home bar: the reader goes back to the picker, which is
+      // the moment their batch has to stop being in flight — the container it
+      // lives in is thrown away as soon as somebody else enters.
+      await mine.read(authProvider.notifier).switchProfile();
+      await _waitFor(
+        () => mine.read(downloadsProvider).value?.paused.contains(12) ?? false,
+      );
+      gate.complete();
+      await saving;
+      expect(mine.read(downloadsProvider).value!.interrupted, isEmpty);
+
+      // The app going away and coming back while the picker is up is not the
+      // reader coming back: nobody is reading, and a batch fired then would
+      // be the coin toss this rule exists to avoid.
+      adapter.requestedPages.clear();
+      mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+      mine
+          .read(appLifecycleProvider.notifier)
+          .report(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(adapter.requestedPages, isEmpty);
+      expect(mine.read(downloadsProvider).value!.paused, contains(12));
+
+      // Their own queue only: the storage paths are per profile, so leaving
+      // this one pauses nothing of anybody else's.
+      final theirs = _downloadsContainer(
+        root,
+        adapter,
+        profileId: _otherProfileId,
+      );
+      addTearDown(theirs.dispose);
+      final other = await theirs.read(downloadsProvider.future);
+      expect(other.records, isEmpty);
+      expect(other.paused, isEmpty);
+      expect(other.awaitingResume, isEmpty);
+
+      // And tapping their own face again is the reader coming back to work they
+      // asked for: it goes on where it left off, with nothing to answer.
+      adapter
+        ..gate = null
+        ..requestedPages.clear();
+      await mine.read(authProvider.notifier).resume(_profile);
+      await _waitFor(
+        () =>
+            mine.read(downloadsProvider).value?.saved.containsKey(12) ?? false,
+      );
+      expect(adapter.requestedPages, [0, 1, 2]);
+    },
+  );
+
+  test('a profile entered again finds its queue going on', () async {
+    // What the container thrown away with a batch running left behind.
+    await DownloadsService(root: root, profileId: _profileId).writeQueue({
+      12: const DownloadQueueRecord(
+        request: _chapter,
+        status: DownloadQueueStatus.paused,
+        priority: 0,
+      ),
+    });
+
+    final returning = _downloadsContainer(
+      root,
+      adapter,
+      session: _profile,
+      launching: false,
+    );
+    addTearDown(returning.dispose);
+
+    await _waitFor(
+      () =>
+          returning.read(downloadsProvider).value?.saved.containsKey(12) ??
+          false,
+    );
+
+    // Nothing to answer and nothing to tap: entering the profile *is* the
+    // reader coming back to the batch, and only a launch asks.
+    expect(returning.read(downloadsProvider).value!.awaitingResume, isEmpty);
+    expect(adapter.requestedPages, [0, 1, 2]);
+  });
 }
 
 /// What a stored copy says about itself, which is what has to carry a journey

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,6 +13,7 @@ import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/login/login_screen.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
 
@@ -19,6 +21,14 @@ import 'test_support.dart';
 
 /// A Kavita server with one library and one series.
 class _StubAdapter implements HttpClientAdapter {
+  /// Every page of a chapter the app has asked for, which is what "nothing is
+  /// fetched before the reader has answered" is measured in.
+  final pages = <int>[];
+
+  /// Holds every page request open, so a test can look at the app in the
+  /// middle of a fetch.
+  Completer<void>? gate;
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -32,6 +42,17 @@ class _StubAdapter implements HttpClientAdapter {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
     );
+    if (options.path == '/api/Reader/image') {
+      pages.add(int.parse('${options.queryParameters['page']}'));
+      if (gate case final held?) await held.future;
+      return ResponseBody.fromBytes(
+        List<int>.filled(4, 9),
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['image/jpeg'],
+        },
+      );
+    }
     return switch (options.path) {
       '/api/Library/libraries' => json([
         {'id': 1, 'name': 'Mangas', 'type': 0},
@@ -65,6 +86,7 @@ Widget _app({
   AuthState auth = const AuthState(),
   Directory? downloadsRoot,
   SignIn? signIn,
+  _StubAdapter? adapter,
 }) {
   final client = KavitaClient(
     baseUrl: 'https://kavita.example',
@@ -72,8 +94,9 @@ Widget _app({
     username: 'romain',
     apiKey: 'key',
   );
-  client.httpClient.httpClientAdapter = _StubAdapter();
-  client.bareHttpClient.httpClientAdapter = _StubAdapter();
+  final server = adapter ?? _StubAdapter();
+  client.httpClient.httpClientAdapter = server;
+  client.bareHttpClient.httpClientAdapter = server;
 
   return ProviderScope(
     overrides: [
@@ -317,6 +340,118 @@ void main() {
     // the top of this screen switches profile; the button at the bottom of
     // it removes this one.
     expect(find.text('Sign out'), findsNothing);
+  });
+
+  testWidgets('a cold start asks before the batch goes on', (tester) async {
+    final root = Directory.systemTemp.createTempSync('patra-cold-start');
+    addTearDown(() => root.deleteSync(recursive: true));
+    mockPathProvider();
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    // What the previous run was closed in the middle of, written down the way
+    // the queue writes it down.
+    await DownloadsService(root: root, profileId: _profile.id).writeQueue({
+      7: DownloadQueueRecord(
+        request: const SavedChapter(
+          chapterId: 7,
+          seriesId: 5,
+          volumeId: 1,
+          libraryId: 1,
+          seriesName: 'Blame!',
+          title: 'Chapter 1',
+          pages: 2,
+          bytes: 0,
+        ),
+        status: DownloadQueueStatus.paused,
+        priority: 0,
+      ),
+    });
+    final server = _StubAdapter();
+
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(profiles: [_profile], activeId: _profile.id),
+        downloadsRoot: root,
+        adapter: server,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The one question a launch asks, in words, over whatever the app opened
+    // on — and not one page fetched behind it, however long it sits there.
+    expect(find.text('Resume downloads?'), findsOneWidget);
+    expect(
+      find.text('One download stopped when the app closed.'),
+      findsOneWidget,
+    );
+    expect(server.pages, isEmpty);
+  });
+
+  testWidgets('leaving the foreground pauses a batch the app is running', (
+    tester,
+  ) async {
+    final root = Directory.systemTemp.createTempSync('patra-background-test');
+    addTearDown(() => root.deleteSync(recursive: true));
+    mockPathProvider();
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    // Every page held open, so the app is caught in the middle of the fetch.
+    final server = _StubAdapter()..gate = Completer<void>();
+
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(profiles: [_profile], activeId: _profile.id),
+        downloadsRoot: root,
+        adapter: server,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(NavigationBar)),
+    );
+    unawaited(
+      container
+          .read(downloadsProvider.notifier)
+          .save(
+            const SavedChapter(
+              chapterId: 7,
+              seriesId: 5,
+              volumeId: 1,
+              libraryId: 1,
+              seriesName: 'Blame!',
+              title: 'Chapter 1',
+              pages: 2,
+              bytes: 0,
+            ),
+          ),
+    );
+    await pumpUntil(
+      tester,
+      () =>
+          container.read(downloadsProvider).value?.inFlight.containsKey(7) ??
+          false,
+    );
+
+    // The OS takes the app away. The platform's own transition is what the
+    // queue listens to, so this is the whole path a device takes.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    final paused = container.read(downloadsProvider).value!;
+    expect(paused.paused, contains(7));
+    expect(paused.inFlight, isEmpty);
+    expect(paused.failed, isEmpty);
+
+    // And the reader coming back is not asked anything: it goes on.
+    server.gate!.complete();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await pumpUntil(
+      tester,
+      () =>
+          container.read(downloadsProvider).value?.saved.containsKey(7) ??
+          false,
+    );
+    expect(find.text('Resume downloads?'), findsNothing);
   });
 
   testWidgets('the navigation bar drops its labels when they do not fit', (

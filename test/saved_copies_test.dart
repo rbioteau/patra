@@ -15,6 +15,7 @@ import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/downloads/downloads_screen.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/save_pill.dart';
 import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/read_mark.dart';
 
@@ -214,6 +215,36 @@ class _QueueScreenNotifier extends DownloadsNotifier {
   }
 }
 
+/// A queue holding one copy the app paused: it stopped because the app did,
+/// which is not the same fact as a failure.
+class _PausedScreenNotifier extends DownloadsNotifier {
+  final resumed = Completer<int>();
+  final started = Completer<int>();
+
+  late final Map<int, DownloadQueueRecord> records = {
+    7: DownloadQueueRecord(
+      request: _queuedChapter(7, 'Dune Messiah'),
+      status: DownloadQueueStatus.paused,
+      priority: 0,
+      completedPages: 2,
+      totalPages: 4,
+    ),
+  };
+
+  @override
+  Future<DownloadsState> build() async => DownloadsState.fromQueue(records);
+
+  @override
+  Future<void> retry(int chapterId) async {
+    if (!resumed.isCompleted) resumed.complete(chapterId);
+  }
+
+  @override
+  Future<void> save(SavedChapter chapter) async {
+    if (!started.isCompleted) started.complete(chapter.chapterId);
+  }
+}
+
 /// Whose store the device is holding these copies for.
 const _profileId = 'https://kavita.test#1';
 
@@ -315,19 +346,6 @@ Future<ProviderContainer> _pumpDownloads(
   downloadsNotifier: downloadsNotifier,
 );
 
-/// Pumps until [ready], rather than for a fixed number of frames: what these
-/// tests wait on is real filesystem IO, and a frame budget is a race a loaded
-/// machine loses.
-Future<void> _pumpUntil(
-  WidgetTester tester,
-  bool Function() ready, {
-  int frames = 80,
-}) async {
-  for (var i = 0; i < frames && !ready(); i++) {
-    await tester.pump(const Duration(milliseconds: 50));
-  }
-}
-
 /// What the row says about a copy the server no longer counts the same way.
 String get _stale => 'Out of date — the server now counts 12 pages';
 
@@ -411,6 +429,60 @@ void main() {
     expect(await notifier.retried.future, 10);
   });
 
+  testWidgets('a paused copy is listed as paused, not as missing', (
+    tester,
+  ) async {
+    final notifier = _PausedScreenNotifier();
+    await _pumpDownloads(
+      tester,
+      _room(),
+      _BookServer(),
+      downloadsNotifier: notifier,
+    );
+
+    expect(find.text('NEEDS ATTENTION'), findsOneWidget);
+    expect(find.text('Dune Messiah'), findsOneWidget);
+    // The word, and not a blank where a copy should be: what stopped because
+    // the app did is recognisable as such wherever copies are listed.
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+    // Two pages of four already on the device are not thrown away by the
+    // pause: the tap that sends it on is the one a retry is, from there.
+    expect(
+      tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .map((bar) => bar.value),
+      isEmpty,
+    );
+
+    await tester.tap(find.text('Resume'));
+    expect(await notifier.resumed.future, 7);
+  });
+
+  testWidgets('a paused copy’s row offers the tap that sends it on', (
+    tester,
+  ) async {
+    final notifier = _PausedScreenNotifier();
+    await _pump(
+      tester,
+      _room(),
+      _BookServer(),
+      Scaffold(body: SavePill(request: _queuedChapter(7, 'Dune Messiah'))),
+      downloadsNotifier: notifier,
+    );
+
+    // The row's own control says which stop this was: a copy the app paused
+    // is one tap from going on, and it does not read as something that went
+    // wrong.
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+
+    await tester.tap(find.text('Resume'));
+    expect(await notifier.started.future, 7);
+  });
+
   testWidgets('the refresh control asks to store the copy again', (
     tester,
   ) async {
@@ -486,14 +558,14 @@ void main() {
     // running that remembers the journey. Reading the store is what sends it.
     final home = _BookServer();
     await _pumpDownloads(tester, room, home);
-    await _pumpUntil(tester, () => home.posted.isNotEmpty);
+    await pumpUntil(tester, () => home.posted.isNotEmpty);
 
     // The page and the place within it, together: half of it is a reader put
     // back at words they had already read.
     expect(home.posted, [
       (pageNum: kept['pageNum'], anchor: kept['bookScrollId']),
     ]);
-    await _pumpUntil(tester, () => copy()['pending'] == null);
+    await pumpUntil(tester, () => copy()['pending'] == null);
     expect(copy()['pending'], isNull, reason: 'taken, so nothing is held');
   });
 
@@ -517,7 +589,7 @@ void main() {
 
     final recounting = _BookServer(pages: 12);
     final home = await _pumpDownloads(tester, room, recounting);
-    await _pumpUntil(
+    await pumpUntil(
       tester,
       () => home.read(savedChapterProvider(_chapterId))?.serverPages == 12,
     );
@@ -539,7 +611,7 @@ void main() {
           ),
     );
     home.invalidate(downloadsProvider);
-    await _pumpUntil(
+    await pumpUntil(
       tester,
       () => home.read(savedChapterProvider(_chapterId))?.pages == 12,
     );
@@ -565,10 +637,10 @@ void main() {
 
     await _pumpReader(tester, room, server);
     expect(find.text('The spice must flow.'), findsOneWidget);
-    await _pumpUntil(tester, () => server.posted.isNotEmpty);
+    await pumpUntil(tester, () => server.posted.isNotEmpty);
 
     final home = await _pumpDownloads(tester, room, _BookServer());
-    await _pumpUntil(tester, () => home.read(downloadsProvider).hasValue);
+    await pumpUntil(tester, () => home.read(downloadsProvider).hasValue);
     expect(home.read(savedChapterProvider(_chapterId))?.outOfDate, isFalse);
     expect(find.textContaining('Out of date'), findsNothing);
     expect(find.text('Refresh'), findsNothing);
@@ -597,7 +669,7 @@ void main() {
     );
 
     final home = await _pumpDownloads(tester, room, _BookServer());
-    await _pumpUntil(tester, () => home.read(downloadsProvider).hasValue);
+    await pumpUntil(tester, () => home.read(downloadsProvider).hasValue);
 
     expect(
       find.byWidgetPredicate((widget) => widget is ReadRail && widget.read),

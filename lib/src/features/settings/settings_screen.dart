@@ -8,6 +8,7 @@ import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
 import '../../format.dart';
+import '../../lifecycle.dart';
 import '../../lock/profile_lock.dart';
 import '../../settings/cache_settings.dart';
 import '../../settings/locale_settings.dart';
@@ -865,37 +866,22 @@ class _ServerCard extends ConsumerStatefulWidget {
   ConsumerState<_ServerCard> createState() => _ServerCardState();
 }
 
-class _ServerCardState extends ConsumerState<_ServerCard>
-    with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      ref.invalidate(serverReachableProvider);
-      // A server's version changes when it is upgraded, which means it
-      // restarted — so from here that shows up as a spell of unreachability
-      // and a return. Coming back to the foreground is therefore the moment
-      // to ask again, and there is no other: Kavita pushes `UpdateAvailable`
-      // to admins only and has no restart event at all, so noticing the
-      // string changed is the only mechanism a client of ours has.
-      ref.invalidate(serverVersionProvider);
-    }
-  }
-
+class _ServerCardState extends ConsumerState<_ServerCard> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Coming back to the foreground is when a server that was upgraded has to
+    // be asked again: Kavita pushes `UpdateAvailable` to admins only and has
+    // no restart event at all, so a spell of unreachability and a return is
+    // the only thing noticing it can be made of. Listened to rather than
+    // watched, and through the app's one lifecycle seam (`appLifecycleProvider`)
+    // rather than an observer of its own — two answers to one platform fact
+    // is how they come to disagree.
+    ref.listen(appLifecycleProvider, (_, state) {
+      if (state != AppLifecycleState.resumed) return;
+      ref.invalidate(serverReachableProvider);
+      ref.invalidate(serverVersionProvider);
+    });
     // A request that has just failed is fresher news than a probe that
     // succeeded a while ago, so being offline outranks a stale success.
     // Null is "not known yet", which is neither colour.

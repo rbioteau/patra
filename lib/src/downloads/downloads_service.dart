@@ -206,11 +206,27 @@ class SavedChapter {
   }
 }
 
-enum DownloadQueueStatus { queued, downloading, interrupted, failed, saved }
+enum DownloadQueueStatus {
+  queued,
+  downloading,
+  paused,
+  interrupted,
+  failed,
+  saved,
+}
 
 /// One chapter's durable download state. The request is enough to retry it;
 /// [saved] is the finished copy, where one exists independently of the current
 /// attempt (a refresh can fail without spending the copy it was replacing).
+///
+/// [DownloadQueueStatus.paused] is deliberately not
+/// [DownloadQueueStatus.interrupted], though both keep every page they have
+/// and both are resumed from the last one written: a **pause** is the app's
+/// own doing — it left the foreground, or the reader left their profile — and
+/// what was paused goes on without being asked. An **interruption** is a
+/// process that stopped without saying so, and it waits for the reader's
+/// word, because the app that comes up next cannot know what was happening
+/// when the last one died.
 class DownloadQueueRecord {
   const DownloadQueueRecord({
     required this.request,

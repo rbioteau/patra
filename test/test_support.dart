@@ -17,6 +17,27 @@ import 'package:patra/src/lock/profile_lock.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
 
+/// Pumps until [ready], alternating frames with the real event loop.
+///
+/// What these suites wait on is real filesystem IO — a download writes its
+/// pages and its queue through `dart:io` — and a test binding only advances
+/// that inside `runAsync`: the frames drain the continuations the queue's own
+/// futures leave behind, and `runAsync` is the only thing that lets the writes
+/// themselves finish. A fixed frame budget would be a race even then, which is
+/// why this gives up after [frames] turns rather than asserting.
+Future<void> pumpUntil(
+  WidgetTester tester,
+  bool Function() ready, {
+  int frames = 400,
+}) async {
+  for (var i = 0; i < frames && !ready(); i++) {
+    await tester.pump(const Duration(milliseconds: 10));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+  }
+}
+
 /// Points path_provider at a temp directory for the duration of a test.
 ///
 /// Widget tests that render covers pull in cached_network_image, whose cache
