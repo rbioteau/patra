@@ -384,7 +384,6 @@ void main() {
 
     // The one question a launch asks, in words, over whatever the app opened
     // on — and not one page fetched behind it, however long it sits there.
-    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(
       find.text('One download stopped when the app closed.'),
       findsOneWidget,
@@ -396,11 +395,92 @@ void main() {
     // it did.
     final appBar = tester.getBottomLeft(find.byType(AppBar)).dy;
     expect(appBar, greaterThanOrEqualTo(59));
+    final strip = tester.getTopLeft(
+      find.text('One download stopped when the app closed.'),
+    );
     expect(
-      tester.getTopLeft(find.byType(MaterialBanner)).dy,
+      strip.dy,
       greaterThanOrEqualTo(appBar),
       reason: 'the strip hangs under the app bar, not over the status bar',
     );
+
+    // And the tab that *lists* the copies is the answer to the strip that
+    // points at them: arriving there closes the question, and the copy is
+    // still paused — visiting a tab decides nothing about it.
+    await tester.tap(find.text('Downloads'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('One download stopped when the app closed.'),
+      findsNothing,
+      reason: 'the question is closed once the reader has seen the copies',
+    );
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(server.pages, isEmpty);
+  });
+
+  testWidgets('a reader may open a series while the question is up', (
+    tester,
+  ) async {
+    // The question was a `MaterialBanner`, which wraps its content in a
+    // `Hero`; shown in every tab's Scaffold at once, that was two heroes with
+    // one tag in one route, and pushing a screen threw. What is drawn now is
+    // a plain strip, and this is the path that used to break: the reader opens
+    // a series with the question still standing.
+    final root = Directory.systemTemp.createTempSync('patra-strip-push-test');
+    addTearDown(() => root.deleteSync(recursive: true));
+    mockPathProvider();
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    await DownloadsService(root: root, profileId: _profile.id).writeQueue({
+      7: DownloadQueueRecord(
+        request: const SavedChapter(
+          chapterId: 7,
+          seriesId: 5,
+          volumeId: 1,
+          libraryId: 1,
+          seriesName: 'Blame!',
+          title: 'Chapter 1',
+          pages: 2,
+          bytes: 0,
+        ),
+        status: DownloadQueueStatus.paused,
+        priority: 0,
+      ),
+    });
+
+    await tester.pumpWidget(
+      _app(
+        auth: AuthState(profiles: [_profile], activeId: _profile.id),
+        downloadsRoot: root,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('One download stopped when the app closed.'),
+      findsOneWidget,
+    );
+
+    // A second tab first, which is what the hero collision needed: the strip
+    // stands in every screen that carries it, and two of them in one route
+    // were two heroes with one tag.
+    await tester.tap(find.text('Library'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('One download stopped when the app closed.'),
+      findsOneWidget,
+    );
+
+    // `pumpAndSettle` is half the assertion: a hero collision is an assertion
+    // error, and one would fail the test here.
+    await tester.tap(find.text('Blame!').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BackButton), findsOneWidget);
   });
 
   testWidgets('leaving the foreground pauses a batch the app is running', (
@@ -466,7 +546,7 @@ void main() {
           container.read(downloadsProvider).value?.saved.containsKey(7) ??
           false,
     );
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.textContaining('stopped when the app closed'), findsNothing);
   });
 
   testWidgets('the navigation bar drops its labels when they do not fit', (

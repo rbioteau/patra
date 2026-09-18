@@ -1125,6 +1125,40 @@ void main() {
     },
   );
 
+  test('a question the reader has been shown is not asked again', () async {
+    // The reader is on the tab that lists the copies, which is where the
+    // answer to the question is written down.
+    await DownloadsService(root: root, profileId: _profileId).writeQueue({
+      12: const DownloadQueueRecord(
+        request: _chapter,
+        status: DownloadQueueStatus.paused,
+        priority: 0,
+      ),
+    });
+    final mine = _downloadsContainer(root, adapter, session: _profile);
+    addTearDown(mine.dispose);
+    final opened = await mine.read(downloadsProvider.future);
+    expect(opened.awaitingResume, contains(12));
+
+    mine.read(downloadsProvider.notifier).seenStopped();
+    await pumpEventQueue();
+    final seen = mine.read(downloadsProvider).value!;
+    expect(seen.awaitingResume, isEmpty, reason: 'the strip stops being drawn');
+    // And nothing else changed: the copy is still paused, the app is still
+    // holding it, and no page has been asked for.
+    expect(seen.paused, contains(12));
+    expect(seen.interrupted, isEmpty);
+    expect(adapter.requestedPages, isEmpty);
+
+    // Nor does it start on its own when the app comes back to the foreground:
+    // what ended was the question, not the hold.
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
+    await pumpEventQueue();
+    expect(adapter.requestedPages, isEmpty);
+    expect(mine.read(downloadsProvider).value!.paused, contains(12));
+  });
+
   test('a profile entered again finds its queue going on', () async {
     // What the container thrown away with a batch running left behind.
     await DownloadsService(root: root, profileId: _profileId).writeQueue({
