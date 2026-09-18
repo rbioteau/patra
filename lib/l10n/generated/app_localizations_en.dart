@@ -502,6 +502,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refreshingCopy => 'Refreshing…';
 
   @override
+  String get downloadsQueueSection => 'Downloading';
+
+  @override
+  String get downloadsPendingSection => 'Needs attention';
+
+  @override
+  String downloadsBatchSummary(int done, int total, int percent) {
+    return '$done of $total · $percent%';
+  }
+
+  @override
+  String get downloadsWaiting => 'Waiting';
+
+  @override
+  String get downloadsStoppedShort => 'Stopped';
+
+  @override
+  String get downloadsFailed => 'Could not finish';
+
+  @override
+  String cancelDownload(String title) {
+    return 'Cancel $title';
+  }
+
+  @override
   String get serverUnreachable => 'Server unreachable';
 
   @override

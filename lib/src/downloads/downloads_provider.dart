@@ -20,6 +20,8 @@ class DownloadsState {
     this.inFlight = const {},
     this.failed = const {},
     this.interrupted = const {},
+    this.records = const {},
+    this.batchSummary,
   });
 
   /// Chapters fully stored on the device, keyed by chapter id.
@@ -28,7 +30,7 @@ class DownloadsState {
   /// Downloads queued or running, chapter id → 0..1.
   final Map<int, double> inFlight;
 
-  /// Chapters whose download failed, so the pill can offer a retry instead
+  /// Chapters whose download failed, so a control can offer a retry instead
   /// of silently going back to "Save". A cancel is not a failure.
   final Set<int> failed;
 
@@ -36,27 +38,164 @@ class DownloadsState {
   /// than silently restarting requests during launch.
   final Set<int> interrupted;
 
+  /// The durable record behind every projected state above.
+  ///
+  /// Record instances are retained for chapters that did not change, which
+  /// is what lets a per-chapter provider ignore another chapter's pages.
+  final Map<int, DownloadQueueRecord> records;
+
+  /// The latest batch that still has work or a failure to account for.
+  final DownloadBatchSummary? batchSummary;
+
   int get totalBytes =>
       saved.values.fold(0, (total, chapter) => total + chapter.bytes);
 
-  factory DownloadsState.fromQueue(
-    Map<int, DownloadQueueRecord> records,
-  ) => DownloadsState(
-    saved: {for (final entry in records.entries) entry.key: ?entry.value.saved},
-    inFlight: {
-      for (final entry in records.entries)
-        if (entry.value.isInFlight) entry.key: entry.value.progress,
-    },
-    failed: {
-      for (final entry in records.entries)
-        if (entry.value.status == DownloadQueueStatus.failed) entry.key,
-    },
-    interrupted: {
-      for (final entry in records.entries)
-        if (entry.value.status == DownloadQueueStatus.interrupted) entry.key,
-    },
-  );
+  factory DownloadsState.fromQueue(Map<int, DownloadQueueRecord> records) {
+    final snapshot = Map<int, DownloadQueueRecord>.unmodifiable(records);
+    final batches = <int, List<DownloadQueueRecord>>{};
+    for (final record in snapshot.values) {
+      final batchId = record.batchId;
+      if (batchId != null) (batches[batchId] ??= []).add(record);
+    }
+    // A batch that is entirely on the device is over: a line counting zero of
+    // what is left would be a report about nothing.
+    final unfinished = batches.entries
+        .where(
+          (entry) => entry.value.any(
+            (record) => record.status != DownloadQueueStatus.saved,
+          ),
+        )
+        .map((entry) => entry.key);
+    final latest = unfinished.isEmpty
+        ? null
+        : unfinished.reduce((a, b) => a > b ? a : b);
+
+    return DownloadsState(
+      records: snapshot,
+      saved: {
+        for (final entry in snapshot.entries) entry.key: ?entry.value.saved,
+      },
+      inFlight: {
+        for (final entry in snapshot.entries)
+          if (entry.value.isInFlight) entry.key: entry.value.progress,
+      },
+      failed: {
+        for (final entry in snapshot.entries)
+          if (entry.value.status == DownloadQueueStatus.failed) entry.key,
+      },
+      interrupted: {
+        for (final entry in snapshot.entries)
+          if (entry.value.status == DownloadQueueStatus.interrupted) entry.key,
+      },
+      batchSummary: latest == null
+          ? null
+          : DownloadBatchSummary.fromRecords(latest, batches[latest]!),
+    );
+  }
 }
+
+/// Where one batch stands, in the two halves a reader asks about: how many of
+/// its copies are on the device, and how far through the pages of the whole
+/// lot the work has got.
+///
+/// Counted in pages rather than copies, because a batch of four chapters is
+/// not a quarter done when its shortest chapter lands.
+class DownloadBatchSummary {
+  const DownloadBatchSummary({
+    required this.id,
+    required this.done,
+    required this.total,
+    required this.progress,
+  });
+
+  factory DownloadBatchSummary.fromRecords(
+    int id,
+    List<DownloadQueueRecord> records,
+  ) {
+    var completedPages = 0;
+    var totalPages = 0;
+    var done = 0;
+    for (final record in records) {
+      final pages = record.totalPages > 0
+          ? record.totalPages
+          : record.request.pages;
+      totalPages += pages;
+      if (record.status == DownloadQueueStatus.saved) {
+        done++;
+        completedPages += pages;
+      } else {
+        completedPages += record.completedPages.clamp(0, pages);
+      }
+    }
+    return DownloadBatchSummary(
+      id: id,
+      done: done,
+      total: records.length,
+      progress: totalPages == 0 ? 0 : completedPages / totalPages,
+    );
+  }
+
+  final int id;
+  final int done;
+  final int total;
+  final double progress;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DownloadBatchSummary &&
+      other.id == id &&
+      other.done == done &&
+      other.total == total &&
+      other.progress == progress;
+
+  @override
+  int get hashCode => Object.hash(id, done, total, progress);
+}
+
+/// Which chapters are on the device, which are on their way, and which are
+/// waiting to be given another go — and nothing about how far any of them has
+/// got.
+///
+/// Compared **by content**: a page landing anywhere leaves a row that only
+/// asked this question alone. That is the whole reason it exists, and it is
+/// why the ids are the value rather than the records behind them: a set of
+/// records is compared by identity, so it would answer "changed" on every
+/// single page.
+class DownloadMembership {
+  DownloadMembership({
+    required Set<int> saved,
+    required Set<int> inFlight,
+    required Set<int> pending,
+  }) : saved = Set.unmodifiable(saved),
+       inFlight = Set.unmodifiable(inFlight),
+       pending = Set.unmodifiable(pending);
+
+  final Set<int> saved;
+  final Set<int> inFlight;
+
+  /// Copies that stopped short — failed, or left unfinished by the app. They
+  /// stay listed until they are retried or removed.
+  final Set<int> pending;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DownloadMembership &&
+      _sameIds(saved, other.saved) &&
+      _sameIds(inFlight, other.inFlight) &&
+      _sameIds(pending, other.pending);
+
+  @override
+  int get hashCode => Object.hashAll([
+    ...saved.toList()..sort(),
+    -1,
+    ...inFlight.toList()..sort(),
+    -2,
+    ...pending.toList()..sort(),
+  ]);
+}
+
+bool _sameIds(Set<int> a, Set<int> b) =>
+    a.length == b.length && a.every(b.contains);
 
 /// Where every profile's saved chapters live, which the **device** owns —
 /// null meaning the documents directory, as the service resolves it itself.
@@ -125,6 +264,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   late DownloadsService _service;
   var _nextPriority = 0;
   int? _lastRequestedChapterId;
+  var _nextBatchId = 0;
   int? _readingChapterId;
   var _disposed = false;
 
@@ -143,6 +283,14 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     _nextPriority = _records.values.fold<int>(
       0,
       (next, record) => record.priority >= next ? record.priority + 1 : next,
+    );
+    // A batch id is a counter over this profile's queue, so a batch asked for
+    // now outranks every batch the device has already written down.
+    _nextBatchId = _records.values.fold<int>(
+      0,
+      (next, record) => record.batchId != null && record.batchId! >= next
+          ? record.batchId! + 1
+          : next,
     );
     // Progress the server has not been told waits in each copy, and a server
     // that answers is the moment to send it. Listened to rather than watched:
@@ -173,26 +321,66 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     await _enqueue(chapter, saved: existing?.saved, resume: existing);
   }
 
+  /// Starts a copy that stopped short again, from the pages it kept.
+  ///
+  /// Nothing is discarded first: the whole point of a durable partial is that
+  /// a retry costs one page and not a chapter, and the rest of the batch is
+  /// left running.
+  Future<void> retry(int chapterId) async {
+    final record = _records[chapterId];
+    if (record == null) return;
+    if (record.isInFlight || record.status == DownloadQueueStatus.saved) return;
+    await _enqueue(record.request, saved: record.saved, resume: record);
+  }
+
   /// Enqueues [chapters] as a batch. Chapters that already have a saved copy
   /// or are already in flight are skipped. Returns a map of chapter id to
   /// future that completes when that chapter finishes, fails or is cancelled.
+  ///
+  /// A batch carries an id of its own, which its records keep even once they
+  /// are finished: the Downloads tab reports how much of *this* request is
+  /// done, and a copy that lands leaves the section while the line goes on
+  /// counting it.
   Future<Map<int, Future<void>>> saveBatch(List<SavedChapter> chapters) async {
     if (!await _ready()) return {};
+    if (chapters.isEmpty) return {};
+    final batchId = _nextBatchId++;
+    var adopted = false;
     final futures = <int, Future<void>>{};
     for (final chapter in chapters) {
       final existing = _records[chapter.chapterId];
       if (existing?.isInFlight ?? false) {
+        // Already coming, and asked for again as part of this lot: it joins
+        // the batch rather than being left out of the count, or the summary
+        // would report a batch with a chapter missing from it.
+        _records[chapter.chapterId] = existing!.copyWith(batchId: batchId);
         futures[chapter.chapterId] = _waiters[chapter.chapterId]!.future;
+        adopted = true;
         continue;
       }
       if (existing?.saved != null &&
           existing?.status == DownloadQueueStatus.saved) {
+        // Already on the device, so there is nothing here to do: the batch
+        // counts the work it was asked to do, not the shelf it stands on.
         continue;
       }
       final completer = Completer<void>();
       _waiters[chapter.chapterId] = completer;
       futures[chapter.chapterId] = completer.future;
-      unawaited(_enqueue(chapter, saved: existing?.saved, resume: existing));
+      unawaited(
+        _enqueue(
+          chapter,
+          saved: existing?.saved,
+          resume: existing,
+          batchId: batchId,
+        ),
+      );
+    }
+    // A copy already on its way joined the batch without being enqueued
+    // again, so that adoption is what is written down here.
+    if (adopted) {
+      await _persist();
+      _writeState();
     }
     return futures;
   }
@@ -216,6 +404,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     SavedChapter chapter, {
     required SavedChapter? saved,
     DownloadQueueRecord? resume,
+    int? batchId,
   }) async {
     final id = chapter.chapterId;
     final waiter = Completer<void>();
@@ -232,6 +421,9 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       totalPages: resume?.status == DownloadQueueStatus.saved
           ? 0
           : resume?.totalPages ?? 0,
+      // A retry keeps the batch it was asked for as part of: dropping it
+      // would leave the summary counting a copy it cannot see any more.
+      batchId: batchId ?? resume?.batchId,
     );
     await _persist();
     _writeState();
@@ -305,6 +497,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       _records[id] = DownloadQueueRecord.completed(
         saved,
         priority: queued.priority,
+        batchId: queued.batchId,
       );
       await _persist();
       _writeState();
@@ -318,6 +511,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
           _records[id] = DownloadQueueRecord.completed(
             saved,
             priority: current.priority,
+            batchId: current.batchId,
           );
         } else {
           _records.remove(id);
@@ -454,6 +648,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       _records[id] = DownloadQueueRecord.completed(
         saved,
         priority: record.priority,
+        batchId: record.batchId,
       );
     } else {
       _records.remove(id);
@@ -493,6 +688,79 @@ final downloadsProvider =
 final savedChapterProvider = Provider.family<SavedChapter?, int>(
   (ref, chapterId) => ref.watch(downloadsProvider).value?.saved[chapterId],
 );
+
+/// The durable record of one chapter's download, including its page progress.
+///
+/// The record of a chapter that did not change is the same instance after
+/// every queue write, so a row watching this is left alone while another
+/// chapter's pages land — which is what stops one page from rebuilding every
+/// visible row.
+final downloadRecordProvider = Provider.family<DownloadQueueRecord?, int>(
+  (ref, chapterId) => ref.watch(downloadsProvider).value?.records[chapterId],
+);
+
+/// Which chapters are on the device, which are on their way and which are
+/// waiting to be given another go — and nothing about how far any of them has
+/// got.
+///
+/// A row or a section that only has to answer "is this one saved?", "is it
+/// still coming?", or "is there anything here to retry?" asks this rather
+/// than watching the whole state, so a page landing anywhere leaves it alone.
+final downloadMembershipProvider = Provider<DownloadMembership>((ref) {
+  final state = ref.watch(downloadsProvider).value;
+  return DownloadMembership(
+    saved: state?.saved.keys.toSet() ?? const {},
+    inFlight: state?.inFlight.keys.toSet() ?? const {},
+    pending: {...?state?.failed, ...?state?.interrupted},
+  );
+});
+
+/// How far through one chapter's pages the fetch has got, and nothing else —
+/// null where the chapter is not being fetched at all.
+///
+/// The one number a pill or a row repaints as pages land, so the rest of it
+/// can be resubscribed to something that does not move.
+final downloadProgressProvider = Provider.family<double?, int>(
+  (ref, chapterId) => ref.watch(
+    downloadRecordProvider(
+      chapterId,
+    ).select((record) => record?.isInFlight ?? false ? record?.progress : null),
+  ),
+);
+
+/// The copies on the device, as ids in the order the tab lists them.
+///
+/// A list of ids rather than a map of copies, because what a row is *for* is
+/// one copy: it reads that copy itself, so a page landing on another chapter
+/// leaves the whole list alone rather than rebuilding every row in it.
+final savedChapterIdsProvider = Provider<List<int>>(
+  (ref) => ref.watch(
+    downloadsProvider.select(
+      (state) =>
+          (state.value?.records.values
+                  .map((record) => record.saved)
+                  .whereType<SavedChapter>()
+                  .toList()
+                ?..sort(_bySeriesThenTitle))
+              ?.map((chapter) => chapter.chapterId)
+              .toList() ??
+          const <int>[],
+    ),
+  ),
+);
+
+/// Where the batch a reader asked for stands, in one line.
+///
+/// Null where there is nothing left to report: a finished batch is not a
+/// thing the tab should go on counting.
+final batchSummaryProvider = Provider<DownloadBatchSummary?>(
+  (ref) => ref.watch(downloadsProvider).value?.batchSummary,
+);
+
+int _bySeriesThenTitle(SavedChapter a, SavedChapter b) {
+  final bySeries = a.seriesName.compareTo(b.seriesName);
+  return bySeries != 0 ? bySeries : a.title.compareTo(b.title);
+}
 
 /// Where a chapter's pages live, for building local image paths.
 final chapterDirProvider = FutureProvider.family<Directory, int>(

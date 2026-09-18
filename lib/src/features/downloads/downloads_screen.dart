@@ -19,58 +19,109 @@ class DownloadsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final downloads = ref.watch(downloadsProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.downloadsTitle)),
       body: SafeArea(
         top: false,
-        child: downloads.when(
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: patraOffline),
-          ),
-          error: (error, _) => Center(
-            child: Text('$error', style: PatraText.body(color: patraTextMuted)),
-          ),
-          data: (state) {
-            final saved = state.saved.values.toList()
-              ..sort((a, b) {
-                final bySeries = a.seriesName.compareTo(b.seriesName);
-                return bySeries != 0 ? bySeries : a.title.compareTo(b.title);
-              });
-            if (saved.isEmpty && state.inFlight.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(gutter * 1.5),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.download_outlined,
-                        color: patraOffline,
-                        size: 28,
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        l10n.emptyDownloads,
-                        textAlign: TextAlign.center,
-                        style: PatraText.body(color: patraTextMuted),
-                      ),
-                    ],
-                  ),
+        child: ref
+            .watch(downloadsProvider)
+            .when(
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: patraOffline),
+              ),
+              error: (error, _) => Center(
+                child: Text(
+                  '$error',
+                  style: PatraText.body(color: patraTextMuted),
                 ),
-              );
-            }
-            return ListView(
-              padding: const EdgeInsets.only(bottom: sectionGap),
-              children: [
-                _StorageMeter(bytes: state.totalBytes, chapters: saved.length),
-                for (final chapter in saved) _SavedRow(chapter: chapter),
-              ],
-            );
-          },
+              ),
+              data: (state) {
+                // The tab shows the lot, so a queue with nothing finished yet
+                // is not the empty state: it is work the reader is waiting on.
+                if (state.records.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(gutter * 1.5),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.download_outlined,
+                            color: patraOffline,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            l10n.emptyDownloads,
+                            textAlign: TextAlign.center,
+                            style: PatraText.body(color: patraTextMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                // Every child below is a `const` widget that watches one
+                // provider of its own, so a page landing — which hands this
+                // build a new state — rebuilds the list and nothing in it.
+                // The rows that are not moving are left alone, which is the
+                // whole point of the per-chapter providers.
+                return ListView(
+                  padding: EdgeInsets.only(bottom: sectionGap),
+                  children: [
+                    _StorageMeterCard(),
+                    _BatchSummaryLine(),
+                    _QueueSection(),
+                    _PendingSection(),
+                    _SavedSection(),
+                  ],
+                );
+              },
+            ),
+      ),
+    );
+  }
+}
+
+/// The storage meter and the tally under it, reading the two numbers it is
+/// about and nothing else.
+///
+/// Kept apart from the screen's own build so a page landing leaves it alone:
+/// what it reports is how much saved reading is on the device, which a
+/// download changes only when it finishes.
+class _StorageMeterCard extends ConsumerWidget {
+  const _StorageMeterCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final storage = ref.watch(
+      downloadsProvider.select(
+        (state) => (
+          bytes: state.value?.totalBytes ?? 0,
+          chapters: state.value?.saved.length ?? 0,
         ),
       ),
+    );
+    return _StorageMeter(bytes: storage.bytes, chapters: storage.chapters);
+  }
+}
+
+/// The copies on the device, in the order the tab lists them.
+///
+/// What it watches is the list of ids, so a row is rebuilt when the copy it
+/// draws changes and not when another chapter's pages land: each row reads
+/// its own copy, and this list is left alone.
+class _SavedSection extends ConsumerWidget {
+  const _SavedSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ids = ref.watch(savedChapterIdsProvider);
+    return Column(
+      children: [
+        for (final id in ids) _SavedRow(key: ValueKey(id), chapterId: id),
+      ],
     );
   }
 }
@@ -131,15 +182,306 @@ class _StorageMeter extends StatelessWidget {
   }
 }
 
-class _SavedRow extends ConsumerWidget {
-  const _SavedRow({required this.chapter});
-
-  final SavedChapter chapter;
+/// The one line that answers "where is the batch" without reading every row:
+/// how many of its copies are on the device, and how far through the pages of
+/// the whole lot the work has got.
+///
+/// It watches only the summary, so a page landing on one chapter repaints
+/// this line and that chapter's row and nothing else on the screen. Drawn
+/// only while something is left to report: a count of zero of nothing is a
+/// line about a batch that is over.
+class _BatchSummaryLine extends ConsumerWidget {
+  const _BatchSummaryLine();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final dir = ref.watch(chapterDirProvider(chapter.chapterId)).value;
+    final summary = ref.watch(batchSummaryProvider);
+    if (summary == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, 8),
+      child: Text(
+        l10n.downloadsBatchSummary(
+          summary.done,
+          summary.total,
+          (summary.progress * 100).round(),
+        ),
+        style: PatraText.metadata(color: patraOffline),
+      ),
+    );
+  }
+}
+
+/// The copies still being fetched, with each one's own progress and its own
+/// cancel control.
+///
+/// Cancelling one leaves the rest running: a batch is several chapters the
+/// reader asked for in one tap, and dropping one of them is a smaller
+/// decision than dropping the lot.
+class _QueueSection extends ConsumerWidget {
+  const _QueueSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final membership = ref.watch(downloadMembershipProvider);
+    if (membership.inFlight.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
+          child: SectionLabel(l10n.downloadsQueueSection, color: patraOffline),
+        ),
+        for (final chapterId in membership.inFlight)
+          _DownloadingRow(chapterId: chapterId),
+      ],
+    );
+  }
+}
+
+/// One in-flight copy: the work the reader asked for, how far it has got,
+/// and the one control that takes it out of the batch.
+class _DownloadingRow extends ConsumerWidget {
+  const _DownloadingRow({required this.chapterId});
+
+  final int chapterId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final request = ref.watch(
+      downloadRecordProvider(chapterId).select((record) => record?.request),
+    );
+    if (request == null) return const SizedBox.shrink();
+    // A queued copy has pages to fetch and none fetched yet, so there is no
+    // total to be a fraction of: it says what it is waiting for rather than
+    // reporting zero.
+    final hasPageTotal = ref.watch(
+      downloadRecordProvider(chapterId)
+          .select((record) => (record?.totalPages ?? 0) > 0),
+    );
+    // The one number a landing page moves. Everything else in the row is
+    // resubscribed to things that do not, so it is left alone.
+    final progress = ref.watch(downloadProgressProvider(chapterId));
+    final tablet = isTabletLayout(context);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: gutter,
+        vertical: tablet ? 9 : 6,
+      ),
+      child: Row(
+        children: [
+          // Where the cover of a copy that has landed is: the same box, so a
+          // row in flight and a row on the device line up. What is in it is
+          // not a picture the device has — there are only pages so far — but
+          // the one thing a reader can tell from it, which is whether this
+          // copy is moving.
+          SizedBox(
+            width: tablet ? rowCoverWidthTablet : rowCoverWidth,
+            height: tablet ? rowCoverHeightTablet : rowCoverHeight,
+            child: Center(
+              child: SizedBox(
+                width: tablet ? 22 : 18,
+                height: tablet ? 22 : 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: patraOffline,
+                  value: hasPageTotal ? progress : null,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.seriesName.isEmpty
+                      ? request.title
+                      : request.seriesName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  request.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PatraText.metadata(size: tablet ? 12 : 11),
+                ),
+                const SizedBox(height: 7),
+                // A bar under a thing means how far through that thing one is
+                // — the rule every chapter row and library tile obeys — in the
+                // offline blue every download wears.
+                _CopyProgress(
+                  value: hasPageTotal ? progress : null,
+                  color: patraOffline,
+                  width: 180,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (!hasPageTotal)
+            Text(
+              l10n.downloadsWaiting,
+              style: PatraText.metadata(color: patraOffline),
+            ),
+          IconButton(
+            tooltip: l10n.cancelDownload(request.title),
+            icon: const Icon(Icons.cancel_outlined, size: 20),
+            color: patraTextMuted,
+            onPressed: () =>
+                ref.read(downloadsProvider.notifier).cancel(chapterId),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Copies that stopped before they were finished, which stay listed with a
+/// Retry instead of living in memory and disappearing.
+///
+/// A failure seen from anywhere but the series screen, or after a restart, is
+/// a failure the reader never saw — so it is named here, in the one tab that
+/// is about what is on the device.
+class _PendingSection extends ConsumerWidget {
+  const _PendingSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final pending = ref.watch(
+      downloadMembershipProvider.select((membership) => membership.pending),
+    );
+    if (pending.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
+          child: SectionLabel(l10n.downloadsPendingSection, color: patraDanger),
+        ),
+        for (final chapterId in pending) _PendingRow(chapterId: chapterId),
+      ],
+    );
+  }
+}
+
+/// One copy that stopped short, with the control that starts it again —
+/// from the pages it kept, not from the beginning.
+class _PendingRow extends ConsumerWidget {
+  const _PendingRow({required this.chapterId});
+
+  final int chapterId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    // Its own record, so a page landing on another chapter leaves this row —
+    // and the fact that it is waiting — alone.
+    final record = ref.watch(downloadRecordProvider(chapterId));
+    if (record == null) return const SizedBox.shrink();
+    final request = record.request;
+    final tablet = isTabletLayout(context);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: gutter,
+        vertical: tablet ? 9 : 6,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.seriesName.isEmpty
+                      ? request.title
+                      : request.seriesName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  request.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PatraText.metadata(size: tablet ? 12 : 11),
+                ),
+                const SizedBox(height: 3),
+                // The two are different facts: one was refused or lost the
+                // server, the other lost the app. Both keep their pages and
+                // both are one tap from going on.
+                Text(
+                  record.status == DownloadQueueStatus.failed
+                      ? l10n.downloadsFailed
+                      : l10n.downloadsStoppedShort,
+                  style: PatraText.metadata(
+                    size: tablet ? 12 : 11,
+                    color: patraDanger,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Worded, and of a width of its own: the same control the row's
+          // refresh is, so a retry reads as a tap on a word and not on the
+          // row it sits in.
+          InkWell(
+            onTap: () => ref
+                .read(downloadsProvider.notifier)
+                .retry(record.request.chapterId),
+            borderRadius: BorderRadius.circular(radiusPill),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 30, minWidth: 84),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: patraDanger.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(radiusPill),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.refresh, size: 14, color: patraDanger),
+                  const SizedBox(width: 7),
+                  Text(
+                    l10n.retry,
+                    style: PatraText.metadata(color: patraDanger),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavedRow extends ConsumerWidget {
+  const _SavedRow({super.key, required this.chapterId});
+
+  final int chapterId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    // Its own copy: a page landing on another chapter leaves this row alone,
+    // and reading progress mirrored into this one redraws only this row.
+    final chapter = ref.watch(savedChapterProvider(chapterId));
+    if (chapter == null) return const SizedBox.shrink();
+    final dir = ref.watch(chapterDirProvider(chapterId)).value;
     // The same row the series screen shows, and it grows the same way.
     final tablet = isTabletLayout(context);
     // What the server counts now, where that is not what this copy was made
@@ -210,25 +552,6 @@ class _SavedRow extends ConsumerWidget {
                     ),
                     // Progress is what tells you which volumes are done with
                     // and can go.
-                    if (!chapter.isRead && chapter.progress > 0) ...[
-                      const SizedBox(height: 7),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 180),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(1),
-                          child: LinearProgressIndicator(
-                            value: chapter.progress,
-                            minHeight: 2,
-                            backgroundColor: Colors.white.withValues(
-                              alpha: .07,
-                            ),
-                            valueColor: const AlwaysStoppedAnimation(
-                              patraAccent,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                     // A copy keeps the pagination it was made with (ADR-0009),
                     // so the count the server gives now is a fact about it:
                     // where the two disagree the copy says so, and is offered
@@ -250,6 +573,14 @@ class _SavedRow extends ConsumerWidget {
                         _RefreshCopy(chapter: chapter),
                       ],
                     ],
+                    if (!chapter.isRead && chapter.progress > 0) ...[
+                      const SizedBox(height: 7),
+                      _CopyProgress(
+                        value: chapter.progress,
+                        color: patraAccent,
+                        width: 180,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -259,7 +590,7 @@ class _SavedRow extends ConsumerWidget {
                 icon: const Icon(Icons.delete_outline, size: 20),
                 color: patraTextMuted,
                 onPressed: () async {
-                  if (await _confirmRemove(context, l10n)) {
+                  if (await _confirmRemove(context, l10n, chapter.label)) {
                     await ref
                         .read(downloadsProvider.notifier)
                         .remove(chapter.chapterId);
@@ -273,18 +604,18 @@ class _SavedRow extends ConsumerWidget {
     );
   }
 
+  /// Asked before a copy is deleted, naming the copy: what is about to go has
+  /// to be said before it goes, since nothing can reach these files after.
   Future<bool> _confirmRemove(
     BuildContext context,
     AppLocalizations l10n,
+    String title,
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: patraSurface,
-        title: Text(
-          l10n.removeDownloadConfirm(chapter.label),
-          style: PatraText.body(),
-        ),
+        title: Text(l10n.removeDownloadConfirm(title), style: PatraText.body()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -318,9 +649,12 @@ class _RefreshCopy extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // Only this chapter's record, and only the part of it that changes as
+    // pages land: a refresh in progress on one copy is not a reason to
+    // rebuild every other row on the screen.
     final stored = ref.watch(
-      downloadsProvider.select(
-        (state) => state.value?.inFlight[chapter.chapterId],
+      downloadRecordProvider(chapter.chapterId).select(
+        (record) => record?.isInFlight ?? false ? record?.progress : null,
       ),
     );
 
@@ -397,4 +731,38 @@ class _LocalThumb extends StatelessWidget {
     color: patraSurface,
     child: Icon(Icons.menu_book_outlined, size: 18, color: patraTextMuted),
   );
+}
+
+/// A progress bar under a copy, in the token every other bar in the app uses.
+///
+/// One widget because the Downloads tab draws it in three places — a copy on
+/// the device in the accent, a copy on its way in the offline blue — and a
+/// radius or a colour written twice is a radius or a colour that drifts.
+class _CopyProgress extends StatelessWidget {
+  const _CopyProgress({
+    required this.value,
+    required this.color,
+    this.width = 180,
+  });
+
+  /// 0..1, or null where there is nothing to be a fraction of yet.
+  final double? value;
+  final Color color;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: width),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radiusTrack / 2),
+        child: LinearProgressIndicator(
+          value: value,
+          minHeight: radiusTrack,
+          backgroundColor: patraTrack,
+          valueColor: AlwaysStoppedAnimation(color),
+        ),
+      ),
+    );
+  }
 }

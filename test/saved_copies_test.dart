@@ -141,12 +141,75 @@ class _RefreshRecordingNotifier extends DownloadsNotifier {
   final refreshed = Completer<SavedChapter>();
 
   @override
-  Future<DownloadsState> build() async =>
-      DownloadsState(saved: {chapter.chapterId: chapter});
+  Future<DownloadsState> build() async => DownloadsState.fromQueue({
+    chapter.chapterId: DownloadQueueRecord.completed(chapter, priority: 0),
+  });
 
   @override
   Future<void> refresh(SavedChapter chapter) async {
     if (!refreshed.isCompleted) refreshed.complete(chapter);
+  }
+}
+
+SavedChapter _queuedChapter(int id, String title) => SavedChapter(
+  chapterId: id,
+  seriesId: 3,
+  volumeId: 4,
+  libraryId: 1,
+  seriesName: 'Dune',
+  title: title,
+  pages: 4,
+  bytes: 0,
+  format: MangaFormat.epub,
+);
+
+class _QueueScreenNotifier extends DownloadsNotifier {
+  final cancelled = Completer<int>();
+  final retried = Completer<int>();
+  late final Map<int, DownloadQueueRecord> records = {
+    7: DownloadQueueRecord.completed(
+      _queuedChapter(7, 'Dune Messiah').copyWith(bytes: 40),
+      priority: 0,
+      batchId: 10,
+    ),
+    8: DownloadQueueRecord(
+      request: _queuedChapter(8, 'Children of Dune'),
+      status: DownloadQueueStatus.downloading,
+      priority: 1,
+      completedPages: 2,
+      totalPages: 4,
+      batchId: 10,
+    ),
+    9: DownloadQueueRecord(
+      request: _queuedChapter(9, 'God Emperor of Dune'),
+      status: DownloadQueueStatus.downloading,
+      priority: 2,
+      completedPages: 1,
+      totalPages: 4,
+      batchId: 10,
+    ),
+    10: DownloadQueueRecord(
+      request: _queuedChapter(10, 'Heretics of Dune'),
+      status: DownloadQueueStatus.failed,
+      priority: 3,
+      totalPages: 4,
+      batchId: 10,
+    ),
+  };
+
+  @override
+  Future<DownloadsState> build() async => DownloadsState.fromQueue(records);
+
+  @override
+  Future<void> cancel(int chapterId) async {
+    records.remove(chapterId);
+    state = AsyncData(DownloadsState.fromQueue(records));
+    if (!cancelled.isCompleted) cancelled.complete(chapterId);
+  }
+
+  @override
+  Future<void> retry(int chapterId) async {
+    if (!retried.isCompleted) retried.complete(chapterId);
   }
 }
 
@@ -268,6 +331,45 @@ Future<void> _pumpUntil(
 String get _stale => 'Out of date — the server now counts 12 pages';
 
 void main() {
+  testWidgets('the tab shows the batch and controls each queued copy', (
+    tester,
+  ) async {
+    final notifier = _QueueScreenNotifier();
+    await _pumpDownloads(
+      tester,
+      _room(),
+      _BookServer(),
+      downloadsNotifier: notifier,
+    );
+
+    expect(find.text('DOWNLOADING'), findsOneWidget);
+    expect(find.text('1 of 4 · 44%'), findsOneWidget);
+    // Progress is drawn rather than spelled out: the ring on the leading edge
+    // of each row and the bar under its title carry the same fraction.
+    expect(
+      tester
+          .widgetList<CircularProgressIndicator>(
+            find.byType(CircularProgressIndicator),
+          )
+          .map((indicator) => indicator.value),
+      [0.5, 0.25],
+    );
+    expect(find.text('Children of Dune'), findsOneWidget);
+    expect(find.text('God Emperor of Dune'), findsOneWidget);
+    expect(find.text('NEEDS ATTENTION'), findsOneWidget);
+    expect(find.text('Heretics of Dune'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Cancel Children of Dune'));
+    await tester.pump();
+
+    expect(await notifier.cancelled.future, 8);
+    expect(find.text('Children of Dune'), findsNothing);
+    expect(find.text('God Emperor of Dune'), findsOneWidget);
+
+    await tester.tap(find.text('Retry'));
+    expect(await notifier.retried.future, 10);
+  });
+
   testWidgets('the refresh control asks to store the copy again', (
     tester,
   ) async {

@@ -205,11 +205,13 @@ class DownloadQueueRecord {
     this.completedPages = 0,
     this.totalPages = 0,
     this.saved,
+    this.batchId,
   });
 
   factory DownloadQueueRecord.completed(
     SavedChapter saved, {
     required int priority,
+    int? batchId,
   }) => DownloadQueueRecord(
     request: saved,
     saved: saved,
@@ -217,6 +219,7 @@ class DownloadQueueRecord {
     priority: priority,
     completedPages: saved.pages,
     totalPages: saved.pages,
+    batchId: batchId,
   );
 
   final SavedChapter request;
@@ -225,6 +228,11 @@ class DownloadQueueRecord {
   final int completedPages;
   final int totalPages;
   final SavedChapter? saved;
+
+  /// The batch action this record belongs to, if it was enqueued as a batch.
+  /// Kept on completed records so the Downloads tab can report how much of
+  /// that request is done while its remaining chapters are still running.
+  final int? batchId;
 
   double get progress =>
       totalPages == 0 ? 0 : (completedPages / totalPages).clamp(0.0, 1.0);
@@ -240,6 +248,7 @@ class DownloadQueueRecord {
     int? completedPages,
     int? totalPages,
     SavedChapter? saved,
+    int? batchId,
     bool clearSaved = false,
   }) => DownloadQueueRecord(
     request: request ?? this.request,
@@ -248,6 +257,7 @@ class DownloadQueueRecord {
     completedPages: completedPages ?? this.completedPages,
     totalPages: totalPages ?? this.totalPages,
     saved: clearSaved ? null : saved ?? this.saved,
+    batchId: batchId ?? this.batchId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -257,6 +267,7 @@ class DownloadQueueRecord {
     'completedPages': completedPages,
     'totalPages': totalPages,
     'saved': saved?.toJson(),
+    'batchId': batchId,
   };
 
   static DownloadQueueRecord? fromJson(Object? json) {
@@ -278,6 +289,7 @@ class DownloadQueueRecord {
       completedPages: json['completedPages'] as int? ?? 0,
       totalPages: json['totalPages'] as int? ?? 0,
       saved: SavedChapter.fromJson(json['saved']),
+      batchId: json['batchId'] as int?,
     );
   }
 }

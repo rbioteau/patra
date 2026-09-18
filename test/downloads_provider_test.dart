@@ -14,10 +14,18 @@ import 'package:patra/src/downloads/downloads_service.dart';
 /// parameter, so a request without it is answered 400 — the bearer token is
 /// not enough.
 class _KavitaLikeAdapter implements HttpClientAdapter {
+  _KavitaLikeAdapter({this.apiKey = 'the-api-key'});
+
   int served = 0;
   int rejected = 0;
-  int active = 0;
+
+  /// What the server is given on every page request. Mutable, so a test can
+  /// take the credential away and hand it back — which is what a retry after
+  /// a refused run looks like.
+  String apiKey;
+
   int maxActive = 0;
+  int active = 0;
   int? failOnPage;
   final requestedPages = <int>[];
   final activeChapterRequests = <int, int>{};
@@ -64,8 +72,7 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
         },
       );
     }
-    if (options.queryParameters['apiKey'] is! String ||
-        (options.queryParameters['apiKey'] as String).isEmpty) {
+    if (options.queryParameters['apiKey'] != apiKey || apiKey.isEmpty) {
       rejected++;
       return ResponseBody.fromBytes(const [], 400);
     }
@@ -418,6 +425,187 @@ void main() {
       item.gate.complete();
     }
     await Future.wait([for (final item in pending.values) item.saving]);
+  });
+
+  test('a page landing hands no other chapter a new state', () async {
+    // What every row on the series screen and the Downloads tab asks of the
+    // store. A percentage that watched the whole state rebuilt every one of
+    // them on every single page, which is what made a batch stutter.
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    final gate = Completer<void>();
+    adapter.chapterGates[13] = gate.future;
+    final other = container
+        .read(downloadsProvider.notifier)
+        .save(_otherChapter);
+    await _waitFor(() => adapter.requestedPages.isNotEmpty);
+
+    var finishedCopyUpdates = 0;
+    final subscription = container.listen(
+      savedChapterProvider(12),
+      (_, _) => finishedCopyUpdates++,
+    );
+    addTearDown(subscription.close);
+
+    var inFlightUpdates = 0;
+    final otherSubscription = container.listen(
+      downloadRecordProvider(13),
+      (_, _) => inFlightUpdates++,
+    );
+    addTearDown(otherSubscription.close);
+
+    gate.complete();
+    await other;
+
+    expect(
+      finishedCopyUpdates,
+      0,
+      reason: 'a finished copy is the same copy however many pages land',
+    );
+    expect(
+      inFlightUpdates,
+      greaterThan(0),
+      reason: 'the chapter being fetched still reports its own progress',
+    );
+  });
+
+  test(
+    'a batch is counted as it goes, and while one of it is waiting',
+    () async {
+      // All three held at their first request, so the state read below is a
+      // state of the batch rather than wherever the fetches happen to be.
+      final gates = {
+        for (final id in [12, 13, 14]) id: Completer<void>(),
+      };
+      for (final entry in gates.entries) {
+        adapter.chapterGates[entry.key] = entry.value.future;
+      }
+      unawaited(
+        container.read(downloadsProvider.notifier).saveBatch([
+          _chapter,
+          _otherChapter,
+          _chapterWithId(14),
+        ]),
+      );
+      await _waitFor(
+        () => container.read(downloadsProvider).value?.inFlight.length == 3,
+      );
+
+      // One of the three let through: it lands, and leaves the section it was
+      // listed in — but not the batch it was asked for as part of.
+      gates[13]!.complete();
+      await _waitFor(
+        () => (container.read(downloadsProvider).value?.saved.length ?? 0) == 1,
+      );
+
+      final summary = container.read(batchSummaryProvider);
+      expect(summary, isNotNull);
+      expect(summary!.done, 1);
+      expect(summary.total, 3);
+      // Nine pages between the three of them, and three of them written: a
+      // batch of three is not a third done when its first chapter lands.
+      expect(summary.progress, closeTo(1 / 3, 0.001));
+      expect(
+        container.read(downloadsProvider).value!.inFlight.keys,
+        isNot(contains(13)),
+      );
+
+      for (final gate in gates.values) {
+        if (!gate.isCompleted) gate.complete();
+      }
+    },
+  );
+
+  test(
+    'a copy already on its way joins the batch it was asked for again',
+    () async {
+      final gate = Completer<void>();
+      adapter.chapterGates[13] = gate.future;
+      final saving = container
+          .read(downloadsProvider.notifier)
+          .save(_otherChapter);
+      await _waitFor(
+        () =>
+            container.read(downloadsProvider).value?.inFlight.containsKey(13) ??
+            false,
+      );
+
+      // Asked for again as part of a lot of two: it is not enqueued twice,
+      // but it is counted, or the summary would report a batch with a chapter
+      // missing from it.
+      await container.read(downloadsProvider.notifier).saveBatch([
+        _chapter,
+        _otherChapter,
+      ]);
+      final summary = container.read(batchSummaryProvider);
+      expect(summary, isNotNull);
+      expect(summary!.total, 2);
+
+      gate.complete();
+      await saving;
+    },
+  );
+
+  test('cancelling one of a batch leaves the rest of it running', () async {
+    final gate = Completer<void>();
+    adapter.chapterGates[12] = gate.future;
+    unawaited(
+      container.read(downloadsProvider.notifier).saveBatch([
+        _chapter,
+        _otherChapter,
+      ]),
+    );
+    await _waitFor(
+      () => container.read(downloadsProvider).value?.inFlight.length == 2,
+    );
+
+    await container.read(downloadsProvider.notifier).cancel(12);
+    // Cancelled outright rather than failed: it is not listed as something to
+    // come back to, and the copy beside it was never touched.
+    final state = container.read(downloadsProvider).value!;
+    expect(state.saved, isNot(contains(12)));
+    expect(state.failed, isEmpty);
+    expect(state.interrupted, isEmpty);
+    expect(state.inFlight.keys, contains(13));
+
+    gate.complete();
+    await _waitFor(
+      () => (container.read(downloadsProvider).value?.saved.length ?? 0) == 1,
+    );
+    expect(container.read(downloadsProvider).value!.saved.keys, [13]);
+  });
+
+  test('a batch that stopped short is still counted after a restart', () async {
+    adapter.failOnPage = 1;
+    await container.read(downloadsProvider.notifier).saveBatch([
+      _chapter,
+      _otherChapter,
+    ]);
+    await _waitFor(
+      () => (container.read(downloadsProvider).value?.failed.length ?? 0) == 2,
+    );
+    container.dispose();
+
+    // The app closed on a batch nothing had finished: what is on the device
+    // here is the queue, and the tab has to be able to say so.
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+    final summary = (await restarted.read(downloadsProvider.future))
+        .batchSummary;
+
+    expect(summary, isNotNull);
+    expect(summary!.done, 0);
+    expect(summary.total, 2);
+
+    // One of them is given another go, refetches only the page it was missing
+    // and keeps the batch it belongs to.
+    adapter
+      ..failOnPage = null
+      ..requestedPages.clear();
+    await restarted.read(downloadsProvider.notifier).retry(12);
+
+    expect(adapter.requestedPages, [1]);
+    expect(restarted.read(downloadsProvider).value?.saved, contains(12));
+    expect(restarted.read(batchSummaryProvider)?.done, 1);
   });
 
   test('a failed download is reported, not silently reverted', () async {
