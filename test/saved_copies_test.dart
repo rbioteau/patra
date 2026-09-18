@@ -374,29 +374,28 @@ void main() {
         contains('/api/Image/chapter-cover?chapterId=10'),
       ],
     );
-    // Progress is read on the trailing edge, where the heading above these
-    // rows is: one bar per copy, to the right of the title rather than
-    // starting wherever the title happens to end, and every one of them
-    // ending on the same line — however unlike the titles beside them are.
-    final bars = tester
-        .widgetList<LinearProgressIndicator>(
-          find.byType(LinearProgressIndicator),
-        )
-        .toList();
-    expect(bars.map((bar) => bar.value), [0.5, 0.25]);
-    final ends = {
-      for (final bar in bars) tester.getTopRight(find.byWidget(bar)).dx,
-    };
+    // Each copy on its way carries its own progress: on the cover, where
+    // every cover in the app carries the progress of what it pictures, and
+    // under the title, the same fraction twice.
     expect(
-      ends,
-      hasLength(1),
-      reason: 'every bar in the section ends on the same line',
+      tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .map((bar) => bar.value),
+      [0.5, 0.5, 0.25, 0.25],
     );
-    expect(
-      ends.single,
-      greaterThan(tester.getTopRight(find.text('Children of Dune')).dx),
-      reason: 'the bar is on the trailing edge, past the title',
-    );
+    // And each bar sits under the title it belongs to, not off on the row's
+    // trailing edge: a row of a batch is read down its own column.
+    for (final bar in tester.widgetList<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    )) {
+      expect(
+        tester.getTopLeft(find.byWidget(bar)).dx,
+        lessThan(tester.getTopRight(find.text('Children of Dune')).dx),
+        reason: 'the bar is in the row’s column, beside the title',
+      );
+    }
     expect(find.text('God Emperor of Dune'), findsOneWidget);
     expect(find.text('NEEDS ATTENTION'), findsOneWidget);
     expect(find.text('Heretics of Dune'), findsOneWidget);
