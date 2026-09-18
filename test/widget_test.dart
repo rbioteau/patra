@@ -348,6 +348,10 @@ void main() {
     mockPathProvider();
     tester.view.physicalSize = const Size(1200, 2200);
     tester.view.devicePixelRatio = 2;
+    // A status bar to pay for, so "under the app bar" is a claim with
+    // something in front of it.
+    tester.view.padding = const FakeViewPadding(top: 118);
+    tester.view.viewPadding = const FakeViewPadding(top: 118);
     addTearDown(tester.view.reset);
     // What the previous run was closed in the middle of, written down the way
     // the queue writes it down.
@@ -386,6 +390,17 @@ void main() {
       findsOneWidget,
     );
     expect(server.pages, isEmpty);
+    // Hung under the app bar of the screen it opened on, which is what keeps
+    // it off the status bar and what the notch has already been paid for —
+    // the strip asks for no inset of its own, and would sit twice as low if
+    // it did.
+    final appBar = tester.getBottomLeft(find.byType(AppBar)).dy;
+    expect(appBar, greaterThanOrEqualTo(59));
+    expect(
+      tester.getTopLeft(find.byType(MaterialBanner)).dy,
+      greaterThanOrEqualTo(appBar),
+      reason: 'the strip hangs under the app bar, not over the status bar',
+    );
   });
 
   testWidgets('leaving the foreground pauses a batch the app is running', (
