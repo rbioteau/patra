@@ -344,7 +344,23 @@ void main() {
     );
 
     expect(find.text('DOWNLOADING'), findsOneWidget);
+    // Where the batch stands is read on the heading's own line, at its
+    // trailing edge: an answer about the section, not a row above it.
     expect(find.text('1 of 4 · 44%'), findsOneWidget);
+    final heading = tester.getRect(
+      find.widgetWithText(SectionLabel, 'DOWNLOADING'),
+    );
+    final summary = tester.getRect(find.text('1 of 4 · 44%'));
+    expect(
+      summary.center.dy,
+      closeTo(heading.center.dy, 1),
+      reason: 'the summary is on the same line as the heading',
+    );
+    expect(
+      summary.right,
+      closeTo(heading.right, 1),
+      reason: 'and at its trailing edge, not under the title',
+    );
     // Each copy on its way is pictured: the cover of what is being fetched,
     // not a spinner where its cover will be. Filed under the shared cache
     // key, so the picture is the one the row will draw when it has landed.
