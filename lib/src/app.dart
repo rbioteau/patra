@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../l10n/generated/app_localizations.dart';
 import 'auth/session.dart';
 import 'features/downloads/downloads_screen.dart';
-import 'features/downloads/resume_prompt.dart';
+import 'features/downloads/resume_banner.dart';
 import 'features/home/home_screen.dart';
 import 'features/launch/launch_animation.dart';
 import 'features/library/library_screen.dart';
@@ -204,7 +204,7 @@ class _PatraShell extends StatelessWidget {
       // Around the shell rather than inside one tab: the one question a cold
       // start asks belongs to the app, not to the tab that lists the copies —
       // it has to be asked before the reader has done anything at all.
-      body: DownloadsResumePrompt(child: shell),
+      body: DownloadsResumeBanner(child: shell),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: patraBorder)),

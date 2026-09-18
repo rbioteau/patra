@@ -380,7 +380,7 @@ void main() {
 
     // The one question a launch asks, in words, over whatever the app opened
     // on — and not one page fetched behind it, however long it sits there.
-    expect(find.text('Resume downloads?'), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(
       find.text('One download stopped when the app closed.'),
       findsOneWidget,
@@ -451,7 +451,7 @@ void main() {
           container.read(downloadsProvider).value?.saved.containsKey(7) ??
           false,
     );
-    expect(find.text('Resume downloads?'), findsNothing);
+    expect(find.byType(MaterialBanner), findsNothing);
   });
 
   testWidgets('the navigation bar drops its labels when they do not fit', (

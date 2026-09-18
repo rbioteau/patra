@@ -528,9 +528,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resumeDownload => 'Resume';
 
   @override
-  String get resumeDownloadsTitle => 'Resume downloads?';
-
-  @override
   String resumeDownloadsBody(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

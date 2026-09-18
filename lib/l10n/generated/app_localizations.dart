@@ -872,13 +872,7 @@ abstract class AppLocalizations {
   /// **'Resume'**
   String get resumeDownload;
 
-  /// Title of the one question a cold start asks, where the app was closed with copies still being fetched. Nothing is fetched until it is answered
-  ///
-  /// In en, this message translates to:
-  /// **'Resume downloads?'**
-  String get resumeDownloadsTitle;
-
-  /// The cold-start question, naming how many copies are involved; each one keeps the pages it already has
+  /// The one question a cold start asks, in a strip across the app rather than a dialog: how many copies the previous run was closed in the middle of. Nothing is fetched until it is answered, and each copy keeps the pages it already has
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{One download stopped when the app closed.} other{{count} downloads stopped when the app closed.}}'**
