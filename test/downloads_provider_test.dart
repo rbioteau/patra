@@ -14,15 +14,13 @@ import 'package:patra/src/downloads/downloads_service.dart';
 /// parameter, so a request without it is answered 400 — the bearer token is
 /// not enough.
 class _KavitaLikeAdapter implements HttpClientAdapter {
-  _KavitaLikeAdapter({this.apiKey = 'the-api-key'});
-
   int served = 0;
   int rejected = 0;
 
-  /// What the server is given on every page request. Mutable, so a test can
-  /// take the credential away and hand it back — which is what a retry after
-  /// a refused run looks like.
-  String apiKey;
+  /// Whether the server answers every page request with 400, as Kavita does
+  /// for one carrying no `apiKey`. Mutable, so a test can refuse a run and
+  /// then let one through — which is what a retry after a failure is.
+  bool refuses = false;
 
   int maxActive = 0;
   int active = 0;
@@ -72,7 +70,7 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
         },
       );
     }
-    if (options.queryParameters['apiKey'] != apiKey || apiKey.isEmpty) {
+    if (refuses || options.queryParameters['apiKey'] is! String) {
       rejected++;
       return ResponseBody.fromBytes(const [], 400);
     }
@@ -171,15 +169,16 @@ const _otherProfileId = 'https://kavita.test#2';
 ProviderContainer _downloadsContainer(
   Directory root,
   _KavitaLikeAdapter adapter, {
-  String apiKey = 'the-api-key',
+  bool refuses = false,
   String profileId = _profileId,
 }) {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
     username: 'romain',
-    apiKey: apiKey,
+    apiKey: 'the-api-key',
   );
+  adapter.refuses = refuses;
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
   return ProviderContainer.test(
@@ -609,7 +608,7 @@ void main() {
   });
 
   test('a failed download is reported, not silently reverted', () async {
-    final failing = _downloadsContainer(root, adapter, apiKey: '');
+    final failing = _downloadsContainer(root, adapter, refuses: true);
 
     await failing.read(downloadsProvider.future);
     await failing.read(downloadsProvider.notifier).save(_chapter);
@@ -654,12 +653,12 @@ void main() {
   });
 
   test('a failed download is still failed after a restart', () async {
-    final failing = _downloadsContainer(root, adapter, apiKey: '');
+    final failing = _downloadsContainer(root, adapter, refuses: true);
     await failing.read(downloadsProvider.future);
     await failing.read(downloadsProvider.notifier).save(_chapter);
     failing.dispose();
 
-    final restarted = _downloadsContainer(root, adapter, apiKey: '');
+    final restarted = _downloadsContainer(root, adapter, refuses: true);
     addTearDown(restarted.dispose);
 
     final state = await restarted.read(downloadsProvider.future);
@@ -668,7 +667,7 @@ void main() {
     final otherProfile = _downloadsContainer(
       root,
       adapter,
-      apiKey: '',
+      refuses: true,
       profileId: _otherProfileId,
     );
     addTearDown(otherProfile.dispose);
