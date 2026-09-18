@@ -8,12 +8,13 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
 import '../../catalogue/catalogue_reads.dart' as catalogue;
+import '../../api/connection_failure.dart';
 import '../../routes.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
-import '../../api/connection_failure.dart';
 import '../../widgets/dashed_border.dart';
 import '../../widgets/offline_indicator.dart';
+import '../downloads/resume_strip.dart';
 
 /// Which library the Library tab is showing. Null means "the first one",
 /// resolved once the library list arrives.
@@ -209,7 +210,9 @@ class LibraryScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: libraries.when(
+        // The strip a cold start draws, above this screen's own body.
+        child: DownloadsResumeStrip(
+          child: libraries.when(
           loading: () => const _LibraryGridSkeleton(),
           error: (error, _) => _ErrorState(
             onRetry: () => ref.invalidate(catalogue.libraries.invalidatable),
@@ -249,6 +252,7 @@ class LibraryScreen extends ConsumerWidget {
               ],
             );
           },
+        ),
         ),
       ),
     );

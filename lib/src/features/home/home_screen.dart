@@ -14,6 +14,7 @@ import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/profile_avatar.dart';
+import '../downloads/resume_strip.dart';
 import '../library/library_screen.dart';
 import 'continue_hero.dart';
 
@@ -145,35 +146,40 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: RefreshIndicator(
-          onRefresh: () => _refresh(ref),
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: sectionGap),
-            children: [
-              if (everythingEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(gutter * 1.5),
-                  child: Text(
-                    l10n.homeEmpty,
-                    textAlign: TextAlign.center,
-                    style: PatraText.body(color: patraTextMuted),
+        // The strip a cold start draws, above this screen's own body: inside
+        // the SafeArea, under the app bar, and it asks for no inset of its
+        // own.
+        child: DownloadsResumeStrip(
+          child: RefreshIndicator(
+            onRefresh: () => _refresh(ref),
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: sectionGap),
+              children: [
+                if (everythingEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(gutter * 1.5),
+                    child: Text(
+                      l10n.homeEmpty,
+                      textAlign: TextAlign.center,
+                      style: PatraText.body(color: patraTextMuted),
+                    ),
                   ),
+                if (nothingCameBack && offline) const _OfflineHome(),
+                if (hero != null)
+                  ContinueHero(data: hero, onReturn: () => _refresh(ref)),
+                // On deck is the only list, and the hero is drawn from the very
+                // same answer — see `catalogue.onDeck`. Nothing else is fetched
+                // for the promotion, so the card and the shelf under it can
+                // never disagree about what is being read.
+                _Shelf(
+                  label: l10n.onDeckSection,
+                  series: onDeck,
+                  showProgress: true,
+                  onReturn: () => _refresh(ref),
                 ),
-              if (nothingCameBack && offline) const _OfflineHome(),
-              if (hero != null)
-                ContinueHero(data: hero, onReturn: () => _refresh(ref)),
-              // On deck is the only list, and the hero is drawn from the very
-              // same answer — see `catalogue.onDeck`. Nothing else is fetched
-              // for the promotion, so the card and the shelf under it can
-              // never disagree about what is being read.
-              _Shelf(
-                label: l10n.onDeckSection,
-                series: onDeck,
-                showProgress: true,
-                onReturn: () => _refresh(ref),
-              ),
-              _LibrariesSection(libraries: libraries),
-            ],
+                _LibrariesSection(libraries: libraries),
+              ],
+            ),
           ),
         ),
       ),

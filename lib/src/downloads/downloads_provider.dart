@@ -298,7 +298,19 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   /// What a **launch** found stopped and has not yet been given an answer
   /// about. Nothing in it is fetched: it is the whole of the difference
   /// between the app opening and the app coming back.
+  ///
+  /// It is a **hold**, not a question: the question can be dropped without the
+  /// hold being lifted — see [_asking].
   final _awaitingResume = <int>{};
+
+  /// Whether the app is still **asking** about [_awaitingResume].
+  ///
+  /// The reader who has been to the tab that lists the copies has been told
+  /// where they are and what can be done with each one, so the strip that
+  /// points at them stops being drawn. What ends there is the question and not
+  /// the hold: the copies stay paused, and nothing in them is fetched before a
+  /// tap.
+  var _asking = true;
 
   /// Whether this container has read its profile's queue once already. What a
   /// launch found is the *first* read; a rebuild is the same app reading its
@@ -384,10 +396,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         }
       }
     }
-    final next = DownloadsState.fromQueue(
-      _records,
-      awaitingResume: _awaitingResume,
-    );
+    final next = DownloadsState.fromQueue(_records, awaitingResume: _asked());
     unawaited(syncPendingProgress(next.saved.values));
     return next;
   }
@@ -444,6 +453,18 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     _drain();
   }
 
+  /// The reader has arrived at the tab that lists the copies, which is an
+  /// answer of its own: they can see every one of them there, paused, each
+  /// with the control that sends it on. So the app stops asking — the strip
+  /// is not drawn again in this launch — while the copies stay **paused** and
+  /// stay held: nothing in them is fetched before a tap, and nothing about
+  /// them is reworded. Visiting a tab is not a decision.
+  void seenStopped() {
+    if (!_asking) return;
+    _asking = false;
+    _writeState();
+  }
+
   /// The reader's word on the question a launch asked: everything the app
   /// left stopped goes again, from the pages it kept.
   Future<void> resumeStopped() => _answerLaunchPrompt(resume: true);
@@ -457,6 +478,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     if (_awaitingResume.isEmpty) return;
     final waiting = {..._awaitingResume};
     _awaitingResume.clear();
+    _asking = false;
     if (!await _ready()) return;
     if (resume) {
       _requeue(waiting);
@@ -861,10 +883,14 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
   void _writeState() {
     if (!_disposed) {
       state = AsyncData(
-        DownloadsState.fromQueue(_records, awaitingResume: _awaitingResume),
+        DownloadsState.fromQueue(_records, awaitingResume: _asked()),
       );
     }
   }
+
+  /// The copies the app is still asking about: the hold while the question
+  /// stands, and nothing once it has been dropped.
+  Set<int> _asked() => _asking ? _awaitingResume : const <int>{};
 
   void _complete(int chapterId) {
     final waiter = _waiters.remove(chapterId);

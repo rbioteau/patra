@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import 'auth/session.dart';
+import 'downloads/downloads_provider.dart';
 import 'features/downloads/downloads_screen.dart';
-import 'features/downloads/resume_banner.dart';
 import 'features/home/home_screen.dart';
 import 'features/launch/launch_animation.dart';
 import 'features/library/library_screen.dart';
@@ -162,10 +162,46 @@ final _routerProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-class _PatraShell extends StatelessWidget {
+class _PatraShell extends ConsumerStatefulWidget {
   const _PatraShell({required this.shell});
 
   final StatefulNavigationShell shell;
+
+  @override
+  ConsumerState<_PatraShell> createState() => _PatraShellState();
+}
+
+class _PatraShellState extends ConsumerState<_PatraShell> {
+  /// The tab that lists the copies, which is the answer to the strip that
+  /// points at them — see [_arrived].
+  static const _downloads = 2;
+
+  /// Arriving at the Downloads tab closes the question a cold start asked.
+  ///
+  /// That tab is where every stopped copy is listed with the control that
+  /// sends it on, so a strip pointing at them there would be the same sentence
+  /// twice on one screen — and once the reader has been shown them, the app
+  /// has nothing left to ask. What it does *not* do is answer for them: the
+  /// copies stay paused, and stay held, exactly as they were (`seenStopped`).
+  ///
+  /// Here rather than in a tap handler because a branch can be reached without
+  /// tapping the bar (Home's offline state has a way onto that tab), and this
+  /// is the one place that sees every one of them.
+  @override
+  void didUpdateWidget(_PatraShell previous) {
+    super.didUpdateWidget(previous);
+    if (widget.shell.currentIndex != _downloads) return;
+    // Nothing asked, nothing to close. Read rather than watched: this is the
+    // moment of arrival, not a fact the shell draws with.
+    if (ref.read(downloadsProvider).value?.awaitingResume.isEmpty ?? true) {
+      return;
+    }
+    // After the frame, because a provider may not be written while the tree is
+    // being built — and this runs inside it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(downloadsProvider.notifier).seenStopped();
+    });
+  }
 
   /// Whether every label fits on one line in its share of the bar.
   ///
@@ -201,24 +237,21 @@ class _PatraShell extends StatelessWidget {
     final showLabels = _labelsFit(context, labels);
 
     return Scaffold(
-      // Around the shell rather than inside one tab: the one question a cold
-      // start asks belongs to the app, not to the tab that lists the copies —
-      // it has to be asked before the reader has done anything at all.
-      body: DownloadsResumeBanner(child: shell),
+      body: widget.shell,
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: patraBorder)),
         ),
         child: NavigationBar(
-          selectedIndex: shell.currentIndex,
+          selectedIndex: widget.shell.currentIndex,
           height: showLabels ? 68 : 56,
           labelBehavior: showLabels
               ? NavigationDestinationLabelBehavior.alwaysShow
               : NavigationDestinationLabelBehavior.alwaysHide,
           // goBranch keeps each tab's own navigation stack.
-          onDestinationSelected: (index) => shell.goBranch(
+          onDestinationSelected: (index) => widget.shell.goBranch(
             index,
-            initialLocation: index == shell.currentIndex,
+            initialLocation: index == widget.shell.currentIndex,
           ),
           destinations: [
             NavigationDestination(

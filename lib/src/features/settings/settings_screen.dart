@@ -16,6 +16,7 @@ import '../../settings/profile_preferences.dart';
 import '../../theme.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/profile_lock_sheet.dart';
+import '../downloads/resume_strip.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -30,75 +31,78 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: SafeArea(
         top: false,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: sectionGap),
-          children: [
-            _Section(label: l10n.serverSectionLabel),
-            if (session != null)
-              _ServerCard(
-                host: session.host,
-                username: session.username,
-                actionLabel: l10n.switchProfile,
-                onTap: () => ref.read(authProvider.notifier).switchProfile(),
+        // The strip a cold start draws, above this screen's own body.
+        child: DownloadsResumeStrip(
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: sectionGap),
+            children: [
+              _Section(label: l10n.serverSectionLabel),
+              if (session != null)
+                _ServerCard(
+                  host: session.host,
+                  username: session.username,
+                  actionLabel: l10n.switchProfile,
+                  onTap: () => ref.read(authProvider.notifier).switchProfile(),
+                ),
+              if (session != null) _ProfileLockRow(profile: session),
+              const _OtherProfiles(),
+
+              _Section(label: l10n.generalSectionLabel),
+              _SettingRow(
+                icon: const Icon(Icons.language, size: 18, color: patraAccent),
+                title: l10n.appLanguage,
+                value: locale == null
+                    ? l10n.appLanguageSystem
+                    : languageEndonym(locale),
+                onTap: () => _pickLanguage(context, ref, locale),
               ),
-            if (session != null) _ProfileLockRow(profile: session),
-            const _OtherProfiles(),
 
-            _Section(label: l10n.generalSectionLabel),
-            _SettingRow(
-              icon: const Icon(Icons.language, size: 18, color: patraAccent),
-              title: l10n.appLanguage,
-              value: locale == null
-                  ? l10n.appLanguageSystem
-                  : languageEndonym(locale),
-              onTap: () => _pickLanguage(context, ref, locale),
-            ),
+              // There is no reading section here any more (#58): everything the
+              // reader's preferences can be is set from the reader's own sheet,
+              // which is where somebody notices they want them. What this held
+              // was a default for every series at once, which is precisely the
+              // wrong shape for a direction (ADR-0007).
+              _Section(label: l10n.storageSectionLabel),
+              const _StorageRows(),
 
-            // There is no reading section here any more (#58): everything the
-            // reader's preferences can be is set from the reader's own sheet,
-            // which is where somebody notices they want them. What this held
-            // was a default for every series at once, which is precisely the
-            // wrong shape for a direction (ADR-0007).
-            _Section(label: l10n.storageSectionLabel),
-            const _StorageRows(),
-
-            _Section(label: l10n.aboutSectionLabel),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: gutter,
-                vertical: 6,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const PatraLockup(size: 18),
-                      const SizedBox(width: 10),
-                      // The tagline is a sentence: it wraps here rather than
-                      // running off the row.
-                      Expanded(
-                        child: Text(
-                          l10n.appTagline,
-                          style: PatraText.metadata(),
+              _Section(label: l10n.aboutSectionLabel),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: gutter,
+                  vertical: 6,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const PatraLockup(size: 18),
+                        const SizedBox(width: 10),
+                        // The tagline is a sentence: it wraps here rather than
+                        // running off the row.
+                        Expanded(
+                          child: Text(
+                            l10n.appTagline,
+                            style: PatraText.metadata(),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const _AppVersion(),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const _AppVersion(),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: sectionGap),
-            // No sign-out button, deliberately: there are two verbs and this
-            // was neither of them. Leaving is switching — the card above,
-            // which keeps the credential — and the signed-out state still
-            // exists for the one thing that really produces it, a key the
-            // server has stopped accepting.
-            if (session != null) _ForgetProfile(profile: session),
-          ],
+              const SizedBox(height: sectionGap),
+              // No sign-out button, deliberately: there are two verbs and this
+              // was neither of them. Leaving is switching — the card above,
+              // which keeps the credential — and the signed-out state still
+              // exists for the one thing that really produces it, a key the
+              // server has stopped accepting.
+              if (session != null) _ForgetProfile(profile: session),
+            ],
+          ),
         ),
       ),
     );
