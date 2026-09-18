@@ -141,7 +141,6 @@
   "downloadsFailed": "N'a pas pu finir",
   "downloadsPaused": "En pause",
   "resumeDownload": "Reprendre",
-  "resumeDownloadsTitle": "Reprendre les téléchargements ?",
   "resumeDownloadsBody": "{count, plural, =1{Un téléchargement s'est arrêté à la fermeture de l'application.} other{{count} téléchargements se sont arrêtés à la fermeture de l'application.}}",
   "resumeDownloadsLater": "Plus tard",
   "cancelDownload": "Annuler {title}",

@@ -9,7 +9,7 @@ import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
-import 'package:patra/src/features/downloads/resume_prompt.dart';
+import 'package:patra/src/features/downloads/resume_banner.dart';
 import 'package:patra/src/theme.dart';
 
 import 'test_support.dart';
@@ -71,8 +71,8 @@ Future<Directory> _interruptedRoom(List<int> chapterIds) async {
   return root;
 }
 
-/// The prompt, around an app that draws nothing of its own: what is under
-/// test is the question, not the shell it is mounted around.
+/// The strip, around an app that draws nothing of its own: what is under test
+/// is the question, not the shell it is mounted above.
 Future<ProviderContainer> _pump(
   WidgetTester tester,
   Directory root,
@@ -102,7 +102,7 @@ Future<ProviderContainer> _pump(
         theme: patraTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const DownloadsResumePrompt(child: Scaffold(body: SizedBox())),
+        home: const DownloadsResumeBanner(child: Scaffold(body: SizedBox())),
       ),
     ),
   );
@@ -118,17 +118,20 @@ void main() {
     final server = _PageServer();
     final container = await _pump(tester, root, server);
 
-    expect(find.text('Resume downloads?'), findsOneWidget);
+    // A strip across the app rather than a dialog in the middle of it: the
+    // sentence, and two worded answers, over a screen the reader can go on
+    // using.
     expect(
       find.text('2 downloads stopped when the app closed.'),
       findsOneWidget,
     );
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(server.requested, isEmpty, reason: 'nothing before the answer');
 
     await tester.tap(find.text('Resume'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Resume downloads?'), findsNothing);
+    expect(find.byType(MaterialBanner), findsNothing);
     await pumpUntil(
       tester,
       () => container.read(downloadsProvider).value?.saved.length == 2,
@@ -157,7 +160,7 @@ void main() {
     await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Resume downloads?'), findsNothing);
+    expect(find.byType(MaterialBanner), findsNothing);
     await pumpUntil(
       tester,
       () =>
