@@ -242,6 +242,32 @@ void main() {
     expect(jsonDecode(meta.readAsStringSync())['seriesName'], 'Blame!');
   });
 
+  test('a copy named after Kavita’s sentinel names nothing', () async {
+    // A volume with no chapter breakdown is named after the volume now, but
+    // copies already on the device were stored with the placeholder's number
+    // and cannot be renamed from here: the row is what refuses to say it.
+    SavedChapter named(String title) => SavedChapter(
+      chapterId: _chapter.chapterId,
+      seriesId: _chapter.seriesId,
+      volumeId: _chapter.volumeId,
+      libraryId: _chapter.libraryId,
+      seriesName: _chapter.seriesName,
+      title: title,
+      pages: _chapter.pages,
+      bytes: _chapter.bytes,
+    );
+
+    expect(named('-100000').resolvedTitle, isEmpty);
+    expect(_chapter.resolvedTitle, _chapter.title);
+    expect(
+      named('-1000').resolvedTitle,
+      '-1000',
+      reason:
+          'a number a reader could have typed is not Kavita’s '
+          'bookkeeping, however odd a title it makes',
+    );
+  });
+
   test('scan returns saved chapters', () async {
     await service.download(
       client: _client(_PageAdapter()),

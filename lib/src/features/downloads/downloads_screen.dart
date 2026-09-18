@@ -11,6 +11,7 @@ import '../../downloads/downloads_service.dart';
 import '../../auth/session.dart';
 import '../../format.dart';
 import '../../theme.dart';
+import '../../widgets/cover.dart';
 import '../../widgets/read_mark.dart';
 
 class DownloadsScreen extends ConsumerWidget {
@@ -265,6 +266,10 @@ class _DownloadingRow extends ConsumerWidget {
     // resubscribed to things that do not, so it is left alone.
     final progress = ref.watch(downloadProgressProvider(chapterId));
     final tablet = isTabletLayout(context);
+    // A copy of a volume with no chapter breakdown was stored before the
+    // label was fixed, and is named after Kavita's sentinel: it names
+    // nothing, so the row leads with the series alone.
+    final title = request.resolvedTitle;
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -273,25 +278,15 @@ class _DownloadingRow extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          // Where the cover of a copy that has landed is: the same box, so a
-          // row in flight and a row on the device line up. What is in it is
-          // not a picture the device has — there are only pages so far — but
-          // the one thing a reader can tell from it, which is whether this
-          // copy is moving.
-          SizedBox(
-            width: tablet ? rowCoverWidthTablet : rowCoverWidth,
-            height: tablet ? rowCoverHeightTablet : rowCoverHeight,
-            child: Center(
-              child: SizedBox(
-                width: tablet ? 22 : 18,
-                height: tablet ? 22 : 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: patraOffline,
-                  value: hasPageTotal ? progress : null,
-                ),
-              ),
-            ),
+          // The cover of what is being fetched, which is the whole of how a
+          // reader recognises a row in a batch of five. It comes from the
+          // server, as the row's own does, and it carries the download's
+          // progress on its bottom edge the way every cover in the app
+          // carries the progress of what it pictures.
+          _CopyCover(
+            request: request,
+            progress: hasPageTotal ? progress : null,
+            color: patraOffline,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -299,20 +294,20 @@ class _DownloadingRow extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request.seriesName.isEmpty
-                      ? request.title
-                      : request.seriesName,
+                  request.seriesName.isEmpty ? title : request.seriesName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  request.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: PatraText.metadata(size: tablet ? 12 : 11),
-                ),
+                if (title.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: PatraText.metadata(size: tablet ? 12 : 11),
+                  ),
+                ],
                 const SizedBox(height: 7),
                 // A bar under a thing means how far through that thing one is
                 // — the rule every chapter row and library tile obeys — in the
@@ -332,12 +327,72 @@ class _DownloadingRow extends ConsumerWidget {
               style: PatraText.metadata(color: patraOffline),
             ),
           IconButton(
-            tooltip: l10n.cancelDownload(request.title),
+            tooltip: l10n.cancelDownload(title),
             icon: const Icon(Icons.cancel_outlined, size: 20),
             color: patraTextMuted,
             onPressed: () =>
                 ref.read(downloadsProvider.notifier).cancel(chapterId),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The cover of a copy that has not landed, which is the whole of how a
+/// reader recognises one row of a batch from another.
+///
+/// Fetched from the server, as the row's own cover is, and filed under the
+/// shared cache key, so a chapter being fetched and the same chapter already
+/// on the device are one picture on the disk rather than two. What is pinned
+/// to its bottom edge is the download's progress, in the offline blue every
+/// download wears — a bar on a cover says how far through the thing
+/// pictured it is, and here the thing pictured is the fetch.
+class _CopyCover extends ConsumerWidget {
+  const _CopyCover({
+    required this.request,
+    required this.progress,
+    required this.color,
+  });
+
+  /// The copy being fetched, which names the series and the chapter the
+  /// cover belongs to.
+  final SavedChapter request;
+
+  /// 0..1, or null where there is no page total to be a fraction of yet.
+  final double? progress;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(kavitaClientProvider);
+    final tablet = isTabletLayout(context);
+    return SizedBox(
+      width: tablet ? rowCoverWidthTablet : rowCoverWidth,
+      height: tablet ? rowCoverHeightTablet : rowCoverHeight,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          CoverImage(
+            url: client.chapterCoverUrl(request.chapterId),
+            headers: client.imageHeaders,
+            seriesId: request.seriesId,
+            seriesName: request.seriesName,
+            radius: radiusThumb,
+          ),
+          // Nothing is drawn where there is nothing to report: a copy that
+          // has not started, or one waiting to be given another go, keeps its
+          // cover clean rather than wearing a bar that sweeps and says no
+          // more than the heading above it already does.
+          if (progress != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(radiusThumb),
+              child: _CopyProgress(
+                value: progress,
+                color: color,
+                width: double.infinity,
+              ),
+            ),
         ],
       ),
     );
@@ -390,6 +445,7 @@ class _PendingRow extends ConsumerWidget {
     if (record == null) return const SizedBox.shrink();
     final request = record.request;
     final tablet = isTabletLayout(context);
+    final title = request.resolvedTitle;
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -398,25 +454,30 @@ class _PendingRow extends ConsumerWidget {
       ),
       child: Row(
         children: [
+          // The same cover the row would have once it has landed: what is
+          // waiting to be given another go is recognisable or it is not
+          // worth listing.
+          _CopyCover(request: request, progress: null, color: patraDanger),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request.seriesName.isEmpty
-                      ? request.title
-                      : request.seriesName,
+                  request.seriesName.isEmpty ? title : request.seriesName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  request.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: PatraText.metadata(size: tablet ? 12 : 11),
-                ),
+                if (title.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: PatraText.metadata(size: tablet ? 12 : 11),
+                  ),
+                ],
                 const SizedBox(height: 3),
                 // The two are different facts: one was refused or lost the
                 // server, the other lost the app. Both keep their pages and

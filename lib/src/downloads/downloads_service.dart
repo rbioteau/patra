@@ -119,6 +119,20 @@ class SavedChapter {
   double get progress => pages == 0 ? 0 : (pagesRead / pages).clamp(0.0, 1.0);
   bool get isRead => pages > 0 && pagesRead >= pages;
 
+  /// Whether [title] is a copy named after Kavita's bookkeeping rather than
+  /// after the work: the sentinel a placeholder chapter carries, which is a
+  /// number to nobody. Copies made before the label was fixed were stored
+  /// with it, so a copy read back off the disk is asked rather than trusted —
+  /// what is drawn then falls back to the series, which is what every row
+  /// leads with and what a reader recognises a copy by.
+  static bool isSentinelTitle(String title) =>
+      num.tryParse(title)?.abs() == Chapter.defaultNumber.abs();
+
+  /// What this copy is called, with Kavita's bookkeeping taken out: a title
+  /// that is only the sentinel number names nothing, so it is left empty and
+  /// the row leads with the series instead.
+  String get resolvedTitle => isSentinelTitle(title) ? '' : title;
+
   /// Whether the copy is out of step with the server: it was made with a
   /// count of pages the server no longer gives.
   bool get outOfDate => serverPages != null;

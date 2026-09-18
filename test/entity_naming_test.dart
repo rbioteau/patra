@@ -152,6 +152,32 @@ void main() {
         'Le Combat ordinaire',
       );
     });
+
+    // The one place a chapter's number is stored rather than drawn: the copy
+    // a reader saves. A volume with no chapter breakdown is the reading unit
+    // there too, so its copy is named after the volume — a row in the
+    // Downloads tab reading "-100000" names nothing a reader recognises.
+    test('a copy of a volume with no chapters is named by the volume', () {
+      final v = Volume.fromJson({
+        'id': 1,
+        'name': '2',
+        'minNumber': 2,
+        'chapters': [
+          {'id': 7, 'range': '-100000', 'minNumber': -100000},
+        ],
+      });
+      final chapter = v.chapters.first;
+      expect(chapter.isVolumePlaceholder, isTrue);
+      expect(
+        LibraryType.manga.chapterTitle(en, chapter),
+        contains('100000'),
+        reason:
+            'the chapter on its own has no honest name, which is why the '
+            'copy is named after the volume it stands for',
+      );
+      expect(LibraryType.manga.volumeLabel(en, v.name), 'Volume 2');
+      expect(LibraryType.manga.volumeLabel(fr, v.name), 'Tome 2');
+    });
   });
 
   group('naming what reading resumes at', () {

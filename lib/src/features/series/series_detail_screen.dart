@@ -348,7 +348,14 @@ class SeriesDetailScreen extends ConsumerWidget {
       volumeId: volume.id,
       libraryId: libraryId,
       seriesName: seriesName,
-      title: type.chapterTitle(l10n, chapter),
+      // A volume with no chapter breakdown is the reading unit, so its copy
+      // is named after the volume: the chapter carrying its pages is
+      // Kavita's placeholder, whose number is the -100000 sentinel, and a
+      // copy named "-100000" in the Downloads tab is a copy a reader cannot
+      // recognise. The same choice the row's own label already makes.
+      title: chapter.isVolumePlaceholder && volume.isNumbered
+          ? type.volumeLabel(l10n, volume.name)
+          : type.chapterTitle(l10n, chapter),
       pages: chapter.pages,
       bytes: 0,
       pagesRead: chapter.pagesRead,
