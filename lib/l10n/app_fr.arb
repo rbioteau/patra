@@ -226,6 +226,7 @@
     }
   },
 
+  "inThisSeries": "Dans cette série",
   "sortSheetTitle": "Trier",
   "sortTooltip": "Trier : {order}",
   "sortReadingPosition": "Position de lecture",

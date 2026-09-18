@@ -699,6 +699,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get inThisSeries => 'Dans cette série';
+
+  @override
   String get sortSheetTitle => 'Trier';
 
   @override

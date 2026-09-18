@@ -84,6 +84,27 @@ List<Map<String, dynamic>> _underWay() => [
   _specials([_chapter(108, '', isSpecial: true, title: 'Omake')]),
 ];
 
+/// A series that holds all three kinds at once: a volume with a chapter
+/// breakdown, chapters that belong to no volume, and a special. Chapter 1 is
+/// read, chapter 2 is under way, the rest is untouched.
+List<Map<String, dynamic>> _mixed() => [
+  _volume(10, '1', [
+    _chapter(101, '1', pagesRead: 10),
+    _chapter(102, '2', pagesRead: 4),
+    _chapter(103, '3'),
+  ]),
+  _loose([_chapter(104, '12'), _chapter(105, '13')]),
+  _specials([_chapter(106, '', isSpecial: true, title: 'Omake')]),
+];
+
+Map<String, dynamic> _loose(List<Map<String, dynamic>> chapters) => {
+  'id': 80,
+  'name': '-100000',
+  'minNumber': -100000,
+  'pages': chapters.fold<int>(0, (n, c) => n + (c['pages'] as int)),
+  'chapters': chapters,
+};
+
 List<Map<String, dynamic>> _untouched() => [
   _volume(10, '1', [_chapter(101, '1'), _chapter(102, '2')]),
   _volume(11, '2', [_chapter(103, '3')]),
@@ -309,6 +330,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('SORT'), findsNothing);
       expect(find.text('VOLUMES'), findsOneWidget);
+    });
+
+    testWidgets('a series of all three kinds groups all three', (tester) async {
+      // Volumes with a chapter breakdown, chapters belonging to no volume,
+      // and a special — the reading-position view is built over
+      // `orderedChapters`, which flattens exactly that, so the grouping is
+      // by what is left to read and never by what kind of row it is.
+      await _pump(tester, _mixed());
+
+      expect(find.text('READING NOW'), findsOneWidget);
+      expect(find.text('UP NEXT'), findsOneWidget);
+      expect(find.text('ALREADY READ · 1'), findsOneWidget);
+
+      // Nothing is lost between the kinds: the volume's remaining chapter,
+      // both loose chapters and the special are all under "Up next", in
+      // reading order, with the special last.
+      expect('Chapter 3', above(tester, 'Chapter 12'));
+      expect('Chapter 12', above(tester, 'Chapter 13'));
+      expect('Chapter 13', above(tester, 'Omake'));
+
+      // The sub-headers name the container the rows are in: the volume over
+      // its chapters in each group it has rows in, and the specials over the
+      // special — which in this view takes part in the grouping rather than
+      // closing the screen.
+      expect(find.text('Volume 1'), findsNWidgets(2));
+      expect(find.text('Specials'), findsOneWidget);
+      // The read one is folded away with everything else read, whichever
+      // kind it was.
+      expect(find.text('Chapter 1'), findsNothing);
     });
 
     testWidgets('the row under way is tinted, and only it', (tester) async {

@@ -725,6 +725,10 @@
     }
   },
 
+  "inThisSeries": "In this series",
+  "@inThisSeries": {
+    "description": "Header of the list under the series hero, over whatever that series turns out to hold — volumes, chapters, specials. Deliberately not the library's unit: the list heads its own sections, and a unit would name only one of the kinds of row under it. The sort control hangs off this row"
+  },
   "sortSheetTitle": "Sort",
   "@sortSheetTitle": {
     "description": "Header of the sheet the sort control on the series screen opens, over the three orders it offers"

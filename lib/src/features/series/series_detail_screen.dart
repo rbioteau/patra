@@ -580,18 +580,28 @@ class SeriesDetailScreen extends ConsumerWidget {
           gutter,
           14 - _SortButton.boxInset,
         ),
-        // The trigger alone, on the trailing edge. The prototype anchors it
-        // with a "Chapters" header and a count, and neither survives the
-        // move: the hero above already tallies the series, and the list
-        // below heads its own sections — so a header here says "Chapters"
-        // directly above a "Chapters", and says "Issues" twice in a comic
-        // library. What the control is stays worded all the same: its
-        // tooltip and its semantics label both name the order in force.
-        child: Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: _SortButton(
-            sort: view.sort,
-            onPick: ref.read(seriesListViewProvider.notifier).sortBy,
+        // The header the prototype gives the list, and the edge its controls
+        // hang off. It does **not** name the unit the way the prototype's
+        // "Chapters" does: this list holds volumes, loose chapters and
+        // specials at once, the repo already refuses to call four volumes
+        // "4 chapters" in the hero's tally right above it, and the list
+        // heads its own sections — so a unit here would both lie and say
+        // "Issues" twice over in a comic library. It names the *series'*
+        // contents instead, which is true whatever the sections turn out to
+        // be, and collides with no header under it.
+        child: SectionLabel(
+          l10n.inThisSeries,
+          // A row of controls rather than one: the sort trigger is the
+          // first, and what switches this list between rows and a grid will
+          // sit beside it on the same edge.
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SortButton(
+                sort: view.sort,
+                onPick: ref.read(seriesListViewProvider.notifier).sortBy,
+              ),
+            ],
           ),
         ),
       ),

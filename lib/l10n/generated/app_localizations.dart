@@ -1130,6 +1130,12 @@ abstract class AppLocalizations {
   /// **'{count} chapters'**
   String batchDownloadSizeOption(int count);
 
+  /// Header of the list under the series hero, over whatever that series turns out to hold — volumes, chapters, specials. Deliberately not the library's unit: the list heads its own sections, and a unit would name only one of the kinds of row under it. The sort control hangs off this row
+  ///
+  /// In en, this message translates to:
+  /// **'In this series'**
+  String get inThisSeries;
+
   /// Header of the sheet the sort control on the series screen opens, over the three orders it offers
   ///
   /// In en, this message translates to:
