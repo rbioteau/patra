@@ -72,7 +72,6 @@ class DownloadsScreen extends ConsumerWidget {
                   padding: EdgeInsets.only(bottom: sectionGap),
                   children: [
                     _StorageMeterCard(),
-                    _BatchSummaryLine(),
                     _QueueSection(),
                     _PendingSection(),
                     _SavedSection(),
@@ -183,36 +182,6 @@ class _StorageMeter extends StatelessWidget {
   }
 }
 
-/// The one line that answers "where is the batch" without reading every row:
-/// how many of its copies are on the device, and how far through the pages of
-/// the whole lot the work has got.
-///
-/// It watches only the summary, so a page landing on one chapter repaints
-/// this line and that chapter's row and nothing else on the screen. Drawn
-/// only while something is left to report: a count of zero of nothing is a
-/// line about a batch that is over.
-class _BatchSummaryLine extends ConsumerWidget {
-  const _BatchSummaryLine();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final summary = ref.watch(batchSummaryProvider);
-    if (summary == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(gutter, 4, gutter, 8),
-      child: Text(
-        l10n.downloadsBatchSummary(
-          summary.done,
-          summary.total,
-          (summary.progress * 100).round(),
-        ),
-        style: PatraText.metadata(color: patraOffline),
-      ),
-    );
-  }
-}
-
 /// The copies still being fetched, with each one's own progress and its own
 /// cancel control.
 ///
@@ -226,13 +195,32 @@ class _QueueSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final membership = ref.watch(downloadMembershipProvider);
+    // Where the batch stands, on the heading's own line and at its trailing
+    // edge: it is an answer about the section, not another row above it, and
+    // a line of its own made the heading look like it belonged to the meter
+    // instead. Null where there is nothing left to report — a count of zero
+    // of nothing is a report about a batch that is over.
+    final summary = ref.watch(batchSummaryProvider);
     if (membership.inFlight.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
-          child: SectionLabel(l10n.downloadsQueueSection, color: patraOffline),
+          child: SectionLabel(
+            l10n.downloadsQueueSection,
+            color: patraOffline,
+            trailing: summary == null
+                ? null
+                : Text(
+                    l10n.downloadsBatchSummary(
+                      summary.done,
+                      summary.total,
+                      (summary.progress * 100).round(),
+                    ),
+                    style: PatraText.metadata(color: patraOffline),
+                  ),
+          ),
         ),
         for (final chapterId in membership.inFlight)
           _DownloadingRow(chapterId: chapterId),
