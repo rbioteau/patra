@@ -687,6 +687,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get licensesTitle => 'Licences';
+
+  @override
   String sizeBytes(int count) {
     return '$count o';
   }
