@@ -533,7 +533,7 @@ void main() {
     // queue listens to, so this is the whole path a device takes.
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     final paused = container.read(downloadsProvider).value!;
-    expect(paused.paused, contains(7));
+    expect(paused.pausedByApp, contains(7));
     expect(paused.inFlight, isEmpty);
     expect(paused.failed, isEmpty);
 

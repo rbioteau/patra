@@ -477,18 +477,11 @@
 
   "savePill": "Save",
   "@savePill": {
-    "description": "Download action on a chapter; always worded, never icon-only"
-  },
-  "downloadingPct": "{percent}%",
-  "@downloadingPct": {
-    "description": "Download in progress; tapping cancels",
-    "placeholders": {
-      "percent": {"type": "int"}
-    }
+    "description": "The word on a chapter's download pill where nobody has asked for the chapter yet, and the tap is what starts the fetch. Always worded, never icon-only"
   },
   "savedPill": "Saved",
   "@savedPill": {
-    "description": "Chapter is available offline; tapping removes it"
+    "description": "A copy of the chapter is on the device. A mark and not a control: the pill says all is well, and taking the copy off the device is a swipe on the row it sits in"
   },
   "downloadsTitle": "Downloads",
   "emptyDownloads": "No saved chapters yet. Save a chapter from a series to read it without the server.",
@@ -537,6 +530,14 @@
   "@downloadsPendingSection": {
     "description": "Downloads tab section heading over copies that failed or stopped with the app, which stay listed until they are retried"
   },
+  "downloadsSavedSection": "Saved",
+  "@downloadsSavedSection": {
+    "description": "Downloads tab section heading over the copies on the device — the shelf the tab is for. It is the one section that is not a state: a copy that is here is here"
+  },
+  "downloadsPausedSection": "Paused",
+  "@downloadsPausedSection": {
+    "description": "Downloads tab section heading over the copies the reader can send on again — what the app paused and what they paused themselves. Blue, because a pause is not a failure"
+  },
   "downloadsBatchSummary": "{done} of {total} · {percent}%",
   "@downloadsBatchSummary": {
     "description": "One line answering where a batch has got to: how many of its copies are on the device, and how far through the pages of the whole batch the work is. The percentage is over pages, not copies, which is why it can move without the count in front of it.",
@@ -548,7 +549,15 @@
   },
   "downloadsWaiting": "Waiting",
   "@downloadsWaiting": {
-    "description": "What a queued copy says instead of a percentage: it has pages to fetch and none fetched yet, so there is nothing to count"
+    "description": "What a copy waiting its turn says: it has pages to fetch and none fetched yet, and it is not happening yet either"
+  },
+  "downloadsPreparing": "Preparing",
+  "@downloadsPreparing": {
+    "description": "What a copy says while the request is out and the server has not yet said how many pages the chapter has. Its ring turns rather than fills, there being nothing to be a fraction of"
+  },
+  "downloadsInProgress": "Downloading",
+  "@downloadsInProgress": {
+    "description": "What a copy says once the server has said how many pages it has, beside a ring that fills as they land. The tap pauses it"
   },
   "downloadsStoppedShort": "Stopped",
   "@downloadsStoppedShort": {
@@ -560,7 +569,7 @@
   },
   "downloadsPaused": "Paused",
   "@downloadsPaused": {
-    "description": "What a copy the app deliberately stopped says — it left the foreground, or the reader left their profile. It keeps the pages it has and goes on by itself when the app, or the profile, comes back"
+    "description": "What a copy that stopped deliberately says — the app left the foreground, the reader left their profile, or the reader paused it themselves. It keeps the pages it has, and the tap sends it on again"
   },
   "resumeDownload": "Resume",
   "@resumeDownload": {
@@ -577,9 +586,9 @@
   "@resumeDownloadsLater": {
     "description": "Dismisses the cold-start question: what was paused stops being resumable and waits for a retry, so nothing is fetched behind the reader's back"
   },
-  "cancelDownload": "Cancel {title}",
-  "@cancelDownload": {
-    "description": "Tooltip of the cancel control on one in-flight copy in the Downloads tab; worded with the title because the row carries no room for the word, and a glyph says nothing to a screen reader",
+  "pauseDownload": "Pause {title}",
+  "@pauseDownload": {
+    "description": "What touching a copy's download pill does while it is being fetched. The pill's own word is the state, so this is the semantics hint rather than the label",
     "placeholders": {
       "title": {"type": "String"}
     }

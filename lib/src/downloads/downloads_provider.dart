@@ -21,7 +21,8 @@ class DownloadsState {
   const DownloadsState({
     this.saved = const {},
     this.inFlight = const {},
-    this.paused = const {},
+    this.pausedByApp = const {},
+    this.pausedByUser = const {},
     this.failed = const {},
     this.interrupted = const {},
     this.records = const {},
@@ -35,10 +36,18 @@ class DownloadsState {
   /// Downloads queued or running, chapter id → 0..1.
   final Map<int, double> inFlight;
 
-  /// Copies stopped deliberately — the app left the foreground, or the reader
-  /// left their profile — which keep every page they have and go on by
-  /// themselves when the app, or the profile, comes back.
-  final Set<int> paused;
+  /// Copies the **app** stopped — it left the foreground, or the reader left
+  /// their profile — which keep every page they have and go on by themselves
+  /// when the app, or the profile, comes back.
+  ///
+  /// Named for who stopped it because the reader can stop one too, and the two
+  /// must not be treated alike: [pausedByUser] waits for a tap. The membership
+  /// the tab reads puts them together, because to the reader they are one word.
+  final Set<int> pausedByApp;
+
+  /// Copies the **reader** stopped, which keep every page they have and wait
+  /// for a tap: what the app paused goes on by itself, and this must not.
+  final Set<int> pausedByUser;
 
   /// Chapters whose download failed, so a control can offer a retry instead
   /// of silently going back to "Save". A cancel is not a failure.
@@ -92,25 +101,42 @@ class DownloadsState {
         ? null
         : unfinished.reduce((a, b) => a > b ? a : b);
 
+    // A record whose chapter is **on the device** belongs to the shelf,
+    // whatever else its record is doing: a refresh runs with the copy it is
+    // replacing still intact, and a copy found on disk under a record that says
+    // it stopped is still a copy. Listing either among the ones on their way,
+    // or among the ones that stopped, would be the same chapter in two
+    // sections — one of them about something else entirely — where what a
+    // refresh is doing is reported by the saved row's own control
+    // (`_RefreshCopy`).
+    final away = {
+      for (final entry in snapshot.entries)
+        if (entry.value.saved == null) entry.key: entry.value,
+    };
+
     return DownloadsState(
       records: snapshot,
       saved: {
         for (final entry in snapshot.entries) entry.key: ?entry.value.saved,
       },
       inFlight: {
-        for (final entry in snapshot.entries)
+        for (final entry in away.entries)
           if (entry.value.isInFlight) entry.key: entry.value.progress,
       },
-      paused: {
-        for (final entry in snapshot.entries)
+      pausedByApp: {
+        for (final entry in away.entries)
           if (entry.value.status == DownloadQueueStatus.paused) entry.key,
       },
+      pausedByUser: {
+        for (final entry in away.entries)
+          if (entry.value.status == DownloadQueueStatus.pausedByUser) entry.key,
+      },
       failed: {
-        for (final entry in snapshot.entries)
+        for (final entry in away.entries)
           if (entry.value.status == DownloadQueueStatus.failed) entry.key,
       },
       interrupted: {
-        for (final entry in snapshot.entries)
+        for (final entry in away.entries)
           if (entry.value.status == DownloadQueueStatus.interrupted) entry.key,
       },
       batchSummary: latest == null
@@ -192,16 +218,26 @@ class DownloadMembership {
   DownloadMembership({
     required Set<int> saved,
     required Set<int> inFlight,
+    required Set<int> paused,
     required Set<int> pending,
   }) : saved = Set.unmodifiable(saved),
        inFlight = Set.unmodifiable(inFlight),
+       paused = Set.unmodifiable(paused),
        pending = Set.unmodifiable(pending);
 
   final Set<int> saved;
   final Set<int> inFlight;
 
-  /// Copies that stopped short — failed, paused, or left unfinished by the
-  /// app. They stay listed until they are resumed, retried or removed.
+  /// Copies stopped deliberately, waiting for a tap to go on: what the app
+  /// paused and what the reader paused themselves. One word and one control
+  /// to the reader — Paused, with a play glyph that sends them on from the
+  /// pages they kept — and two statuses underneath, because only one of them
+  /// the app may start again by itself.
+  final Set<int> paused;
+
+  /// Copies that stopped **without being asked** — a failure, or a process
+  /// that died under them. They stay listed until they are retried or
+  /// removed, and they are the ones the tab names in danger.
   final Set<int> pending;
 
   @override
@@ -209,6 +245,7 @@ class DownloadMembership {
       other is DownloadMembership &&
       _sameIds(saved, other.saved) &&
       _sameIds(inFlight, other.inFlight) &&
+      _sameIds(paused, other.paused) &&
       _sameIds(pending, other.pending);
 
   @override
@@ -217,6 +254,8 @@ class DownloadMembership {
     -1,
     ...inFlight.toList()..sort(),
     -2,
+    ...paused.toList()..sort(),
+    -3,
     ...pending.toList()..sort(),
   ]);
 }
@@ -380,10 +419,18 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     // and what it finds there is work this process has already decided about.
     if (!_read) {
       _read = true;
+      // A copy that is **on the device** is not here, whatever its record is
+      // doing — the same rule the tab lists by (`DownloadsState.fromQueue`).
+      // The one way such a record turns up stopped is a **refresh** that did
+      // not finish, and a refresh is not work at risk: the copy it was
+      // replacing is intact and readable, and it is offered again from its own
+      // row. Counting it here would raise a question about copies that
+      // stopped over a tab that lists none of them.
       final stopped = {
         for (final record in _records.values)
-          if (record.status == DownloadQueueStatus.paused ||
-              record.status == DownloadQueueStatus.interrupted)
+          if (record.saved == null &&
+              (record.status == DownloadQueueStatus.paused ||
+                  record.status == DownloadQueueStatus.interrupted))
             record.request.chapterId,
       };
       if (stopped.isNotEmpty) {
@@ -725,13 +772,16 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
           _records.remove(id);
         }
       } else {
-        // A copy that was paused on its way out stays paused: the cancelled
-        // request is how a pause takes effect, not a failure of its own.
-        final stopped = current.status == DownloadQueueStatus.paused
-            ? DownloadQueueStatus.paused
-            : cancelled
-            ? DownloadQueueStatus.interrupted
-            : DownloadQueueStatus.failed;
+        // A copy that was paused on its way out stays paused, **whoever**
+        // paused it: the cancelled request is how a pause takes effect, not a
+        // failure of its own. A pause the reader asked for must not come back
+        // wearing "Interrupted", which is what a bare `cancelled` would say.
+        final stopped = switch (current.status) {
+          DownloadQueueStatus.paused ||
+          DownloadQueueStatus.pausedByUser => current.status,
+          _ when cancelled => DownloadQueueStatus.interrupted,
+          _ => DownloadQueueStatus.failed,
+        };
         _records[id] = current.copyWith(status: stopped);
       }
       await _persist();
@@ -823,6 +873,34 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         ? saved.copyWith(clearServerPages: true)
         : saved.copyWith(serverPages: total);
     await _writeSavedCopy(record, updated);
+  }
+
+  /// Stops one copy where it stands, as the **reader's** word rather than the
+  /// app's.
+  ///
+  /// Nothing is discarded — the pages it has are kept, and a resume fetches
+  /// only what is missing — which is the whole difference between this and
+  /// [cancel], the control that takes a copy off the device. What is written
+  /// down is [DownloadQueueStatus.pausedByUser], and that is what stops the
+  /// next return to the foreground from sending it on again: [_resumePaused]
+  /// only ever picks up what the app itself paused.
+  ///
+  /// The record is written **before** the request is cancelled, because the
+  /// cancelled request is how a pause takes effect and [_run] reads the status
+  /// it finds to tell a pause from a failure.
+  Future<void> pause(int chapterId) async {
+    if (!await _ready()) return;
+    final record = _records[chapterId];
+    if (record == null || !record.isInFlight) return;
+    _records[chapterId] = record.copyWith(
+      status: DownloadQueueStatus.pausedByUser,
+    );
+    _writeState();
+    await _persist();
+    final token = _cancelTokens[chapterId];
+    if (token == null) return;
+    token.cancel('paused by the reader');
+    await _waiters[chapterId]?.future;
   }
 
   Future<void> cancel(int chapterId) async {
@@ -918,34 +996,23 @@ final downloadRecordProvider = Provider.family<DownloadQueueRecord?, int>(
   (ref, chapterId) => ref.watch(downloadsProvider).value?.records[chapterId],
 );
 
-/// Which chapters are on the device, which are on their way and which are
-/// waiting to be given another go — and nothing about how far any of them has
-/// got.
+/// Which chapters are on the device, which are on their way, which are
+/// waiting for a tap and which are waiting for a retry — and nothing about
+/// how far any of them has got.
 ///
 /// A row or a section that only has to answer "is this one saved?", "is it
-/// still coming?", or "is there anything here to retry?" asks this rather
-/// than watching the whole state, so a page landing anywhere leaves it alone.
+/// still coming?", "is it paused?" or "is there anything here to retry?" asks
+/// this rather than watching the whole state, so a page landing anywhere
+/// leaves it alone.
 final downloadMembershipProvider = Provider<DownloadMembership>((ref) {
   final state = ref.watch(downloadsProvider).value;
   return DownloadMembership(
     saved: state?.saved.keys.toSet() ?? const {},
     inFlight: state?.inFlight.keys.toSet() ?? const {},
-    pending: {...?state?.failed, ...?state?.interrupted, ...?state?.paused},
+    paused: {...?state?.pausedByApp, ...?state?.pausedByUser},
+    pending: {...?state?.failed, ...?state?.interrupted},
   );
 });
-
-/// How far through one chapter's pages the fetch has got, and nothing else —
-/// null where the chapter is not being fetched at all.
-///
-/// The one number a pill or a row repaints as pages land, so the rest of it
-/// can be resubscribed to something that does not move.
-final downloadProgressProvider = Provider.family<double?, int>(
-  (ref, chapterId) => ref.watch(
-    downloadRecordProvider(
-      chapterId,
-    ).select((record) => record?.isInFlight ?? false ? record?.progress : null),
-  ),
-);
 
 /// The copies on the device, as ids in the order the tab lists them.
 ///

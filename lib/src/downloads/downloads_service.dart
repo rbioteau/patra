@@ -210,6 +210,7 @@ enum DownloadQueueStatus {
   queued,
   downloading,
   paused,
+  pausedByUser,
   interrupted,
   failed,
   saved,
@@ -219,14 +220,24 @@ enum DownloadQueueStatus {
 /// [saved] is the finished copy, where one exists independently of the current
 /// attempt (a refresh can fail without spending the copy it was replacing).
 ///
-/// [DownloadQueueStatus.paused] is deliberately not
-/// [DownloadQueueStatus.interrupted], though both keep every page they have
-/// and both are resumed from the last one written: a **pause** is the app's
-/// own doing — it left the foreground, or the reader left their profile — and
-/// what was paused goes on without being asked. An **interruption** is a
-/// process that stopped without saying so, and it waits for the reader's
-/// word, because the app that comes up next cannot know what was happening
-/// when the last one died.
+/// **Three ways to stop are deliberately three states**, though all of them
+/// keep every page they have and all are resumed from the last one written.
+/// What separates them is who stopped the copy, because that is what decides
+/// who starts it again:
+///
+/// - [DownloadQueueStatus.paused] is the app's own doing — it left the
+///   foreground, or the reader left their profile — and it goes on **without
+///   being asked**.
+/// - [DownloadQueueStatus.pausedByUser] is the reader's word. Nothing resumes
+///   it but a tap: an app that came back to the foreground must not undo a
+///   pause somebody made on purpose.
+/// - [DownloadQueueStatus.interrupted] is a process that stopped without
+///   saying so, and it waits for the reader's word too, because the app that
+///   comes up next cannot know what was happening when the last one died.
+///
+/// The two pauses are written down as one word to the reader ("Paused", with
+/// the same blue and the same play glyph) and as two values here, because the
+/// word is the same fact and the resumption is not.
 class DownloadQueueRecord {
   const DownloadQueueRecord({
     required this.request,

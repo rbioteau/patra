@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
@@ -15,7 +16,7 @@ import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/downloads/downloads_screen.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/theme.dart';
-import 'package:patra/src/widgets/save_pill.dart';
+import 'package:patra/src/widgets/download_pill.dart';
 import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/read_mark.dart';
 
@@ -166,7 +167,7 @@ SavedChapter _queuedChapter(int id, String title) => SavedChapter(
 );
 
 class _QueueScreenNotifier extends DownloadsNotifier {
-  final cancelled = Completer<int>();
+  final paused = Completer<int>();
   final retried = Completer<int>();
   late final Map<int, DownloadQueueRecord> records = {
     7: DownloadQueueRecord.completed(
@@ -203,10 +204,14 @@ class _QueueScreenNotifier extends DownloadsNotifier {
   Future<DownloadsState> build() async => DownloadsState.fromQueue(records);
 
   @override
-  Future<void> cancel(int chapterId) async {
-    records.remove(chapterId);
+  Future<void> pause(int chapterId) async {
+    // What the queue does with it, so the row can move to the section that
+    // says so: a pause is a status of its own and keeps every page it has.
+    records[chapterId] = records[chapterId]!.copyWith(
+      status: DownloadQueueStatus.pausedByUser,
+    );
     state = AsyncData(DownloadsState.fromQueue(records));
-    if (!cancelled.isCompleted) cancelled.complete(chapterId);
+    if (!paused.isCompleted) paused.complete(chapterId);
   }
 
   @override
@@ -219,7 +224,6 @@ class _QueueScreenNotifier extends DownloadsNotifier {
 /// which is not the same fact as a failure.
 class _PausedScreenNotifier extends DownloadsNotifier {
   final resumed = Completer<int>();
-  final started = Completer<int>();
 
   late final Map<int, DownloadQueueRecord> records = {
     7: DownloadQueueRecord(
@@ -238,11 +242,39 @@ class _PausedScreenNotifier extends DownloadsNotifier {
   Future<void> retry(int chapterId) async {
     if (!resumed.isCompleted) resumed.complete(chapterId);
   }
+}
+
+/// A queue holding one copy whose page count the server has not given yet: the
+/// request is out, and there is nothing to be a fraction of.
+class _PreparingNotifier extends DownloadsNotifier {
+  late final Map<int, DownloadQueueRecord> records = {
+    7: DownloadQueueRecord(
+      request: _queuedChapter(7, 'Dune Messiah'),
+      status: DownloadQueueStatus.downloading,
+      priority: 0,
+    ),
+  };
 
   @override
-  Future<void> save(SavedChapter chapter) async {
-    if (!started.isCompleted) started.complete(chapter.chapterId);
-  }
+  Future<DownloadsState> build() async => DownloadsState.fromQueue(records);
+}
+
+/// A queue holding a copy that is **on the device** whose record is doing
+/// something else: a refresh runs with the copy it is replacing still intact.
+class _RefreshingNotifier extends DownloadsNotifier {
+  late final Map<int, DownloadQueueRecord> records = {
+    7: DownloadQueueRecord(
+      request: _queuedChapter(7, 'Dune Messiah'),
+      status: DownloadQueueStatus.downloading,
+      priority: 0,
+      completedPages: 1,
+      totalPages: 4,
+      saved: _queuedChapter(7, 'Dune Messiah').copyWith(bytes: 40),
+    ),
+  };
+
+  @override
+  Future<DownloadsState> build() async => DownloadsState.fromQueue(records);
 }
 
 /// Whose store the device is holding these copies for.
@@ -349,6 +381,17 @@ Future<ProviderContainer> _pumpDownloads(
 /// What the row says about a copy the server no longer counts the same way.
 String get _stale => 'Out of date — the server now counts 12 pages';
 
+/// The progress every pill on screen is showing, as the ring inside it.
+List<double?> _rings(WidgetTester tester) => tester
+    .widgetList<CircularProgressIndicator>(
+      find.descendant(
+        of: find.byType(DownloadPill),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+    )
+    .map((ring) => ring.value)
+    .toList();
+
 void main() {
   testWidgets('the tab shows the batch and controls each queued copy', (
     tester,
@@ -392,41 +435,39 @@ void main() {
         contains('/api/Image/chapter-cover?chapterId=10'),
       ],
     );
-    // Each copy on its way carries its own progress: on the cover, where
-    // every cover in the app carries the progress of what it pictures, and
-    // under the title, the same fraction twice.
-    expect(
-      tester
-          .widgetList<LinearProgressIndicator>(
-            find.byType(LinearProgressIndicator),
-          )
-          .map((bar) => bar.value),
-      [0.5, 0.5, 0.25, 0.25],
-    );
-    // And each bar sits under the title it belongs to, not off on the row's
-    // trailing edge: a row of a batch is read down its own column.
-    for (final bar in tester.widgetList<LinearProgressIndicator>(
-      find.byType(LinearProgressIndicator),
-    )) {
-      expect(
-        tester.getTopLeft(find.byWidget(bar)).dx,
-        lessThan(tester.getTopRight(find.text('Children of Dune')).dx),
-        reason: 'the bar is in the row’s column, beside the title',
-      );
-    }
+    // Each copy on its way carries its own progress, in the ring inside its
+    // own pill: a copy's progress is a ring wherever it is drawn, so it can
+    // never be read for the reading progress a bar on a cover carries. The
+    // third ring is the failed copy's, frozen at the pages it kept — none.
+    expect(_rings(tester), [0.5, 0.25, 0.0]);
+    expect(find.text('Downloading'), findsNWidgets(2));
     expect(find.text('God Emperor of Dune'), findsOneWidget);
     expect(find.text('NEEDS ATTENTION'), findsOneWidget);
     expect(find.text('Heretics of Dune'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Cancel Children of Dune'));
+    // The tap on a copy on its way is a pause, not a destruction: it stops
+    // where it stands, keeps the pages it has, and moves to the section that
+    // says so.
+    await tester.tap(find.byTooltip('Pause Dune — Children of Dune'));
     await tester.pump();
 
-    expect(await notifier.cancelled.future, 8);
-    expect(find.text('Children of Dune'), findsNothing);
+    expect(await notifier.paused.future, 8);
+    expect(find.text('PAUSED'), findsOneWidget);
+    expect(find.text('Children of Dune'), findsOneWidget);
     expect(find.text('God Emperor of Dune'), findsOneWidget);
 
+    // And the tap on one that stopped is the retry, in the same pill — which
+    // sits below the fold now that the tab carries three sections.
+    await tester.ensureVisible(find.text('Retry'));
+    await tester.pump();
     await tester.tap(find.text('Retry'));
     expect(await notifier.retried.future, 10);
+
+    // And the shelf is the last section, with a heading of its own: below the
+    // fold in this viewport, which is exactly what its rows needed one for.
+    await tester.scrollUntilVisible(find.text('SAVED'), 200);
+    expect(find.text('SAVED'), findsOneWidget);
+    expect(find.text('Dune Messiah'), findsOneWidget);
   });
 
   testWidgets('a paused copy is listed as paused, not as missing', (
@@ -440,28 +481,23 @@ void main() {
       downloadsNotifier: notifier,
     );
 
-    expect(find.text('NEEDS ATTENTION'), findsOneWidget);
+    expect(find.text('PAUSED'), findsOneWidget);
     expect(find.text('Dune Messiah'), findsOneWidget);
-    // The word, and not a blank where a copy should be: what stopped because
-    // the app did is recognisable as such wherever copies are listed.
+    // Two words for two facts, and not a blank where a copy should be: the row
+    // says which stop this was, and the pill says what the tap does.
     expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
     expect(find.text('Retry'), findsNothing);
     // Two pages of four already on the device are not thrown away by the
-    // pause: the tap that sends it on is the one a retry is, from there.
-    expect(
-      tester
-          .widgetList<LinearProgressIndicator>(
-            find.byType(LinearProgressIndicator),
-          )
-          .map((bar) => bar.value),
-      isEmpty,
-    );
+    // pause: the ring says how far it got, and the tap that sends it on
+    // starts from there.
+    expect(_rings(tester), [0.5]);
 
-    await tester.tap(find.text('Resume'));
+    await tester.tap(find.byType(DownloadPill));
     expect(await notifier.resumed.future, 7);
   });
 
-  testWidgets('a paused copy’s row offers the tap that sends it on', (
+  testWidgets('a paused copy’s pill is the tap that sends it on', (
     tester,
   ) async {
     final notifier = _PausedScreenNotifier();
@@ -469,18 +505,110 @@ void main() {
       tester,
       _room(),
       _BookServer(),
-      Scaffold(body: SavePill(request: _queuedChapter(7, 'Dune Messiah'))),
+      Scaffold(body: DownloadPill(request: _queuedChapter(7, 'Dune Messiah'))),
       downloadsNotifier: notifier,
     );
 
-    // The row's own control says which stop this was: a copy the app paused
-    // is one tap from going on, and it does not read as something that went
-    // wrong.
+    // The pill says what the tap does: a copy that stopped is one tap from
+    // going on, and it does not read as something that went wrong.
     expect(find.text('Resume'), findsOneWidget);
     expect(find.text('Retry'), findsNothing);
 
-    await tester.tap(find.text('Resume'));
-    expect(await notifier.started.future, 7);
+    await tester.tap(find.byType(DownloadPill));
+    expect(await notifier.resumed.future, 7);
+  });
+
+  testWidgets('a copy on the device is the shelf’s, whatever its record is '
+      'doing', (tester) async {
+    // A refresh runs with the copy it is replacing still intact, and a copy
+    // found on disk under a record that says it stopped is still a copy.
+    // Either one listed among the ones on their way — or among the ones that
+    // stopped — is the same chapter in two sections, one of them about
+    // something else.
+    await _pumpDownloads(
+      tester,
+      _room(),
+      _BookServer(),
+      downloadsNotifier: _RefreshingNotifier(),
+    );
+
+    expect(find.text('DOWNLOADING'), findsNothing);
+    expect(find.text('PAUSED'), findsNothing);
+    expect(find.text('NEEDS ATTENTION'), findsNothing);
+    expect(find.text('SAVED'), findsOneWidget);
+    expect(find.text('Dune Messiah'), findsOneWidget);
+  });
+
+  testWidgets('a copy whose page count has not arrived says so', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _room(),
+      _BookServer(),
+      Scaffold(body: DownloadPill(request: _queuedChapter(7, 'Dune Messiah'))),
+      downloadsNotifier: _PreparingNotifier(),
+    );
+
+    // Not a ring stuck at zero for the seconds the count takes: the request
+    // is out, which is a state of its own — the word says which, and the ring
+    // **turns** rather than filling.
+    expect(find.text('Preparing'), findsOneWidget);
+    expect(_rings(tester), [null]);
+    expect(find.byTooltip('Pause Dune — Dune Messiah'), findsOneWidget);
+  });
+
+  testWidgets('a saved copy’s pill is a mark, not a control', (tester) async {
+    await _pump(
+      tester,
+      _room(),
+      _BookServer(),
+      Scaffold(body: DownloadPill(request: _queuedChapter(7, 'Dune Messiah'))),
+      downloadsNotifier: _QueueScreenNotifier(),
+    );
+
+    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byTooltip('Saved'), findsOneWidget);
+
+    // Taking a copy off the device is a swipe on the row it sits in, and
+    // never a tap on the mark whose whole message is that all is well.
+    await tester.tap(find.byType(DownloadPill));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('the tab’s rows fit a phone', (tester) async {
+    // The narrowest surface this app runs on, and the row that carries the
+    // most: the cover, the work, the pill — a word, a glyph and a ring — and
+    // the bin. A row that cannot be read at 390 is a row that cannot be read,
+    // and Flutter throws on an overflow in debug, so the pump is the check.
+    //
+    // The real face is loaded first, and that is not decoration: the test
+    // environment's own font is twice as wide as Space Grotesk — 184pt
+    // against 88 for "Could not finish" at 11.5 — so a row measured without
+    // it would be failing a width no phone has.
+    final spaceGrotesk = FontLoader('Space Grotesk')
+      ..addFont(rootBundle.load('assets/fonts/SpaceGrotesk-Variable.ttf'));
+    await spaceGrotesk.load();
+    tester.view.physicalSize = const Size(780, 1688);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    await _pumpDownloads(
+      tester,
+      _room(),
+      _BookServer(),
+      downloadsNotifier: _QueueScreenNotifier(),
+    );
+
+    expect(find.byType(DownloadPill), findsNWidgets(3));
+    final pill = tester.getRect(find.byType(DownloadPill).first);
+    final bin = tester.getRect(find.byIcon(Icons.delete_outline).first);
+    expect(pill.right, lessThan(bin.left), reason: 'the pill comes first');
+    expect(
+      bin.right,
+      lessThanOrEqualTo(390 - gutter),
+      reason: 'and the bin ends at the gutter, not off the screen',
+    );
   });
 
   testWidgets('the refresh control asks to store the copy again', (

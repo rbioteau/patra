@@ -17,7 +17,7 @@ import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/read_mark.dart';
-import 'package:patra/src/widgets/save_pill.dart';
+import 'package:patra/src/widgets/download_pill.dart';
 
 import 'test_support.dart';
 
@@ -162,6 +162,7 @@ Future<_Adapter> _pump(
   int postStatus = 200,
   bool underNavigator = false,
   int? savedChapter,
+  int? stoppedChapter,
   bool tablet = false,
   bool routed = false,
 }) async {
@@ -189,6 +190,31 @@ Future<_Adapter> _pump(
       pages: 1,
       bytes: 1,
     );
+  }
+  if (stoppedChapter != null) {
+    // A fetch that stopped before it finished, written down the way the queue
+    // writes it down — which is what puts the remove action on the row's
+    // trailing edge while there is no copy on the device yet.
+    await DownloadsService(
+      root: Directory('${cacheDir.path}/downloads'),
+      profileId: _profileId,
+    ).writeQueue({
+      stoppedChapter: DownloadQueueRecord(
+        request: SavedChapter(
+          chapterId: stoppedChapter,
+          seriesId: 7,
+          volumeId: 10,
+          libraryId: 1,
+          seriesName: 'Berserk',
+          title: 'Chapter 1',
+          pages: 1,
+          bytes: 0,
+        ),
+        status: DownloadQueueStatus.failed,
+        priority: 0,
+        totalPages: 1,
+      ),
+    });
   }
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
@@ -601,7 +627,7 @@ void main() {
       // copy of the pages the server rendered, and the pill asks for one.
       await _pump(tester, book(0), type: LibraryType.book);
 
-      expect(find.byType(SavePill), findsOneWidget);
+      expect(find.byType(DownloadPill), findsOneWidget);
       expect(find.text('Save'), findsOneWidget);
     });
 
@@ -618,7 +644,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(rowOpacity(tester, 'Book 1'), 0.4);
-      expect(find.byType(SavePill), findsNothing);
+      expect(find.byType(DownloadPill), findsNothing);
     });
 
     testWidgets('offline there is nothing to swipe for', (tester) async {
@@ -810,9 +836,31 @@ void main() {
       // And the row stops where the pane starts rather than running under it:
       // the save pill is still whole, and still on the row's side of it.
       expect(
-        tester.getRect(find.byType(SavePill)).right,
+        tester.getRect(find.byType(DownloadPill)).right,
         lessThanOrEqualTo(tester.getRect(find.text('Remove')).left),
       );
+    });
+
+    testWidgets('a copy that stopped is removed by the same pane, in one tap', (
+      tester,
+    ) async {
+      // The pane acts on what is on the device, and a fetch that stopped on
+      // its way there is the same job for the same edge. What differs is the
+      // asking: there is no copy here yet, and a partial nobody has read is
+      // not the reader's library.
+      await _pump(tester, series(0), stoppedChapter: 101);
+
+      await tester.drag(find.text('Chapter 1'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove'), findsOneWidget);
+
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      // Gone from the queue, so the row has nothing left to offer: the pill
+      // is back to what it says about a chapter nobody has asked for.
+      expect(find.text('Save'), findsOneWidget);
     });
 
     testWidgets('an open pane is a drawer, not half a tablet row', (
@@ -1113,7 +1161,7 @@ void main() {
       // wrong than the gap it closed inside the row. The row starts and ends
       // one gutter from the screen edge, like every other screen.
       expect(rowCover(tester).left, gutter);
-      expect(tester.getRect(find.byType(SavePill)).right, 820 - gutter);
+      expect(tester.getRect(find.byType(DownloadPill)).right, 820 - gutter);
     });
   });
 }

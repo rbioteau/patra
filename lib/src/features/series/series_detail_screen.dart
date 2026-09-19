@@ -19,8 +19,8 @@ import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/read_mark.dart';
 import '../../widgets/page_backdrop.dart';
+import '../../widgets/download_pill.dart';
 import '../../widgets/offline_indicator.dart';
-import '../../widgets/save_pill.dart';
 
 /// Progress the user has just set by hand, before the server has confirmed it.
 ///
@@ -1417,6 +1417,18 @@ class _ChapterRow extends ConsumerWidget {
 
     final savedCopy = ref.watch(savedChapterProvider(chapter.id));
     final saved = savedCopy != null;
+    // Whether anything of this chapter is on its way — being fetched, paused,
+    // or waiting for a retry — which with [saved] is what the row's trailing
+    // pane acts on. One bool, so a page landing on another chapter leaves this
+    // row alone.
+    final moving = ref.watch(
+      downloadMembershipProvider.select(
+        (membership) =>
+            membership.inFlight.contains(chapter.id) ||
+            membership.paused.contains(chapter.id) ||
+            membership.pending.contains(chapter.id),
+      ),
+    );
     final offline = ref.watch(offlineProvider);
 
     // The server is the authority on progress; mirror it into the stored copy
@@ -1540,7 +1552,7 @@ class _ChapterRow extends ConsumerWidget {
           // cannot be fetched. A copy already here keeps its pill, because
           // removing one is local.
           if (openable)
-            SavePill(
+            DownloadPill(
               request: SavedChapter(
                 chapterId: chapter.id,
                 seriesId: seriesId,
@@ -1616,18 +1628,23 @@ class _ChapterRow extends ConsumerWidget {
                 ],
               )
             : null,
-        endActionPane: saved
+        endActionPane: saved || moving
             ? ActionPane(
                 motion: const DrawerMotion(),
                 extentRatio: _paneRatio(_removePaneWidth, constraints.maxWidth),
                 children: [
                   SlidableAction(
                     onPressed: (actionContext) async {
-                      if (await _confirmRemove(actionContext, l10n)) {
-                        await ref
-                            .read(downloadsProvider.notifier)
-                            .remove(chapter.id);
+                      // A copy that is **here** is the reader's library, and
+                      // what is about to go is said before it goes. One that
+                      // is merely on its way is not: it is a fetch nobody has
+                      // read yet, and one tap takes it off the device.
+                      if (saved && !await _confirmRemove(actionContext, l10n)) {
+                        return;
                       }
+                      await ref
+                          .read(downloadsProvider.notifier)
+                          .remove(chapter.id);
                     },
                     backgroundColor: patraDanger.withValues(alpha: .16),
                     foregroundColor: patraDanger,

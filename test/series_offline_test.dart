@@ -15,7 +15,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
-import 'package:patra/src/widgets/save_pill.dart';
+import 'package:patra/src/widgets/download_pill.dart';
 
 import 'test_support.dart';
 
@@ -242,7 +242,7 @@ void main() {
     expect(_resumeEnabled(tester), isFalse);
     // Nor is anything offered that offline cannot be done: a chapter that is
     // not already on the device cannot be fetched.
-    expect(find.byType(SavePill), findsNothing);
+    expect(find.byType(DownloadPill), findsNothing);
   });
 
   testWidgets('a saved chapter is openable and shows the saved copy\'s '
@@ -290,7 +290,7 @@ void main() {
     expect(_resumeEnabled(tester), isTrue);
     // The pill stays for a copy that is already here, since removing one is
     // local.
-    expect(find.byType(SavePill), findsOneWidget);
+    expect(find.byType(DownloadPill), findsOneWidget);
   });
 
   testWidgets('where neither the fetch nor the catalogue can answer, the '
