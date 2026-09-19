@@ -182,6 +182,7 @@
   "appLanguageSystem": "Système",
   "aboutSectionLabel": "À propos",
   "aboutVersion": "Version {version}",
+  "licensesTitle": "Licences",
   "sizeBytes": "{count} o",
   "sizeMegabytes": "{count} Mo",
   "sizeGigabytes": "{count} Go",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../api/client_identity.dart';
 import '../../auth/session.dart';
 import '../../branding/patra_lockup.dart';
 import '../../catalogue/catalogue_provider.dart';
@@ -91,6 +92,32 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 6),
                     const _AppVersion(),
                   ],
+                ),
+              ),
+
+              // What the app is built from, reachable. The bundled faces
+              // register their OFL notices into Flutter's `LicenseRegistry` and
+              // every package's own licence arrives in the `NOTICES` asset the
+              // build writes, and neither is worth much if a reader cannot open
+              // it: this row is the attribution MIT and BSD ask for, and the
+              // OFL with it.
+              _SettingRow(
+                // Neither progress nor a download, so no colour — the palette's
+                // two hard rules say which of the two a row is, and this is
+                // neither. The same reason the cached-images row has none.
+                icon: const Icon(Icons.description_outlined, size: 18),
+                title: l10n.licensesTitle,
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: ClientIdentity.appName,
+                  applicationVersion: ref
+                      .watch(clientIdentityProvider)
+                      .appVersion,
+                  // On the root navigator, as `/series` and `/reader` are
+                  // declared outside the shell: this is a page of its own
+                  // rather than a tab's child, and a bar of tabs under a
+                  // document that scrolls for pages says otherwise.
+                  useRootNavigator: true,
                 ),
               ),
 
@@ -1032,13 +1059,17 @@ class _SettingRow extends StatelessWidget {
   const _SettingRow({
     required this.icon,
     required this.title,
-    required this.value,
+    this.value,
     required this.onTap,
   });
 
   final Widget icon;
   final String title;
-  final String value;
+
+  /// What the row has to report, on the trailing edge — the language in force,
+  /// and so on. A row that only opens a page has nothing to report, and says
+  /// so with the chevron alone rather than an empty gap where a value goes.
+  final String? value;
   final VoidCallback onTap;
 
   @override
@@ -1053,8 +1084,10 @@ class _SettingRow extends StatelessWidget {
             SizedBox(width: 22, child: Center(child: icon)),
             const SizedBox(width: 14),
             Expanded(child: Text(title, style: PatraText.body())),
-            Text(value, style: PatraText.metadata()),
-            const SizedBox(width: 4),
+            if (value != null) ...[
+              Text(value!, style: PatraText.metadata()),
+              const SizedBox(width: 4),
+            ],
             const Icon(Icons.chevron_right, size: 18),
           ],
         ),

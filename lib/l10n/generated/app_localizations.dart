@@ -1118,6 +1118,12 @@ abstract class AppLocalizations {
   /// **'Version {version}'**
   String aboutVersion(String version);
 
+  /// The row under Settings > About that opens what the app ships under: its own bundled faces, and every package it is built from. Spelled the way the page it opens titles itself, because that title is one tap away and two spellings of one word read as a mistake.
+  ///
+  /// In en, this message translates to:
+  /// **'Licenses'**
+  String get licensesTitle;
+
   /// No description provided for @sizeBytes.
   ///
   /// In en, this message translates to:
