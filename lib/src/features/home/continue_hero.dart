@@ -304,7 +304,7 @@ class _ContinueButton extends StatelessWidget {
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: onPressed,
-        icon: const Icon(Icons.play_arrow_rounded, size: 20),
+        icon: const Icon(Icons.menu_book_rounded, size: 20),
         label: Text(AppLocalizations.of(context).seriesContinuePlain),
       ),
     ),
