@@ -1,0 +1,427 @@
+/* The showcase site — two store listings' worth of pages, drawn in the brand
+   kit the app is drawn in.
+
+   The tokens below are `lib/src/theme.dart`'s, renamed to CSS habits: the
+   page is night blue, the gold is identity and nothing else, and the blue is
+   the one colour that means a download. Nothing here invents a colour, with
+   one exception named where it is drawn — the Sponsor button wears GitHub's
+   own, because it is a door into GitHub. The two faces are the two the app's
+   interface is set in — bundled in
+   `assets/fonts/` rather than fetched from a font CDN, because a page whose
+   whole argument is that nothing leaves your device should not hand every
+   visitor's IP to somebody else for its type. */
+
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('../fonts/SpaceGrotesk-Variable.ttf') format('truetype');
+  /* Variable: one file answers every weight, as it does in the app. */
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('../fonts/SourceSerif4-Variable.ttf') format('truetype');
+  font-weight: 200 900;
+  font-display: swap;
+}
+
+:root {
+  --bg: #111722;
+  --surface: #1c293e;
+  --surface-hi: #26354b;
+  --chrome: #172131;
+
+  /* Identity only. Never the download blue. */
+  --accent: #d7b976;
+  --on-accent: #241d10;
+
+  /* Downloads / offline only. Never progress. */
+  --offline: #8eacd8;
+
+  --text: #f3eee3;
+  --muted: #afb8c7;
+  --border: #35445a;
+
+  --radius-cover: 10px;
+  --radius-card: 12px;
+  --gutter: 20px;
+  --section-gap: 24px;
+
+  --sans: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', sans-serif;
+  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  /* The OS's own smoothing, or the bundled faces come out heavier than the
+     app draws them. */
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---- Shell ------------------------------------------------------------ */
+
+.shell {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+/* Only the page's own bottom, so two sections of prose in a row do not stack
+   a padding each on top of a heading's margin. */
+main {
+  padding-bottom: 40px;
+}
+
+header.site {
+  padding: var(--section-gap) 0;
+}
+
+header.site .shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px var(--section-gap);
+}
+
+/* ---- The lockup ------------------------------------------------------- */
+
+/* The word पत्र from the app's own outlines (`PatraLogoPaths`, flattened by
+   `tool/gen_web_mark.dart`) beside the Latin signature — the same two-part
+   lockup the app's header and gate screens draw. The signature is text in the
+   bundled serif, which is what `PatraWordmark` sets too: an outline of it
+   exists in the kit, and a word that is read as a word should be one. */
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.81em; /* the app's gap ratio, in ems of the signature */
+  /* The signature's size, and the mark's is a ratio of it (0.8em) — one
+     number, as in the app, so the two cannot drift apart. */
+  font-size: 24px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.lockup__mark {
+  /* The app draws the word at 0.8 of the signature's size; the SVG's own
+     aspect (118.8 x 63) comes from the outlines, so only the height is set. */
+  height: 0.8em;
+  width: auto;
+}
+
+.lockup__word {
+  font-family: var(--serif);
+  font-size: 1em;
+  /* `PatraText.serifTitle`: w600, height 1.25 — and the mark is 0.8em of it,
+     so the two boxes keep the ratio the app tuned. */
+  font-weight: 600;
+  line-height: 1.25;
+  /* The handoff's -0.5px at 40px, kept as a fraction as the app keeps it. */
+  letter-spacing: -0.0125em;
+}
+
+.lockup__dot {
+  color: var(--accent);
+}
+
+.site-nav {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 15px;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current='page'] {
+  color: var(--text);
+}
+
+/* ---- Hero ------------------------------------------------------------- */
+
+.hero {
+  padding: var(--section-gap) 0 40px;
+}
+
+.hero h1 {
+  margin: 0 0 16px;
+  font-size: clamp(30px, 6vw, 44px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.hero p {
+  margin: 0 0 12px;
+  max-width: 38rem;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.actions {
+  margin-top: var(--section-gap);
+  display: flex;
+  /* Centred rather than stretched, because the Sponsor button is GitHub's and
+     comes at GitHub's height: a row that stretched it would pull it out of
+     shape to match whatever is beside it. */
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-cover);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+/* An icon on one of these takes the button's own ink, as the two GitHub
+   buttons below do and as GitHub draws its own: a mark is not a colour. 18px
+   and not the 16 they use, because this shell is bigger than theirs — a 15px
+   label beside the 12px one down there. */
+.button svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: currentColor;
+}
+
+.button:hover {
+  background: var(--surface-hi);
+}
+
+.button--accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.button--accent:hover {
+  background: var(--accent);
+  filter: brightness(1.06);
+}
+
+/* GitHub's own button, which is the one thing on this site drawn in somebody
+   else's colours: both of the ones that wear it are doors into GitHub, and a
+   heart on `#212830` is what a reader recognises as "sponsor this, over
+   there". Measured off github.com in dark mode rather than copied from
+   memory — Primer's `Button--secondary Button--small`: `#212830` on a
+   `#3D444D` edge, 6px, 12px at weight 500, 28px tall, `#262C36` under the
+   pointer. Everything is at GitHub's size, not this page's, which is why the
+   row these sit in is centred rather than stretched. */
+.button--github {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #3d444d;
+  border-radius: 6px;
+  background: #212830;
+  color: #f0f6fc;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.button--github:hover {
+  background: #262c36;
+}
+
+/* One size and the button's own ink for every icon in that shell, which is
+   how GitHub draws the icons in its header. The heart is the one it tints,
+   because the pink *is* the sponsors mark. */
+.button--github svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: currentColor;
+}
+
+.button--sponsor svg {
+  fill: #db61a2;
+}
+
+/* ---- Feature cards ---------------------------------------------------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 12px;
+  margin: 0 0 40px;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+}
+
+.card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* A card that is really about what leaves the device wears the offline blue,
+   the one thing that colour means in the app. */
+.card--offline h3 {
+  color: var(--offline);
+}
+
+/* A heading over a grid of cards rather than a run of prose. */
+.section-head {
+  margin: 0 0 12px;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ---- Prose (the two legal pages) -------------------------------------- */
+
+.prose {
+  max-width: 38rem;
+}
+
+.prose h1 {
+  margin: 0 0 6px;
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.prose .updated {
+  margin: 0 0 32px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.prose h2 {
+  margin: 36px 0 10px;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+/* Body copy is the ivory the app sets its own text in: a policy is read
+   rather than skimmed, and the muted grey belongs to the timestamps and the
+   card blurbs, not to the paragraphs a store reviewer has to read. */
+.prose p,
+.prose li {
+  color: var(--text);
+}
+
+.prose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.prose ul {
+  padding-left: 1.2em;
+}
+
+.prose li {
+  margin-bottom: 6px;
+}
+
+/* ---- Footer ----------------------------------------------------------- */
+
+footer.site {
+  border-top: 1px solid var(--border);
+  padding: var(--section-gap) 0 40px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+footer.site .shell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px var(--section-gap);
+  align-items: baseline;
+}
+
+footer.site p {
+  margin: 0;
+}
+
+footer.site nav {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+footer.site a {
+  color: var(--muted);
+}
+
+footer.site a:hover {
+  color: var(--text);
+}

@@ -1,0 +1,66 @@
+name: Pages
+
+# The showcase site in `site/` — the page a store listing points at, and the
+# two pages it has to point at: the privacy policy and the terms of use.
+#
+# It follows `main` and is not part of a release. A tag's job is to ship a
+# binary, and a store's review reads the policy URL when the listing is
+# submitted, not when the app is built — so the site publishes as soon as it
+# changes, and a fix to a legal page needs no version.
+#
+# Nothing is built: the pages are plain HTML and CSS, served as they are. The
+# only thing generated is `site/assets/img/patra-mark.svg`, which is committed
+# too (`dart run tool/gen_web_mark.dart`), so a deploy never depends on a
+# toolchain.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time, and never cancel one in flight: an interrupted
+# deploy can leave the site half-written, which on these two pages is a policy
+# that does not load.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only the default branch publishes. This is GitHub's own advice — a
+    # deployment protection rule on the `github-pages` environment — written
+    # where it cannot be lost by a setting nobody remembers: a
+    # `workflow_dispatch` ignores the `paths` filter above, so without this a
+    # dispatch on a feature branch would put *that* branch's pages on the live
+    # site, and the page most likely to be half-written on a branch is the
+    # privacy policy a store has already been told to read.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Reads the repository's Pages configuration and fails early if it does
+      # not point at GitHub Actions. It does *not* turn Pages on: the action's
+      # `enablement` input needs a token that is not `GITHUB_TOKEN` to create
+      # the site, so with the token this workflow has it would fail rather than
+      # help. Enabling it is a one-time setting on the repository — Settings →
+      # Pages → Source: GitHub Actions — and every repository that wants this
+      # workflow has to make it.
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: publish
+        uses: actions/deploy-pages@v5
