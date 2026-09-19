@@ -86,6 +86,7 @@ These sections moved out of this file so they load only when they are relevant. 
 | The reader | `lib/src/features/reader/CLAUDE.md` |
 | The launch animation | `lib/src/features/launch/CLAUDE.md` |
 | Cutting a release, and what CI does | `.github/CLAUDE.md` |
+| The images the two store listings take | `store/CLAUDE.md` |
 | The design system beyond the two hard rules | `.claude/skills/patra-design/SKILL.md` |
 
 They were written as one continuous argument and still cross-reference each other by name. **When work crosses two of them, read both** — a nested file loads on the directory being touched, not on the subject being reasoned about.

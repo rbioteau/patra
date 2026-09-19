@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Patra — Play feature graphic 1024x500</title>
+<style>
+  /* A store asset, not a page: rendered at exactly 1024x500 and screenshotted.
+     Play's rules shape it rather than taste: no alpha, no device imagery, the
+     focal point kept inside the middle of the frame, and — the one that bites
+     — not a dark grey or near-black field, because that is what Google Play's
+     own background is. So the brand is turned around: ivory paper, night-blue
+     ink, the gold kept for the mark and the full stop. */
+  @font-face { font-family: 'Space Grotesk';
+    src: url('../site/assets/fonts/SpaceGrotesk-Variable.ttf') format('truetype'); font-weight: 300 700; }
+  @font-face { font-family: 'Source Serif 4';
+    src: url('../site/assets/fonts/SourceSerif4-Variable.ttf') format('truetype'); font-weight: 200 900; }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1024px; height: 500px; overflow: hidden; }
+  body {
+    background: #f3eee3;
+    color: #111722;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 26px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .lockup { display: flex; align-items: center; gap: 0.81em; font-size: 104px; }
+  .lockup img { height: 0.8em; width: auto; }
+  .word { font-family: 'Source Serif 4', serif; font-weight: 600; line-height: 1.25; letter-spacing: -0.0125em; }
+  .dot { color: #d7b976; }
+  .tagline {
+    font-size: 28px;
+    font-weight: 400;
+    /* Secondary ink is the primary one at a share of itself, not a new
+       colour: the kit has no second blue, and inventing one here would be the
+       one thing the stylesheet above the site refuses to do. */
+    color: rgba(17, 23, 34, 0.68);
+    letter-spacing: 0.01em;
+  }
+  /* The tagline's rule, in the gold — the one warm line on cold paper, which is
+     what the accent means everywhere else in this project. */
+  .rule { width: 96px; height: 3px; background: #d7b976; border-radius: 2px; }
+</style>
+</head>
+<body>
+  <div class="lockup">
+    <img src="../site/assets/img/patra-mark.svg" alt="">
+    <span class="word">patra<span class="dot">.</span></span>
+  </div>
+  <div class="rule"></div>
+  <div class="tagline">Leaf by leaf. A reader for your Kavita library.</div>
+</body>
+</html>

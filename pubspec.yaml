@@ -31,6 +31,13 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # `flutter drive` for the store screenshots: the recipe lives in
+  # `integration_test/`, the half that writes the files in `test_driver/`.
+  # Both ship with the SDK; neither is a package to keep up with.
+  flutter_driver:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:
