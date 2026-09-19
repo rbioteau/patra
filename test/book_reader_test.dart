@@ -33,11 +33,12 @@ String _pageHtml(int page) =>
     '<p>The spice must flow, &amp; the worm <b>follows</b>.</p>'
     '<p><img src="OEBPS/images/worm$page.jpg"/></p>';
 
-/// What Kavita really writes for a page's pictures: a whole address with no
-/// scheme in it, not a path inside the book.
+/// What Kavita really writes for a page's pictures: a whole address of its
+/// own making — no scheme, its own guess at its host, its own key — rather
+/// than a path inside the book.
 const _addressedPicture =
-    '<p><img src="//kavita.test/api/Book/7/book-resources'
-    '?file=OEBPS/images/cover.jpg"/></p>';
+    '<p><img src="//kavita.test/api/book/7/book-resources'
+    '?apiKey=key&file=OEBPS/images/cover.jpg"/></p>';
 
 /// What the server says a book is made of: a part with two chapters under it,
 /// and a second part after them.
@@ -689,7 +690,7 @@ void main() {
     expect(cached.cacheKey, imageCacheKey(cached.url));
   });
 
-  testWidgets('a picture the page addresses with no scheme is drawn', (
+  testWidgets('a picture the page addresses for itself is drawn', (
     tester,
   ) async {
     await _pumpBook(tester, html: _addressedPicture);
@@ -697,15 +698,16 @@ void main() {
     final pictures = tester.widgetList<Image>(find.byType(Image));
     expect(pictures, hasLength(1));
     final cached = pictures.single.image as CachedNetworkImageProvider;
-    // Asked for as the page wrote it, with this server's scheme in front: a
-    // whole address wrapped into `book-resources` as though it were a path
-    // inside the book is answered with a 400, and the page that carried it —
-    // a cover's, which has no words — is then drawn as nothing at all.
+    // Asked for on the address this session was built with rather than the
+    // one the page carried: only the file it named survives. The server
+    // writes that address out of its own idea of where it lives, which a
+    // proxy is free to get wrong, and the page that carried it — a cover's,
+    // which has no words — is then drawn as nothing at all.
     expect(
       cached.url,
       startsWith('http://kavita.test/api/Book/7/book-resources'),
     );
-    expect(cached.url, contains('file=OEBPS/images/cover.jpg'));
+    expect(cached.url, contains('file=OEBPS%2Fimages%2Fcover.jpg'));
     expect(cached.url, isNot(contains('%2F%2F')));
     expect(cached.cacheKey, imageCacheKey(cached.url));
   });

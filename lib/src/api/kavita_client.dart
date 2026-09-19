@@ -536,18 +536,44 @@ class KavitaClient {
   /// the two ways it named it.
   ///
   /// A path inside the book, usually — but Kavita also writes a **whole
-  /// address with no scheme in it** (`//host/api/Book/7/book-resources
-  /// ?file=cover.jpg`), which is what a cover page is made of. That one is
-  /// the address it already is, and the scheme is this session's own: handed
-  /// to `book-resources` as though it were a path it is answered with a 400,
-  /// and a page whose only block is that picture is then drawn as nothing at
-  /// all.
+  /// address** (`//host/api/Book/7/book-resources?apiKey=…&file=cover.jpg`),
+  /// which is what a cover page is made of, and what any page's pictures are
+  /// made of once the server's own correction pass has touched their names.
+  ///
+  /// **That address is the server's guess at itself, and it is only ever a
+  /// guess.** Kavita builds it out of `Request.Host + Request.PathBase`, so a
+  /// reverse proxy that serves Kavita on a port or under a path of its own —
+  /// and does not tell it so — has the server naming a host the app has never
+  /// spoken to: `https://host/api/Book/…` where the session is
+  /// `https://host:5000` or `https://host/kavita`. Every picture on every
+  /// page then 404s, from the *proxy* rather than from Kavita, and a book
+  /// reads as words with holes in it.
+  ///
+  /// So an address that names `book-resources` is not followed: only the
+  /// `file` it carries is kept, and the request is rebuilt on the address
+  /// this session was actually built with — which is the one address known
+  /// to reach the server, the pages themselves having come down it. Its
+  /// `apiKey` goes with the rest, this endpoint being header-authenticated.
+  /// Anything else the page addresses is left as the address it is, with the
+  /// scheme of the session's own where it names none.
   String bookPictureUrl(int chapterId, String src) {
-    if (src.startsWith('http://') || src.startsWith('https://')) return src;
-    if (src.startsWith('//')) {
-      return Uri.parse(baseUrl).resolve(src).toString();
-    }
-    return bookResourceUrl(chapterId, src);
+    final address = src.startsWith('//')
+        ? Uri.tryParse(baseUrl)?.resolve(src)
+        : (src.startsWith('http://') || src.startsWith('https://'))
+        ? Uri.tryParse(src)
+        : null;
+    if (address == null) return bookResourceUrl(chapterId, src);
+    final file = _bookResourceFile(address);
+    return file == null ? address.toString() : bookResourceUrl(chapterId, file);
+  }
+
+  /// The file a `book-resources` address asks for, or null where the address
+  /// asks for something else entirely — a picture a book really does host
+  /// elsewhere is fetched from where it lives.
+  static String? _bookResourceFile(Uri address) {
+    if (!address.path.toLowerCase().endsWith('/book-resources')) return null;
+    final file = address.queryParameters['file'];
+    return file == null || file.isEmpty ? null : file;
   }
 
   /// The bytes of one picture a page of a book named.

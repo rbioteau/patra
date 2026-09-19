@@ -463,6 +463,72 @@ void main() {
       expect(contents.single.children.single.page, 5);
     });
   });
+
+  group("a book page's pictures are fetched from the session's own server", () {
+    // A Kavita behind a reverse proxy that does not tell it where it lives:
+    // the session reaches it under a path, and the server names itself
+    // without one, because it builds that address out of `Request.Host` and
+    // an empty `Request.PathBase`.
+    KavitaClient proxied() => KavitaClient(
+      baseUrl: 'https://host.test/kavita',
+      token: 'token',
+      username: 'romain',
+      apiKey: 'key',
+    );
+
+    test('a path inside the book is resolved by the server', () {
+      expect(
+        proxied().bookPictureUrl(7, 'OEBPS/images/worm.jpg'),
+        'https://host.test/kavita/api/Book/7/book-resources'
+        '?file=OEBPS%2Fimages%2Fworm.jpg',
+      );
+    });
+
+    test('an address the server wrote for itself is rebuilt on this one', () {
+      // The whole of the bug: followed as written, this asks a host the app
+      // has never spoken to — the proxy's own root — which answers 404 for
+      // every picture in the book while the words come through fine.
+      expect(
+        proxied().bookPictureUrl(
+          7,
+          '//host.test/api/book/7/book-resources'
+          '?apiKey=secret&file=..%2Fresources%2Fimage-19-ch9.png',
+        ),
+        'https://host.test/kavita/api/Book/7/book-resources'
+        '?file=..%2Fresources%2Fimage-19-ch9.png',
+      );
+    });
+
+    test('so is one it wrote with a scheme in it', () {
+      expect(
+        proxied().bookPictureUrl(
+          7,
+          'http://host.test:5000/api/Book/7/book-resources?file=cover.jpg',
+        ),
+        'https://host.test/kavita/api/Book/7/book-resources?file=cover.jpg',
+      );
+    });
+
+    test('and the key it carried is not passed on', () {
+      // `book-resources` is header-authenticated here; a key in the query is
+      // the server writing for a web view, and repeating it would put one
+      // profile's credential into the shared image cache's key.
+      expect(
+        proxied().bookPictureUrl(
+          7,
+          '//host.test/api/Book/7/book-resources?apiKey=secret&file=cover.jpg',
+        ),
+        isNot(contains('secret')),
+      );
+    });
+
+    test('a picture hosted elsewhere is left where it lives', () {
+      expect(
+        proxied().bookPictureUrl(7, 'https://elsewhere.test/worm.jpg'),
+        'https://elsewhere.test/worm.jpg',
+      );
+    });
+  });
 }
 
 /// Answers a book's contents as [contentType], whatever it is.

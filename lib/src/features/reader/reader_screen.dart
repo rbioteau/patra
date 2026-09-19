@@ -845,13 +845,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// What a picture a book's page refers to is drawn with.
   ///
   /// A page names its pictures the way the file does — a path inside the
-  /// book — and the server is what turns that name into bytes. A page that
-  /// already carries a whole address is left to it, **including one with no
-  /// scheme in it**: Kavita writes those (`//host/api/Book/…?file=cover.jpg`)
-  /// and the scheme is the server's own, so it is completed from the address
-  /// this session was built with. Handing one to `book-resources` as though
-  /// it were a path inside the book answers 400, and a page whose only block
-  /// is that picture is then drawn as nothing at all.
+  /// book — and the server is what turns that name into bytes. Where the page
+  /// carries a whole address instead, Kavita wrote it (`//host/api/book/…
+  /// ?apiKey=…&file=cover.jpg`) out of its own idea of where it lives, so
+  /// only the file in it is kept and the request is made on the address this
+  /// session was built with (`KavitaClient.bookPictureUrl`). A page whose
+  /// only block is a picture that cannot be had is drawn as nothing at all.
   Widget _bookPicture(String src) {
     // A page that came from a stored copy carries its pictures with it: the
     // bytes are in the name itself, since there is no server left to fetch
