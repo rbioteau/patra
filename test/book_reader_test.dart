@@ -982,10 +982,9 @@ void main() {
   });
 
   group('where a page sits in the screen', () {
-    /// A phone's screen, and a page in it whose one picture is [height] tall
-    /// — which is what a test can say about a picture it cannot fetch.
-    const height = 800.0;
-
+    /// A phone's screen, and a page in it whose one picture is
+    /// [pictureHeight] tall — which is what a test can say about a picture it
+    /// cannot fetch.
     Future<void> pumpPage(WidgetTester tester, double pictureHeight) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1;
@@ -997,12 +996,10 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: Center(
             child: SizedBox(
-              width: 400,
-              height: height,
               child: BookPageBody(
                 textSize: defaultBookTextSize,
                 lineHeight: defaultBookLineHeight,
-                face: defaultBookReadingFace,
+                face: (family: fontAtkinsonHyperlegibleNext, canSetItalic: false),
                 page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
                 picture: (_) =>
                     SizedBox(key: const Key('picture'), height: pictureHeight),
@@ -1046,7 +1043,7 @@ void main() {
     Future<void> pumpWords(
       WidgetTester tester,
       String html, {
-      ReadingFace face = defaultBookReadingFace,
+      BookType face = (family: fontAtkinsonHyperlegibleNext, canSetItalic: false),
     }) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1;
@@ -1113,7 +1110,7 @@ void main() {
       await _showChrome(tester);
       await tester.tap(find.byIcon(Icons.settings));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Literata'));
+      await tester.tap(find.text('Serif'));
       await tester.pumpAndSettle();
       // Every block of words on the page is set in it — prose, headings,
       // quotations and list items alike — because a book set in a serif with
@@ -1138,7 +1135,7 @@ void main() {
       // a mixture by design since the counter was first drawn.
       expect(
         tester.widget<Text>(find.text('1 / $_pages')).style?.fontFamily,
-        fontSourceSerif4,
+        fontLiterata,
       );
 
       // Nothing was asked of the server: a page set in another face is the
@@ -1165,7 +1162,7 @@ void main() {
       await _showChrome(tester);
       await tester.tap(find.byIcon(Icons.settings));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Literata'));
+      await tester.tap(find.text('Serif'));
       await tester.pumpAndSettle();
 
       // A face is a reflow like a size is: the words break somewhere else,
@@ -1180,7 +1177,7 @@ void main() {
     });
 
     testWidgets('emphasis is set in the italic the face ships', (tester) async {
-      Future<List<FontStyle?>> styles(ReadingFace face) async {
+      Future<List<FontStyle?>> styles(BookType face) async {
         await pumpWords(
           tester,
           '<p>The worm <i>follows</i>.</p>',
@@ -1197,19 +1194,23 @@ void main() {
             run.fontStyle,
         ];
       }
-
+      // The app's serif (Literata) ships an italic.
       expect(
-        await styles(ReadingFace.literata),
+        await styles(ReadingFace.serif.resolve()),
         contains(FontStyle.italic),
-        reason: 'Literata ships an italic, so a book’s emphasis is set in it',
+        reason: "Literata ships an italic, so a book's emphasis is set in it",
       );
-
-      // Space Grotesk has no italic at all, and a slant the engine drew is
-      // not a letterform anybody designed.
+      // The app's sans (Atkinson Hyperlegible Next) also ships an italic.
       expect(
-        await styles(ReadingFace.spaceGrotesk),
+        await styles(ReadingFace.sans.resolve()),
+        contains(FontStyle.italic),
+        reason: 'Atkinson Hyperlegible Next ships an italic',
+      );
+      // The default (book's own, falling back to app sans) has no italic.
+      expect(
+        await styles(ReadingFace.book.resolve()),
         everyElement(FontStyle.normal),
-        reason: 'it has none, so the emphasis stays in the roman',
+        reason: 'the fallback sans has no italic when the book has none',
       );
     });
   });

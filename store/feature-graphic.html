@@ -12,8 +12,8 @@
      ink, the gold kept for the mark and the full stop. */
   @font-face { font-family: 'Space Grotesk';
     src: url('../site/assets/fonts/SpaceGrotesk-Variable.ttf') format('truetype'); font-weight: 300 700; }
-  @font-face { font-family: 'Source Serif 4';
-    src: url('../site/assets/fonts/SourceSerif4-Variable.ttf') format('truetype'); font-weight: 200 900; }
+  @font-face { font-family: 'Literata';
+    src: url('../site/assets/fonts/Literata-Variable.ttf') format('truetype'); font-weight: 200 900; }
 
   * { box-sizing: border-box; margin: 0; }
   html, body { width: 1024px; height: 500px; overflow: hidden; }
@@ -28,9 +28,12 @@
     font-family: 'Space Grotesk', sans-serif;
   }
   .lockup { display: flex; align-items: center; gap: 0.81em; font-size: 104px; }
-  .lockup img { height: 0.8em; width: auto; }
-  .word { font-family: 'Source Serif 4', serif; font-weight: 600; line-height: 1.25; letter-spacing: -0.0125em; }
-  .dot { color: #d7b976; }
+  /* The mark is 0.8em of the signature, as the app draws it; the signature's
+     own box is its ink, 23.885 units of the kit's 28.7-unit em, so it is
+     0.832em rather than 1em. One rule each, because `.lockup img` would now
+     catch the signature too and give it the mark's height. */
+  .lockup__mark { height: 0.8em; width: auto; }
+  .lockup__word { height: 0.832em; width: auto; }
   .tagline {
     font-size: 28px;
     font-weight: 400;
@@ -47,8 +50,11 @@
 </head>
 <body>
   <div class="lockup">
-    <img src="../site/assets/img/patra-mark.svg" alt="">
-    <span class="word">patra<span class="dot">.</span></span>
+    <img class="lockup__mark" src="../site/assets/img/patra-mark.svg" alt="">
+    <!-- The signature in **ink**: this one asset is drawn on ivory rather than
+         on the night blue, so the word has to be the dark one. Generated
+         beside the site's ivory copy by `tool/gen_web_mark.dart`. -->
+    <img class="lockup__word" src="patra-signature-ink.svg" alt="">
   </div>
   <div class="rule"></div>
   <div class="tagline">Leaf by leaf. A reader for your Kavita library.</div>

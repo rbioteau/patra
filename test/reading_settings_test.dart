@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/settings/reading_settings.dart';
+import 'package:patra/src/theme.dart';
 
 import 'test_support.dart';
 
@@ -78,11 +79,12 @@ void main() {
     test('are every one declared, with the file that draws it', () {
       final declared = _declaredFaces();
       for (final face in ReadingFace.values) {
-        final entry = declared[face.family];
+        final resolved = face.resolve(bookFamily: null);
+        final entry = declared[resolved.family];
         expect(
           entry,
           isNotNull,
-          reason: '${face.family} is offered but not bundled, so it would be '
+          reason: '${resolved.family} is offered but not bundled, so it would be '
               'drawn in the default face with nothing saying so',
         );
         expect(entry!.assets, isNotEmpty);
@@ -94,18 +96,17 @@ void main() {
           );
         }
         // One variable file per family — one file answers every weight, so a
-        // static per weight is a bundle four times the size for nothing.
+        // static per weight is a bundle four times the size for nothing — plus
+        // the italic where the family ships one. The family's own bundle is
+        // what this is about, not whether the *choice* may italicise: the
+        // book's own choice resolves to the app's sans when a book has no face
+        // of its own, and there is nothing of the book's to set in italic.
         final files = entry.assets.map((a) => a.split('/').last).toSet();
         expect(
           files.length,
-          face.canSetItalic ? 2 : 1,
-          reason: '${face.family} ships one file per family, plus its italic',
-        );
-        expect(
-          entry.italic,
-          face.canSetItalic,
-          reason: '${face.family} must say the same thing about its italic '
-              'as the code that sets a book in it does',
+          entry.italic ? 2 : 1,
+          reason: '${resolved.family} ships one file per family, plus its '
+              'italic where it has one',
         );
       }
     });
@@ -113,7 +114,8 @@ void main() {
     test('each ships the licence it is published under', () {
       final declared = _declaredFaces();
       for (final face in ReadingFace.values) {
-        for (final asset in declared[face.family]!.assets) {
+        final resolved = face.resolve(bookFamily: null);
+        for (final asset in declared[resolved.family]!.assets) {
           final name = asset.split('/').last;
           final family = name.substring(0, name.indexOf('-'));
           expect(
@@ -123,6 +125,53 @@ void main() {
           );
         }
       }
+    });
+
+    test('resolve falls back to the app sans when the book has no face', () {
+      final book = ReadingFace.book.resolve(bookFamily: null);
+      expect(
+        book.family,
+        fontAtkinsonHyperlegibleNext,
+        reason: 'a book with no face of its own is set in the app sans',
+      );
+      expect(
+        book.canSetItalic,
+        isFalse,
+        reason: 'the app sans has no italic when used as the book default',
+      );
+    });
+
+    test('resolve uses the book family when it has one, carrying its italic', () {
+      const bookFamily = 'CustomBookFont';
+      final book = ReadingFace.book.resolve(
+        bookFamily: bookFamily,
+        bookItalic: true,
+      );
+      expect(
+        book.family,
+        bookFamily,
+        reason: 'the book\'s own face uses the family the book shipped',
+      );
+      expect(
+        book.canSetItalic,
+        isTrue,
+        reason: 'the book\'s italic is carried through when the book has one',
+      );
+
+      final bookNoItalic = ReadingFace.book.resolve(
+        bookFamily: bookFamily,
+        bookItalic: false,
+      );
+      expect(
+        bookNoItalic.family,
+        bookFamily,
+        reason: 'the book\'s own face still uses the book family',
+      );
+      expect(
+        bookNoItalic.canSetItalic,
+        isFalse,
+        reason: 'without a book italic, emphasis falls back to the roman',
+      );
     });
   });
 }

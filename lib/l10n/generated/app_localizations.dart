@@ -602,35 +602,29 @@ abstract class AppLocalizations {
   /// **'Reading face'**
   String get bookReadingFace;
 
-  /// Explains what the reading face setting changes, and says where it applies.
+  /// Explains what the reading face setting changes, and says what happens where the book carries no font of its own.
   ///
   /// In en, this message translates to:
-  /// **'The face a book is set in. Every book is set in this face.'**
+  /// **'The book\'s own face where it has one, the app\'s sans where it does not.'**
   String get bookReadingFaceExplained;
 
-  /// The name of a typeface the app ships. A proper noun, never translated.
+  /// Reading face option: the typeface the e-book itself asks for, and the one a book is set in until somebody chooses another. A kind of type, never a font's name.
   ///
   /// In en, this message translates to:
-  /// **'Space Grotesk'**
-  String get readingFaceSpaceGrotesk;
+  /// **'The book\'s own'**
+  String get readingFaceBook;
 
-  /// The name of a typeface the app ships. A proper noun, never translated.
+  /// Reading face option: the app's serif typeface. A kind of type, never a font's name.
   ///
   /// In en, this message translates to:
-  /// **'Source Serif 4'**
-  String get readingFaceSourceSerif4;
+  /// **'Serif'**
+  String get readingFaceSerif;
 
-  /// The name of a typeface the app ships. A proper noun, never translated.
+  /// Reading face option: the app's sans-serif typeface, drawn for reading long and for low vision. A kind of type, never a font's name.
   ///
   /// In en, this message translates to:
-  /// **'Literata'**
-  String get readingFaceLiterata;
-
-  /// The name of a typeface the app ships. A proper noun, never translated.
-  ///
-  /// In en, this message translates to:
-  /// **'Atkinson Hyperlegible Next'**
-  String get readingFaceAtkinsonHyperlegibleNext;
+  /// **'Sans serif'**
+  String get readingFaceSans;
 
   /// A value shown as a percentage of the whole.
   ///

@@ -13,11 +13,20 @@ given.
 WebView is enough*: drop the HTML into a web view and let the platform draw it.
 Two facts recorded in this repository say otherwise.
 
-**Kavita's book endpoints are header-authenticated and take no `apiKey` in the
-query** — `lib/src/api/CLAUDE.md`, and the one image URL in the app with none.
-An `<img>` inside a web view can carry no header of ours, so a page's pictures
-would never load: they are exactly what `book-resources` serves, and the
-pictures are half of what an illustrated book is.
+**The book endpoints are header-authenticated in this client, and a page's own
+pictures are not addressed in a way a web view could use.** `book-resources`
+does *accept* an `apiKey` in the query — Kavita's own page HTML is written for a
+web view and carries `//host/api/book/{chapterId}/book-resources?apiKey=…&file=…`
+— but that address is the server's own guess at where it lives, built from
+`Request.Host + Request.PathBase`, and behind a reverse proxy it names a host
+the app has never spoken to; this client deliberately takes the `file` out of it
+and rebuilds the request on the address the session was built with
+(`KavitaClient.bookPictureUrl`). What a page says about a picture is otherwise a
+**bare path inside the book**, which carries no key for anybody. So a web view
+would fetch the pictures the server had already rewritten, from the host the
+server guessed, and none of the rest — and this ADR's original claim, that the
+endpoint takes no key in the query at all, was simply wrong. The decision does
+not rest on this paragraph: the two facts below are enough on their own.
 
 **A web view is not available where this project develops.** `webview_flutter`
 has no Linux implementation; Linux desktop is the fast local target, and losing

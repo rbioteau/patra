@@ -4,30 +4,29 @@ import 'package:flutter/material.dart';
 /// The app commits to a single dark look: the reader canvas is pure black and
 /// the whole chrome is built around it.
 
-/// The four faces the app ships, and the only ones it draws with.
+/// The three faces the app ships, and the only ones it draws with.
 ///
-/// All four are bundled rather than fetched — a reader is opened on a train,
+/// All three are bundled rather than fetched — a reader is opened on a train,
 /// and a book saved for one (#77) opens in the face its reader chose with no
 /// server to ask. Every one is **variable**, so one file answers every
-/// weight. Two of them ship with their italic as well; Space Grotesk has
-/// none at all and Source Serif 4's is deliberately not bundled (see
-/// [ReadingFace.canSetItalic]).
+/// weight, and the two a book can be set in ship their italic beside the
+/// roman. A book can also be set in the face it carries itself, which is
+/// fetched from the server or comes out of the copy (see [ReadingFace.resolve]).
 ///
-/// The first two are the **app's own** — the interface is drawn in the sans
-/// and the serif is reserved for titles of works, the wordmark and the
-/// reader's page numerals. The other two are a book's alone: they are
-/// offered nowhere but in the reader's sheet, and the only place the serif
-/// rule of this file is deliberately broken on purpose (see the reader's
+/// The interface is drawn in the sans, and the serif is reserved for titles
+/// of works, the wordmark and the reader's page numerals. Both are also two
+/// of the three faces a book can be set in: prose is the one place that rule
+/// is deliberately broken, and it is broken for prose alone, which puts
+/// neither the wordmark nor a title of a work at risk (see the reader's
 /// rules).
 const fontSpaceGrotesk = 'Space Grotesk';
-const fontSourceSerif4 = 'Source Serif 4';
 const fontLiterata = 'Literata';
 const fontAtkinsonHyperlegibleNext = 'Atkinson Hyperlegible Next';
 
 /// The two the interface is drawn in, by the only names the rest of this
 /// file needs to know them by.
 const _sans = fontSpaceGrotesk;
-const _serif = fontSourceSerif4;
+const _serif = fontLiterata;
 
 /// The page. Also the ground of every app icon and of the window the OS
 /// paints while the process starts, which is what makes the launch read as a

@@ -331,12 +331,11 @@ void main() {
       expect(find.text('Reading face'), findsOneWidget);
       expect(find.text('16 pt'), findsOneWidget);
       expect(find.text('155%'), findsOneWidget);
-      // Exactly the faces the app ships, each named as the family publishes
-      // it — a face is a proper noun and is never translated.
-      expect(find.text('Space Grotesk'), findsOneWidget);
-      expect(find.text('Source Serif 4'), findsOneWidget);
-      expect(find.text('Literata'), findsOneWidget);
-      expect(find.text('Atkinson Hyperlegible Next'), findsOneWidget);
+      // Three choices, each labelled by the kind of type it is — not a font's
+      // name. The row itself is the sample, composed in that face.
+      expect(find.text("The book's own"), findsOneWidget);
+      expect(find.text('Serif'), findsOneWidget);
+      expect(find.text('Sans serif'), findsOneWidget);
     });
 
     testWidgets('the face is the third row, and the last', (tester) async {
@@ -353,7 +352,7 @@ void main() {
     testWidgets('picking a face leaves the two numbers alone', (tester) async {
       await _openBookSheet(tester);
 
-      await tester.tap(find.text('Literata'));
+      await tester.tap(find.text('Serif'));
       await tester.pumpAndSettle();
 
       // The check moves to the face that was picked, and the sheet stays
@@ -362,14 +361,13 @@ void main() {
       expect(find.text('16 pt'), findsOneWidget);
       expect(find.text('155%'), findsOneWidget);
       final checked = tester.getCenter(find.byIcon(Icons.check));
-      expect(checked.dy, tester.getCenter(find.text('Literata')).dy);
+      expect(checked.dy, tester.getCenter(find.text('Serif')).dy);
       expect(
         find.byIcon(Icons.check),
         findsOneWidget,
-        reason: 'exactly one of the four is in force',
+        reason: 'exactly one of the three is in force',
       );
     });
-
     testWidgets('offers nothing that is a question about pictures', (
       tester,
     ) async {

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/kavita_client.dart';
 import '../api/models.dart';
+import '../features/reader/book_face.dart';
 import '../features/reader/book_page.dart';
 import '../profile_files.dart';
 
@@ -816,6 +817,12 @@ class DownloadsService {
   /// the top: a server that has recounted a book leaves pages behind that are
   /// not pages of it any more, and a reader that found them would call the
   /// copy longer than it is.
+  ///
+  /// The one exception is the book's own face, which a copy carries under the
+  /// frozen names [BookFontFile.roman] and [BookFontFile.italic]. That name
+  /// lives in the reader's module so the two cannot disagree about it — the
+  /// download code does not know what a font file is, only that these two
+  /// names are not pages and must survive promotion.
   Future<void> _promote(Directory dir, Directory staging, int pages) async {
     for (var page = 0; page < pages; page++) {
       File('${staging.path}/${pageFileName(page)}')
@@ -825,13 +832,16 @@ class DownloadsService {
       if (entity is! File) continue;
       final name = entity.path.split(Platform.pathSeparator).last;
       final page = pageOfFileName(name);
-      if (page == null || page >= pages) entity.deleteSync();
+      if (page == null || page >= pages) {
+        if (!BookFontFile.isCarried(name)) entity.deleteSync();
+      }
     }
     await _deleteQuietly(staging);
   }
 
   /// Stores one page of a book: the HTML the server laid out, with every
-  /// picture it named carried inside it.
+  /// picture it named carried inside it, and the book's own face carried once
+  /// per copy.
   ///
   /// Returns what the page cost, which is what the Downloads tab reports.
   Future<int> _storeBookPage(
@@ -847,6 +857,30 @@ class DownloadsService {
       page,
       cancelToken: cancelToken,
     );
+
+    // The book's face is the same on every page; parse it on the first page
+    // we see and memoize the font fetches in [carried] so a 300-page book
+    // fetches its font once. A font the server refuses costs the copy its
+    // font and not the reader the book — same shape as a refused picture.
+    final face = parseBookFace(html);
+    if (face != null && !face.isEmpty) {
+      final chapterDir = dir.parent;
+      if (face.roman != null) {
+        await carried.putIfAbsent(
+          'font:roman:${face.roman}',
+          () => _carryFont(client, chapterId, face.roman!, BookFontFile.roman,
+              chapterDir, cancelToken),
+        );
+      }
+      if (face.italic != null) {
+        await carried.putIfAbsent(
+          'font:italic:${face.italic}',
+          () => _carryFont(client, chapterId, face.italic!, BookFontFile.italic,
+              chapterDir, cancelToken),
+        );
+      }
+    }
+
     final resolved = <String, String?>{};
     for (final src in BookPage.fromHtml(html).pictureSources) {
       // Asked for once however many pages name it — including a picture the
@@ -885,6 +919,37 @@ class DownloadsService {
     }
   }
 
+  /// Fetches a font file from the book-resources endpoint and writes it to the
+  /// chapter directory under the frozen name ([fontName] — either
+  /// [BookFontFile.roman] or [BookFontFile.italic]).
+  ///
+  /// A font the server refuses costs the copy its font and not the reader the
+  /// book — the same shape as a refused picture in [_carryPicture]. The future
+  /// completes with null on failure so the memoization in [carried] remembers
+  /// the refusal and does not retry on subsequent pages.
+  Future<String?> _carryFont(
+    KavitaClient client,
+    int chapterId,
+    String src,
+    String fontName,
+    Directory chapterDir,
+    CancelToken? cancelToken,
+  ) async {
+    try {
+      final bytes = await client.bookPictureBytes(
+        chapterId,
+        src,
+        cancelToken: cancelToken,
+      );
+      final file = File('${chapterDir.path}/$fontName');
+      await _writePage(file, bytes);
+      return fontName;
+    } on DioException catch (error) {
+      // A cancelled download is not a font that could not be fetched.
+      if (error.type == DioExceptionType.cancel) rethrow;
+      return null;
+    }
+  }
   /// Drops only the resumable bytes of an attempt. A refresh may have a saved
   /// copy beside its staging directory; cancellation never spends that copy.
   Future<void> discardPartial(int chapterId) async {

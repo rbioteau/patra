@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/features/reader/book_face.dart';
 
 /// Serves fake page bytes, and can fail on a chosen page.
 class _PageAdapter implements HttpClientAdapter {
@@ -90,7 +91,6 @@ const _picture = [7, 8, 9];
 
 /// One book, in the chapter the server hangs it on.
 const _bookId = 7;
-
 /// What the server says a page of the book is made of: words, and a picture
 /// named the way the file names it. The first two pages name the same one,
 /// which is the ordinary thing for a book to do.
@@ -99,6 +99,31 @@ String _bookPageHtml(int page) =>
     '<p>The spice must flow.</p>'
     '<p><img src="OEBPS/images/${page == 2 ? 'cover' : 'worm'}.jpg"/></p>';
 
+/// What the server says a page of the book-with-font is made of: words, a
+/// picture, and a @font-face pointing at a book-resources file.
+String _bookWithFontPageHtml(int page) =>
+    '<style>'
+    '@font-face {'
+    '  font-family: "Book Face";'
+    // The address Kavita writes: scheme-less, naming the host it guesses it
+    // lives on, with the file it means in the query. `bookPictureUrl` keeps
+    // the `file` and rebuilds the request on this session's own base URL.
+    '  src: url("//host/api/Book/$_bookId/book-resources?apiKey=key&file=fonts/regular.woff2")'
+    '       format("woff2");'
+    '  font-weight: normal;'
+    '  font-style: normal;'
+    '}'
+    '@font-face {'
+    '  font-family: "Book Face";'
+    '  src: url("//host/api/Book/$_bookId/book-resources?apiKey=key&file=fonts/italic.woff2")'
+    '       format("woff2");'
+    '  font-weight: normal;'
+    '  font-style: italic;'
+    '}'
+    '</style>'
+    '<h1>Part ${page == 2 ? 'two' : 'one'}</h1>'
+    '<p>The spice must flow.</p>'
+    '<p><img src="OEBPS/images/${page == 2 ? 'cover' : 'worm'}.jpg"/></p>';
 /// A Kavita holding one book: `book-info` says how many pages it made of it,
 /// `book-page` hands one over at a time, and `book-resources` serves what a
 /// page named.
@@ -117,6 +142,10 @@ class _BookAdapter implements HttpClientAdapter {
 
   /// Every picture the app asked the server for, in order.
   final requested = <String>[];
+
+  /// Every font the app asked the server for — always empty for this adapter
+  /// since its pages carry no @font-face rules.
+  final requestedFonts = <String>[];
 
   @override
   Future<ResponseBody> fetch(
@@ -168,19 +197,97 @@ class _BookAdapter implements HttpClientAdapter {
       error: 'nothing here answers $path',
     );
   }
+  @override
+  void close({bool force = false}) {}
+}
+
+/// A Kavita holding one book that ships its own face: the page HTML carries
+/// @font-face rules pointing at book-resources files, and the adapter tracks
+/// font requests separately from picture requests.
+class _BookWithFontAdapter implements HttpClientAdapter {
+  _BookWithFontAdapter({this.refuseFonts = false, this.pages = 3});
+
+  final bool refuseFonts;
+  final int pages;
+
+  final requestedPages = <int>[];
+
+  /// Every picture the app asked the server for, in order.
+  final requested = <String>[];
+
+  /// Every font file the app asked the server for, in order.
+  final requestedFonts = <String>[];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    final path = options.uri.path;
+    if (path == '/api/Book/$_bookId/book-info') {
+      return _json({
+        'bookTitle': 'Dune Messiah',
+        'seriesId': 3,
+        'volumeId': 4,
+        'libraryId': 1,
+        'pages': pages,
+        'seriesName': 'Dune',
+        'seriesFormat': MangaFormat.epub.id,
+      });
+    }
+    if (path == '/api/Book/$_bookId/book-page') {
+      final page = int.parse('${options.uri.queryParameters['page']}');
+      requestedPages.add(page);
+      return ResponseBody.fromString(
+        _bookWithFontPageHtml(page),
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['text/html'],
+        },
+      );
+    }
+    if (path == '/api/Book/$_bookId/book-resources') {
+      final file = options.uri.queryParameters['file'] as String;
+      // Track font requests separately from picture requests.
+      if (file.startsWith('fonts/')) {
+        requestedFonts.add(file);
+        if (refuseFonts) return ResponseBody.fromBytes(const [], 404);
+        return ResponseBody.fromBytes(
+          _picture,
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['font/woff2'],
+          },
+        );
+      }
+      requested.add(file);
+      return ResponseBody.fromBytes(
+        _picture,
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['image/jpeg'],
+        },
+      );
+    }
+    throw DioException(
+      requestOptions: options,
+      type: DioExceptionType.unknown,
+      error: 'nothing here answers $path',
+    );
+  }
 
   @override
   void close({bool force = false}) {}
 }
 
-ResponseBody _json(Object body) => ResponseBody.fromString(
-  jsonEncode(body),
-  200,
-  headers: {
-    Headers.contentTypeHeader: [Headers.jsonContentType],
-  },
-);
-
+ ResponseBody _json(Object body) => ResponseBody.fromString(
+   jsonEncode(body),
+   200,
+   headers: {
+     Headers.contentTypeHeader: [Headers.jsonContentType],
+   },
+ );
 /// A book as a row knows it: the chapter the server hangs the file on, whose
 /// own page count is of image pages and so is none at all.
 const _book = SavedChapter(
@@ -726,6 +833,163 @@ void main() {
 
       expect(saved.content, ChapterContent.fixedPages);
       expect(saved.format, MangaFormat.unknown);
+    });
+  });
+
+  group('saving a book that ships its own face', () {
+    test('the font is fetched once and written under the frozen name', () async {
+      final adapter = _BookWithFontAdapter();
+
+      final saved = await service.download(
+        client: _client(adapter),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      expect(saved.pages, 3);
+      expect(saved.content, ChapterContent.reflowable);
+      expect(saved.bytes, greaterThan(0));
+
+      // The font files were requested exactly once each, despite 3 pages.
+      expect(adapter.requestedFonts, [
+        'fonts/regular.woff2',
+        'fonts/italic.woff2',
+      ]);
+      // Pictures were still fetched as before.
+      expect(adapter.requested, [
+        'OEBPS/images/worm.jpg',
+        'OEBPS/images/cover.jpg',
+      ]);
+
+      // The font files exist in the chapter directory under the frozen names.
+      final dir = await service.chapterDir(_bookId);
+      final romanFile = File('${dir.path}/${BookFontFile.roman}');
+      final italicFile = File('${dir.path}/${BookFontFile.italic}');
+      expect(romanFile.existsSync(), isTrue, reason: 'roman font file exists');
+      expect(italicFile.existsSync(), isTrue, reason: 'italic font file exists');
+      expect(romanFile.lengthSync(), _picture.length);
+      expect(italicFile.lengthSync(), _picture.length);
+
+      // Pages still carry their pictures.
+      for (var page = 0; page < 3; page++) {
+        final file = await service.pageFile(_bookId, page);
+        expect(file.existsSync(), isTrue, reason: 'page $page is stored');
+        final html = file.readAsStringSync();
+        expect(html, contains('The spice must flow.'));
+        expect(html, contains(base64Encode(_picture)));
+        expect(html, isNot(contains('OEBPS/')));
+      }
+    });
+
+    test('the font survives promotion when the book is saved again with a different page count', () async {
+      // First save: 3 pages.
+      final firstAdapter = _BookWithFontAdapter(pages: 3);
+      await service.download(
+        client: _client(firstAdapter),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      final dir = await service.chapterDir(_bookId);
+      final romanFile = File('${dir.path}/${BookFontFile.roman}');
+      final italicFile = File('${dir.path}/${BookFontFile.italic}');
+      expect(romanFile.existsSync(), isTrue);
+      expect(italicFile.existsSync(), isTrue);
+      final firstRomanBytes = romanFile.readAsBytesSync();
+      final firstItalicBytes = italicFile.readAsBytesSync();
+
+      // Second save (refresh): server now reports 4 pages, but we keep the
+      // original 3. The font files should survive _promote.
+      final secondAdapter = _BookWithFontAdapter(pages: 4);
+      final saved = await service.download(
+        client: _client(secondAdapter),
+        chapter: _book,
+        onProgress: (_, _) {},
+        knownTotalPages: 3,
+      );
+
+      expect(saved.pages, 3, reason: 'the copy keeps its original pagination');
+
+      // Font files still exist and have the same content.
+      expect(romanFile.existsSync(), isTrue, reason: 'roman font survives promotion');
+      expect(italicFile.existsSync(), isTrue, reason: 'italic font survives promotion');
+      expect(romanFile.readAsBytesSync(), firstRomanBytes);
+      expect(italicFile.readAsBytesSync(), firstItalicBytes);
+
+      // The stale page 3 (which would have been page index 3 in a 4-page book)
+      // is not present.
+      final stalePage = File('${dir.path}/${DownloadsService.pageFileName(3)}');
+      expect(stalePage.existsSync(), isFalse, reason: 'stale page 3 was removed');
+
+      // A refresh remakes the copy, so the face is fetched again — once, not
+      // once per page, which is what the memoization in `carried` is for.
+      expect(secondAdapter.requestedFonts, [
+        'fonts/regular.woff2',
+        'fonts/italic.woff2',
+      ], reason: 'the face is fetched once per save, never once per page');
+    });
+
+    test('a font the server refuses costs the copy its font but not the book', () async {
+      // A server that serves the page but refuses the font files.
+      final adapter = _BookWithFontAdapter(refuseFonts: true);
+      final saved = await service.download(
+        client: _client(adapter),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      expect(saved.pages, 3);
+      expect(saved.content, ChapterContent.reflowable);
+
+      // Font files were requested but the server refused.
+      expect(adapter.requestedFonts, [
+        'fonts/regular.woff2',
+        'fonts/italic.woff2',
+      ]);
+
+      // No font files were written.
+      final dir = await service.chapterDir(_bookId);
+      final romanFile = File('${dir.path}/${BookFontFile.roman}');
+      final italicFile = File('${dir.path}/${BookFontFile.italic}');
+      expect(romanFile.existsSync(), isFalse, reason: 'no roman font written');
+      expect(italicFile.existsSync(), isFalse, reason: 'no italic font written');
+
+      // Pages are still stored and carry their pictures.
+      for (var page = 0; page < 3; page++) {
+        final file = await service.pageFile(_bookId, page);
+        expect(file.existsSync(), isTrue, reason: 'page $page is stored');
+        final html = file.readAsStringSync();
+        expect(html, contains('The spice must flow.'));
+        expect(html, contains(base64Encode(_picture)));
+      }
+    });
+
+    test('a book whose page asks for no font writes no font file and does not fail', () async {
+      // The original _BookAdapter returns pages without @font-face rules.
+      final adapter = _BookAdapter();
+      final saved = await service.download(
+        client: _client(adapter),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      expect(saved.pages, 3);
+      expect(saved.content, ChapterContent.reflowable);
+
+      // No font files were requested or written.
+      expect(adapter.requestedFonts, isEmpty);
+
+      final dir = await service.chapterDir(_bookId);
+      final romanFile = File('${dir.path}/${BookFontFile.roman}');
+      final italicFile = File('${dir.path}/${BookFontFile.italic}');
+      expect(romanFile.existsSync(), isFalse, reason: 'no roman font written');
+      expect(italicFile.existsSync(), isFalse, reason: 'no italic font written');
+
+      // Pages are stored normally.
+      for (var page = 0; page < 3; page++) {
+        final file = await service.pageFile(_bookId, page);
+        expect(file.existsSync(), isTrue, reason: 'page $page is stored');
+      }
     });
   });
 }

@@ -12,13 +12,13 @@ Usable, still young. What works:
 - **Home** — Continue reading, On deck, and your libraries
 - **Library** — filter pills per library, 3-column cover grid with reading progress
 - **Series** — volumes, chapters and specials as rows, with covers and per-chapter progress
-- **Books (EPUB)** — a book's row opens the reader on the pages Kavita laid out, with a table of contents, a text size and a line spacing of your own, and a copy you can save for the train
+- **Books (EPUB)** — a book's row opens the reader on the pages Kavita laid out, in the face the book itself asks for — or in one of the app's own — with a table of contents, a text size and a line spacing of your own, and a copy you can save for the train
 - **Offline** — save chapters and books to the device, read them with no server reachable, and have the progress you made on the train reach the server when you are back
 - English and French, following the system language
 
 ## Roadmap
 
-- [x] EPUB reading — Kavita renders a book into pages of HTML server-side and the app draws them in its own type (ADR-0008, ADR-0010)
+- [x] EPUB reading — Kavita renders a book into pages of HTML server-side and the app draws them itself, in the face the book asks for (ADR-0008, ADR-0010, ADR-0012)
 - [ ] Search across libraries
 - [ ] Reading lists and collections
 

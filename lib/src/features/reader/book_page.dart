@@ -16,10 +16,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'book_face.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
-
 /// A run of words inside a block, and how the book set it.
 class BookSpan {
   const BookSpan(this.text, {this.bold = false, this.italic = false});
@@ -32,7 +32,7 @@ class BookSpan {
   /// run's emphasis has an italic to be set in: where it has none — Space
   /// Grotesk has none at all — emphasis is set in the roman rather than in a
   /// slant the engine drew (#92).
-  InlineSpan toSpan(TextStyle base, ReadingFace face) => TextSpan(
+  InlineSpan toSpan(TextStyle base, BookType face) => TextSpan(
     text: text,
     style: base.copyWith(
       fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
@@ -71,9 +71,14 @@ class BookPicture extends BookBlock {
 
 /// One page of a book: the server's HTML, taken apart once.
 class BookPage {
-  const BookPage(this.blocks);
+  const BookPage(this.blocks, {this.face});
 
   final List<BookBlock> blocks;
+
+  /// The face the page's own stylesheet asks for, or null if it asks for
+  /// nothing. This is parsed once from the page's HTML and carried so that
+  /// the reader can load and register the font before drawing.
+  final BookFace? face;
 
   /// Nothing to draw is a page the server did not produce, whatever it
   /// answered with.
@@ -85,7 +90,8 @@ class BookPage {
   Iterable<String> get pictureSources =>
       blocks.whereType<BookPicture>().map((picture) => picture.src);
 
-  factory BookPage.fromHtml(String html) => BookPage(parseBookPage(html));
+  factory BookPage.fromHtml(String html) =>
+      BookPage(parseBookPage(html), face: parseBookFace(html));
 }
 
 /// What a stored page carries a picture as, in place of the name it named it
@@ -195,15 +201,14 @@ class BookPageBody extends StatefulWidget {
   /// The room between the lines, as a share of [textSize].
   final double lineHeight;
 
-  /// The face the words are set in: one of the four the app ships, and the
-  /// reader's own choice for every book (#92).
+  /// The face the words are set in: the resolved family and whether it can
+  /// set italic. This is a record so it compares by value, which lets
+  /// [didUpdateWidget] carry the reader's place across a face change exactly
+  /// as it does for a size change.
   ///
-  /// Every block of words on the page is set in it — prose, headings,
-  /// quotations and list items alike — because a book set in a serif with
-  /// sans intertitres reads as an interface rather than as a book. What is
-  /// not set in it is the page counter, which is the app's own furniture and
-  /// stays in the serif whatever is chosen.
-  final ReadingFace face;
+  /// The page counter stays in the app's serif — that is the app's own
+  /// furniture and is unchanged.
+  final BookType face;
 
   /// Where in the page the reader was, when it is opened again: null, or the
   /// top, for a page with nowhere to be but its beginning.
@@ -468,6 +473,14 @@ const Map<String, BookBlockStyle> _blockTags = {
   'li': BookBlockStyle.item,
 };
 
+/// The name of the tag [tag] opens or closes, in lower case, or null where it
+/// names nothing — the one definition of what a page's markup calls a tag.
+///
+/// Public because the face a book asks for is read out of the page's own
+/// `<style>`, and that walk is the same grammar as this one (`book_face.dart`).
+String? bookTagName(String tag) =>
+    _tagName.firstMatch(tag)?.group(1)?.toLowerCase();
+
 /// The server's HTML, as the blocks a page is drawn from.
 ///
 /// No tree is built and no CSS is honoured, which is the whole of what keeps
@@ -522,9 +535,8 @@ List<BookBlock> parseBookPage(String html) {
     final tag = piece.text;
     if (tag.startsWith('<!--')) continue;
 
-    final match = _tagName.firstMatch(tag);
-    if (match == null) continue;
-    final name = match.group(1)!.toLowerCase();
+    final name = bookTagName(tag);
+    if (name == null) continue;
     final closing = tag.startsWith('</');
 
     if (dropping != null) {
@@ -615,7 +627,7 @@ String renameBookPictures(String html, String? Function(String src) rename) {
       continue;
     }
     final tag = piece.text;
-    final name = _tagName.firstMatch(tag)?.group(1)?.toLowerCase();
+    final name = bookTagName(tag);
     out.write(
       (name == 'img' || name == 'image') && !tag.startsWith('</')
           ? _renamedPicture(tag, rename)

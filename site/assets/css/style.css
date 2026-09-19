@@ -20,8 +20,8 @@
 }
 
 @font-face {
-  font-family: 'Source Serif 4';
-  src: url('../fonts/SourceSerif4-Variable.ttf') format('truetype');
+  font-family: 'Literata';
+  src: url('../fonts/Literata-Variable.ttf') format('truetype');
   font-weight: 200 900;
   font-display: swap;
 }
@@ -47,10 +47,7 @@
   --radius-card: 12px;
   --gutter: 20px;
   --section-gap: 24px;
-
-  --sans: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', sans-serif;
-  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --serif: 'Literata', Georgia, 'Times New Roman', serif;
 }
 
 *,
@@ -124,9 +121,10 @@ header.site .shell {
 
 /* The word पत्र from the app's own outlines (`PatraLogoPaths`, flattened by
    `tool/gen_web_mark.dart`) beside the Latin signature — the same two-part
-   lockup the app's header and gate screens draw. The signature is text in the
-   bundled serif, which is what `PatraWordmark` sets too: an outline of it
-   exists in the kit, and a word that is read as a word should be one. */
+   lockup the app's header and gate screens draw. The signature is an SVG
+   generated from the kit's own outlines (`tool/gen_web_mark.dart` emits
+   `patra-signature.svg`), so the mark is the kit's at every size — the app's
+   serif is Literata and the kit's is not. */
 .lockup {
   display: inline-flex;
   align-items: center;
@@ -146,18 +144,13 @@ header.site .shell {
 }
 
 .lockup__word {
-  font-family: var(--serif);
-  font-size: 1em;
-  /* `PatraText.serifTitle`: w600, height 1.25 — and the mark is 0.8em of it,
-     so the two boxes keep the ratio the app tuned. */
-  font-weight: 600;
-  line-height: 1.25;
-  /* The handoff's -0.5px at 40px, kept as a fraction as the app keeps it. */
-  letter-spacing: -0.0125em;
-}
-
-.lockup__dot {
-  color: var(--accent);
+  /* The signature SVG's own box is its **ink** — the word and its period,
+     23.885 units of the kit's 28.7-unit em — so at `1em` it would be a fifth
+     larger than the app draws it. `0.832em` is that ink, and the mark's
+     0.8em is what the app puts beside it: the two spans on top of one
+     another, which is what `PatraWordmark.markEm` means. */
+  height: 0.832em;
+  width: auto;
 }
 
 .site-nav {

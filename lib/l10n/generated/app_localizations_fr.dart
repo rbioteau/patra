@@ -346,20 +346,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get bookReadingFaceExplained =>
-      'La police d\'un livre. Tous les livres sont composés dans cette police.';
+      'La police du livre quand il en a une, sinon celle de l\'app, sans empattements.';
 
   @override
-  String get readingFaceSpaceGrotesk => 'Space Grotesk';
+  String get readingFaceBook => 'Celle du livre';
 
   @override
-  String get readingFaceSourceSerif4 => 'Source Serif 4';
+  String get readingFaceSerif => 'Avec empattements';
 
   @override
-  String get readingFaceLiterata => 'Literata';
-
-  @override
-  String get readingFaceAtkinsonHyperlegibleNext =>
-      'Atkinson Hyperlegible Next';
+  String get readingFaceSans => 'Sans empattements';
 
   @override
   String percent(int value) {

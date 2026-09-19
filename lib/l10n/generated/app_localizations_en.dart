@@ -345,20 +345,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookReadingFaceExplained =>
-      'The face a book is set in. Every book is set in this face.';
+      'The book\'s own face where it has one, the app\'s sans where it does not.';
 
   @override
-  String get readingFaceSpaceGrotesk => 'Space Grotesk';
+  String get readingFaceBook => 'The book\'s own';
 
   @override
-  String get readingFaceSourceSerif4 => 'Source Serif 4';
+  String get readingFaceSerif => 'Serif';
 
   @override
-  String get readingFaceLiterata => 'Literata';
-
-  @override
-  String get readingFaceAtkinsonHyperlegibleNext =>
-      'Atkinson Hyperlegible Next';
+  String get readingFaceSans => 'Sans serif';
 
   @override
   String percent(int value) {

@@ -404,7 +404,10 @@ class _WidthFactorRow extends ConsumerWidget {
 /// Nothing comes back from it: all three are written straight through to the
 /// profile the way the width is, and the sheet stays open over the page it is
 /// changing.
-Future<void> showBookSettingsSheet(BuildContext context) =>
+Future<void> showBookSettingsSheet(
+  BuildContext context, {
+  String? bookFamily,
+}) =>
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: patraSurface,
@@ -415,12 +418,12 @@ Future<void> showBookSettingsSheet(BuildContext context) =>
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               _BookTextSizeRow(),
               Divider(height: 24, indent: gutter, endIndent: gutter),
               _BookLineSpacingRow(),
               Divider(height: 24, indent: gutter, endIndent: gutter),
-              _BookReadingFaceRow(),
+              _BookReadingFaceRow(bookFamily: bookFamily),
               SizedBox(height: 8),
             ],
           ),
@@ -608,19 +611,22 @@ class _BookLineSpacingRow extends ConsumerWidget {
 /// The face a book is set in, for whoever is reading: the third row a book's
 /// sheet offers, and the one that is not a number.
 ///
-/// A face is picked rather than slid, so each of the four the app ships is
-/// offered as a row of its own — and each is **set in the face it offers**,
-/// which is the only way to choose between them without already knowing what
-/// they are called. Picking one writes it straight through to the profile and
-/// redraws the page behind the sheet, which stays open.
+/// Three choices, not four families: the reader chooses a kind of type, not a
+/// font by name. Each row says what kind of type it is ("The book's own",
+/// "Serif", "Sans serif") and is **composed in the face it offers** — that is
+/// the sample, and it is why the name is gone. The book's own row is set in
+/// the family the book shipped (or the app's sans where it shipped none), so a
+/// reader sees exactly what "the book's own" means for this book.
 ///
-/// It is the one deliberate hole in the design system's serif rule: two of
-/// the four are serifs, and prose is what they are offered for. The rule's
-/// purpose is to keep the wordmark and the titles of works distinct from
-/// everything else, and a page of prose puts neither at risk — see the
-/// reader's rules, where the hole is written down as one.
+/// It is the one deliberate hole in the design system's serif rule: the serif
+/// row, and the book's own row where the book ships a serif, are set in a
+/// serif. The rule's purpose is to keep the wordmark and the titles of works
+/// distinct from everything else, and a page of prose puts neither at risk —
+/// see the reader's rules, where the hole is written down as one.
 class _BookReadingFaceRow extends ConsumerWidget {
-  const _BookReadingFaceRow();
+  const _BookReadingFaceRow({this.bookFamily});
+
+  final String? bookFamily;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -649,6 +655,7 @@ class _BookReadingFaceRow extends ConsumerWidget {
           _FaceOption(
             face: offered,
             selected: offered == face,
+            bookFamily: bookFamily,
             onPick: () =>
                 ref.read(bookReadingFaceProvider.notifier).set(offered),
           ),
@@ -657,24 +664,31 @@ class _BookReadingFaceRow extends ConsumerWidget {
   }
 }
 
-/// One of the faces a book can be set in, named in the face it is.
+/// One of the faces a book can be set in, composed in the face it offers.
+///
+/// The row is not named after a font — it says what kind of type it is, and
+/// the row itself is the sample. The family is resolved once through
+/// [ReadingFace.resolve], which is the only place the fallback is decided.
 class _FaceOption extends StatelessWidget {
   const _FaceOption({
     required this.face,
     required this.selected,
+    required this.bookFamily,
     required this.onPick,
   });
 
   final ReadingFace face;
   final bool selected;
+  final String? bookFamily;
   final VoidCallback onPick;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final resolved = face.resolve(bookFamily: bookFamily);
     return ListTile(
       onTap: onPick,
-      // As wide as the header's own icon, so the four names line up under
+      // As wide as the header's own icon, so the three names line up under
       // the row they belong to rather than under its leading edge.
       leading: SizedBox(
         width: 22,
@@ -687,7 +701,7 @@ class _FaceOption extends StatelessWidget {
         // Set in the face it is offering: choosing a face one cannot see is
         // a choice made on its name alone.
         style: PatraText.body(color: selected ? patraAccent : patraText)
-            .copyWith(fontFamily: face.family),
+            .copyWith(fontFamily: resolved.family),
       ),
     );
   }

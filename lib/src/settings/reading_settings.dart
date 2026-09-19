@@ -33,65 +33,114 @@ enum ReadingDirection {
 // — so they are answered here rather than by the page that is set in them.
 // The page is drawn at whatever these hold.
 
-/// The face a book is set in: one of the four reading faces the app ships.
+/// How a book's words are set: the family they are drawn in, and whether its
+/// emphasis can be set in an italic.
 ///
-/// Every face is bundled (`assets/fonts/`, one variable file per family) and
-/// nothing is fetched, which is what lets a saved book (#77) open in the
-/// face its reader chose with no server at all.
+/// A pair rather than a family alone because the two are one answer: a face
+/// with no italic of its own must have its emphasis set in the roman rather
+/// than in a slant the engine drew, and the face the reader chose is what
+/// decides which of the two it is. See [ReadingFace.resolve], which is the
+/// only place that decides it.
+typedef BookType = ({String family, bool canSetItalic});
+
+/// The face a book is set in: **the book's own**, one of the two the app
+/// ships, or nothing at all.
+///
+/// Three choices and not four families, because the reader is choosing a
+/// kind of type rather than a font: which family answers "the book's own"
+/// is the book's business, and a name like `Literata` on a row says nothing
+/// to somebody who does not already know what Literata looks like. The sheet
+/// draws each row in the face it offers, which is the sample (see
+/// `reader_settings_sheet.dart`).
+///
+/// **The book's own is the default**, which is what the server's own client
+/// does: its font choice is a sentinel that resolves to CSS `inherit` and
+/// leaves the book's stylesheet to win, and the faces it offers are an
+/// override on top of that. A book whose stylesheet asks for nothing is set
+/// in the app's sans, which is what it was set in before there was anything
+/// to choose.
 ///
 /// **The name is what is written down** — the persisted preference is a
 /// string, as it is for [ReadingDirection] — so a value renamed here has to
 /// keep its old name readable, or a device holding it falls back to
-/// [defaultBookReadingFace] without saying anything. [named] is what reads
-/// it back, and what a name it does not know costs is the default rather
-/// than the app.
+/// [defaultBookReadingFace] without saying anything. [_legacyNames] is that,
+/// and [named] is what reads it back; what a name it does not know costs is
+/// the default rather than the app.
 ///
-/// Two of the four are the app's own two faces, offered for a book rather
-/// than only for the interface — the one deliberate hole in the design
-/// system's serif rule, since prose set in a serif puts neither the wordmark
-/// nor a title of a work at risk. See the reader's rules.
+/// Every family named here is **bundled** (`assets/fonts/`, one variable file
+/// per family) and nothing is fetched, which is what lets a saved book (#77)
+/// open in the face its reader chose with no server at all. The one face that
+/// is not bundled is the book's own, and a copy carries it — see the reader's
+/// rules.
 enum ReadingFace {
-  spaceGrotesk,
-  sourceSerif4,
-  literata,
-  atkinsonHyperlegibleNext;
+  /// The face the book's own stylesheet asks for.
+  book,
 
-  /// The family it is drawn with, as `pubspec.yaml` declares it.
-  String get family => switch (this) {
-    ReadingFace.spaceGrotesk => fontSpaceGrotesk,
-    ReadingFace.sourceSerif4 => fontSourceSerif4,
-    ReadingFace.literata => fontLiterata,
-    ReadingFace.atkinsonHyperlegibleNext => fontAtkinsonHyperlegibleNext,
-  };
+  /// The app's serif, which is also the face its titles and its page numerals
+  /// are drawn in.
+  serif,
 
-  /// Whether a book's emphasis can be set in an italic of this face.
+  /// The app's sans, drawn for reading long and for low vision.
+  sans;
+
+  /// What a book is set in: this choice, and what the book asked for.
   ///
-  /// Not whether the family has one designed: **Space Grotesk has no italic
-  /// at all**, and Source Serif 4's is deliberately not bundled, so both
-  /// answer false and emphasis in either is set in the roman rather than in
-  /// a slant the engine drew. Where this is true the italic is in the bundle
-  /// beside the roman, and every weight the page asks for has one.
-  bool get canSetItalic => switch (this) {
-    ReadingFace.spaceGrotesk || ReadingFace.sourceSerif4 => false,
-    ReadingFace.literata || ReadingFace.atkinsonHyperlegibleNext => true,
-  };
+  /// [bookFamily] is the family the book's own stylesheet named, already
+  /// registered with the engine, or null where the book asks for nothing or
+  /// its font could not be had — in which case the app's sans stands in, the
+  /// same face a book was set in before there was anything to choose. This is
+  /// the only place the fallback is decided, so a page cannot disagree with
+  /// the row that chose it.
+  BookType resolve({String? bookFamily, bool bookItalic = false}) =>
+      switch (this) {
+        ReadingFace.book => bookFamily == null
+            ? (family: fontAtkinsonHyperlegibleNext, canSetItalic: false)
+            : (family: bookFamily, canSetItalic: bookItalic),
+        ReadingFace.serif => (family: fontLiterata, canSetItalic: true),
+        ReadingFace.sans => (
+          family: fontAtkinsonHyperlegibleNext,
+          canSetItalic: true,
+        ),
+      };
 
-  /// Its own name, which is the name the family is published under and is
-  /// never translated — the rule a language is listed under its own name
-  /// by, since a face is a proper noun wherever it is offered.
+  /// What the row offering this is called.
+  ///
+  /// Not the family's name: a row says what kind of type it is, and the row
+  /// itself is drawn in it, which is the only sample a reader needs. See
+  /// [ReadingFace].
   String label(AppLocalizations l10n) => switch (this) {
-    ReadingFace.spaceGrotesk => l10n.readingFaceSpaceGrotesk,
-    ReadingFace.sourceSerif4 => l10n.readingFaceSourceSerif4,
-    ReadingFace.literata => l10n.readingFaceLiterata,
-    ReadingFace.atkinsonHyperlegibleNext =>
-      l10n.readingFaceAtkinsonHyperlegibleNext,
+    ReadingFace.book => l10n.readingFaceBook,
+    ReadingFace.serif => l10n.readingFaceSerif,
+    ReadingFace.sans => l10n.readingFaceSans,
   };
 
-  /// What [name] names, or null for a name this build does not know: the
-  /// stored preference is a string the device wrote, so an unknown one costs
-  /// the profile its face and never the app its page.
-  static ReadingFace? named(String? name) =>
-      values.where((face) => face.name == name).firstOrNull;
+  /// The names this build no longer uses, and what they stand for.
+  ///
+  /// The preference used to be a family — `spaceGrotesk`, `sourceSerif4`,
+  /// `literata`, `atkinsonHyperlegibleNext` — and every device that has one
+  /// holds one of those strings. An unrecognised string falls back to the
+  /// default silently, which is how a setting resets itself on somebody's
+  /// device and says nothing, so each old name is read as the choice that
+  /// stands closest to it: the two serifs are the serif, the app's sans and
+  /// the face drawn for low vision are the sans. `save` writes the current
+  /// name, so the old strings die out.
+  static const _legacyNames = {
+    'sourceSerif4': ReadingFace.serif,
+    'literata': ReadingFace.serif,
+    'spaceGrotesk': ReadingFace.sans,
+    'atkinsonHyperlegibleNext': ReadingFace.sans,
+  };
+
+  /// What [name] names, reading the names of faces this build no longer
+  /// offers too, or null for a name it does not know: the stored preference
+  /// is a string the device wrote, so an unknown one costs the profile its
+  /// face and never the app its page.
+  static ReadingFace? named(String? name) {
+    for (final face in values) {
+      if (face.name == name) return face;
+    }
+    return _legacyNames[name];
+  }
 }
 
 /// The size a book's words are set at, in points: one number for every book,
@@ -111,10 +160,14 @@ const double defaultBookLineHeight = 1.55;
 const double minBookLineHeight = 1.2;
 const double maxBookLineHeight = 2.0;
 
-/// The face every book is set in until somebody chooses another: the sans a
-/// book has been set in all along, which is why a profile that has never
-/// chosen one sees no difference.
-const ReadingFace defaultBookReadingFace = ReadingFace.spaceGrotesk;
+/// The face every book is set in until somebody chooses another: **the book's
+/// own**, which is what the server's own client does with its font choice
+/// (see [ReadingFace]) and what makes a book look like the book it is.
+///
+/// A book whose stylesheet asks for nothing is set in the app's sans, which is
+/// the face a book was set in before there was anything to choose — so the
+/// change costs a reader whose books carry no font exactly nothing.
+const ReadingFace defaultBookReadingFace = ReadingFace.book;
 
 /// The **device's** reading defaults, under the flat keys they have always
 /// been written to.

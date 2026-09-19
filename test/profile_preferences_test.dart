@@ -102,9 +102,9 @@ void main() {
       await store.setWidthFactor(_romain.id, 0.6);
       // How a book is set, which is one number for every book: a choice
       // about a person's eyes, not about one work.
-      await store.setBookTextSize(_romain.id, 20);
       await store.setBookLineHeight(_romain.id, 1.9);
-      await store.setBookReadingFace(_romain.id, ReadingFace.literata);
+      await store.setBookTextSize(_romain.id, 20);
+      await store.setBookReadingFace(_romain.id, ReadingFace.serif);
       await store.setSeriesDirection(
         _romain.id,
         3,
@@ -119,7 +119,7 @@ void main() {
       expect(reopened.widthFactorFor(_romain.id), 0.6);
       expect(reopened.bookTextSizeFor(_romain.id), 20);
       expect(reopened.bookLineHeightFor(_romain.id), 1.9);
-      expect(reopened.bookReadingFaceFor(_romain.id), ReadingFace.literata);
+      expect(reopened.bookReadingFaceFor(_romain.id), ReadingFace.serif);
       expect(
         reopened.seriesDirectionFor(_romain.id, 3),
         ReadingDirection.rightToLeft,
@@ -193,7 +193,44 @@ void main() {
       );
       expect(store.languageFor(_romain.id), const Locale('fr'));
     });
+    test('an old reading face name reads as the closest current choice', () async {
+      // The preference used to be a family name. A device holding one of those
+      // strings must not silently reset the setting — it reads back as the
+      // choice that stands closest to it. An unknown name reads as never having
+      // chosen, so the default (the book's own) takes over.
+      final legacyNames = {
+        'literata': ReadingFace.serif,
+        'sourceSerif4': ReadingFace.serif,
+        'spaceGrotesk': ReadingFace.sans,
+        'atkinsonHyperlegibleNext': ReadingFace.sans,
+      };
+      for (final entry in legacyNames.entries) {
+        final store = await preferencesStore(
+          keychain: MemoryKeychain({
+            'profilePreferences':
+                '{"${_romain.id}": {"bookReadingFace": "${entry.key}"}}',
+          }),
+        );
+        expect(
+          store.bookReadingFaceFor(_romain.id),
+          entry.value,
+          reason: '${entry.key} maps to ${entry.value.name}',
+        );
+      }
 
+      // An unknown name costs the profile its face, not the app its page.
+      final unknownStore = await preferencesStore(
+        keychain: MemoryKeychain({
+          'profilePreferences':
+              '{"${_romain.id}": {"bookReadingFace": "comicSansMS"}}',
+        }),
+      );
+      expect(
+        unknownStore.bookReadingFaceFor(_romain.id),
+        defaultBookReadingFace,
+        reason: 'an unknown name reads as never having chosen',
+      );
+    });
     test('changing one preference keeps the others', () async {
       // `setLanguage` cannot go through `copyWith` — null is a choice — so it
       // builds the record by hand, and a field it forgets to carry is a
@@ -484,9 +521,9 @@ void main() {
       final store = await preferencesStore();
       await store.setMagnify(_romain.id, true);
       await store.setWidthFactor(_romain.id, 0.6);
-      await store.setBookTextSize(_romain.id, 20);
       await store.setBookLineHeight(_romain.id, 1.9);
-      await store.setBookReadingFace(_romain.id, ReadingFace.literata);
+      await store.setBookTextSize(_romain.id, 20);
+      await store.setBookReadingFace(_romain.id, ReadingFace.serif);
       await store.setLanguage(_romain.id, const Locale('fr'));
       await store.setSeriesDirection(
         _romain.id,
@@ -502,8 +539,7 @@ void main() {
       expect(his.read(widthFactorProvider), 0.6);
       expect(his.read(bookTextSizeProvider), 20);
       expect(his.read(bookLineHeightProvider), 1.9);
-      expect(his.read(bookReadingFaceProvider), ReadingFace.literata);
-
+      expect(his.read(bookReadingFaceProvider), ReadingFace.serif);
       // The next person to be handed the tablet, on a container of their own
       // — which is what `SessionScope` builds for them.
       final hers = _container(store: store, active: _lea);
@@ -523,7 +559,7 @@ void main() {
       expect(
         hers.read(bookReadingFaceProvider),
         defaultBookReadingFace,
-        reason: 'a book is set in the sans until somebody says otherwise',
+        reason: "a book is set in the book's own until somebody says otherwise",
       );
       expect(hers.read(localeProvider), isNull);
     });
@@ -604,10 +640,10 @@ void main() {
       // the device's — so what follows the person has to be read out of it
       // again rather than held by the container that chose it.
       final store = await preferencesStore();
-      await store.setBookReadingFace(_romain.id, ReadingFace.literata);
+      await store.setBookReadingFace(_romain.id, ReadingFace.serif);
       await store.setBookReadingFace(
         _lea.id,
-        ReadingFace.atkinsonHyperlegibleNext,
+        ReadingFace.sans,
       );
 
       final container = ProviderContainer(
@@ -623,14 +659,14 @@ void main() {
       addTearDown(container.dispose);
       expect(
         container.read(bookReadingFaceProvider),
-        ReadingFace.literata,
+        ReadingFace.serif,
         reason: 'the face is his, and the tablet is not what chose it',
       );
 
       await container.read(authProvider.notifier).resume(_lea);
       expect(
         container.read(bookReadingFaceProvider),
-        ReadingFace.atkinsonHyperlegibleNext,
+        ReadingFace.sans,
         reason: 'the next reader’s books are set in the face they chose',
       );
     });

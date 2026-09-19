@@ -341,25 +341,21 @@
   "@bookReadingFace": {
     "description": "Reader setting: the typeface a book's words are set in. Offered for a book, beside its text size and line spacing."
   },
-  "bookReadingFaceExplained": "The face a book is set in. Every book is set in this face.",
+  "bookReadingFaceExplained": "The book's own face where it has one, the app's sans where it does not.",
   "@bookReadingFaceExplained": {
-    "description": "Explains what the reading face setting changes, and says where it applies."
+    "description": "Explains what the reading face setting changes, and says what happens where the book carries no font of its own."
   },
-  "readingFaceSpaceGrotesk": "Space Grotesk",
-  "@readingFaceSpaceGrotesk": {
-    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  "readingFaceBook": "The book's own",
+  "@readingFaceBook": {
+    "description": "Reading face option: the typeface the e-book itself asks for, and the one a book is set in until somebody chooses another. A kind of type, never a font's name."
   },
-  "readingFaceSourceSerif4": "Source Serif 4",
-  "@readingFaceSourceSerif4": {
-    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  "readingFaceSerif": "Serif",
+  "@readingFaceSerif": {
+    "description": "Reading face option: the app's serif typeface. A kind of type, never a font's name."
   },
-  "readingFaceLiterata": "Literata",
-  "@readingFaceLiterata": {
-    "description": "The name of a typeface the app ships. A proper noun, never translated."
-  },
-  "readingFaceAtkinsonHyperlegibleNext": "Atkinson Hyperlegible Next",
-  "@readingFaceAtkinsonHyperlegibleNext": {
-    "description": "The name of a typeface the app ships. A proper noun, never translated."
+  "readingFaceSans": "Sans serif",
+  "@readingFaceSans": {
+    "description": "Reading face option: the app's sans-serif typeface, drawn for reading long and for low vision. A kind of type, never a font's name."
   },
   "percent": "{value}%",
   "@percent": {

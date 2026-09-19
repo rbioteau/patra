@@ -323,4 +323,31 @@ void main() {
     expect(find.byType(PatraMark), findsOneWidget);
     expect(find.byType(PatraWordmark), findsOneWidget);
   });
+
+  testWidgets('wordmark is drawn from outlines and labelled for semantics',
+      (tester) async {
+    await _pump(tester, [_profile()]);
+
+    // The wordmark is a PatraSignature which uses CustomPaint — not a Text.
+    final wordmark = tester.widget<PatraWordmark>(find.byType(PatraWordmark));
+    expect(wordmark, isA<PatraWordmark>());
+
+    // Find the CustomPaint inside the wordmark's subtree.
+    final customPaint = tester.widget<CustomPaint>(
+      find.descendant(
+        of: find.byType(PatraWordmark),
+        matching: find.byType(CustomPaint),
+      ),
+    );
+    expect(customPaint.painter, isA<CustomPainter>());
+
+    // The wordmark's semantics label must be 'Patra' and image=true.
+    expect(
+      find.descendant(
+        of: find.byType(PatraWordmark),
+        matching: find.bySemanticsLabel('Patra'),
+      ),
+      findsOneWidget,
+    );
+  });
 }

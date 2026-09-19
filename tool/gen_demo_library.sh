@@ -17,8 +17,7 @@ cd "$(dirname "$0")/.."
 
 OUT=store/demo
 FONT=assets/fonts/SpaceGrotesk-Variable.ttf
-SERIF=assets/fonts/SourceSerif4-Variable.ttf
-
+SERIF=assets/fonts/Literata-Variable.ttf
 BG='#111722'        # patraBg
 SURFACE='#1C293E'   # patraSurface
 SURFACE_HI='#26354B'
@@ -28,7 +27,7 @@ MUTED='#AFB8C7'     # patraTextMuted
 
 command -v convert >/dev/null || { echo "ImageMagick (convert) is required" >&2; exit 1; }
 [ -f "$FONT" ] || { echo "$FONT is missing — the pictures are drawn in the app's own face" >&2; exit 1; }
-
+[ -f "$SERIF" ] || { echo "$SERIF is missing — the pictures are drawn in the app's own serif" >&2; exit 1; }
 mkdir -p "$OUT"
 
 # The four series the demo server serves. Titles are invented and belong to

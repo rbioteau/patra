@@ -21,6 +21,7 @@ import '../../theme.dart';
 import '../../widgets/chrome_pill.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import 'book_contents.dart';
+import 'book_face.dart';
 import 'book_page.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
@@ -777,6 +778,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       if (near < 0 || near >= chapter.pages || near == _page) continue;
       ref.watch(bookPageProvider((chapterId: widget.chapterId, page: near)));
     }
+    // Watch the current page to get the book's own face (if any) for the
+    // settings cog. The sheet's "the book's own" row is composed in this face.
+    final currentPage = ref.watch(
+      bookPageProvider((chapterId: widget.chapterId, page: _page)),
+    );
+    final bookFamily = currentPage.maybeWhen(
+      data: (page) => page.face != null && !page.face!.isEmpty
+          ? namespacedFamily(widget.chapterId, page.face!.family)
+          : null,
+      orElse: () => null,
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -800,7 +812,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             // series' name, and the file's own title is on the page it is
             // reading.
             title: chapter.title,
-            settings: const _BookSettings(),
+            settings: _BookSettings(bookFamily: bookFamily),
           ),
           _BottomChrome(
             chapter: chapter,
@@ -1705,22 +1717,89 @@ class _BookPage extends ConsumerWidget {
     );
     final textSize = ref.watch(bookTextSizeProvider);
     final lineHeight = ref.watch(bookLineHeightProvider);
-    final face = ref.watch(bookReadingFaceProvider);
+    final readingFace = ref.watch(bookReadingFaceProvider);
     return switch (content) {
       // Nothing to show, and nothing coming: a page the server could not
       // produce says so instead of being read as a page with no words in it.
       AsyncError() => const BookPageUnavailable(),
-      AsyncData(:final value) => BookPageBody(
+      AsyncData(:final value) => _ResolvedBookPage(
+        chapterId: chapterId,
         page: value,
         picture: picture,
         textSize: textSize,
         lineHeight: lineHeight,
-        face: face,
+        readingFace: readingFace,
         anchor: anchor,
         onScroll: onScroll,
       ),
       _ => const Center(child: CircularProgressIndicator(color: patraAccent)),
     };
+  }
+}
+
+/// A page set in the face its reader chose, resolved against what the book
+/// itself asks for.
+///
+/// Separate from [_BookPage] for one reason: the resolution watches
+/// [bookFontProvider], so it rebuilds when the book's font lands — and a
+/// [_BookPage] that watched it would rebuild the whole page-provider chain
+/// with it. This is also where the load is *asked for*, guarded by
+/// [BookFontsCache.knows] rather than by a null, so a book with no face of its
+/// own, or a reader whose fetch failed, asks once instead of once a frame.
+class _ResolvedBookPage extends ConsumerWidget {
+  const _ResolvedBookPage({
+    required this.chapterId,
+    required this.page,
+    required this.picture,
+    required this.textSize,
+    required this.lineHeight,
+    required this.readingFace,
+    required this.anchor,
+    required this.onScroll,
+  });
+
+  final int chapterId;
+  final BookPage page;
+  final Widget Function(String src) picture;
+  final double textSize;
+  final double lineHeight;
+  final ReadingFace readingFace;
+  final BookAnchor? anchor;
+  final ValueChanged<BookAnchor> onScroll;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bookFace = page.face;
+    final bookFont = ref.watch(
+      bookFontProvider((chapterId: chapterId, face: bookFace)),
+    );
+
+    // The one place the fallback is decided: what the reader chose, and what
+    // the book asked for where the choice was the book's own.
+    final resolvedFace = readingFace.resolve(
+      bookFamily: bookFont?.family,
+      bookItalic: bookFont?.italic ?? false,
+    );
+
+    // Asked for once, and asked for on the *cache* rather than on the null:
+    // `bookFont` is null both for "never asked" and for "asked, and there is
+    // no face", so a guard on it would re-ask on every frame — which is what
+    // an offline reader would pay for.
+    if (bookFace != null && !bookFace.isEmpty) {
+      final key = (chapterId: chapterId, face: bookFace);
+      final cache = ref.read(bookFontsCacheProvider.notifier);
+      if (!cache.knows(key)) unawaited(cache.loadFont(key));
+    }
+
+    return BookPageBody(
+      page: page,
+      picture: picture,
+      textSize: textSize,
+      lineHeight: lineHeight,
+      face: resolvedFace,
+      anchor: anchor,
+      onScroll: onScroll,
+    );
   }
 }
 
@@ -1801,7 +1880,12 @@ final class _PictureSettings extends _ReaderSettings {
 /// pictures. It has nothing to report: both of its settings are written
 /// straight through to the person reading.
 final class _BookSettings extends _ReaderSettings {
-  const _BookSettings();
+  const _BookSettings({this.bookFamily});
+
+  /// The family the book's own face was registered under, or null where the
+  /// book has none. This is passed to [showBookSettingsSheet] so the sheet's
+  /// "the book's own" row is composed in the book's actual face.
+  final String? bookFamily;
 }
 
 class _TopChrome extends StatelessWidget {
@@ -1900,7 +1984,10 @@ class _SettingsCog extends StatelessWidget {
             ),
           // A book's sheet has nothing to report: what it changes, it
           // writes to the person reading as it is being changed.
-          _BookSettings() => showBookSettingsSheet(context).then((_) => null),
+          _BookSettings(:final bookFamily) => showBookSettingsSheet(
+              context,
+              bookFamily: bookFamily,
+            ).then((_) => null),
         };
         // The sheet outlives the chrome it was opened from, so what it
         // reports may arrive with the cog already out of the tree.
