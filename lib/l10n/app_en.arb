@@ -122,10 +122,6 @@
   "navLibrary": "Library",
   "navDownloads": "Downloads",
   "navSettings": "Settings",
-  "continueSection": "Continue",
-  "@continueSection": {
-    "description": "Home section listing works the user has started reading"
-  },
   "onDeckSection": "On deck",
   "@onDeckSection": {
     "description": "Home section listing the next thing to read in each series"
@@ -233,13 +229,6 @@
   "@bookContents": {
     "description": "A book's table of contents: the label on the control in the reader's bottom chrome that opens it, and the heading of the sheet it opens."
   },
-  "homeHeroPagesLeft": "{count, plural, =1{1 page left} other{{count} pages left}}",
-  "@homeHeroPagesLeft": {
-    "description": "Pages remaining in the chapter the home hero would resume",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "seriesChapterCount": "{count, plural, =0{No chapters} =1{1 chapter} other{{count} chapters}}",
   "@seriesChapterCount": {
     "description": "Chapter tally in the series hero",
@@ -254,37 +243,9 @@
       "count": {"type": "int"}
     }
   },
-  "seriesContinueVolume": "Continue — Vol. {volume}",
-  "@seriesContinueVolume": {
-    "description": "Hero button for a volume with no chapter breakdown; volume is its number",
-    "placeholders": {
-      "volume": {"type": "String"}
-    }
-  },
-  "seriesContinue": "Continue — Ch. {chapter}",
-  "@seriesContinue": {
-    "description": "Hero button when a chapter is already started; chapter is its number or range",
-    "placeholders": {
-      "chapter": {"type": "String"}
-    }
-  },
-  "seriesContinueIssue": "Continue — #{issue}",
-  "@seriesContinueIssue": {
-    "description": "Hero button in a comic library, where a chapter is an issue; issue is its number or range",
-    "placeholders": {
-      "issue": {"type": "String"}
-    }
-  },
-  "seriesContinueBook": "Continue — Book {book}",
-  "@seriesContinueBook": {
-    "description": "Hero button in a book or light novel library, where the unit is the book; book is its number or name",
-    "placeholders": {
-      "book": {"type": "String"}
-    }
-  },
   "seriesContinuePlain": "Continue",
   "@seriesContinuePlain": {
-    "description": "Hero button when the thing to resume has no number to show — a special, or a lone book. Its title is free text and would stretch the button, so the button says only what it does"
+    "description": "The hero's button, which names nothing: what it opens is already named by the row underneath it. So this is the word for resuming a series, whatever it is made of — a chapter, a volume, an issue or a book"
   },
   "seriesStartReading": "Start reading",
   "seriesReadAgain": "Read again",

@@ -58,20 +58,6 @@ extension LibraryTypeNaming on LibraryType {
       ? l10n.bookRangeLabel(from, to)
       : l10n.volumeRangeLabel(from, to);
 
-  /// The hero button, which names what it will open in the same vocabulary.
-  String continueChapterLabel(AppLocalizations l10n, String range) =>
-      switch (this) {
-        LibraryType.comic ||
-        LibraryType.comicVine => l10n.seriesContinueIssue(range),
-        LibraryType.book ||
-        LibraryType.lightNovel => l10n.seriesContinueBook(range),
-        _ => l10n.seriesContinue(range),
-      };
-
-  String continueVolumeLabel(AppLocalizations l10n, String name) => usesBooks
-      ? l10n.seriesContinueBook(name)
-      : l10n.seriesContinueVolume(name);
-
   /// The full name of one chapter, following Kavita's rules: a special is
   /// known only by its title, so is anything else carrying no number of its
   /// own, and where there is a number the title is *appended* to it rather
@@ -97,32 +83,19 @@ extension LibraryTypeNaming on LibraryType {
     return '$base - $title';
   }
 
-  /// The full name of whatever reading resumes at, which is not always a
-  /// chapter: a volume with no chapter breakdown is known by the volume, and
-  /// its placeholder chapter carries Kavita's -100000 sentinel, which must
-  /// never reach a label. Empty where there is nothing honest to say.
-  String resumeTitle(AppLocalizations l10n, Volume volume, Chapter chapter) =>
-      _numberedTitle(l10n, volume, chapter, terse: false);
-
-  /// [resumeTitle] with the chapter's own title left off — the name a chapter
-  /// goes by where two of them share one line, as the ends of a range do. A
-  /// special keeps its title, having nothing else to be known by.
-  String terseTitle(AppLocalizations l10n, Volume volume, Chapter chapter) =>
-      _numberedTitle(l10n, volume, chapter, terse: true);
-
-  String _numberedTitle(
-    AppLocalizations l10n,
-    Volume volume,
-    Chapter chapter, {
-    required bool terse,
-  }) {
+  /// The name a chapter goes by where two of them share one line, as the ends
+  /// of a range do: whatever reading resumes at is not always a chapter — a
+  /// volume with no chapter breakdown is known by the volume, and its
+  /// placeholder chapter carries Kavita's -100000 sentinel, which must never
+  /// reach a label — and the chapter's own title is left off. A special keeps
+  /// its title, having nothing else to be known by. Empty where there is
+  /// nothing honest to say.
+  String terseTitle(AppLocalizations l10n, Volume volume, Chapter chapter) {
     if (chapter.isSpecial) return chapterTitle(l10n, chapter);
     if (chapter.isVolumePlaceholder) {
       return volume.isNumbered ? volumeLabel(l10n, volume.name) : '';
     }
     if (!chapter.hasNumber) return '';
-    return terse
-        ? numberedChapterLabel(l10n, chapter.range)
-        : chapterTitle(l10n, chapter);
+    return numberedChapterLabel(l10n, chapter.range);
   }
 }

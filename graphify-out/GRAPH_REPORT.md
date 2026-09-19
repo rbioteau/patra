@@ -1,16 +1,16 @@
-# Graph Report - worktree-green-meadow-df2b  (2026-09-19)
+# Graph Report - patra  (2026-09-19)
 
 ## Corpus Check
-- 190 files · ~404,775 words
+- 195 files · ~417,252 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4673 nodes · 6541 edges · 181 communities (159 shown, 18 thin omitted)
+- 4733 nodes · 6608 edges · 188 communities (163 shown, 21 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 85 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `819b8ca6`
+- Built from commit: `1f4884aa`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -24,7 +24,7 @@
 - session.dart
 - theme.dart
 - KavitaClient (lib/src/api/kavita_client.dart)
-- package:flutter_test/flutter_test.dart
+- package:flutter/widgets.dart
 - patra package manifest
 - kavita_client.dart
 - page_loading.dart
@@ -34,17 +34,17 @@
 - series_detail_screen.dart
 - _
 - home_screen.dart
-- auth_test.dart
+- dart:convert
 - profile_preferences.dart
 - test_support.dart
 - client_identity.dart
-- batch_hint.dart
+- keychain.dart
 - series_list_views_test.dart
 - profile_lock_sheet.dart
 - downloads_service.dart
 - patra_launch.dart
 - profile_lock.dart
-- package:flutter/material.dart
+- package:patra/src/api/kavita_client.dart
 - reader_test.dart
 - Continuous vertical reader: zoom and navigation research
 - magnify_gesture.dart
@@ -53,7 +53,7 @@
 - analyze job (pub get, analyze, test)
 - home_hero_test.dart
 - my_application.cc
-- package:dio/dio.dart
+- test_support.dart
 - _ReaderScreenState
 - downloads_provider.dart
 - Profile lock (lib/src/lock/profile_lock.dart)
@@ -71,13 +71,13 @@
 - package:patra/src/theme.dart
 - The profile picker (/profiles)
 - patra_logo_paths.dart
-- home_offline_test.dart
+- dart:io
 - graphify_merge_driver_test.dart
-- continue_hero.dart
+- series_hero.dart
 - server_reachability_test.dart
 - reading_settings.dart
 - strip_width.dart
-- HttpClientAdapter
+- catalogue_overlay_test.dart
 - _
 - strip_width_test.dart
 - ADR-0003 — A profile is a Kavita account, and there are no local ones
@@ -85,34 +85,34 @@
 - book_page.dart
 - patraAccent = progress/identity, patraOffline = downloads/offline
 - DownloadsService (<documents>/downloads/<profile>/<chapterId>/)
-- deep_link_test.dart
+- package:flutter_test/flutter_test.dart
 - resume_point.dart
 - downloads_provider_test.dart
-- return
+- store_screenshots_test.dart
 - series_offline_test.dart
 - ADR-0006 — The strip is zoomed by laying it out wider, not by transforming it
-- entity_naming.dart
-- dart:convert
-- server_version_test.dart
+- page_shape.dart
+- package:dio/dio.dart
+- demo_server.dart
 - saved_copies_test.dart
 - ADR-0002 — One rule decides where reading resumes, and it is ours
 - cover_placeholder.dart
 - gen_web_mark.dart
 - Compact three-blade frond variant (icons at or under 72px)
-- profile_switch_test.dart
+- catalogue_write_path_test.dart
 - 72px threshold: small icons render from the compact master
-- magnify_gesture_test.dart
+- dart:math
 - A profile is exactly one Kavita account
 - book_reader_test.dart
 - page_loading_test.dart
 - page_rail_test.dart
-- sessionProvider
+- Map
 - Patra palm frond mark (app icon rendering)
 - Patra palm frond mark (rasterised launcher artwork)
 - package:patra/src/auth/session.dart
 - ADR-0008 — Kavita paginates a book; the app parses no EPUB
 - Patra Frond Mark (five-blade master, 1024px)
-- no_intrinsic.dart
+- profile_picker_screen.dart
 - ADR-0001 — A one-finger drag magnifies the page, and the border wins
 - offlineProvider
 - ProfilePreferencesStore (profile_preferences.dart)
@@ -125,10 +125,10 @@
 - ADR-0004 — The auth key is the only secret a profile keeps
 - Domain Docs
 - AppLocalizations
-- saved_chapters_per_profile_test.dart
+- server_version_test.dart
 - MainActivity.kt
 - page_shape_test.dart
-- library_scan_test.dart
+- package:flutter/material.dart
 - login_screen.dart
 - The graphify union merge driver (two halves)
 - Issue tracker agent skill (GitHub issues via gh)
@@ -137,7 +137,7 @@
 - downloads_screen.dart
 - gen-l10n configuration (non-nullable getter)
 - bool?
-- api/models.dart
+- ConsumerWidget
 - profile_files.dart
 - Where a page stops being a page: the vertical threshold
 - AuthNotifier
@@ -145,8 +145,8 @@
 - State
 - catalogue_overlay.dart
 - reading_direction.dart
-- keychain.dart
-- connection_failure_test.dart
+- HttpClientAdapter
+- profile_picker_test.dart
 - package:flutter_riverpod/flutter_riverpod.dart
 - reader_settings_sheet_test.dart
 - The Kavita API client
@@ -157,47 +157,54 @@
 - catalogue_reads.dart
 - SKILL.md
 - .github/CLAUDE.md
-- ../theme.dart
+- page_backdrop.dart
 - CustomPainter
 - auth/CLAUDE.md
 - downloads/CLAUDE.md
 - launch/CLAUDE.md
-- Widget
-- ConsumerWidget
-- ../../l10n/generated/app_localizations.dart
+- ../api/models.dart
+- kavitaClientProvider
+- ../../../l10n/generated/app_localizations.dart
 - ADR-0011 — A second theme is deferred, not rejected
 - CLAUDE.md
 - ADR-0009 — A saved copy keeps the pagination it was made with
-- catalogue_provider.dart
+- ../auth/session.dart
 - _ThumbStripState
 - StatelessWidget
 - ADR-0010 — A book's page is drawn by the app, not handed to a web view
 - package:flutter/foundation.dart
 - BookPicture
 - Credential
-- UserDto.isAdmin (role read from the login response)
+- deep_link_test.dart
 - gen_app_icons.sh
-- SignInExpired
+- cover.dart
 - cache_settings.dart
 - downloads_service_test.dart
-- BookPageBody
+- VoidCallback?
 - List
 - downloads_resume_strip_test.dart
 - image_cache_store_test.dart
-- package:flutter/widgets.dart
-- Map
-- test_support.dart
+- profile_avatar.dart
+- StripWidthController
+- openapi_contract_test.dart
+- authProvider
 - @immutable
-- dart:math
-- ProfilePreferencesStore
-- DownloadsNotifier
+- static const
+- UserDto.isAdmin (role read from the login response)
+- SignInExpired
+- BookPageBody
+- build
 - patra_mark.dart
+- _ProbeThumb
+- What the two store listings take
+- store_screenshots.sh
+- gen_demo_library.sh
 
 ## God Nodes (most connected - your core abstractions)
 1. `_` - 67 edges
 2. `_` - 32 edges
-3. `kavitaClientProvider` - 25 edges
-4. `offlineProvider` - 22 edges
+3. `kavitaClientProvider` - 24 edges
+4. `offlineProvider` - 23 edges
 5. `downloadsProvider` - 21 edges
 6. `sessionProvider` - 18 edges
 7. `_ReaderScreenState` - 16 edges
@@ -220,23 +227,23 @@
 ## Import Cycles
 - None detected.
 
-## Communities (181 total, 18 thin omitted)
+## Communities (188 total, 21 thin omitted)
 
 ### Community 0 - "app_localizations.dart"
 Cohesion: 0.01
-Nodes (221): app_localizations_en.dart, app_localizations_fr.dart, class, aboutSectionLabel, aboutVersion, addProfile, appLanguage, appLanguageSystem (+213 more)
+Nodes (215): app_localizations_en.dart, app_localizations_fr.dart, class, aboutSectionLabel, aboutVersion, addProfile, appLanguage, appLanguageSystem (+207 more)
 
 ### Community 1 - "app_localizations_fr.dart"
 Cohesion: 0.01
-Nodes (208): app_localizations.dart, aboutSectionLabel, aboutVersion, addProfile, appLanguage, appLanguageSystem, appTagline, askServerToScan (+200 more)
+Nodes (202): app_localizations.dart, aboutSectionLabel, aboutVersion, addProfile, appLanguage, appLanguageSystem, appTagline, askServerToScan (+194 more)
 
 ### Community 2 - "app_localizations_en.dart"
 Cohesion: 0.01
-Nodes (208): aboutSectionLabel, aboutVersion, addProfile, appLanguage, appLanguageSystem, appTagline, askServerToScan, backToProfiles (+200 more)
+Nodes (202): aboutSectionLabel, aboutVersion, addProfile, appLanguage, appLanguageSystem, appTagline, askServerToScan, backToProfiles (+194 more)
 
 ### Community 3 - "thumb_strip.dart"
 Cohesion: 0.02
-Nodes (86): Animation, Duration, _accordion, _backfillConcurrent, _baseShare, _baseWidth, build, _centre (+78 more)
+Nodes (85): Animation, _accordion, _backfillConcurrent, _baseShare, _baseWidth, build, _centre, _chromeAroundStrip (+77 more)
 
 ### Community 4 - "reader_screen.dart"
 Cohesion: 0.02
@@ -244,7 +251,7 @@ Nodes (113): book_contents.dart, book_page.dart, anchor, _anchorFor, _anchors, a
 
 ### Community 5 - "models.dart"
 Cohesion: 0.02
-Nodes (89): adminRole, ageRestricted, and, apiKey, aspectRatio, aspectRatioFor, BookInfo, bookScrollId (+81 more)
+Nodes (91): adminRole, ageRestricted, and, apiKey, aspectRatio, aspectRatioFor, BookInfo, bookScrollId (+83 more)
 
 ### Community 6 - "session.dart"
 Cohesion: 0.04
@@ -258,9 +265,9 @@ Nodes (61): base, body, build, color, colors, _controller, controlMaxWidth, copy
 Cohesion: 0.16
 Nodes (16): ConnectionFailureKind.blockedByBrowser, ChapterDto.sortOrder is the reading order, Cleartext HTTP permitted on both platforms, ConnectionFailure (connection_failure.dart), The Kavita client is deliberately hand-written, android.permission.INTERNET in the main manifest, KavitaClient (lib/src/api/kavita_client.dart), Kavita (self-hosted server) (+8 more)
 
-### Community 9 - "package:flutter_test/flutter_test.dart"
-Cohesion: 0.05
-Nodes (39): package:flutter_test/flutter_test.dart, package:patra/l10n/generated/app_localizations_en.dart, package:patra/l10n/generated/app_localizations_fr.dart, package:patra/src/api/client_identity.dart, package:patra/src/api/kavita_client.dart, package:patra/src/api/models.dart, package:patra/src/entity_naming.dart, package:patra/src/features/reader/spread_layout.dart (+31 more)
+### Community 9 - "package:flutter/widgets.dart"
+Cohesion: 0.50
+Nodes (3): build, report, package:flutter/widgets.dart
 
 ### Community 10 - "patra package manifest"
 Cohesion: 0.05
@@ -275,8 +282,8 @@ Cohesion: 0.10
 Nodes (21): AlignmentGeometry, BoxFit, alignment, build, createState, dispose, explain, explainAfter (+13 more)
 
 ### Community 13 - "settings_screen.dart"
-Cohesion: 0.05
-Nodes (47): ../../api/client_identity.dart, ../../downloads/image_cache_store.dart, didChangeAppLifecycleState, serverReachableProvider, serverVersionProvider, imageCacheSizeProvider, imageCacheStoreProvider, actionLabel (+39 more)
+Cohesion: 0.07
+Nodes (29): ../../api/client_identity.dart, ../../downloads/image_cache_store.dart, actionLabel, _avatarSize, child, children, confirmed, createState (+21 more)
 
 ### Community 14 - "measure_page_shapes.dart"
 Cohesion: 0.04
@@ -288,24 +295,24 @@ Nodes (30): int? stoppedChapter,
   bool, build, cacheDir, _chapter, client, close, delegates, fetch (+22 more)
 
 ### Community 16 - "series_detail_screen.dart"
-Cohesion: 0.03
-Nodes (61): Chapter, boxInset, _Buckets, _buildSections, chapter, ChapterSort, child, clear (+53 more)
+Cohesion: 0.04
+Nodes (47): Chapter, ../../entity_naming.dart, boxInset, _Buckets, chapter, ChapterSort, child, clear (+39 more)
 
 ### Community 17 - "_"
-Cohesion: 0.07
-Nodes (30): _, alreadyRunning, any, asked, _askForScan, available, canScan, failed (+22 more)
+Cohesion: 0.06
+Nodes (41): _, alreadyRunning, any, asked, _askForScan, available, build, canScan (+33 more)
 
 ### Community 18 - "home_screen.dart"
-Cohesion: 0.05
-Nodes (42): AsyncValue, ../branding/patra_lockup.dart, continue_hero.dart, ../downloads/resume_strip.dart, Library, ResolvedFailure, build, gapEm (+34 more)
+Cohesion: 0.06
+Nodes (36): ../catalogue/catalogue_reads.dart, continue_hero.dart, ../downloads/resume_strip.dart, Library, best, date, featuredSeries, incumbent (+28 more)
 
-### Community 19 - "auth_test.dart"
-Cohesion: 0.10
-Nodes (19): DioException get, package:patra/src/keychain.dart, accountId, apiKey, call, calls, color, _container (+11 more)
+### Community 19 - "dart:convert"
+Cohesion: 0.07
+Nodes (27): dart:convert, DioException, DioException get, accountIdFrom, _padded, segments, package:patra/src/api/account_id.dart, _jwt (+19 more)
 
 ### Community 20 - "profile_preferences.dart"
 Cohesion: 0.03
-Nodes (62): abstract class, batchDownloadSizeFor, bookLineHeight, bookLineHeightFor, bookReadingFace, bookReadingFaceFor, bookTextSize, bookTextSizeFor (+54 more)
+Nodes (64): abstract class, batchDownloadSizeFor, bookLineHeight, bookLineHeightFor, bookReadingFace, bookReadingFaceFor, bookTextSize, bookTextSizeFor (+56 more)
 
 ### Community 21 - "test_support.dart"
 Cohesion: 0.04
@@ -317,17 +324,17 @@ Nodes (55): MangaFormat, MemoryKeychain? keychain,
 Cohesion: 0.06
 Nodes (35): appName, appVersion, ClientIdentity, ClientPlatform, _describeDevice, deviceId, _deviceIdKey, deviceModel (+27 more)
 
-### Community 23 - "batch_hint.dart"
-Cohesion: 0.29
-Nodes (6): ../keychain.dart, BatchSizeHintStore, _key, _keychain, markShown, wasShown
+### Community 23 - "keychain.dart"
+Cohesion: 0.18
+Nodes (11): delete, Keychain, keychainProvider, read, readAll, SecureKeychain, _storage, write (+3 more)
 
 ### Community 24 - "series_list_views_test.dart"
 Cohesion: 0.07
-Nodes (28): LinearProgressIndicator, RenderParagraph, ScaffoldMessengerState, above, cacheDir, _chapter, client, close (+20 more)
+Nodes (29): LinearProgressIndicator, package:flutter/rendering.dart, RenderParagraph, ScaffoldMessengerState, above, cacheDir, _chapter, client (+21 more)
 
 ### Community 25 - "profile_lock_sheet.dart"
-Cohesion: 0.06
-Nodes (32): biometricsProvider, askProfilePin, _backspace, _biometrics, build, child, chooseProfilePin, choosing (+24 more)
+Cohesion: 0.07
+Nodes (27): askProfilePin, _backspace, _biometrics, build, child, chooseProfilePin, choosing, createState (+19 more)
 
 ### Community 26 - "downloads_service.dart"
 Cohesion: 0.02
@@ -338,22 +345,22 @@ Cohesion: 0.06
 Nodes (31): AnimationController, build, child, _controller, createState, didChangeDependencies, didUpdateWidget, dispose (+23 more)
 
 ### Community 28 - "profile_lock.dart"
-Cohesion: 0.07
-Nodes (27): accepts, build, clear, _digest, _flush, forPin, fromJson, hash (+19 more)
+Cohesion: 0.08
+Nodes (25): accepts, build, clear, _digest, _flush, forPin, fromJson, hash (+17 more)
 
-### Community 29 - "package:flutter/material.dart"
+### Community 29 - "package:patra/src/api/kavita_client.dart"
 Cohesion: 0.06
-Nodes (30): Finder get, IconButton, package:flutter/material.dart, package:patra/l10n/generated/app_localizations.dart, package:patra/src/features/home/home_screen.dart, package:patra/src/settings/locale_settings.dart, package:patra/src/widgets/no_intrinsic.dart, main (+22 more)
+Nodes (30): Finder get, IconButton, package:patra/src/api/kavita_client.dart, package:patra/src/features/home/home_screen.dart, package:patra/src/resume_point.dart, _Adapter, close, _cloud (+22 more)
 
 ### Community 30 - "reader_test.dart"
 Cohesion: 0.04
-Nodes (48): CustomScrollView, Key? readerKey,
+Nodes (46): CustomScrollView, Key? readerKey,
   int, NeverScrollableScrollPhysics, PageView, required int initialPage,
   
   
   
   ReadingDirection?, required int pagesRead,
-  int, Scrollable, Slider (+40 more)
+  int, Scrollable, Slider (+38 more)
 
 ### Community 31 - "Continuous vertical reader: zoom and navigation research"
 Cohesion: 0.04
@@ -361,16 +368,16 @@ Nodes (46): 1. State model, 2. Layout, 3. Gestures and alternate controls, 4. Cu
 
 ### Community 32 - "magnify_gesture.dart"
 Cohesion: 0.07
-Nodes (28): anchor, _band, contain, content, _degenerate, drawnContent, fromLTWH, half (+20 more)
+Nodes (29): double get, anchor, _band, contain, content, _degenerate, drawnContent, fromLTWH (+21 more)
 
 ### Community 33 - "client_identity_test.dart"
 Cohesion: 0.09
-Nodes (21): package:patra/src/api/client_device.dart, _android, client, _clientWith, close, delete, _device, _DeviceAdapter (+13 more)
+Nodes (22): package:patra/src/api/client_device.dart, package:patra/src/keychain.dart, _android, client, _clientWith, close, delete, _device (+14 more)
 
 ### Community 34 - "series_hero_test.dart"
-Cohesion: 0.11
-Nodes (18): LibraryType? libraryType,
-  Locale, cacheDir, _chapter, client, close, fetch, libraryType, locale (+10 more)
+Cohesion: 0.06
+Nodes (34): CachedNetworkImage, LibraryType? libraryType,
+  Locale, package:cached_network_image/cached_network_image.dart, package:patra/src/features/series/series_detail_screen.dart, package:patra/src/widgets/cover.dart, package:patra/src/widgets/cover_placeholder.dart, _channelGap, client (+26 more)
 
 ### Community 35 - "analyze job (pub get, analyze, test)"
 Cohesion: 0.09
@@ -378,15 +385,15 @@ Nodes (29): Dependabot github-actions ecosystem (weekly), analyze job (pub get, 
 
 ### Community 36 - "home_hero_test.dart"
 Cohesion: 0.06
-Nodes (31): NavigatorState, _backdrop, _chapter, client, close, fetch, _finishedBookVolume, _iPad (+23 more)
+Nodes (32): NavigatorState, _backdrop, _chapter, client, close, fetch, _finishedBookVolume, _heroCoverUrl (+24 more)
 
 ### Community 37 - "my_application.cc"
 Cohesion: 0.09
 Nodes (22): FlPluginRegistry, FlView, GApplication, gboolean, gchar, GObject, GtkApplication, fl_register_plugins() (+14 more)
 
-### Community 38 - "package:dio/dio.dart"
-Cohesion: 0.08
-Nodes (24): client_identity.dart, kavita_client.dart, announceDevice, identity, null, renameTarget, models.dart, package:dio/dio.dart (+16 more)
+### Community 38 - "test_support.dart"
+Cohesion: 0.06
+Nodes (34): package:patra/l10n/generated/app_localizations.dart, package:patra/src/features/library/library_screen.dart, _Adapter, client, close, fetch, main, profile (+26 more)
 
 ### Community 39 - "_ReaderScreenState"
 Cohesion: 0.13
@@ -394,7 +401,7 @@ Nodes (24): libraryNameProvider, bookContentsProvider, _BookPage, bookPageProvid
 
 ### Community 40 - "downloads_provider.dart"
 Cohesion: 0.03
-Nodes (71): downloads_service.dart, _answerLaunchPrompt, _asked, _asking, awaitingResume, batchSummary, bySeries, _bySeriesThenTitle (+63 more)
+Nodes (73): downloads_service.dart, _answerLaunchPrompt, _asked, _asking, awaitingResume, batchSummary, build, bySeries (+65 more)
 
 ### Community 41 - "Profile lock (lib/src/lock/profile_lock.dart)"
 Cohesion: 0.22
@@ -406,7 +413,7 @@ Nodes (32): bottomGap, build, controller, createState, dispose, _documentAt, _dr
 
 ### Community 43 - "app.dart"
 Cohesion: 0.07
-Nodes (33): ConsumerState, ConsumerStatefulWidget, features/downloads/downloads_screen.dart, features/home/home_screen.dart, features/library/library_screen.dart, features/login/login_screen.dart, features/profiles/profile_picker_screen.dart, features/reader/reader_screen.dart (+25 more)
+Nodes (31): features/downloads/downloads_screen.dart, features/home/home_screen.dart, features/library/library_screen.dart, features/login/login_screen.dart, features/profiles/profile_picker_screen.dart, features/reader/reader_screen.dart, features/series/series_detail_screen.dart, features/settings/settings_screen.dart (+23 more)
 
 ### Community 44 - "reader_settings_sheet.dart"
 Cohesion: 0.06
@@ -421,8 +428,8 @@ Cohesion: 0.10
 Nodes (19): dart:isolate, DateTime?, Future, _cacheKey, clear, dir, entries, _lastTrim (+11 more)
 
 ### Community 47 - "download_pill.dart"
-Cohesion: 0.06
-Nodes (33): double?, download_stop.dart, ../downloads/downloads_service.dart, EdgeInsetsGeometry, IconData, SavedChapter, build, child (+25 more)
+Cohesion: 0.07
+Nodes (29): Color, download_stop.dart, ../downloads/downloads_service.dart, IconData, SavedChapter, color, paint, radius (+21 more)
 
 ### Community 48 - "catalogue_store.dart"
 Cohesion: 0.05
@@ -437,8 +444,8 @@ Cohesion: 0.10
 Nodes (20): catalogue/catalogue_provider.dart, features/launch/launch_animation.dart, auth, build, child, _container, createState, dispose (+12 more)
 
 ### Community 51 - "strip_geometry.dart"
-Cohesion: 0.06
-Nodes (30): double get, IndexedWidgetBuilder, anchorAt, build, childCount, decodeWidthFor, estimateMaxScrollOffset, fraction (+22 more)
+Cohesion: 0.07
+Nodes (29): IndexedWidgetBuilder, anchorAt, build, childCount, decodeWidthFor, estimateMaxScrollOffset, fraction, geometry (+21 more)
 
 ### Community 52 - "main.dart"
 Cohesion: 0.07
@@ -456,34 +463,34 @@ Nodes (13): Android adaptive icon (drawable/patra_mark.xml), FrondGeometry.bound
 Cohesion: 0.17
 Nodes (11): dart:ui, leaf1, leaf2, markHeight, markWidth, PatraLogoPaths, splitX, wordmark (+3 more)
 
-### Community 56 - "home_offline_test.dart"
-Cohesion: 0.07
-Nodes (26): package:patra/src/catalogue/catalogue_provider.dart, package:patra/src/downloads/downloads_service.dart, package:patra/src/features/home/continue_hero.dart, package:patra/src/widgets/offline_indicator.dart, adapter, _catalogue, downloads, main (+18 more)
+### Community 56 - "dart:io"
+Cohesion: 0.04
+Nodes (57): dart:io, Locale, package:integration_test/integration_test_driver_extended.dart, package:patra/src/catalogue/catalogue_provider.dart, package:patra/src/catalogue/catalogue_store.dart, package:patra/src/downloads/downloads_provider.dart, package:patra/src/features/home/continue_hero.dart, package:patra/src/widgets/offline_indicator.dart (+49 more)
 
 ### Community 57 - "graphify_merge_driver_test.dart"
 Cohesion: 0.11
 Nodes (17): _command, _config, driver, false, _git, graph, inRepo, installed (+9 more)
 
-### Community 58 - "continue_hero.dart"
-Cohesion: 0.07
-Nodes (28): ../../catalogue/catalogue_reads.dart, ../../entity_naming.dart, best, button, _buttonGap, child, _continue, _ContinueButton (+20 more)
+### Community 58 - "series_hero.dart"
+Cohesion: 0.12
+Nodes (16): AsyncValue, cover.dart, ResolvedFailure, _coverHeight, _coverWidth, _label, onOpenSeries, seriesId (+8 more)
 
 ### Community 59 - "server_reachability_test.dart"
 Cohesion: 0.10
 Nodes (19): Container, _Adapter, _announcement, card, client, close, dot, _dotColor (+11 more)
 
 ### Community 60 - "reading_settings.dart"
-Cohesion: 0.07
-Nodes (27): leftToRight,
-  rightToLeft,, atkinsonHyperlegibleNext, canSetItalic, defaultBookLineHeight, defaultBookReadingFace, defaultBookTextSize, directionNamed, family (+19 more)
+Cohesion: 0.08
+Nodes (25): leftToRight,
+  rightToLeft,, atkinsonHyperlegibleNext, canSetItalic, defaultBookLineHeight, defaultBookReadingFace, defaultBookTextSize, directionNamed, family (+17 more)
 
 ### Community 61 - "strip_width.dart"
 Cohesion: 0.04
 Nodes (50): Drag?, _anchor, build, _capture, child, _clampedBy, clampWidthFactor, controller (+42 more)
 
-### Community 62 - "HttpClientAdapter"
-Cohesion: 0.06
-Nodes (35): DioException, HttpClientAdapter, _BookAdapter, _AnswersThenFails, _StubAdapter, _KavitaLikeAdapter, _BookAdapter, _PageAdapter (+27 more)
+### Community 62 - "catalogue_overlay_test.dart"
+Cohesion: 0.10
+Nodes (19): package:patra/src/catalogue/catalogue_overlay.dart, package:patra/src/catalogue/catalogue_reads.dart, adapter, calls, client, close, container, expectLater (+11 more)
 
 ### Community 63 - "_"
 Cohesion: 0.11
@@ -491,8 +498,8 @@ Nodes (21): FutureProvider, _, CatalogueDeps, CatalogueRead, _deps, _fetch, into
 
 ### Community 64 - "strip_width_test.dart"
 Cohesion: 0.04
-Nodes (48): ChangeNotifier, dart:typed_data, StripWidthController, package:patra/src/features/reader/strip_width.dart, RenderBox, RenderSliverMultiBoxAdaptor?, required double to,
-  int, _aspectRatioFor (+40 more)
+Nodes (46): dart:typed_data, package:patra/src/features/reader/strip_width.dart, RenderBox, RenderSliverMultiBoxAdaptor?, required double to,
+  int, _aspectRatioFor, bottom, _brokenImage (+38 more)
 
 ### Community 65 - "ADR-0003 — A profile is a Kavita account, and there are no local ones"
 Cohesion: 0.13
@@ -514,10 +521,10 @@ Nodes (14): patraAccent = progress/identity, patraOffline = downloads/offline, /
 Cohesion: 0.10
 Nodes (24): ADR-0001 reader magnify gesture, GET /api/Reader/chapter-info pageDimensions, A column of rows runs the full width at the app's gutter, DownloadsNotifier must re-read state.value after an await, DownloadsService (<documents>/downloads/<profile>/<chapterId>/), A shelf and the reader canvas run edge to edge, A grid of cards takes another column, not a bigger card, ImageCacheStore.trim (a capped image cache) (+16 more)
 
-### Community 70 - "deep_link_test.dart"
-Cohesion: 0.06
-Nodes (32): Completer, NavigationBar, package:patra/src/app.dart, package:patra/src/features/login/login_screen.dart, package:patra/src/features/reader/reader_screen.dart, package:patra/src/features/series/series_detail_screen.dart, package:patra/src/routes.dart, required Directory downloadsRoot,
-  bool (+24 more)
+### Community 70 - "package:flutter_test/flutter_test.dart"
+Cohesion: 0.05
+Nodes (47): package:flutter_test/flutter_test.dart, package:patra/src/api/client_identity.dart, package:patra/src/api/models.dart, package:patra/src/features/reader/spread_layout.dart, package:patra/src/settings/cache_settings.dart, package:patra/src/settings/profile_preferences.dart, package:patra/src/settings/reading_settings.dart, Profile? active,
+  Map (+39 more)
 
 ### Community 71 - "resume_point.dart"
 Cohesion: 0.10
@@ -528,9 +535,9 @@ Cohesion: 0.05
 Nodes (40): package:patra/src/lifecycle.dart, Profile? session,
   bool, active, activeChapterRequests, adapter, _chapter, chapterGates, _chapterWithId (+32 more)
 
-### Community 73 - "return"
+### Community 73 - "store_screenshots_test.dart"
 Cohesion: 0.04
-Nodes (46): package:patra/src/catalogue/catalogue_overlay.dart, package:patra/src/catalogue/catalogue_reads.dart, package:patra/src/catalogue/catalogue_store.dart, return, adapter, _AnswersThenHangs, calls, client (+38 more)
+Nodes (46): Duration, back, bar, _beat, binding, centre, cover, _deadline (+38 more)
 
 ### Community 74 - "series_offline_test.dart"
 Cohesion: 0.10
@@ -540,21 +547,21 @@ Nodes (19): FilledButton, InkWell, package:patra/src/widgets/download_pill.dart,
 Cohesion: 0.20
 Nodes (9): ADR-0006 — The strip is zoomed by laying it out wider, not by transforming it, Consequences, Considered options, and why not, Context, Cost, accepted, Decision, Prototype, Sources (+1 more)
 
-### Community 76 - "entity_naming.dart"
-Cohesion: 0.12
-Nodes (16): LibraryType, chaptersTitle, chapterTitle, continueChapterLabel, continueVolumeLabel, LibraryTypeNaming, numberedChapterLabel, numberedChapterRange (+8 more)
+### Community 76 - "page_shape.dart"
+Cohesion: 0.14
+Nodes (13): LibraryType, LibraryTypeNaming, build, isVertical, libraryType, measuredPagesNeeded, _median, middle (+5 more)
 
-### Community 77 - "dart:convert"
-Cohesion: 0.08
-Nodes (23): dart:convert, accountIdFrom, _padded, segments, package:patra/src/api/account_id.dart, _jwt, main, seg (+15 more)
+### Community 77 - "package:dio/dio.dart"
+Cohesion: 0.11
+Nodes (16): client_identity.dart, kavita_client.dart, announceDevice, identity, null, renameTarget, ConnectionFailure, ConnectionFailureKind (+8 more)
 
-### Community 78 - "server_version_test.dart"
-Cohesion: 0.09
-Nodes (20): dart:async, package:patra/src/features/reader/thumb_strip.dart, _Adapter, card, client, close, dot, _dotColor (+12 more)
+### Community 78 - "demo_server.dart"
+Cohesion: 0.04
+Nodes (51): _arg, _body, _Chapter, chapterById, chapterInfoJson, chapterJson, chapters, coverDrawing (+43 more)
 
 ### Community 79 - "saved_copies_test.dart"
 Cohesion: 0.05
-Nodes (38): CircularProgressIndicator, package:patra/src/features/downloads/downloads_screen.dart, RichText, _answer, build, chapter, _chapterId, client (+30 more)
+Nodes (46): AsyncNotifier, CircularProgressIndicator, DownloadsNotifier, DownloadsState, package:patra/src/features/downloads/downloads_screen.dart, RichText, _answer, build (+38 more)
 
 ### Community 80 - "ADR-0002 — One rule decides where reading resumes, and it is ours"
 Cohesion: 0.18
@@ -572,18 +579,17 @@ Nodes (38): accent, add, addQuadratic, argb, _bottom, _Bounds, box, command (+30
 Cohesion: 0.19
 Nodes (13): Accent-coloured centre blade and stem, 72px master-selection rule for icon rasterisation, Compact three-blade frond variant (icons at or under 72px), Five-blade fan frond variant (icons above 72px), iOS App Icon 40x40@1x (40px, iPad notification/spotlight), iOS App Icon 40x40@2x (80px, iPhone/iPad spotlight), iOS App Icon 40x40@3x (120px, iPhone spotlight), iOS App Icon 50x50@1x (50px, legacy iPad spotlight) (+5 more)
 
-### Community 84 - "profile_switch_test.dart"
-Cohesion: 0.06
-Nodes (35): package:patra/src/session_scope.dart, required Credential credential,
-  ClientIdentity, _app, attempts, close, fetch, identity, _lea (+27 more)
+### Community 84 - "catalogue_write_path_test.dart"
+Cohesion: 0.11
+Nodes (18): package:patra/src/session_scope.dart, _Adapter, asked, client, close, container, fetch, _lea (+10 more)
 
 ### Community 85 - "72px threshold: small icons render from the compact master"
 Cohesion: 0.20
 Nodes (12): Accent-purple centre blade and stem carry identity, iOS Marketing Icon 1024px (five-blade frond), App icons are opaque RGB with no alpha channel, Patra palm frond mark (five capsule blades on ink), 72px threshold: small icons render from the compact master, iOS Notification Icon 20px (compact frond), iOS Notification Icon 40px (compact frond), iOS Notification Icon 60px (compact frond) (+4 more)
 
-### Community 86 - "magnify_gesture_test.dart"
-Cohesion: 0.25
-Nodes (7): package:flutter/painting.dart, package:patra/src/features/reader/magnify_gesture.dart, _content, _from, main, _under, _viewport
+### Community 86 - "dart:math"
+Cohesion: 0.22
+Nodes (8): dart:math, package:flutter/painting.dart, package:patra/src/features/reader/magnify_gesture.dart, _content, _from, main, _under, _viewport
 
 ### Community 87 - "A profile is exactly one Kavita account"
 Cohesion: 0.22
@@ -600,11 +606,11 @@ Nodes (12): Image, ImageInfo, ImageProvider, package:patra/src/features/reader/p
 
 ### Community 90 - "page_rail_test.dart"
 Cohesion: 0.08
-Nodes (23): package:patra/src/features/reader/page_rail.dart, package:patra/src/features/reader/strip_geometry.dart, ScrollController, 8, _bottomGap, geometry, _Harness, _heightAt (+15 more)
+Nodes (23): , package:patra/src/features/reader/page_rail.dart, ScrollController, 8, _bottomGap, geometry, _Harness, _heightAt (+15 more)
 
-### Community 91 - "sessionProvider"
-Cohesion: 0.24
-Nodes (17): OfflineNotifier, sessionProvider, _resumePaused, BatchDownloadSizeNotifier, BookLineHeightNotifier, BookReadingFaceNotifier, BookTextSizeNotifier, clear (+9 more)
+### Community 91 - "Map"
+Cohesion: 0.14
+Nodes (26): AppLifecycleState, OfflineNotifier, sessionProvider, _resumePaused, PageShapesNotifier, ReadOverridesNotifier, AppLifecycleNotifier, ProfileLocksNotifier (+18 more)
 
 ### Community 92 - "Patra palm frond mark (app icon rendering)"
 Cohesion: 0.36
@@ -626,9 +632,9 @@ Nodes (7): ADR-0008 — Kavita paginates a book; the app parses no EPUB, Consequ
 Cohesion: 0.40
 Nodes (5): Accent centre blade and stem, Five-blade fan geometry, Parchment alpha ladder on the outer blades, Patra Frond Mark (five-blade master, 1024px), Patra ink ground (#16141C full-bleed)
 
-### Community 97 - "no_intrinsic.dart"
-Cohesion: 0.18
-Nodes (10): computeMaxIntrinsicHeight, computeMaxIntrinsicWidth, computeMinIntrinsicHeight, computeMinIntrinsicWidth, createRenderObject, NoIntrinsic, _RenderNoIntrinsic, package:flutter/rendering.dart (+2 more)
+### Community 97 - "profile_picker_screen.dart"
+Cohesion: 0.09
+Nodes (21): ../../api/connection_failure.dart, _AddFace, _avatarSize, busy, createState, _entering, _error, _Face (+13 more)
 
 ### Community 98 - "ADR-0001 — A one-finger drag magnifies the page, and the border wins"
 Cohesion: 0.25
@@ -652,11 +658,11 @@ Nodes (6): Conventions, Issue tracker: GitHub, Pull requests as a triage surface
 
 ### Community 103 - "strip_geometry_test.dart"
 Cohesion: 0.08
-Nodes (24): , 8, controller, fraction, geometry, _heightAt, images, main (+16 more)
+Nodes (24): package:patra/src/features/reader/strip_geometry.dart, 8, controller, fraction, geometry, _heightAt, images, main (+16 more)
 
 ### Community 104 - "locale_settings.dart"
-Cohesion: 0.20
-Nodes (9): _key, _keychain, languageEndonym, load, localeSettingsProvider, LocaleSettingsStore, null, save (+1 more)
+Cohesion: 0.12
+Nodes (15): ../keychain.dart, BatchSizeHintStore, _key, _keychain, markShown, wasShown, _key, _keychain (+7 more)
 
 ### Community 105 - "Patra"
 Cohesion: 0.29
@@ -678,30 +684,30 @@ Nodes (5): Before exploring, read these, Domain Docs, File structure, Flag ADR c
 Cohesion: 0.40
 Nodes (6): AppLocalizations, _AppLocalizationsDelegate, AppLocalizationsEn, AppLocalizationsFr, of, LocalizationsDelegate
 
-### Community 110 - "saved_chapters_per_profile_test.dart"
+### Community 110 - "server_version_test.dart"
 Cohesion: 0.11
-Nodes (18): Locale, _catalogueRoot, client, close, fetch, _lea, locale, main (+10 more)
+Nodes (17): _Adapter, card, client, close, dot, _dotColor, fetch, held (+9 more)
 
 ### Community 112 - "page_shape_test.dart"
 Cohesion: 0.13
 Nodes (14): package:patra/src/features/reader/page_shape.dart, Set, _chapter, container, libraryType, main, _measured, _page (+6 more)
 
-### Community 113 - "library_scan_test.dart"
-Cohesion: 0.10
-Nodes (20): PopupMenuItem, required bool admin,
-  bool, _Adapter, client, close, _container, empty, fetch (+12 more)
+### Community 113 - "package:flutter/material.dart"
+Cohesion: 0.05
+Nodes (38): Completer, dart:async, NavigationBar, package:flutter/material.dart, package:patra/src/features/login/login_screen.dart, package:patra/src/features/reader/thumb_strip.dart, PopupMenuItem, required bool admin,
+  bool (+30 more)
 
 ### Community 114 - "login_screen.dart"
-Cohesion: 0.03
-Nodes (67): ../../api/connection_failure.dart, FormState, authProvider, Profile, Session, profileCatalogueProvider, profileDownloadsProvider, _ProfileFace (+59 more)
+Cohesion: 0.08
+Nodes (25): FormState, _askForServer, _buildForm, _busy, child, createState, didChangeDependencies, dispose (+17 more)
 
 ### Community 119 - "downloads_screen.dart"
-Cohesion: 0.07
-Nodes (27): ../downloads/downloads_provider.dart, ../../format.dart, bytes, chapter, chapterId, chapters, color, _confirmRemove (+19 more)
+Cohesion: 0.09
+Nodes (21): ../../format.dart, bytes, chapter, chapterId, chapters, color, _confirmRemove, _CopyProgress (+13 more)
 
-### Community 126 - "api/models.dart"
-Cohesion: 0.15
-Nodes (12): api/models.dart, build, isVertical, libraryType, measuredPagesNeeded, _median, middle, of (+4 more)
+### Community 126 - "ConsumerWidget"
+Cohesion: 0.11
+Nodes (26): ConsumerWidget, didUpdateWidget, batchSummaryProvider, downloadMembershipProvider, downloadRecordProvider, downloadsProvider, savedChapterIdsProvider, _CopyRow (+18 more)
 
 ### Community 128 - "Where a page stops being a page: the vertical threshold"
 Cohesion: 0.15
@@ -727,13 +733,13 @@ Nodes (17): catalogue_provider.dart, fetch, held, heldSpine, live, onDeckOverlay
 Cohesion: 0.07
 Nodes (28): canPromoteToLibrary, ChapterDirection, ChapterDirectionKey, detected, detectedDirectionProvider, direction, hasLibraryDirection, hasSeriesDirection (+20 more)
 
-### Community 134 - "keychain.dart"
-Cohesion: 0.18
-Nodes (11): delete, Keychain, keychainProvider, read, readAll, SecureKeychain, _storage, write (+3 more)
+### Community 134 - "HttpClientAdapter"
+Cohesion: 0.04
+Nodes (48): DioExceptionType?, HttpClientAdapter, Object?, package:patra/src/api/connection_failure.dart, _BookAdapter, _AnswersThenFails, _AnswersThenHangs, _Adapter (+40 more)
 
-### Community 135 - "connection_failure_test.dart"
-Cohesion: 0.13
-Nodes (14): DioExceptionType?, Object?, package:patra/src/api/connection_failure.dart, _Adapter, body, close, contentType, _failureOf (+6 more)
+### Community 135 - "profile_picker_test.dart"
+Cohesion: 0.12
+Nodes (16): CustomPaint, LoginResult, Opacity, package:patra/src/branding/patra_mark.dart, package:patra/src/features/profiles/profile_picker_screen.dart, package:patra/src/widgets/dashed_border.dart, package:patra/src/widgets/patra_wordmark.dart, box (+8 more)
 
 ### Community 136 - "package:flutter_riverpod/flutter_riverpod.dart"
 Cohesion: 0.28
@@ -757,27 +763,27 @@ Nodes (3): A book, Reader, The reader
 
 ### Community 143 - "catalogue_reads.dart"
 Cohesion: 0.14
-Nodes (13): catalogue_overlay.dart, catalogue_read.dart, Series, SeriesMetadata, libraries, libraryTypeProvider, list, onDeck (+5 more)
+Nodes (13): catalogue_overlay.dart, catalogue_read.dart, SeriesMetadata, libraries, libraryTypeProvider, list, onDeck, series (+5 more)
 
-### Community 146 - "../theme.dart"
-Cohesion: 0.04
-Nodes (44): ../api/kavita_client.dart, ../auth/session.dart, cover_placeholder.dart, build, CoverImage, CoverTile, headers, memCacheWidth (+36 more)
+### Community 146 - "page_backdrop.dart"
+Cohesion: 0.15
+Nodes (12): _artwork, build, chapterId, _CoverBackdrop, _fade, _hidden, _maxAspect, page (+4 more)
 
 ### Community 147 - "CustomPainter"
 Cohesion: 0.33
 Nodes (6): CustomPainter, _LaunchPainter, _MarkPainter, _Hatch, DashedBorderPainter, _DirectionPainter
 
-### Community 151 - "Widget"
-Cohesion: 0.27
-Nodes (9): ../../branding/patra_launch.dart, build, child, createState, isLaunchProvider, LaunchAnimation, _LaunchAnimationState, play (+1 more)
+### Community 151 - "../api/models.dart"
+Cohesion: 0.17
+Nodes (11): ../api/models.dart, chaptersTitle, chapterTitle, numberedChapterLabel, numberedChapterRange, specialsTitle, storylineTitle, terseTitle (+3 more)
 
-### Community 152 - "ConsumerWidget"
+### Community 152 - "kavitaClientProvider"
+Cohesion: 0.09
+Nodes (38): catalogue, kavitaClientProvider, offlineProvider, chapterDirProvider, _run, savedChapterProvider, syncPendingProgress, build (+30 more)
+
+### Community 153 - "../../../l10n/generated/app_localizations.dart"
 Cohesion: 0.07
-Nodes (63): catalogue, ConsumerWidget, didUpdateWidget, kavitaClientProvider, offlineProvider, batchSummaryProvider, chapterDirProvider, downloadMembershipProvider (+55 more)
-
-### Community 153 - "../../l10n/generated/app_localizations.dart"
-Cohesion: 0.08
-Nodes (22): ../../l10n/generated/app_localizations.dart, ConnectionFailure, ConnectionFailureKind, detail, from, _fromStatus, kind, message (+14 more)
+Nodes (24): ../../branding/patra_launch.dart, ../downloads/downloads_provider.dart, ../../../l10n/generated/app_localizations.dart, build, child, DownloadsResumeStrip, _Strip, child (+16 more)
 
 ### Community 154 - "ADR-0011 — A second theme is deferred, not rejected"
 Cohesion: 0.25
@@ -791,17 +797,17 @@ Nodes (18): Agent skills, Architecture, CLAUDE.md, Commands, Design system — t
 Cohesion: 0.29
 Nodes (6): ADR-0009 — A saved copy keeps the pagination it was made with, Consequence, Context, Cost, accepted, Decision, Why
 
-### Community 157 - "catalogue_provider.dart"
-Cohesion: 0.13
-Nodes (14): catalogue_store.dart, _storeOrNull, CataloguePrefetch, cataloguePrefetchProvider, catalogueRootProvider, catalogueStoreProvider, _done, markStored (+6 more)
+### Community 157 - "../auth/session.dart"
+Cohesion: 0.12
+Nodes (15): ../auth/session.dart, catalogue_store.dart, _storeOrNull, CataloguePrefetch, cataloguePrefetchProvider, catalogueRootProvider, catalogueStoreProvider, _done (+7 more)
 
 ### Community 158 - "_ThumbStripState"
 Cohesion: 0.67
 Nodes (3): ThumbStrip, _ThumbStripState, TickerProviderStateMixin
 
 ### Community 159 - "StatelessWidget"
-Cohesion: 0.05
-Nodes (38): BookContentsEntry, _EmptyBody, _LibraryGridSkeleton, _LibraryPills, BookContentsButton, build, _contentsIndent, _ContentsList (+30 more)
+Cohesion: 0.06
+Nodes (35): BookContentsEntry, BookContentsButton, build, _contentsIndent, _ContentsList, depth, entries, entry (+27 more)
 
 ### Community 160 - "ADR-0010 — A book's page is drawn by the app, not handed to a web view"
 Cohesion: 0.29
@@ -819,70 +825,87 @@ Nodes (5): BookBlock, BookPicture, BookWords, endBlock, parseBookPage
 Cohesion: 0.67
 Nodes (3): AuthKeyCredential, Credential, PasswordCredential
 
-### Community 164 - "UserDto.isAdmin (role read from the login response)"
-Cohesion: 0.47
-Nodes (6): Admin scan request from the Library tab's app-bar menu, AuthNotifier.clearAdmin (a 403 clears the flag), currentLibraryProvider, POST /api/Library/scan (admin only), LibraryScanNotifier, UserDto.isAdmin (role read from the login response)
+### Community 164 - "deep_link_test.dart"
+Cohesion: 0.06
+Nodes (35): package:patra/src/app.dart, package:patra/src/features/reader/reader_screen.dart, package:patra/src/routes.dart, required Directory downloadsRoot,
+  bool, _app, client, close, fetch (+27 more)
 
 ### Community 165 - "gen_app_icons.sh"
 Cohesion: 0.47
 Nodes (5): The header draws the five-blade fan at 24pt, The palm frond mark (five-blade and compact three-blade), android_icon(), ios_icon(), gen_app_icons.sh script
 
+### Community 166 - "cover.dart"
+Cohesion: 0.13
+Nodes (14): cover_placeholder.dart, build, CoverImage, CoverTile, headers, memCacheWidth, onTap, progress (+6 more)
+
 ### Community 167 - "cache_settings.dart"
-Cohesion: 0.16
-Nodes (14): int get, build, bytes, defaultLimit, ImageCacheLimit, ImageCacheLimitNotifier, imageCacheSettingsProvider, ImageCacheSettingsStore (+6 more)
+Cohesion: 0.18
+Nodes (13): build, bytes, defaultLimit, ImageCacheLimit, ImageCacheLimitNotifier, imageCacheSettingsProvider, ImageCacheSettingsStore, initialImageCacheLimitProvider (+5 more)
 
 ### Community 168 - "downloads_service_test.dart"
 Cohesion: 0.08
 Nodes (24): int?, DownloadsService, SelectedLibraryNotifier, _book, _bookId, _bookPageHtml, _chapter, client (+16 more)
 
+### Community 169 - "VoidCallback?"
+Cohesion: 0.18
+Nodes (10): double?, EdgeInsetsGeometry, build, child, ChromePill, onTap, padding, tooltip (+2 more)
+
 ### Community 170 - "List"
-Cohesion: 0.20
-Nodes (9): firstOf, indexOf, length, of, _slotOfPage, slots, spanOf, SpreadLayout (+1 more)
+Cohesion: 0.18
+Nodes (10): int get, firstOf, indexOf, length, of, _slotOfPage, slots, spanOf (+2 more)
 
 ### Community 171 - "downloads_resume_strip_test.dart"
 Cohesion: 0.12
-Nodes (16): package:patra/src/downloads/downloads_provider.dart, package:patra/src/features/downloads/resume_strip.dart, _chapter, client, close, container, fetch, _interruptedRoom (+8 more)
+Nodes (16): package:patra/src/downloads/downloads_service.dart, package:patra/src/features/downloads/resume_strip.dart, _chapter, client, close, container, fetch, _interruptedRoom (+8 more)
 
 ### Community 172 - "image_cache_store_test.dart"
 Cohesion: 0.25
 Nodes (7): Directory, ImageCacheStore, package:patra/src/downloads/image_cache_store.dart, dir, main, store, write
 
-### Community 174 - "package:flutter/widgets.dart"
-Cohesion: 0.33
-Nodes (5): AppLifecycleState, AppLifecycleNotifier, build, report, package:flutter/widgets.dart
+### Community 173 - "profile_avatar.dart"
+Cohesion: 0.14
+Nodes (13): ../api/kavita_client.dart, Profile, Session, build, dimmed, hex, _Initial, on (+5 more)
 
-### Community 175 - "Map"
-Cohesion: 0.18
-Nodes (10): File, PageShapesNotifier, ReadOverridesNotifier, Map, main, resolve, schema, schemas (+2 more)
+### Community 175 - "openapi_contract_test.dart"
+Cohesion: 0.25
+Nodes (7): File, main, resolve, schema, schemas, spec, specName
 
-### Community 176 - "test_support.dart"
-Cohesion: 0.06
-Nodes (37): CachedNetworkImage, CustomPaint, dart:io, LoginResult, Opacity, package:cached_network_image/cached_network_image.dart, package:patra/src/branding/patra_mark.dart, package:patra/src/features/profiles/profile_picker_screen.dart (+29 more)
+### Community 176 - "authProvider"
+Cohesion: 0.08
+Nodes (31): ConsumerState, ConsumerStatefulWidget, _PatraShell, _PatraShellState, authProvider, profileCatalogueProvider, profileDownloadsProvider, _ProfileFace (+23 more)
 
 ### Community 177 - "@immutable"
 Cohesion: 0.50
 Nodes (4): @immutable, BookAnchor, MagnifyGesture, MagnifyTransform
 
-### Community 178 - "dart:math"
-Cohesion: 0.25
-Nodes (7): Color, dart:math, color, paint, radius, shouldRepaint, strokeWidth
+### Community 178 - "static const"
+Cohesion: 0.09
+Nodes (20): ../branding/patra_lockup.dart, build, gapEm, PatraLockup, size, build, _gateGapEm, PatraMasthead (+12 more)
 
-### Community 182 - "DownloadsNotifier"
-Cohesion: 0.20
-Nodes (10): AsyncNotifier, build, DownloadsNotifier, downloadsServiceProvider, DownloadsState, _PausedScreenNotifier, _PreparingNotifier, _QueueScreenNotifier (+2 more)
+### Community 179 - "UserDto.isAdmin (role read from the login response)"
+Cohesion: 0.47
+Nodes (6): Admin scan request from the Library tab's app-bar menu, AuthNotifier.clearAdmin (a 403 clears the flag), currentLibraryProvider, POST /api/Library/scan (admin only), LibraryScanNotifier, UserDto.isAdmin (role read from the login response)
+
+### Community 182 - "build"
+Cohesion: 0.21
+Nodes (14): didChangeAppLifecycleState, serverReachableProvider, serverVersionProvider, imageCacheSizeProvider, imageCacheStoreProvider, _buildSections, build, _pickBatchSize (+6 more)
 
 ### Community 183 - "patra_mark.dart"
 Cohesion: 0.20
 Nodes (9): build, color, height, paint, PatraMark, shouldRepaint, _wordBounds, patra_logo_paths.dart (+1 more)
+
+### Community 186 - "What the two store listings take"
+Cohesion: 0.40
+Nodes (4): The check a run has to pass, What the two store listings take, Where the run stands, Where the screenshots' content comes from
 
 ## Ambiguous Edges - Review These
 - `Dependabot github-actions ecosystem (weekly)` → `Upload to the internal test track`  [AMBIGUOUS]
   .github/dependabot.yml · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **3377 isolated node(s):** `XCTest`, `localeName`, `delegate`, `localizationsDelegates`, `supportedLocales` (+3372 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3649 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **3431 isolated node(s):** `_server`, `_user`, `_password`, `_locale`, `_deadline` (+3426 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3704 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -890,14 +913,14 @@ _Questions this graph is uniquely positioned to answer:_
 - **What is the exact relationship between `Dependabot github-actions ecosystem (weekly)` and `Upload to the internal test track`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **Why does `Profile lock (lib/src/lock/profile_lock.dart)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `ProfilePreferencesStore (profile_preferences.dart)`, `patraAccent = progress/identity, patraOffline = downloads/offline`, `AsyncValue.isResolvedFailure`, `The profile picker (/profiles)`, `profile_lock_sheet.dart`?**
-  _High betweenness centrality (0.043) - this node is a cross-community bridge._
+  _High betweenness centrality (0.069) - this node is a cross-community bridge._
+- **Why does `_` connect `_` to `profile_picker_screen.dart`, `downloads_service_test.dart`, `package:flutter_riverpod/flutter_riverpod.dart`, `List`, `page_rail.dart`, `VoidCallback?`, `package:dio/dio.dart`, `authProvider`, `package:flutter/material.dart`, `home_screen.dart`, `static const`, `downloads_screen.dart`, `../api/models.dart`, `kavitaClientProvider`, `../../../l10n/generated/app_localizations.dart`, `../auth/session.dart`?**
+  _High betweenness centrality (0.024) - this node is a cross-community bridge._
 - **Why does `suggestsLock (the suggestion goes to the unrestricted profile)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `UserDto.isAdmin (role read from the login response)`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **Why does `ProfilePreferencesStore (profile_preferences.dart)` connect `ProfilePreferencesStore (profile_preferences.dart)` to `Profile lock (lib/src/lock/profile_lock.dart)`, `AsyncValue.isResolvedFailure`, `DownloadsService (<documents>/downloads/<profile>/<chapterId>/)`?**
-  _High betweenness centrality (0.015) - this node is a cross-community bridge._
-- **What connects `XCTest`, `localeName`, `delegate` to the rest of the system?**
-  _3377 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.022) - this node is a cross-community bridge._
+- **What connects `_server`, `_user`, `_password` to the rest of the system?**
+  _3431 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `app_localizations.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.009009009009009009 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.009259259259259259 - nodes in this community are weakly interconnected._
 - **Should `app_localizations_fr.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.009569377990430622 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.009852216748768473 - nodes in this community are weakly interconnected._

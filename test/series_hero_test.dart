@@ -226,8 +226,9 @@ void main() {
     // Counted in volumes, because that is how the list below is organised.
     expect(find.text('2 volumes · Manga'), findsOneWidget);
     // Chapter 3 is started but unfinished: that is where reading resumes —
-    // and the list under the hero opens on it too.
-    expect(find.text('Continue — Ch. 3'), findsOneWidget);
+    // and the list under the hero opens on it too. The button says what it
+    // does and names nothing; chapter 3 is named by the row.
+    expect(find.text('Continue'), findsOneWidget);
     expect(find.text('READING NOW'), findsOneWidget);
   });
 
@@ -257,7 +258,7 @@ void main() {
       findsNWidgets(2),
     );
     // The button the title shares the column with is untouched.
-    expect(find.text('Continue — Ch. 3'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
     // And with one chapter left there is no batch card under the hero: that
     // is the row's own pill's job.
     expect(find.text("Download what's next"), findsNothing);
@@ -280,16 +281,21 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
-  testWidgets('a volume with no chapters is named, never numbered -100000', (
-    tester,
-  ) async {
+  testWidgets('a volume with no chapters is named by the volume, never by '
+      '-100000', (tester) async {
     tester.view.physicalSize = const Size(1100, 2200);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
 
     await _pumpSeries(tester, _volumesWithoutChapters);
 
-    expect(find.text('Continue — Vol. 1'), findsOneWidget);
+    // The volume is the reading unit: its row is named after the volume, and
+    // the hero is drawn by the volume's own cover.
+    expect(find.text('Volume 1'), findsOneWidget);
+    expect(
+      tester.widget<CoverImage>(find.byType(CoverImage).first).url,
+      contains('volume-cover'),
+    );
     expect(find.text('2 volumes · Manga'), findsOneWidget);
     expect(
       find.textContaining('-100000'),
@@ -527,15 +533,18 @@ void main() {
       );
     });
 
-    // The button names what it opens in the library's own vocabulary, and a
-    // Book library's is "livre" — never a chapter, which is the word a manga
-    // shelf uses for the same thing.
-    testWidgets('names the book, as the rows below do', (tester) async {
+    // The button names nothing; what the book is called comes from the
+    // library's own vocabulary, on the row below it — a Book library's is
+    // "livre" in French, never a chapter, which is the word a manga shelf
+    // uses for the same thing.
+    testWidgets('is named by the row, in the library\'s own unit', (
+      tester,
+    ) async {
       await _pumpSeries(tester, bookVolumes, libraryType: LibraryType.book);
 
-      expect(find.text('Continue — Book 1'), findsOneWidget);
-      // A book has no chapter breakdown, so its row is the book too.
+      expect(find.text('Continue'), findsOneWidget);
       expect(find.text('Book 1'), findsOneWidget);
+      expect(find.textContaining('-100000'), findsNothing);
     });
 
     testWidgets('and in French calls it a livre', (tester) async {
@@ -546,7 +555,7 @@ void main() {
         locale: const Locale('fr'),
       );
 
-      expect(find.text('Reprendre — livre 1'), findsOneWidget);
+      expect(find.text('Reprendre'), findsOneWidget);
       expect(find.text('Livre 1'), findsOneWidget);
     });
   });

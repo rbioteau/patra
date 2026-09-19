@@ -308,12 +308,6 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get navSettings;
 
-  /// Home section listing works the user has started reading
-  ///
-  /// In en, this message translates to:
-  /// **'Continue'**
-  String get continueSection;
-
   /// Home section listing the next thing to read in each series
   ///
   /// In en, this message translates to:
@@ -470,12 +464,6 @@ abstract class AppLocalizations {
   /// **'Contents'**
   String get bookContents;
 
-  /// Pages remaining in the chapter the home hero would resume
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 page left} other{{count} pages left}}'**
-  String homeHeroPagesLeft(int count);
-
   /// Chapter tally in the series hero
   ///
   /// In en, this message translates to:
@@ -488,31 +476,7 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 volume} other{{count} volumes}}'**
   String seriesVolumeCount(int count);
 
-  /// Hero button for a volume with no chapter breakdown; volume is its number
-  ///
-  /// In en, this message translates to:
-  /// **'Continue — Vol. {volume}'**
-  String seriesContinueVolume(String volume);
-
-  /// Hero button when a chapter is already started; chapter is its number or range
-  ///
-  /// In en, this message translates to:
-  /// **'Continue — Ch. {chapter}'**
-  String seriesContinue(String chapter);
-
-  /// Hero button in a comic library, where a chapter is an issue; issue is its number or range
-  ///
-  /// In en, this message translates to:
-  /// **'Continue — #{issue}'**
-  String seriesContinueIssue(String issue);
-
-  /// Hero button in a book or light novel library, where the unit is the book; book is its number or name
-  ///
-  /// In en, this message translates to:
-  /// **'Continue — Book {book}'**
-  String seriesContinueBook(String book);
-
-  /// Hero button when the thing to resume has no number to show — a special, or a lone book. Its title is free text and would stretch the button, so the button says only what it does
+  /// The hero's button, which names nothing: what it opens is already named by the row underneath it. So this is the word for resuming a series, whatever it is made of — a chapter, a volume, an issue or a book
   ///
   /// In en, this message translates to:
   /// **'Continue'**

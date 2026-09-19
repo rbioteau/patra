@@ -111,7 +111,35 @@ class _HomeAdapter implements HttpClientAdapter {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
     );
+    // The hero draws the series' own tally and library name beside its
+    // credits, exactly as the series screen's does — it is the same widget,
+    // and it asks for the same two things.
+    final seriesId = int.tryParse(
+      RegExp(r'^/api/Series/(\d+)$').firstMatch(options.path)?.group(1) ?? '',
+    );
+    if (seriesId != null) {
+      final entry = onDeck.firstWhere(
+        (series) => series['id'] == seriesId,
+        orElse: () => const <String, dynamic>{},
+      );
+      return json({
+        ...entry,
+        'id': seriesId,
+        'name': entry['name'] ?? 'Series $seriesId',
+        'libraryName': 'Manga',
+      });
+    }
     return switch (options.path) {
+      '/api/Series/metadata' => json({
+        'id': 5,
+        'summary': 'Thorfinn seeks revenge.',
+        'writers': [
+          {'id': 1, 'name': 'Makoto Yukimura'},
+        ],
+        'genres': [
+          {'id': 2, 'title': 'Seinen'},
+        ],
+      }),
       '/api/Library/libraries' => json([
         {'id': 1, 'name': 'Shelf', 'type': libraryType.id},
       ]),
@@ -309,6 +337,17 @@ Finder _backdrop() => find.descendant(
   matching: find.byKey(const ValueKey('heroBackdrop')),
 );
 
+/// What the hero pictures: the chapter's own cover where the series is under
+/// way, the series' or the volume's where it is not.
+String _heroCoverUrl(WidgetTester tester) => tester
+    .widget<CoverImage>(
+      find.descendant(
+        of: find.byType(ContinueHero),
+        matching: find.byType(CoverImage),
+      ),
+    )
+    .url;
+
 void main() {
   group('the series the hero promotes', () {
     test('there is none when the shelf is empty', () {
@@ -430,9 +469,13 @@ void main() {
       );
     });
 
-    testWidgets('names the chapter it would resume, and what is left of it', (
-      tester,
-    ) async {
+    // **The button names nothing.** It said "Continue — Ch. 12" for a while,
+    // in the library's own vocabulary; what that bought was a number the row
+    // it opens already carries, in a control that then had to be read rather
+    // than pressed. So it says what it does, and the chapter it opens is
+    // named by the row under it — and by the cover beside it, which is still
+    // that chapter's rather than the series'.
+    testWidgets('the button says Continue, and names nothing', (tester) async {
       await _pumpHome(
         tester,
         _HomeAdapter(
@@ -453,54 +496,15 @@ void main() {
       Finder inHero(Finder f) =>
           find.descendant(of: find.byType(ContinueHero), matching: f);
 
-      // A title is appended to the number, never swapped for it.
-      expect(inHero(find.text('Chapter 12 - Le duel')), findsOneWidget);
-      expect(inHero(find.text('18 pages left')), findsOneWidget);
-    });
-
-    // The bar is the percentage; printing it too would be one fact twice.
-    testWidgets('does not print a percentage beside its bar', (tester) async {
-      await _pumpHome(
-        tester,
-        _HomeAdapter(
-          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
-          volumes: [
-            {
-              'id': 1,
-              'name': '1',
-              'minNumber': 1,
-              'chapters': [_chapter(101, 12, pages: 30, read: 12)],
-            },
-          ],
-        ),
-      );
-      expect(find.textContaining('%'), findsNothing);
-    });
-
-    // Everything it could name is already on the card.
-    testWidgets('the button says only Continue', (tester) async {
-      await _pumpHome(
-        tester,
-        _HomeAdapter(
-          onDeck: [_json(5, lastRead: '2026-09-05T10:00:00')],
-          volumes: [
-            {
-              'id': 1,
-              'name': '1',
-              'minNumber': 1,
-              'chapters': [_chapter(101, 12, pages: 30, read: 12)],
-            },
-          ],
-        ),
-      );
+      expect(inHero(find.text('Continue')), findsOneWidget);
+      expect(find.textContaining('Ch. 12'), findsNothing);
+      // A title never reaches a button either.
+      expect(inHero(find.textContaining('Le duel')), findsNothing);
+      // And the cover of the chapter it opens is beside it, not the series'.
       expect(
-        find.descendant(
-          of: find.byType(FilledButton),
-          matching: find.text('Continue'),
-        ),
-        findsOneWidget,
+        tester.widget<CoverImage>(inHero(find.byType(CoverImage))).url,
+        contains('chapterId=101'),
       );
-      expect(find.textContaining('Continue — '), findsNothing);
     });
 
     testWidgets('its series is not repeated in the list below it', (
@@ -657,7 +661,7 @@ void main() {
     ) async {
       final adapter = _oneInProgress();
       await _pumpHome(tester, adapter);
-      expect(find.text('Chapter 12'), findsOneWidget);
+      expect(_heroCoverUrl(tester), contains('chapterId=101'));
 
       adapter.volumes = [
         {
@@ -673,7 +677,9 @@ void main() {
       await tester.fling(find.byType(ListView), const Offset(0, 400), 1000);
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapter 13'), findsOneWidget);
+      // The card has moved on to the chapter the shelf now points at: its
+      // cover is that chapter's, and the page behind it is the one it keeps.
+      expect(_heroCoverUrl(tester), contains('chapterId=102'));
     });
 
     // A volume with no chapter breakdown must never be announced by Kavita's
@@ -701,7 +707,9 @@ void main() {
           ],
         ),
       );
-      expect(find.text('Volume 2'), findsOneWidget);
+      // The volume is the reading unit, so the hero is drawn by the volume's
+      // own cover — the choice the rows below already make.
+      expect(_heroCoverUrl(tester), contains('volume-cover'));
       expect(find.textContaining('100000'), findsNothing);
     });
 
@@ -711,7 +719,7 @@ void main() {
     ) async {
       final adapter = _oneInProgress();
       await _pumpRouted(tester, adapter);
-      expect(find.text('Chapter 12'), findsOneWidget);
+      expect(_heroCoverUrl(tester), contains('chapterId=101'));
 
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
@@ -732,7 +740,7 @@ void main() {
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapter 13'), findsOneWidget);
+      expect(_heroCoverUrl(tester), contains('chapterId=102'));
     });
 
     // The backdrop is where you actually are in the book, not its cover — and
@@ -772,58 +780,50 @@ void main() {
         ];
       await _pumpHome(tester, adapter);
       expect(find.text('ON DECK'), findsOneWidget);
-      expect(find.text('CONTINUE'), findsOneWidget); // the hero's eyebrow
+      // **The card sits where the series screen's hero sits**: at the top of
+      // the list, with the app bar directly above it and nothing of Home's
+      // own between the two. It carried a `CONTINUE` eyebrow over a
+      // `sectionGap` until the heroes were made one — a label is what a
+      // shelf wears, and the hero is not a shelf.
       expect(
-        find.descendant(
-          of: find.byType(ContinueHero),
-          matching: find.text('CONTINUE'),
-        ),
-        findsOneWidget,
-      );
-    });
-
-    // The row once had a percentage at one end and the pages remaining at the
-    // other. With the percentage gone it holds one label, and a lone label
-    // right-aligned drifts onto the brightest part of the page behind it.
-    testWidgets('the pages remaining sit at the start, over the ink', (
-      tester,
-    ) async {
-      await _pumpHome(tester, _oneInProgress());
-      expect(
-        tester.getTopLeft(find.text('18 pages left')).dx,
-        tester.getTopLeft(find.byType(LinearProgressIndicator)).dx,
+        tester.getTopLeft(find.byType(ContinueHero)).dy,
+        tester.getTopLeft(find.byType(ListView).first).dy,
       );
     });
 
     // The card is drawn as soon as the series is known and fills its chapter
-    // in behind — so there is a real frame where `point` is null, and
-    // everything the card reads has to survive it.
+    // in behind — so there is a real frame where the volumes are still on
+    // their way, and everything the card reads has to survive it.
     testWidgets('draws before its chapter is known, then fills it in', (
       tester,
     ) async {
       final gate = Completer<void>();
       final adapter = _oneInProgress()..volumesGate = gate;
-      await _pumpHome(tester, adapter);
+      await _pumpHome(tester, adapter, settle: false);
 
       expect(tester.takeException(), isNull);
       expect(find.byType(ContinueHero), findsOneWidget);
       expect(find.text('Vinland Saga'), findsOneWidget);
-      // No chapter yet, so no chapter line and no page behind it.
-      expect(find.textContaining('Chapter'), findsNothing);
-      expect(
-        tester.widget<CachedNetworkImage>(_backdrop()).imageUrl,
-        contains('/api/Image/series-cover'),
-      );
-      // And nothing to resume yet.
+      // The plain word, not "Start reading": a verdict on a question still
+      // being asked is a word that would have to be taken back. And nothing
+      // to open yet.
+      expect(find.text('Continue'), findsOneWidget);
       expect(
         tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
         isNull,
       );
+      // No chapter yet, so nothing behind the card: a page is drawn only for
+      // a chapter that is genuinely under way, which is the rule the series
+      // screen's hero has always kept.
+      expect(_backdrop(), findsNothing);
 
       gate.complete();
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapter 12'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull,
+      );
       expect(
         tester.widget<CachedNetworkImage>(_backdrop()).imageUrl,
         contains('/api/Reader/image'),
@@ -858,54 +858,19 @@ void main() {
       matching: find.byType(CoverImage),
     );
 
-    testWidgets('the cover fills the card on a phone', (tester) async {
+    // The cover is drawn at its own size rather than stretched to whatever
+    // the words beside it take: this is the series screen's hero, and
+    // 124x182 is what a cover is drawn at there.
+    testWidgets('the cover is the size a cover is drawn at', (tester) async {
       _phone(tester);
       await _pumpHome(tester, _oneInProgress());
       final picture = tester.getRect(cover());
       final card = tester.getRect(find.byType(ContinueHero));
-      // Flush with the band's own padding, because the words beside it are
-      // what it is stretched to — and wider than the 92pt a cover is drawn
-      // at, its width following the height by the 2:3 ratio.
-      expect(picture.top, card.top + 18);
-      expect(picture.bottom, card.bottom - 18);
-      expect(picture.width, closeTo(picture.height * 2 / 3, 0.5));
-      expect(picture.width, greaterThan(92));
-    });
-
-    // The card's height is the words' height, and a title long enough to wrap
-    // is drawn at a width the words were not measured at. The block the title
-    // sits in is two lines whether or not it needs them, which is what keeps
-    // the two the same height — a title measured one line wide and drawn two
-    // is a card 26pt shorter than its content.
-    testWidgets('a long title does not make the card taller', (tester) async {
-      _phone(tester);
-      await _pumpHome(tester, _oneInProgress());
-      final short = tester.getSize(find.byType(ContinueHero));
-
-      await _pumpHome(
-        tester,
-        _HomeAdapter(
-          onDeck: [
-            _json(
-              5,
-              name: 'Le Combat ordinaire, tome trois',
-              lastRead: '2026-09-05T10:00:00',
-            ),
-          ],
-          volumes: [
-            {
-              'id': 1,
-              'name': '1',
-              'minNumber': 1,
-              'chapters': [_chapter(101, 12, pages: 30, read: 12)],
-            },
-          ],
-        ),
-      );
-      expect(tester.takeException(), isNull);
-      expect(tester.getSize(find.byType(ContinueHero)), short);
-      // And the cover still fills it.
-      expect(tester.getRect(cover()).height, short.height - 36);
+      expect(picture.width, 124);
+      expect(picture.height, 182);
+      // At the card's own gutter, where the shelf's label and first tile
+      // stand below it.
+      expect(picture.left, card.left + gutter);
     });
 
     testWidgets('the cover grows on a tablet', (tester) async {
@@ -920,57 +885,36 @@ void main() {
       _iPad(tester);
       await _pumpHome(tester, _oneInProgress());
       expect(tester.getSize(find.byType(ContinueHero)).width, 820);
-      // The band runs edge to edge; its contents keep the gutter, so the
+      // The card runs edge to edge; its contents keep the gutter, so the
       // cover stands where the shelf's label and first tile do below it.
       expect(tester.getTopLeft(cover()).dx, gutter);
     });
 
     // Give a button a whole iPad to fill and it reads as a banner.
-    testWidgets('the button stops at 280 and follows the progress track', (
-      tester,
-    ) async {
+    testWidgets('the button stops at 280', (tester) async {
       _iPad(tester);
       await _pumpHome(tester, _oneInProgress());
       final button = tester.getRect(find.byType(FilledButton));
-      final track = tester.getRect(find.byType(LinearProgressIndicator));
       final picture = tester.getRect(cover());
       expect(button.width, 280);
-      // The same width and the same left edge as the bar it closes, and
-      // below it — not out at the band's trailing edge.
-      expect(button.left, closeTo(track.left, 0.5));
-      expect(button.top, greaterThan(track.bottom));
-      // Beside the cover rather than under the row, which is the whole point:
-      // the space the button takes is the one the words left empty.
-      expect(button.top, lessThan(picture.bottom));
+      // At the column of words' own left edge — the cover's 160pt plus the
+      // 16 the two keep between them — and inside the card rather than out
+      // at its trailing edge.
+      expect(button.left, picture.right + 16);
+      expect(button.right, lessThan(820 - gutter));
     });
 
-    // The same rule on a phone: the column of words is narrower than the
-    // track's 280pt cap, so both take the column — and still line up.
-    testWidgets('the button follows the track on a phone too', (tester) async {
+    // The same rule on a phone, where the column of words is narrower than
+    // the 280pt cap: the button takes the column instead, and stops where
+    // every other row on the screen stops.
+    testWidgets('and takes the column on a phone', (tester) async {
       _phone(tester);
       await _pumpHome(tester, _oneInProgress());
       final button = tester.getRect(find.byType(FilledButton));
-      final track = tester.getRect(find.byType(LinearProgressIndicator));
-      expect(button.left, closeTo(track.left, 0.5));
-      expect(button.right, closeTo(track.right, 0.5));
-      expect(button.top, greaterThan(track.bottom));
-    });
-
-    // A bar that runs the whole width of a tablet stops reading as progress
-    // and starts reading as a rule across the card.
-    testWidgets('the progress bar stops at 280', (tester) async {
-      _iPad(tester);
-      await _pumpHome(tester, _oneInProgress());
-      expect(tester.getSize(find.byType(LinearProgressIndicator)).width, 280);
-    });
-
-    testWidgets('and is narrower than that on a phone', (tester) async {
-      _phone(tester);
-      await _pumpHome(tester, _oneInProgress());
-      expect(
-        tester.getSize(find.byType(LinearProgressIndicator)).width,
-        lessThan(280),
-      );
+      final picture = tester.getRect(cover());
+      expect(button.left, picture.right + 16);
+      expect(button.width, lessThan(280));
+      expect(button.right, closeTo(390 - gutter, 0.5));
     });
 
     // A page is portrait and a hero on a wide screen is a letterbox. Covering
@@ -998,9 +942,9 @@ void main() {
     });
   });
 
-  // The card is about one chapter — it names it, counts the pages left in it
-  // and opens it — so the picture beside all that is the chapter's, not the
-  // series'. The series cover is what stands in until the chapter is known.
+  // The hero is about one chapter — it names it and opens it — so the picture
+  // beside all that is the chapter's, not the series'. The series cover is
+  // what stands in until the chapter is known.
   group('the cover on the Continue hero', () {
     CoverImage cover(WidgetTester tester) => tester.widget<CoverImage>(
       find.descendant(
@@ -1088,9 +1032,9 @@ void main() {
       expect(cover(tester).url, contains('/api/Image/series-cover'));
     });
 
-    // The details stand off the cover by the gap a chapter row keeps between
-    // its cover and its title; a cover the title butts up against is a card
-    // with no layout at all, and the prototype's 16 read as too much here.
+    // The details stand off the cover by the gap the series screen's hero
+    // keeps between its cover and its title — the same 16, because it is the
+    // same widget.
     testWidgets('stands clear of the details beside it', (tester) async {
       await _pumpHome(tester, _oneInProgress());
       final coverRect = tester.getRect(
@@ -1100,7 +1044,7 @@ void main() {
         ),
       );
       final title = tester.getRect(find.text('Vinland Saga'));
-      expect(title.left - coverRect.right, 12);
+      expect(title.left - coverRect.right, 16);
     });
   });
 
@@ -1115,15 +1059,21 @@ void main() {
 
       expect(find.byType(ContinueHero), findsOneWidget);
       expect(find.text('Dune'), findsOneWidget);
-      // Named in the library's own vocabulary, as the row below is.
-      expect(find.text('Book 1'), findsOneWidget);
-      expect(find.text('100 pages left'), findsOneWidget);
+      // The same word whatever the library counts in: the button names
+      // nothing, and the row below names the book.
+      expect(find.text('Continue'), findsOneWidget);
+      // How far through the book is the ring on its cover — the rule every
+      // chapter row and shelf tile follows — and it is the chapter's own
+      // progress, because the cover is the chapter's.
       expect(
         tester
-            .widget<LinearProgressIndicator>(
-              find.byType(LinearProgressIndicator),
+            .widget<CoverImage>(
+              find.descendant(
+                of: find.byType(ContinueHero),
+                matching: find.byType(CoverImage),
+              ),
             )
-            .value,
+            .progress,
         closeTo(2 / 3, 0.001),
       );
     });
@@ -1159,7 +1109,9 @@ void main() {
       final gate = Completer<void>();
       final adapter = _oneBookInProgress()..volumesGate = gate;
       adapter.onDeck = [...adapter.onDeck, _otherBookOnDeck];
-      await _pumpHome(tester, adapter);
+      // The hero beside the shelf shimmers while the volumes are held, so
+      // the frames the requests need are pumped rather than settled.
+      await _pumpHome(tester, adapter, settle: false);
 
       final tile = tester.widgetList<CoverTile>(find.byType(CoverTile)).single;
       expect(

@@ -693,9 +693,11 @@ void main() {
     });
   });
 
-  group('the resume button names only what is numbered', () {
+  group('the resume button names nothing', () {
     // A book library's files often carry a title and no number at all: this
-    // is the case that has nothing short to show.
+    // is the case that has nothing short to show — and the button shows
+    // nothing at all, since a title is free text and would stretch it across
+    // the hero.
     final startedSpecial = <Map<String, dynamic>>[
       {
         'id': 12,
@@ -734,26 +736,6 @@ void main() {
 
       expect(find.text('Reprendre'), findsOneWidget);
       expect(find.textContaining('Reprendre —'), findsNothing);
-    });
-
-    testWidgets('a numbered chapter is named by its number, not its title', (
-      tester,
-    ) async {
-      // Kavita does the same: the title only stands in where there is no
-      // number to show.
-      await _pump(tester, [
-        {
-          'id': 10,
-          'name': '-100000',
-          'minNumber': -100000,
-          'pages': 100,
-          'chapters': [
-            _chapter(101, '3', titleName: 'The Duel', pagesRead: 40),
-          ],
-        },
-      ]);
-
-      expect(find.text('Continue — Ch. 3'), findsOneWidget);
     });
   });
 
@@ -1026,7 +1008,9 @@ void main() {
       // halfway through a series.
       await _pump(tester, [volume(1, '1', 200, 200), volume(2, '2', 180, 0)]);
 
-      expect(find.text('Continue — Vol. 2'), findsOneWidget);
+      // The button asks about the series, not the chapter it lands on — so
+      // it is the resuming word, not the starting one.
+      expect(find.text('Continue'), findsOneWidget);
       expect(find.text('Start reading'), findsNothing);
     });
 

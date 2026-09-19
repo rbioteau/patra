@@ -66,30 +66,6 @@ void main() {
       expect(LibraryType.manga.specialsTitle(fr), 'Hors-série');
     });
 
-    test('the resume button uses the same units, in shorthand', () {
-      expect(
-        LibraryType.manga.continueChapterLabel(fr, '3'),
-        'Reprendre — ch. 3',
-      );
-      // Kavita's own issue shorthand is a bare hash mark, in both languages.
-      expect(
-        LibraryType.comic.continueChapterLabel(fr, '12'),
-        'Reprendre — #12',
-      );
-      expect(
-        LibraryType.comic.continueChapterLabel(en, '12'),
-        'Continue — #12',
-      );
-      expect(
-        LibraryType.manga.continueVolumeLabel(fr, '1'),
-        'Reprendre — tome 1',
-      );
-      expect(
-        LibraryType.book.continueVolumeLabel(fr, '1'),
-        'Reprendre — livre 1',
-      );
-    });
-
     test('a book library says livre', () {
       expect(LibraryType.book.volumesTitle(fr), 'Livres');
       expect(LibraryType.lightNovel.volumeLabel(fr, '2'), 'Livre 2');
@@ -199,40 +175,34 @@ void main() {
     // shown as a number.
     test('a volume with no chapters is named by the volume', () {
       final v = volume(1, [placeholder()]);
-      expect(
-        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
-        'Volume 1',
-      );
-      expect(LibraryType.book.resumeTitle(en, v, v.chapters.first), 'Book 1');
-      expect(LibraryType.manga.resumeTitle(fr, v, v.chapters.first), 'Tome 1');
+      expect(LibraryType.manga.terseTitle(en, v, v.chapters.first), 'Volume 1');
+      expect(LibraryType.book.terseTitle(en, v, v.chapters.first), 'Book 1');
+      expect(LibraryType.manga.terseTitle(fr, v, v.chapters.first), 'Tome 1');
     });
 
     test('the sentinel never reaches the screen', () {
       final v = volume(1, [placeholder()]);
       expect(
-        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
+        LibraryType.manga.terseTitle(en, v, v.chapters.first),
         isNot(contains('100000')),
       );
       // A placeholder inside the loose-leaf pseudo-volume names nothing at
       // all rather than naming a volume that does not exist.
       final loose = volume(-100000, [placeholder()]);
-      expect(
-        LibraryType.manga.resumeTitle(en, loose, loose.chapters.first),
-        '',
-      );
+      expect(LibraryType.manga.terseTitle(en, loose, loose.chapters.first), '');
     });
 
-    test('an ordinary chapter is named as one, title and all', () {
+    test('an ordinary chapter is named by its number alone', () {
       final v = volume(1, [
         {'id': 3, 'range': '12', 'minNumber': 12, 'titleName': 'Le duel'},
       ]);
       expect(
-        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
-        'Chapter 12 - Le duel',
+        LibraryType.manga.terseTitle(en, v, v.chapters.first),
+        'Chapter 12',
       );
       expect(
-        LibraryType.comic.resumeTitle(en, v, v.chapters.first),
-        'Issue #12 - Le duel',
+        LibraryType.comic.terseTitle(en, v, v.chapters.first),
+        'Issue #12',
       );
     });
 
@@ -246,10 +216,7 @@ void main() {
           'titleName': 'Prologue',
         },
       ]);
-      expect(
-        LibraryType.manga.resumeTitle(en, v, v.chapters.first),
-        'Prologue',
-      );
+      expect(LibraryType.manga.terseTitle(en, v, v.chapters.first), 'Prologue');
     });
   });
 }

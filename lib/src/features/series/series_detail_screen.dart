@@ -18,9 +18,9 @@ import '../../settings/profile_preferences.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../widgets/read_mark.dart';
-import '../../widgets/page_backdrop.dart';
 import '../../widgets/download_pill.dart';
 import '../../widgets/offline_indicator.dart';
+import '../../widgets/series_hero.dart';
 
 /// Progress the user has just set by hand, before the server has confirmed it.
 ///
@@ -235,13 +235,12 @@ class SeriesDetailScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.only(bottom: sectionGap),
             children: [
-              _SeriesHero(
+              SeriesHero(
                 seriesId: seriesId,
                 seriesName: seriesName,
-                type: type,
                 volumes: volumes,
-                onRead: (chapter) => _read(context, ref, chapter),
-                libraryId: libraryId,
+                onRead: (chapter, {required started}) =>
+                    _read(context, ref, chapter, started: started),
               ),
               ...switch (volumes) {
                 AsyncData(:final value) => _buildSections(
@@ -285,12 +284,17 @@ class SeriesDetailScreen extends ConsumerWidget {
   }
 
   /// Opens a chapter and refreshes what reading it may have changed.
+  ///
+  /// [started] is the hero's word, not this screen's: the hero knows which
+  /// chapter it opens and whether it is under way, and it is the same hero the
+  /// home screen draws — so the two cannot land on different pages of the
+  /// same chapter.
   Future<void> _read(
     BuildContext context,
     WidgetRef ref,
-    Chapter chapter,
-  ) async {
-    final started = chapter.pagesRead > 0 && chapter.pagesRead < chapter.pages;
+    Chapter chapter, {
+    required bool started,
+  }) async {
     await context.push(readerLocation(chapter, started: started));
     ref.invalidate(catalogue.volumes(seriesId).invalidatable);
     ref.invalidate(catalogue.series(seriesId).invalidatable);
@@ -1081,279 +1085,6 @@ class _BatchCard extends ConsumerWidget {
     final to = type.terseTitle(l10n, last.volume, last.chapter);
     if (from.isEmpty || to.isEmpty) return '';
     return '$from – $to';
-  }
-}
-
-/// The hero the design opens the screen with: the series cover, who made it,
-/// how much of it there is, and one button that resumes exactly where the
-/// reader left off.
-class _SeriesHero extends ConsumerWidget {
-  const _SeriesHero({
-    required this.seriesId,
-    required this.seriesName,
-    required this.type,
-    required this.volumes,
-    required this.onRead,
-    required this.libraryId,
-  });
-
-  final int seriesId;
-  final String seriesName;
-
-  /// Names the resume button in the library's own vocabulary.
-  final LibraryType type;
-
-  /// The chapter list as the screen has it — the whole [AsyncValue] and not
-  /// only its value, because the hero has to tell a list still on its way
-  /// from one that is never coming: the button waits for the first, and the
-  /// tally's skeleton must stop shimmering for the second.
-  final AsyncValue<List<Volume>> volumes;
-  final void Function(Chapter chapter) onRead;
-
-  /// The library ID for saved chapters metadata.
-  final int libraryId;
-
-  static const _coverWidth = 124.0;
-  static const _coverHeight = 182.0;
-
-  /// The same hero, given a tablet's room: the cover keeps its proportions.
-  static const _tabletCoverWidth = 160.0;
-  static const _tabletCoverHeight = 235.0;
-
-  /// The chapter the button opens, decided by the one shared rule the home
-  /// screen's Continue hero uses too — see `resume_point.dart`.
-  ResumePoint? _target() {
-    final list = volumes.value;
-    return list == null ? null : resumePoint(list);
-  }
-
-  /// What to call the thing the button opens, in the library's own unit.
-  ///
-  /// Only what is *numbered* gets named — a volume, a chapter, an issue, a
-  /// book — because those are two words wide. A title is free text: a book's
-  /// stretches the button across the hero, and a Book library would do it
-  /// every time, since its files often carry a title and no number at all.
-  /// There the button says only what it does; the title is already on the row
-  /// it opens.
-  String _resumeLabel(ResumeEntry entry, AppLocalizations l10n) {
-    final chapter = entry.chapter;
-
-    // A special is never numbered, whatever the library counts in.
-    if (chapter.isSpecial) return l10n.seriesContinuePlain;
-    // A volume with no chapter breakdown is named after the volume: its
-    // placeholder chapter carries Kavita's -100000 sentinel, which must never
-    // reach the label.
-    if (entry.isWholeVolume) {
-      return type.continueVolumeLabel(l10n, entry.volume.name);
-    }
-    // Anything at sentinel scale is Kavita bookkeeping, not a chapter number.
-    // Compared on magnitude: the sentinels differ by sign, this check does not.
-    final number = num.tryParse(chapter.range)?.abs() ?? 0;
-    if (chapter.range.isNotEmpty && number < Chapter.defaultNumber.abs()) {
-      return type.continueChapterLabel(l10n, chapter.range);
-    }
-    return l10n.seriesContinuePlain;
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final tablet = isTabletLayout(context);
-    final coverWidth = tablet ? _tabletCoverWidth : _coverWidth;
-    final coverHeight = tablet ? _tabletCoverHeight : _coverHeight;
-    final client = ref.watch(kavitaClientProvider);
-    final series = ref.watch(catalogue.series(seriesId).provider).value;
-    final metadataAsync = ref.watch(
-      catalogue.seriesMetadata(seriesId).provider,
-    );
-    final metadata = metadataAsync.value;
-    final target = _target();
-
-    // "Author · Genre", dropping whichever half the server does not have.
-    final credits = [
-      if (metadata != null && metadata.writers.isNotEmpty)
-        metadata.writers.take(2).join(', '),
-      if (metadata != null && metadata.genres.isNotEmpty) metadata.genres.first,
-    ].join(' · ');
-    // A volume-organised series is counted in volumes: calling four volumes
-    // "4 chapters" reads as wrong to anyone looking at the list below.
-    final tally = switch (volumes.value) {
-      null => null,
-      final list when list.any((v) => v.isNumbered) => l10n.seriesVolumeCount(
-        list.where((v) => v.isNumbered).length,
-      ),
-      final list => l10n.seriesChapterCount(orderedChapters(list).length),
-    };
-    final stats = [
-      ?tally,
-      if (series != null && series.libraryName.isNotEmpty) series.libraryName,
-    ].join(' · ');
-
-    // Offline the button follows the same rule as the row it opens: a chapter
-    // that is not on the device cannot be read, and a hero offering what the
-    // dimmed row below it refuses is the screen disagreeing with itself. The
-    // *format* is deliberately not asked about here, as it never has been — a
-    // book is read through the pages the server makes of it, so there is no
-    // format left that a chapter cannot be opened in.
-    final openable =
-        target != null &&
-        (!ref.watch(offlineProvider) ||
-            ref.watch(savedChapterProvider(target.entry.chapter.id)) != null);
-
-    final label = switch (target) {
-      null => null,
-      (:final entry, started: true, allRead: false) => _resumeLabel(
-        entry,
-        l10n,
-      ),
-      (allRead: true, entry: _, started: _) => l10n.seriesReadAgain,
-      _ => l10n.seriesStartReading,
-    };
-
-    // A page behind the hero only when a chapter is genuinely under way.
-    // Where the button starts the series, or offers it again, there is no
-    // page you are on — and the first page of something unread is a spoiler
-    // with nothing behind it. The cover in front follows the looser rule: it
-    // is the entry the button opens whenever the series is under way, the
-    // untouched next volume included. Both rules are `resume_point.dart`'s,
-    // so this hero and the home screen's card name one and the same chapter.
-    final underWay = entryUnderWay(target);
-    final onPage = underWay?.chapter;
-    final pictured = entryPictured(target);
-
-    // Muted grey is tuned against a flat panel; over a page it is the first
-    // thing to go.
-    final onArt = onPage == null ? null : patraTextOnArt;
-
-    // A cover's bar always means "how far through the thing pictured" — the
-    // rule every chapter row and library tile follows — so it belongs to
-    // whichever of the two this cover turned out to be, and must never fall
-    // back across that line: a series' progress under a chapter's picture is
-    // a number about something else.
-    final coverProgress = switch (pictured) {
-      final entry? =>
-        entry.chapter.pages == 0
-            ? 0.0
-            : entry.chapter.pagesRead / entry.chapter.pages,
-      null =>
-        series == null || series.pages == 0
-            ? 0.0
-            : series.pagesRead / series.pages,
-    };
-
-    return Stack(
-      children: [
-        if (onPage != null)
-          Positioned.fill(
-            child: PageBackdrop(
-              seriesId: seriesId,
-              // A book has no page picture to draw — see
-              // [Chapter.hasPagePictures]. The cover stands in, which is
-              // what the backdrop already does for a page that cannot load.
-              chapterId: onPage.hasPagePictures ? onPage.id : null,
-              page: onPage.pagesRead,
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, gutter),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: coverWidth,
-                height: coverHeight,
-                child: CoverImage(
-                  url: pictured == null
-                      ? client.seriesCoverUrl(seriesId)
-                      : entryCoverUrl(client, pictured),
-                  headers: client.imageHeaders,
-                  seriesId: seriesId,
-                  seriesName: seriesName,
-                  progress: coverProgress,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: SizedBox(
-                  height: coverHeight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      // The column is pinned to the cover's height, so a
-                      // title that needs more room than the button row leaves
-                      // it must clip rather than overflow: the hero is not
-                      // scrollable, and an overflow paints the title over
-                      // the screen below. The title is the only child that
-                      // can grow — the lines under it all ellipsize to one.
-                      Flexible(
-                        child: Text(
-                          seriesName,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: PatraText.serifTitle(size: tablet ? 25 : 21),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      if (credits.isNotEmpty)
-                        Text(
-                          credits,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: PatraText.metadata(size: 12, color: onArt),
-                        )
-                      // Only while it may still arrive. A resolved failure
-                      // is not a slow answer, and a skeleton keyed on a null
-                      // value alone shimmers for one that is never coming.
-                      else if (metadata == null &&
-                          !metadataAsync.isResolvedFailure)
-                        const Skeleton(height: 11, width: 150),
-                      const SizedBox(height: 6),
-                      if (stats.isNotEmpty)
-                        Text(
-                          stats,
-                          style: PatraText.metadata(size: 12, color: onArt),
-                        )
-                      // Same rule, and the volumes alone answer it: a list
-                      // that arrived always counts to something, so an empty
-                      // tally means the fetch is either in flight or refused.
-                      else if (!volumes.isResolvedFailure)
-                        const Skeleton(height: 11, width: 110),
-                      const SizedBox(height: 14),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: controlMaxWidth,
-                        ),
-                        child: SizedBox(
-                          height: 44,
-                          width: double.infinity,
-                          child: FilledButton(
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(44),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                            ),
-                            onPressed: openable
-                                ? () => onRead(target.entry.chapter)
-                                : null,
-                            child: Text(
-                              label ?? l10n.seriesStartReading,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 }
 

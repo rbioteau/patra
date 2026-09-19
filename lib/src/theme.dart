@@ -369,8 +369,10 @@ class SectionLabel extends StatelessWidget {
   final String text;
   final Widget? trailing;
 
-  /// Muted unless a screen says otherwise — the Continue hero's eyebrow is
-  /// the accent, which is what marks it as being about reading progress.
+  /// Muted unless a screen says otherwise: the Downloads tab heads the
+  /// sections that are about the offline store in `patraOffline`, and the ones
+  /// that stopped in `patraDanger`. Never the accent — gold means reading
+  /// progress, and a heading is not progress.
   final Color? color;
 
   @override

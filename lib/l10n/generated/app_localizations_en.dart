@@ -147,9 +147,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navSettings => 'Settings';
 
   @override
-  String get continueSection => 'Continue';
-
-  @override
   String get onDeckSection => 'On deck';
 
   @override
@@ -243,17 +240,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookContents => 'Contents';
 
   @override
-  String homeHeroPagesLeft(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count pages left',
-      one: '1 page left',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String seriesChapterCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -274,26 +260,6 @@ class AppLocalizationsEn extends AppLocalizations {
       one: '1 volume',
     );
     return '$_temp0';
-  }
-
-  @override
-  String seriesContinueVolume(String volume) {
-    return 'Continue — Vol. $volume';
-  }
-
-  @override
-  String seriesContinue(String chapter) {
-    return 'Continue — Ch. $chapter';
-  }
-
-  @override
-  String seriesContinueIssue(String issue) {
-    return 'Continue — #$issue';
-  }
-
-  @override
-  String seriesContinueBook(String book) {
-    return 'Continue — Book $book';
   }
 
   @override

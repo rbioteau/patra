@@ -15,6 +15,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/download_pill.dart';
 
 import 'test_support.dart';
@@ -204,8 +205,13 @@ void main() {
     expect(find.text('Blame!'), findsNWidgets(2));
     expect(find.text('Tsutomu Nihei · Seinen'), findsOneWidget);
     expect(find.text('1 volume · Mangas'), findsOneWidget);
-    // Chapter 1 is finished and chapter 2 untouched, so reading resumes at 2.
-    expect(find.text('Continue — Ch. 2'), findsOneWidget);
+    // Chapter 1 is finished and chapter 2 untouched, so reading resumes at 2
+    // — which the hero shows by picturing that chapter. The button itself
+    // names nothing, so the picture is the whole of what it says.
+    expect(
+      tester.widget<CoverImage>(find.byType(CoverImage).first).url,
+      contains('chapterId=102'),
+    );
 
     // The sections, and the specials that close the screen.
     expect(find.text('VOLUMES'), findsOneWidget);
@@ -285,8 +291,12 @@ void main() {
     expect(_rowOpens(tester, 'Chapter 1'), isFalse);
     expect(_rowOpens(tester, 'Blame! Academy'), isFalse);
     // And the hero resumes into it, which is the whole chain: the saved
-    // copy's progress reached the resume point, not only the row.
-    expect(find.text('Continue — Ch. 2'), findsOneWidget);
+    // copy's progress reached the resume point, not only the row — the hero
+    // pictures the chapter the one openable row opens.
+    expect(
+      tester.widget<CoverImage>(find.byType(CoverImage).first).url,
+      contains('chapterId=102'),
+    );
     expect(_resumeEnabled(tester), isTrue);
     // The pill stays for a copy that is already here, since removing one is
     // local.

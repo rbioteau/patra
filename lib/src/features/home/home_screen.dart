@@ -23,9 +23,9 @@ import 'continue_hero.dart';
 /// Null means the hero is not drawn *and* the On deck shelf keeps its series
 /// — the two are one decision, or a series that failed to be promoted would
 /// vanish from the home screen entirely. It is null when nothing is in
-/// progress and when the volumes can be neither fetched nor remembered; it is
-/// non-null with a null `point` while they are still being looked for, so the
-/// card can show its cover and title without waiting.
+/// progress and when the volumes can be neither fetched nor remembered; while
+/// they are still being looked for it is the series, so the card can show its
+/// cover and title without waiting for the chapter it would resume.
 ///
 /// **Being offline is no longer one of those cases.** It used to short-circuit
 /// on `offlineProvider`, which was the honest answer while the volumes could
@@ -34,7 +34,7 @@ import 'continue_hero.dart';
 /// been stored. Where they have not, nothing new is needed — the volumes
 /// overlay resolves into its fetch's failure, `hasError` is what it always
 /// was, and the series stays in the shelf below.
-final continueHeroProvider = Provider.autoDispose<ContinueHeroData?>((ref) {
+final continueHeroProvider = Provider.autoDispose<Series?>((ref) {
   final started = ref.watch(catalogue.onDeck.provider).value;
   final featured = featuredSeries(started ?? const []);
   if (featured == null) return null;
@@ -46,9 +46,12 @@ final continueHeroProvider = Provider.autoDispose<ContinueHeroData?>((ref) {
   // path back from reading re-fetches — see `_refresh`.
   final volumes = ref.watch(catalogue.volumes(featured.id).provider);
   if (volumes.hasError) return null;
-  final point = volumes.value == null ? null : resumePoint(volumes.value!);
-  if (volumes.hasValue && point == null) return null;
-  return (series: featured, point: point);
+  // A series with nothing left to resume is not promoted: the card exists to
+  // be resumed from, and a finished one belongs to the shelf alone. The
+  // question is the hero's own — `resume_point.dart` answers it for both
+  // screens — and it is asked here only to decide whether to draw at all.
+  if (volumes.hasValue && resumePoint(volumes.value!) == null) return null;
+  return featured;
 });
 
 /// Library type → icon, matching Kavita's own taxonomy.
@@ -83,7 +86,7 @@ class HomeScreen extends ConsumerWidget {
     // The hero's chapter is a third request, hanging off whichever series is
     // promoted. A pull has to reach it too, or the card would keep naming the
     // chapter the shelf has just stopped agreeing with.
-    final featured = ref.read(continueHeroProvider)?.series.id;
+    final featured = ref.read(continueHeroProvider)?.id;
     if (featured != null) {
       ref.invalidate(catalogue.volumes(featured).invalidatable);
     }
@@ -95,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
     ]).catchError((Object _) => const <List<Object>>[]);
     // The shelves have moved, so the promoted series may not be the one whose
     // chapter was invalidated above.
-    final promoted = ref.read(continueHeroProvider)?.series.id;
+    final promoted = ref.read(continueHeroProvider)?.id;
     if (promoted != null && promoted != featured) {
       ref.invalidate(catalogue.volumes(promoted).invalidatable);
     }
@@ -105,10 +108,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final hero = ref.watch(continueHeroProvider);
-    final onDeck = _without(
-      ref.watch(catalogue.onDeck.provider),
-      hero?.series.id,
-    );
+    final onDeck = _without(ref.watch(catalogue.onDeck.provider), hero?.id);
     final libraries = ref.watch(catalogue.libraries.provider);
 
     // Every clause has to be a *resolved* emptiness. `hero == null` alone is
@@ -166,7 +166,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 if (nothingCameBack && offline) const _OfflineHome(),
                 if (hero != null)
-                  ContinueHero(data: hero, onReturn: () => _refresh(ref)),
+                  ContinueHero(series: hero, onReturn: () => _refresh(ref)),
                 // On deck is the only list, and the hero is drawn from the very
                 // same answer — see `catalogue.onDeck`. Nothing else is fetched
                 // for the promotion, so the card and the shelf under it can

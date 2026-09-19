@@ -7,7 +7,7 @@
 Two screens now have to answer the same question — *which chapter would you
 resume?* The series screen has answered it since it was written, client-side:
 order the chapters, take the first one that is not fully read
-(`_SeriesHero._target()`). The home screen's Continue hero needs the same
+(`SeriesHero._target()`). The home screen's Continue hero needs the same
 answer, and needs the chapter itself as well, because it names the chapter and
 counts the pages left in it.
 
