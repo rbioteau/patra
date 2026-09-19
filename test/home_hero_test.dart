@@ -858,10 +858,54 @@ void main() {
       matching: find.byType(CoverImage),
     );
 
-    testWidgets('the cover is the phone size on a phone', (tester) async {
+    testWidgets('the cover fills the card on a phone', (tester) async {
       _phone(tester);
       await _pumpHome(tester, _oneInProgress());
-      expect(tester.getSize(cover()).width, 92);
+      final picture = tester.getRect(cover());
+      final card = tester.getRect(find.byType(ContinueHero));
+      // Flush with the band's own padding, because the words beside it are
+      // what it is stretched to — and wider than the 92pt a cover is drawn
+      // at, its width following the height by the 2:3 ratio.
+      expect(picture.top, card.top + 18);
+      expect(picture.bottom, card.bottom - 18);
+      expect(picture.width, closeTo(picture.height * 2 / 3, 0.5));
+      expect(picture.width, greaterThan(92));
+    });
+
+    // The card's height is the words' height, and a title long enough to wrap
+    // is drawn at a width the words were not measured at. The block the title
+    // sits in is two lines whether or not it needs them, which is what keeps
+    // the two the same height — a title measured one line wide and drawn two
+    // is a card 26pt shorter than its content.
+    testWidgets('a long title does not make the card taller', (tester) async {
+      _phone(tester);
+      await _pumpHome(tester, _oneInProgress());
+      final short = tester.getSize(find.byType(ContinueHero));
+
+      await _pumpHome(
+        tester,
+        _HomeAdapter(
+          onDeck: [
+            _json(
+              5,
+              name: 'Le Combat ordinaire, tome trois',
+              lastRead: '2026-09-05T10:00:00',
+            ),
+          ],
+          volumes: [
+            {
+              'id': 1,
+              'name': '1',
+              'minNumber': 1,
+              'chapters': [_chapter(101, 12, pages: 30, read: 12)],
+            },
+          ],
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(ContinueHero)), short);
+      // And the cover still fills it.
+      expect(tester.getRect(cover()).height, short.height - 36);
     });
 
     testWidgets('the cover grows on a tablet', (tester) async {
@@ -882,16 +926,34 @@ void main() {
     });
 
     // Give a button a whole iPad to fill and it reads as a banner.
-    testWidgets('the button stops at 280, in the middle of the band', (
+    testWidgets('the button stops at 280 and follows the progress track', (
       tester,
     ) async {
       _iPad(tester);
       await _pumpHome(tester, _oneInProgress());
       final button = tester.getRect(find.byType(FilledButton));
+      final track = tester.getRect(find.byType(LinearProgressIndicator));
+      final picture = tester.getRect(cover());
       expect(button.width, 280);
-      // Centred, or a 280pt button in an 820pt band leaves its right half
-      // empty.
-      expect(button.center.dx, closeTo(820 / 2, 0.5));
+      // The same width and the same left edge as the bar it closes, and
+      // below it — not out at the band's trailing edge.
+      expect(button.left, closeTo(track.left, 0.5));
+      expect(button.top, greaterThan(track.bottom));
+      // Beside the cover rather than under the row, which is the whole point:
+      // the space the button takes is the one the words left empty.
+      expect(button.top, lessThan(picture.bottom));
+    });
+
+    // The same rule on a phone: the column of words is narrower than the
+    // track's 280pt cap, so both take the column — and still line up.
+    testWidgets('the button follows the track on a phone too', (tester) async {
+      _phone(tester);
+      await _pumpHome(tester, _oneInProgress());
+      final button = tester.getRect(find.byType(FilledButton));
+      final track = tester.getRect(find.byType(LinearProgressIndicator));
+      expect(button.left, closeTo(track.left, 0.5));
+      expect(button.right, closeTo(track.right, 0.5));
+      expect(button.top, greaterThan(track.bottom));
     });
 
     // A bar that runs the whole width of a tablet stops reading as progress

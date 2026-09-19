@@ -11,6 +11,7 @@ import '../../resume_point.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
 import '../../catalogue/catalogue_reads.dart' as catalogue;
+import '../../widgets/no_intrinsic.dart';
 import '../../widgets/page_backdrop.dart';
 import '../../routes.dart';
 
@@ -69,6 +70,16 @@ bool _readMoreRecently(Series candidate, Series best) {
 /// than holding the whole card back for it.
 typedef ContinueHeroData = ({Series series, ResumePoint? point});
 
+/// The band's own gaps, drawn by both the row and the column of words.
+///
+/// The chapter rows' 12 between a cover and its words, rather than the
+/// prototype's 16: on a band this wide the larger gap read as the details
+/// standing off the cover, not beside it. And the 14 between the progress
+/// track and the button that follows it on a tablet, wider than the 6 above
+/// the track — a control needs more air around it than the line above it does.
+const _coverGap = 12.0;
+const _buttonGap = 14.0;
+
 /// The Continue shelf's series, given the full treatment.
 ///
 /// A promotion, never an obligation: where the card cannot be complete the
@@ -88,10 +99,22 @@ class ContinueHero extends ConsumerWidget {
     await onReturn();
   }
 
+  /// The cover's own size — what it is drawn at, and the floor under the
+  /// height it fills beside the words: see [_FillingCover].
   static const _coverWidth = 92.0;
   static const _coverWidthTablet = 160.0;
 
   String get _seriesLocation => seriesLocation(data.series);
+
+  /// What the button opens, or null while the chapter is still unknown:
+  /// there is nothing to resume yet.
+  VoidCallback? _continue(BuildContext context) => switch (data.point) {
+    null => null,
+    final point => () => _open(
+      context,
+      readerLocation(point.entry.chapter, started: point.started),
+    ),
+  };
 
   /// A chapter nobody has opened starts at the beginning; one under way
   /// resumes where it was left.
@@ -110,11 +133,18 @@ class ContinueHero extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final client = ref.watch(kavitaClientProvider);
     final series = data.series;
+    // **The button follows the track it belongs to, on both sizes.** Drawn
+    // inside the column of words, directly under the progress bar and at the
+    // bar's own width and left edge, the two are one block. A row of its own
+    // under the card instead left a tablet with a card's worth of nothing
+    // above the button and nothing left to be centred against, and left a
+    // phone with the one thing on the screen lined up with nothing at all.
+    final button = _ContinueButton(onPressed: _continue(context));
     final tablet = isTabletLayout(context);
     final coverWidth = tablet ? _coverWidthTablet : _coverWidth;
+    final coverHeight = coverWidth / coverAspectRatio;
 
     // The card is about one chapter — it names it, counts what is left of it
     // and opens it — so the picture beside all that is the chapter's, the
@@ -155,80 +185,45 @@ class ContinueHero extends ConsumerWidget {
                 page: _resumePage,
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 18),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        onTap: () => _open(context, _seriesLocation),
-                        child: SizedBox(
-                          width: coverWidth,
-                          height: coverWidth / coverAspectRatio,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(radiusCover),
-                            child: CoverImage(
-                              url: pictured == null
-                                  ? client.seriesCoverUrl(series.id)
-                                  : entryCoverUrl(client, pictured),
-                              headers: client.imageHeaders,
-                              seriesId: series.id,
-                              seriesName: series.name,
-                            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 18),
+              // **The card is as tall as its words, and the cover takes that
+              // height** — see [_FillingCover]. The row is what makes the two
+              // one height; the cover's width follows from it by the 2:3
+              // ratio, so the space a 92pt cover used to leave empty under
+              // itself on a phone is the space it now fills.
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _open(context, _seriesLocation),
+                      child: _FillingCover(
+                        minHeight: coverHeight,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(radiusCover),
+                          child: CoverImage(
+                            url: pictured == null
+                                ? client.seriesCoverUrl(series.id)
+                                : entryCoverUrl(client, pictured),
+                            headers: client.imageHeaders,
+                            seriesId: series.id,
+                            seriesName: series.name,
                           ),
                         ),
                       ),
-                      // The chapter rows' own gap between a cover and its
-                      // words, rather than the prototype's 16: on a band
-                      // this wide the larger gap read as the details
-                      // standing off the cover, not beside it.
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _Details(
-                          data: data,
-                          onOpenSeries: () => _open(context, _seriesLocation),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 18),
-                  // Centred: the button stops at 280 whatever the band's
-                  // width, and left in the corner it left the band's right
-                  // half empty — on a phone by 70pt, on a tablet by most
-                  // of the row.
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: controlMaxWidth,
-                      ),
-                      child: SizedBox(
-                        height: minHitTarget + 4,
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: switch (data.point) {
-                            null => null,
-                            final point => () => _open(
-                              context,
-                              readerLocation(
-                                point.entry.chapter,
-                                started: point.started,
-                              ),
-                            ),
-                          },
-                          icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                          label: Text(l10n.seriesContinuePlain),
-                        ),
+                    ),
+                    const SizedBox(width: _coverGap),
+                    Expanded(
+                      child: _Details(
+                        data: data,
+                        onOpenSeries: () => _open(context, _seriesLocation),
+                        button: button,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ],
         ),
@@ -237,11 +232,101 @@ class ContinueHero extends ConsumerWidget {
   }
 }
 
+/// A cover that takes the height of the words beside it, never shrinking
+/// below the size a cover is drawn at.
+///
+/// **The height comes from the words.** The card's row is an
+/// `IntrinsicHeight`, so the band is as tall as its column of words; the
+/// cover is stretched to that height and its width follows from it by the
+/// 2:3 ratio. That is what fills the space a 92pt cover used to leave empty
+/// under itself on a phone — a landing page for one chapter, where the cover
+/// and the words are one object and a short cover beside tall ones reads as a
+/// cover that failed to load. On a tablet the words are the shorter of the
+/// two and nothing moves: the cover is its own 160x240, which is what
+/// [minHeight] is for.
+///
+/// **And the picture says nothing to that question.** A decoded image reports
+/// its own pixel dimensions as its intrinsic size, so a 1500px cover would
+/// make the band 1500pt tall the moment its picture landed in the cache —
+/// and not before, which is a bug no widget test with an unloaded image can
+/// see. [NoIntrinsic] is what keeps a picture's pixels out of the card's
+/// height: the space between a cover and the words is a layout decision, and
+/// an image is not entitled to an opinion about it.
+class _FillingCover extends StatelessWidget {
+  const _FillingCover({required this.minHeight, required this.child});
+
+  /// The height a cover is drawn at when the words are shorter than it.
+  final double minHeight;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(minHeight: minHeight),
+    child: NoIntrinsic(
+      child: AspectRatio(aspectRatio: coverAspectRatio, child: child),
+    ),
+  );
+}
+
+/// The height one line of [style] takes, at the text scale the screen is read
+/// at.
+///
+/// Asked of the text engine rather than worked out from the style: a line is
+/// `fontSize * height` only when the style carries a `height`, and what a font
+/// makes of a line otherwise is the font's business.
+double _lineHeight(BuildContext context, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: 'X', style: style),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  return painter.height;
+}
+
+/// The card's one action.
+///
+/// Held to [controlMaxWidth] and to a fixed height, because a button given a
+/// band's width to fill stops reading as a button: that is the same rule the
+/// series hero follows. It is drawn under the progress track on the card, at
+/// the track's own width — so [controlMaxWidth] here is the track's cap
+/// rather than a placement of its own, and on a phone, where the column of
+/// words is narrower than that, the two take the column.
+class _ContinueButton extends StatelessWidget {
+  const _ContinueButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: controlMaxWidth),
+    child: SizedBox(
+      height: minHitTarget + 4,
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.play_arrow_rounded, size: 20),
+        label: Text(AppLocalizations.of(context).seriesContinuePlain),
+      ),
+    ),
+  );
+}
+
 class _Details extends ConsumerWidget {
-  const _Details({required this.data, required this.onOpenSeries});
+  const _Details({
+    required this.data,
+    required this.onOpenSeries,
+    required this.button,
+  });
 
   final ContinueHeroData data;
   final VoidCallback onOpenSeries;
+
+  /// The card's one action, drawn here because it follows the progress track
+  /// the column already holds — at the track's width and left edge, under it.
+  ///
+  /// It is handed down rather than built here so the card builds one of it;
+  /// the gap it keeps from the track is the band's own.
+  final Widget button;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -254,19 +339,42 @@ class _Details extends ConsumerWidget {
     final resumeName = entry == null
         ? null
         : type.resumeTitle(l10n, entry.volume, chapter!);
+    final titleStyle = PatraText.serifTitle(size: tablet ? 24 : 21);
+    // **Two lines of the title's own style, reserved whether or not the title
+    // needs them.** The card is as tall as this column and the cover beside
+    // it is stretched to that height, so the column's height may not depend
+    // on how long the title happens to be: the words are measured by an
+    // `IntrinsicHeight` at the band's *full* width, before the cover takes
+    // its share back, and a title that fits one line there and needs two
+    // where it is drawn leaves the card 26pt shorter than its own content —
+    // which is a RenderFlex overflow, not a tight fit. So the block is two
+    // lines whatever the title says, and a short title sits at the top of
+    // them. The height is asked of the text engine rather than computed from
+    // the style, because a font has its own idea of what a line is.
+    final titleBlock = 2 * _lineHeight(context, titleStyle);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         SectionLabel(l10n.continueSection, color: patraAccent),
         const SizedBox(height: 6),
-        GestureDetector(
-          onTap: onOpenSeries,
-          child: Text(
-            series.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: PatraText.serifTitle(size: tablet ? 24 : 21),
+        SizedBox(
+          height: titleBlock,
+          child: Align(
+            // The title sits at the **bottom** of the block it is given, so a
+            // one-line title stays joined to the chapter named under it and
+            // the reserve is air above the title rather than a gap through
+            // the middle of the words.
+            alignment: AlignmentDirectional.bottomStart,
+            child: GestureDetector(
+              onTap: onOpenSeries,
+              child: Text(
+                series.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: titleStyle,
+              ),
+            ),
           ),
         ),
         if (resumeName != null && resumeName.isNotEmpty) ...[
@@ -298,6 +406,12 @@ class _Details extends ConsumerWidget {
                         chapter.pages,
                       ),
                     ),
+                    // One line, for the same reason the title is two: the
+                    // column's height is what the cover is stretched to, and
+                    // it is measured at a width the column does not end up
+                    // with.
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: PatraText.metadata(
                       size: tablet ? 12 : 10.5,
                       color: patraTextOnArt,
@@ -316,8 +430,25 @@ class _Details extends ConsumerWidget {
                     valueColor: const AlwaysStoppedAnimation(patraAccent),
                   ),
                 ),
+                // Inside the track's own cap and stretching to it, so the
+                // button starts where the bar starts and ends where it ends:
+                // the two are one block, and a button that only nearly lined
+                // up with the bar above it would be the thing that reads as
+                // wrong. Where the column is narrower than the cap — a phone,
+                // at 246 — both take the column instead, and still agree.
+                const SizedBox(height: _buttonGap),
+                button,
               ],
             ),
+          ),
+        ] else ...[
+          // No track to follow — the chapter is still in flight — and the
+          // button is drawn where it would have been, so the card does not
+          // change shape when the answer arrives.
+          const SizedBox(height: _buttonGap),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: controlMaxWidth),
+            child: button,
           ),
         ],
       ],
