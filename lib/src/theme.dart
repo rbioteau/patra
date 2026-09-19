@@ -213,6 +213,20 @@ ThemeData patraTheme() {
   return base.copyWith(
     colorScheme: colors,
     scaffoldBackgroundColor: patraBg,
+
+    // The surfaces Material's *own* widgets draw on, which `ThemeData.dark()`
+    // seeds from the baseline scheme and `copyWith` does not recompute: the
+    // card one is M3's #141218, a neutral near-black that is not one of our
+    // tokens. The licences page (Settings › About) fills its whole body with
+    // `cardColor` and shades a selected row with `highlightColor`, so it came
+    // out a different colour from every other screen — the reason these are
+    // named here rather than left to a widget to set one at a time.
+    cardColor: patraSurface,
+    canvasColor: patraBg,
+    highlightColor: patraSurfaceHi,
+    // The rule between two things, which is [patraBorder] everywhere the app
+    // draws one by hand.
+    dividerColor: patraBorder,
     textTheme: base.textTheme.apply(
       fontFamily: _sans,
       bodyColor: patraText,
