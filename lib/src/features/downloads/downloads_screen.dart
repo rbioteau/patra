@@ -12,6 +12,7 @@ import '../../auth/session.dart';
 import '../../format.dart';
 import '../../theme.dart';
 import '../../widgets/cover.dart';
+import '../../widgets/download_pill.dart';
 import '../../widgets/download_stop.dart';
 import '../../widgets/read_mark.dart';
 
@@ -74,6 +75,7 @@ class DownloadsScreen extends ConsumerWidget {
                   children: [
                     _StorageMeterCard(),
                     _QueueSection(),
+                    _PausedSection(),
                     _PendingSection(),
                     _SavedSection(),
                   ],
@@ -113,14 +115,21 @@ class _StorageMeterCard extends ConsumerWidget {
 /// What it watches is the list of ids, so a row is rebuilt when the copy it
 /// draws changes and not when another chapter's pages land: each row reads
 /// its own copy, and this list is left alone.
+///
+/// It has a **heading of its own**, and that is not decoration: it is the last
+/// section of the tab and the only one that is not a state, so without it these
+/// rows read as belonging to the section above — which is about copies that
+/// stopped, and is not what a finished copy is. Muted, because every other
+/// heading here names a state and wears that state's colour.
 class _SavedSection extends ConsumerWidget {
   const _SavedSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ids = ref.watch(savedChapterIdsProvider);
-    return Column(
-      children: [
+    return _section(
+      heading: AppLocalizations.of(context).downloadsSavedSection,
+      rows: [
         for (final id in ids) _SavedRow(key: ValueKey(id), chapterId: id),
       ],
     );
@@ -184,11 +193,12 @@ class _StorageMeter extends StatelessWidget {
 }
 
 /// The copies still being fetched, with each one's own progress and its own
-/// cancel control.
+/// control.
 ///
-/// Cancelling one leaves the rest running: a batch is several chapters the
-/// reader asked for in one tap, and dropping one of them is a smaller
-/// decision than dropping the lot.
+/// One control per copy, and it is the pill's: a tap pauses it where it stands
+/// and keeps every page it has. Dropping one is the smaller decision — a batch
+/// is several chapters the reader asked for in one tap, and a pause is not a
+/// destruction — so the bin beside the pill is what takes it off the device.
 class _QueueSection extends ConsumerWidget {
   const _QueueSection();
 
@@ -202,38 +212,36 @@ class _QueueSection extends ConsumerWidget {
     // instead. Null where there is nothing left to report — a count of zero
     // of nothing is a report about a batch that is over.
     final summary = ref.watch(batchSummaryProvider);
-    if (membership.inFlight.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
-          child: SectionLabel(
-            l10n.downloadsQueueSection,
-            color: patraOffline,
-            trailing: summary == null
-                ? null
-                : Text(
-                    l10n.downloadsBatchSummary(
-                      summary.done,
-                      summary.total,
-                      (summary.progress * 100).round(),
-                    ),
-                    style: PatraText.metadata(color: patraOffline),
-                  ),
-          ),
-        ),
+    return _section(
+      heading: l10n.downloadsQueueSection,
+      color: patraOffline,
+      trailing: summary == null
+          ? null
+          : Text(
+              l10n.downloadsBatchSummary(
+                summary.done,
+                summary.total,
+                (summary.progress * 100).round(),
+              ),
+              style: PatraText.metadata(color: patraOffline),
+            ),
+      rows: [
         for (final chapterId in membership.inFlight)
-          _DownloadingRow(chapterId: chapterId),
+          _CopyRow(chapterId: chapterId),
       ],
     );
   }
 }
 
-/// One in-flight copy: the work the reader asked for, how far it has got,
-/// and the one control that takes it out of the batch.
-class _DownloadingRow extends ConsumerWidget {
-  const _DownloadingRow({required this.chapterId});
+/// One copy that is not on the device yet — being fetched, paused, or waiting
+/// to be given another go — with the tap that acts on it and the bin that
+/// takes it off the device.
+///
+/// One row for all three, because they are one thing seen at three moments:
+/// the heading above says which section it is in, and the pill at its trailing
+/// edge says which state it is in and what the tap will do with it.
+class _CopyRow extends ConsumerWidget {
+  const _CopyRow({required this.chapterId});
 
   final int chapterId;
 
@@ -244,16 +252,16 @@ class _DownloadingRow extends ConsumerWidget {
       downloadRecordProvider(chapterId).select((record) => record?.request),
     );
     if (request == null) return const SizedBox.shrink();
-    // A queued copy has pages to fetch and none fetched yet, so there is no
-    // total to be a fraction of: it says what it is waiting for rather than
-    // reporting zero.
-    final hasPageTotal = ref.watch(
-      downloadRecordProvider(chapterId)
-          .select((record) => (record?.totalPages ?? 0) > 0),
+    // What this copy stopped as, where it stopped at all: the pill's own word
+    // is the **action** — Resume, Retry — so the row is what says which stop
+    // this was, and a failure and a process that died are deliberately not one
+    // fact.
+    final stop = DownloadStop.of(
+      ref.watch(
+        downloadRecordProvider(chapterId).select((record) => record?.status),
+      ),
+      l10n,
     );
-    // The one number a landing page moves. Everything else in the row is
-    // resubscribed to things that do not, so it is left alone.
-    final progress = ref.watch(downloadProgressProvider(chapterId));
     final tablet = isTabletLayout(context);
     // A copy of a volume with no chapter breakdown was stored before the
     // label was fixed, and is named after Kavita's sentinel: it names
@@ -267,16 +275,7 @@ class _DownloadingRow extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          // The cover of what is being fetched, which is the whole of how a
-          // reader recognises a row in a batch of five. It comes from the
-          // server, as the row's own does, and it carries the download's
-          // progress on its bottom edge the way every cover in the app
-          // carries the progress of what it pictures.
-          _CopyCover(
-            request: request,
-            progress: hasPageTotal ? progress : null,
-            color: patraOffline,
-          ),
+          _CopyCover(request: request),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -297,34 +296,36 @@ class _DownloadingRow extends ConsumerWidget {
                     style: PatraText.metadata(size: tablet ? 12 : 11),
                   ),
                 ],
-                const SizedBox(height: 7),
-                // Where it always was: a bar under the title, in the offline
-                // blue every download wears. A bar under a thing means how far
-                // through that thing one is — the rule every chapter row and
-                // library tile obeys — and a row of a batch is read down its
-                // own column, not across the row's trailing edge.
-                _CopyProgress(
-                  value: hasPageTotal ? progress : null,
-                  color: patraOffline,
-                  width: 180,
-                ),
+                // Which stop this was, in the colour that state wears: the
+                // pill beside it says what the tap does, and this says what
+                // happened.
+                if (stop != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    stop.state,
+                    style: PatraText.metadata(
+                      size: tablet ? 12 : 11,
+                      color: stop.color,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(width: 10),
-          // Nothing to count yet on a copy that is merely queued: it says what
-          // it is waiting for rather than reporting zero.
-          if (!hasPageTotal)
-            Text(
-              l10n.downloadsWaiting,
-              style: PatraText.metadata(color: patraOffline),
-            ),
+          // The state and the tap in one control, the progress as the ring
+          // inside it: a copy's own progress is a ring everywhere, so this row
+          // is read at its trailing edge rather than down a second column.
+          DownloadPill(request: request),
+          const SizedBox(width: 4),
+          // The same bin the saved row carries, and the same word: taking a
+          // copy off the device is one act, finished or not.
           IconButton(
-            tooltip: l10n.cancelDownload(title),
-            icon: const Icon(Icons.cancel_outlined, size: 20),
+            tooltip: l10n.removeDownload,
+            icon: const Icon(Icons.delete_outline, size: 20),
             color: patraTextMuted,
             onPressed: () =>
-                ref.read(downloadsProvider.notifier).cancel(chapterId),
+                ref.read(downloadsProvider.notifier).remove(chapterId),
           ),
         ],
       ),
@@ -334,24 +335,18 @@ class _DownloadingRow extends ConsumerWidget {
 
 /// Fetched from the server, as the row's own cover is, and filed under the
 /// shared cache key, so a chapter being fetched and the same chapter already
-/// on the device are one picture on the disk rather than two. What is pinned
-/// to its bottom edge is the download's progress, in the offline blue every
-/// download wears — a bar on a cover says how far through the thing pictured
-/// it is, and here the thing pictured is the fetch.
+/// on the device are one picture on the disk rather than two.
+///
+/// **Nothing is drawn on it.** Its bottom edge belongs to the reading progress
+/// a cover carries everywhere else (`CoverProgressBar`), and the download's own
+/// progress is the ring inside the pill — the shape says which of the two facts
+/// is in front of you, and a cover wearing both would say neither.
 class _CopyCover extends ConsumerWidget {
-  const _CopyCover({
-    required this.request,
-    required this.progress,
-    required this.color,
-  });
+  const _CopyCover({required this.request});
 
   /// The copy not yet on the device, which names the series and the chapter
   /// the cover belongs to.
   final SavedChapter request;
-
-  /// 0..1, or null where there is nothing to be a fraction of yet.
-  final double? progress;
-  final Color color;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -360,165 +355,92 @@ class _CopyCover extends ConsumerWidget {
     return SizedBox(
       width: tablet ? rowCoverWidthTablet : rowCoverWidth,
       height: tablet ? rowCoverHeightTablet : rowCoverHeight,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          CoverImage(
-            url: client.chapterCoverUrl(request.chapterId),
-            headers: client.imageHeaders,
-            seriesId: request.seriesId,
-            seriesName: request.seriesName,
-            radius: radiusThumb,
-          ),
-          // Nothing is drawn where there is nothing to report: a copy that
-          // has not started, or one waiting to be given another go, keeps its
-          // cover clean rather than wearing a bar that sweeps and says no
-          // more than the heading above it already does.
-          if (progress != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(radiusThumb),
-              child: _CopyProgress(
-                value: progress,
-                color: color,
-                width: double.infinity,
-              ),
-            ),
-        ],
+      child: CoverImage(
+        url: client.chapterCoverUrl(request.chapterId),
+        headers: client.imageHeaders,
+        seriesId: request.seriesId,
+        seriesName: request.seriesName,
+        radius: radiusThumb,
       ),
     );
   }
 }
 
-/// Copies that stopped before they were finished, which stay listed with the
-/// control that starts them again instead of living in memory and
-/// disappearing.
+/// A section of the tab: the word above it, in the colour that word wears, and
+/// the rows under it.
 ///
-/// A failure seen from anywhere but the series screen, or after a restart, is
-/// a failure the reader never saw — so it is named here, in the one tab that
-/// is about what is on the device. A paused copy is listed here too, in the
-/// app's own blue and worded as paused: it is not missing, and it is not a
-/// failure.
-class _PendingSection extends ConsumerWidget {
-  const _PendingSection();
+/// Every section on this screen is the same shape — the app's gutter, the
+/// section gap, a label, then its rows — and four of them drew it one padding
+/// at a time apart. What a section decides for itself is its heading, its
+/// colour and which copies it lists, and that is all it passes.
+///
+/// It takes rows rather than ids because a section watches
+/// `downloadMembershipProvider` **whole** and reads the one set it needs: that
+/// value is compared by content, where a `select` returning a bare `Set`
+/// answers "changed" on every page — the very trap the membership exists to
+/// avoid, and the reason a page landing must not rebuild the world.
+Widget _section({
+  required String heading,
+  Color? color,
+  Widget? trailing,
+  required List<Widget> rows,
+}) => rows.isEmpty
+    ? const SizedBox.shrink()
+    : Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
+            child: SectionLabel(heading, color: color, trailing: trailing),
+          ),
+          ...rows,
+        ],
+      );
+
+/// Copies stopped deliberately, waiting for a tap to send them on.
+///
+/// Blue, and a section of its own rather than a line in the one below: a pause
+/// is not a failure, and one of these is the reader's own doing — announcing it
+/// in the same breath, under a heading in danger, would be the app telling them
+/// something went wrong when they are the one who stopped it.
+class _PausedSection extends ConsumerWidget {
+  const _PausedSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final pending = ref.watch(
-      downloadMembershipProvider.select((membership) => membership.pending),
-    );
-    if (pending.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, sectionGap, gutter, 8),
-          child: SectionLabel(l10n.downloadsPendingSection, color: patraDanger),
-        ),
-        for (final chapterId in pending) _PendingRow(chapterId: chapterId),
+    final membership = ref.watch(downloadMembershipProvider);
+    return _section(
+      heading: AppLocalizations.of(context).downloadsPausedSection,
+      color: patraOffline,
+      rows: [
+        for (final chapterId in membership.paused)
+          _CopyRow(chapterId: chapterId),
       ],
     );
   }
 }
 
-/// One copy that stopped short, with the control that starts it again —
-/// from the pages it kept, not from the beginning.
-class _PendingRow extends ConsumerWidget {
-  const _PendingRow({required this.chapterId});
-
-  final int chapterId;
+/// Copies that stopped **without being asked** — a failure, or a process that
+/// died under them — which stay listed with the tap that starts them again
+/// instead of living in memory and disappearing.
+///
+/// A failure seen from anywhere but the series screen, or after a restart, is
+/// a failure the reader never saw — so it is named here, in the one tab that is
+/// about what is on the device, and it is named in danger because it is the one
+/// thing in this tab nobody chose.
+class _PendingSection extends ConsumerWidget {
+  const _PendingSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    // Its own record, so a page landing on another chapter leaves this row —
-    // and the fact that it is waiting — alone.
-    final record = ref.watch(downloadRecordProvider(chapterId));
-    if (record == null) return const SizedBox.shrink();
-    final request = record.request;
-    final tablet = isTabletLayout(context);
-    final title = request.resolvedTitle;
-    // What this copy stopped as: a pause is the app's own doing, where a
-    // failure and a process that died are two other facts. One place draws
-    // all three, so this row and the row's own pill cannot disagree.
-    final stop = DownloadStop.of(record.status, l10n);
-    if (stop == null) return const SizedBox.shrink();
-
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: gutter,
-        vertical: tablet ? 9 : 6,
-      ),
-      child: Row(
-        children: [
-          // The same cover the row would have once it has landed: what is
-          // waiting to be given another go is recognisable or it is not
-          // worth listing. Left clean — nothing is moving on it.
-          _CopyCover(request: request, progress: null, color: stop.color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  request.seriesName.isEmpty ? title : request.seriesName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: PatraText.rowTitle(size: tablet ? 15 : 13.5),
-                ),
-                if (title.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: PatraText.metadata(size: tablet ? 12 : 11),
-                  ),
-                ],
-                const SizedBox(height: 3),
-                Text(
-                  stop.state,
-                  style: PatraText.metadata(
-                    size: tablet ? 12 : 11,
-                    color: stop.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Worded, and of a width of its own: the same control the row's
-          // refresh is, so a retry reads as a tap on a word and not on the
-          // row it sits in.
-          InkWell(
-            onTap: () => ref
-                .read(downloadsProvider.notifier)
-                .retry(record.request.chapterId),
-            borderRadius: BorderRadius.circular(radiusPill),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 30, minWidth: 84),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: stop.color.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(radiusPill),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(stop.icon, size: 14, color: stop.color),
-                  const SizedBox(width: 7),
-                  Text(
-                    stop.action,
-                    style: PatraText.metadata(color: stop.color),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+    final membership = ref.watch(downloadMembershipProvider);
+    return _section(
+      heading: AppLocalizations.of(context).downloadsPendingSection,
+      color: patraDanger,
+      rows: [
+        for (final chapterId in membership.pending)
+          _CopyRow(chapterId: chapterId),
+      ],
     );
   }
 }
@@ -787,11 +709,13 @@ class _LocalThumb extends StatelessWidget {
   );
 }
 
-/// A progress bar under a copy, in the token every other bar in the app uses.
+/// The **reading** progress of a copy on the device, as a bar under it.
 ///
-/// One widget because the Downloads tab draws it in three places — a copy on
-/// the device in the accent, a copy on its way in the offline blue — and a
-/// radius or a colour written twice is a radius or a colour that drifts.
+/// A bar and not a ring, because a copy's *download* progress is the ring
+/// inside its pill and the two must not be read for one another — this wears
+/// the accent every reading bar in the app wears. It was drawn in three places
+/// once, the offline blue on a cover and under a title among them, and the
+/// ring replaced those two: this is what is left.
 class _CopyProgress extends StatelessWidget {
   const _CopyProgress({
     required this.value,

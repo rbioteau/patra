@@ -13,6 +13,9 @@ import '../theme.dart';
 /// one fact drift apart. The three states are deliberately not one: a **pause**
 /// is the app's own doing and wears the blue every download wears, where a
 /// failure and a process that died are named in danger and offered a retry.
+/// The two pauses are one case here — the reader is told one word and offered
+/// one control, and only the queue knows which of them the app may start
+/// again by itself.
 class DownloadStop {
   const DownloadStop({
     required this.state,
@@ -34,7 +37,8 @@ class DownloadStop {
   /// or one nobody asked for.
   static DownloadStop? of(DownloadQueueStatus? status, AppLocalizations l10n) =>
       switch (status) {
-        DownloadQueueStatus.paused => DownloadStop(
+        DownloadQueueStatus.paused ||
+        DownloadQueueStatus.pausedByUser => DownloadStop(
           state: l10n.downloadsPaused,
           action: l10n.resumeDownload,
           icon: Icons.play_arrow,

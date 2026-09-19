@@ -452,11 +452,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get savePill => 'Enregistrer';
 
   @override
-  String downloadingPct(int percent) {
-    return '$percent %';
-  }
-
-  @override
   String get savedPill => 'Enregistré';
 
   @override
@@ -509,12 +504,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get downloadsPendingSection => 'À reprendre';
 
   @override
+  String get downloadsSavedSection => 'Enregistrés';
+
+  @override
+  String get downloadsPausedSection => 'En pause';
+
+  @override
   String downloadsBatchSummary(int done, int total, int percent) {
     return '$done sur $total · $percent %';
   }
 
   @override
   String get downloadsWaiting => 'En attente';
+
+  @override
+  String get downloadsPreparing => 'Préparation';
+
+  @override
+  String get downloadsInProgress => 'En cours';
 
   @override
   String get downloadsStoppedShort => 'Interrompu';
@@ -544,8 +551,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get resumeDownloadsLater => 'Plus tard';
 
   @override
-  String cancelDownload(String title) {
-    return 'Annuler $title';
+  String pauseDownload(String title) {
+    return 'Mettre en pause $title';
   }
 
   @override

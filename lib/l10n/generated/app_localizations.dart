@@ -746,19 +746,13 @@ abstract class AppLocalizations {
   /// **'this library'**
   String get thisLibrary;
 
-  /// Download action on a chapter; always worded, never icon-only
+  /// The word on a chapter's download pill where nobody has asked for the chapter yet, and the tap is what starts the fetch. Always worded, never icon-only
   ///
   /// In en, this message translates to:
   /// **'Save'**
   String get savePill;
 
-  /// Download in progress; tapping cancels
-  ///
-  /// In en, this message translates to:
-  /// **'{percent}%'**
-  String downloadingPct(int percent);
-
-  /// Chapter is available offline; tapping removes it
+  /// A copy of the chapter is on the device. A mark and not a control: the pill says all is well, and taking the copy off the device is a swipe on the row it sits in
   ///
   /// In en, this message translates to:
   /// **'Saved'**
@@ -836,17 +830,41 @@ abstract class AppLocalizations {
   /// **'Needs attention'**
   String get downloadsPendingSection;
 
+  /// Downloads tab section heading over the copies on the device — the shelf the tab is for. It is the one section that is not a state: a copy that is here is here
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get downloadsSavedSection;
+
+  /// Downloads tab section heading over the copies the reader can send on again — what the app paused and what they paused themselves. Blue, because a pause is not a failure
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get downloadsPausedSection;
+
   /// One line answering where a batch has got to: how many of its copies are on the device, and how far through the pages of the whole batch the work is. The percentage is over pages, not copies, which is why it can move without the count in front of it.
   ///
   /// In en, this message translates to:
   /// **'{done} of {total} · {percent}%'**
   String downloadsBatchSummary(int done, int total, int percent);
 
-  /// What a queued copy says instead of a percentage: it has pages to fetch and none fetched yet, so there is nothing to count
+  /// What a copy waiting its turn says: it has pages to fetch and none fetched yet, and it is not happening yet either
   ///
   /// In en, this message translates to:
   /// **'Waiting'**
   String get downloadsWaiting;
+
+  /// What a copy says while the request is out and the server has not yet said how many pages the chapter has. Its ring turns rather than fills, there being nothing to be a fraction of
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing'**
+  String get downloadsPreparing;
+
+  /// What a copy says once the server has said how many pages it has, beside a ring that fills as they land. The tap pauses it
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get downloadsInProgress;
 
   /// What a copy the app was closed in the middle of says: it keeps the pages it had, and a retry fetches only what is missing
   ///
@@ -860,7 +878,7 @@ abstract class AppLocalizations {
   /// **'Could not finish'**
   String get downloadsFailed;
 
-  /// What a copy the app deliberately stopped says — it left the foreground, or the reader left their profile. It keeps the pages it has and goes on by itself when the app, or the profile, comes back
+  /// What a copy that stopped deliberately says — the app left the foreground, the reader left their profile, or the reader paused it themselves. It keeps the pages it has, and the tap sends it on again
   ///
   /// In en, this message translates to:
   /// **'Paused'**
@@ -884,11 +902,11 @@ abstract class AppLocalizations {
   /// **'Not now'**
   String get resumeDownloadsLater;
 
-  /// Tooltip of the cancel control on one in-flight copy in the Downloads tab; worded with the title because the row carries no room for the word, and a glyph says nothing to a screen reader
+  /// What touching a copy's download pill does while it is being fetched. The pill's own word is the state, so this is the semantics hint rather than the label
   ///
   /// In en, this message translates to:
-  /// **'Cancel {title}'**
-  String cancelDownload(String title);
+  /// **'Pause {title}'**
+  String pauseDownload(String title);
 
   /// No description provided for @serverUnreachable.
   ///

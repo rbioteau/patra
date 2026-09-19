@@ -919,9 +919,7 @@ void main() {
     );
     if (holdPages != null) {
       await _waitFor(
-        () =>
-            reading.read(downloadProgressProvider(12)) != null &&
-            reading.read(downloadProgressProvider(12))! > 0,
+        () => (reading.read(downloadRecordProvider(12))?.progress ?? 0) > 0,
       );
     }
     return (gate: gate, saving: saving);
@@ -935,7 +933,7 @@ void main() {
         .report(AppLifecycleState.paused);
     await _waitFor(
       () =>
-          container.read(downloadsProvider).value?.paused.contains(12) ?? false,
+          container.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
     );
 
     final state = container.read(downloadsProvider).value!;
@@ -949,7 +947,7 @@ void main() {
     final restarted = _downloadsContainer(root, adapter);
     addTearDown(restarted.dispose);
     final read = await restarted.read(downloadsProvider.future);
-    expect(read.paused, contains(12));
+    expect(read.pausedByApp, contains(12));
     expect(read.interrupted, isEmpty);
 
     running.gate.complete();
@@ -963,7 +961,7 @@ void main() {
     final running = await beginRunning(mine, holdPages: {1, 2});
     mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
     await _waitFor(
-      () => mine.read(downloadsProvider).value?.paused.contains(12) ?? false,
+      () => mine.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
     );
     running.gate.complete();
     await running.saving;
@@ -984,6 +982,138 @@ void main() {
     expect(mine.read(downloadsProvider).value!.awaitingResume, isEmpty);
   });
 
+  test('a pause the reader made survives the app going away', () async {
+    final mine = _downloadsContainer(root, adapter, session: _profile);
+    addTearDown(mine.dispose);
+    final running = await beginRunning(mine, holdPages: {1, 2});
+
+    await mine.read(downloadsProvider.notifier).pause(12);
+    final stopped = mine.read(downloadsProvider).value!;
+    expect(stopped.pausedByUser, contains(12));
+    expect(stopped.pausedByApp, isEmpty, reason: 'the app did not do this one');
+    expect(
+      stopped.interrupted,
+      isEmpty,
+      reason: 'the cancelled request is how a pause takes effect, not a '
+          'failure of its own',
+    );
+    running.gate.complete();
+    await running.saving;
+
+    // The app goes away and comes back, which is exactly what sends on
+    // everything the *app* paused: what the reader paused must not move. A
+    // pause written down as `paused` would be undone right here.
+    adapter
+      ..gate = null
+      ..holdPages = null
+      ..requestedPages.clear();
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
+    await pumpEventQueue();
+
+    expect(adapter.requestedPages, isEmpty);
+    final after = mine.read(downloadsProvider).value!;
+    expect(after.pausedByUser, contains(12));
+    expect(after.inFlight, isEmpty);
+  });
+
+  test('a pause the reader made is not a question at launch', () async {
+    final mine = _downloadsContainer(root, adapter, session: _profile);
+    addTearDown(mine.dispose);
+    final running = await beginRunning(mine, holdPages: {1, 2});
+    await mine.read(downloadsProvider.notifier).pause(12);
+    running.gate.complete();
+    await running.saving;
+    mine.dispose();
+    await pumpEventQueue();
+
+    adapter.requestedPages.clear();
+    final launched = _downloadsContainer(root, adapter);
+    addTearDown(launched.dispose);
+    final state = await launched.read(downloadsProvider.future);
+
+    // Nothing to ask: the app was not closed in the middle of this one, the
+    // reader stopped it — and the strip's sentence says the opposite.
+    expect(state.awaitingResume, isEmpty);
+    expect(state.pausedByUser, contains(12));
+    await pumpEventQueue();
+    expect(adapter.requestedPages, isEmpty);
+
+    // And "not now" is not the app's to say about it: it stays paused, and
+    // does not come back worded as an interruption.
+    await launched.read(downloadsProvider.notifier).leaveStopped();
+    final after = launched.read(downloadsProvider).value!;
+    expect(after.pausedByUser, contains(12));
+    expect(after.interrupted, isEmpty);
+  });
+
+  test('pausing one copy lets the next in the batch start', () async {
+    final pending = {
+      for (var id = 1; id <= maxConcurrentChapterDownloads + 1; id++)
+        id: _enqueueGated(container, adapter, id),
+    };
+    await _waitFor(
+      () =>
+          adapter.activeChapterRequests.length == maxConcurrentChapterDownloads,
+    );
+    // The last one asked for overtakes the FIFO, so which copy is still
+    // waiting is the adapter's answer rather than a guess.
+    final waiting = [
+      for (var id = 1; id <= maxConcurrentChapterDownloads + 1; id++)
+        if (!adapter.startedChapters.contains(id)) id,
+    ].single;
+    final running = adapter.startedChapters.first;
+
+    // One tap, one chapter: the slot it frees is the next copy's, and what
+    // was paused is still there with every page it has.
+    await container.read(downloadsProvider.notifier).pause(running);
+    await _waitFor(() => adapter.startedChapters.contains(waiting));
+
+    final state = container.read(downloadsProvider).value!;
+    expect(state.pausedByUser, contains(running));
+    expect(state.inFlight.keys, contains(waiting));
+
+    for (final item in pending.values.where((item) => !item.gate.isCompleted)) {
+      item.gate.complete();
+    }
+    await Future.wait([for (final item in pending.values) item.saving]);
+  });
+
+  test('a launch does not ask about a refresh that stopped', () async {
+    // A record can carry a `saved` chapter and be stopped at the same time: a
+    // refresh runs with the copy it is replacing intact. The tab lists that
+    // copy under Saved and nowhere else, so the strip must not count it — a
+    // question about copies that stopped, over a tab that lists none of them,
+    // names nothing.
+    await saveChapterFixture(
+      root,
+      _profileId,
+      chapterId: 12,
+      seriesName: 'Akira',
+      title: 'Volume 1',
+      pages: 3,
+      bytes: 400,
+    );
+    await DownloadsService(root: root, profileId: _profileId).writeQueue({
+      12: DownloadQueueRecord(
+        request: _chapter,
+        status: DownloadQueueStatus.paused,
+        priority: 0,
+        saved: _chapter.copyWith(bytes: 400),
+      ),
+    });
+
+    final launched = _downloadsContainer(root, adapter);
+    addTearDown(launched.dispose);
+    final state = await launched.read(downloadsProvider.future);
+
+    expect(state.saved, contains(12));
+    expect(state.pausedByApp, isEmpty, reason: 'it is on the device, not here');
+    expect(state.awaitingResume, isEmpty, reason: 'so nothing is asked about it');
+    await pumpEventQueue();
+    expect(adapter.requestedPages, isEmpty);
+  });
+
   test('a cold start waits for the reader, and fires nothing first', () async {
     final running = await beginRunning(container, holdPages: {1, 2});
     container
@@ -991,7 +1121,7 @@ void main() {
         .report(AppLifecycleState.paused);
     await _waitFor(
       () =>
-          container.read(downloadsProvider).value?.paused.contains(12) ?? false,
+          container.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
     );
     running.gate.complete();
     await running.saving;
@@ -1004,7 +1134,7 @@ void main() {
     final state = await launched.read(downloadsProvider.future);
 
     expect(state.awaitingResume, contains(12));
-    expect(state.paused, contains(12));
+    expect(state.pausedByApp, contains(12));
     expect(state.saved, isEmpty);
     // Not one page, however long the app sits there: the question is the
     // whole of what stands between a launch and a batch on somebody's data
@@ -1030,7 +1160,7 @@ void main() {
         .report(AppLifecycleState.paused);
     await _waitFor(
       () =>
-          container.read(downloadsProvider).value?.paused.contains(12) ?? false,
+          container.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
     );
     running.gate.complete();
     await running.saving;
@@ -1045,7 +1175,7 @@ void main() {
     await launched.read(downloadsProvider.notifier).leaveStopped();
     final state = launched.read(downloadsProvider).value!;
     expect(state.awaitingResume, isEmpty, reason: 'the question was answered');
-    expect(state.paused, isEmpty);
+    expect(state.pausedByApp, isEmpty);
     expect(state.interrupted, contains(12));
 
     // And it stays stopped through the next trip out of the foreground:
@@ -1080,7 +1210,7 @@ void main() {
       // lives in is thrown away as soon as somebody else enters.
       await mine.read(authProvider.notifier).switchProfile();
       await _waitFor(
-        () => mine.read(downloadsProvider).value?.paused.contains(12) ?? false,
+        () => mine.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
       );
       gate.complete();
       await saving;
@@ -1096,7 +1226,7 @@ void main() {
           .report(AppLifecycleState.resumed);
       await pumpEventQueue();
       expect(adapter.requestedPages, isEmpty);
-      expect(mine.read(downloadsProvider).value!.paused, contains(12));
+      expect(mine.read(downloadsProvider).value!.pausedByApp, contains(12));
 
       // Their own queue only: the storage paths are per profile, so leaving
       // this one pauses nothing of anybody else's.
@@ -1108,7 +1238,7 @@ void main() {
       addTearDown(theirs.dispose);
       final other = await theirs.read(downloadsProvider.future);
       expect(other.records, isEmpty);
-      expect(other.paused, isEmpty);
+      expect(other.pausedByApp, isEmpty);
       expect(other.awaitingResume, isEmpty);
 
       // And tapping their own face again is the reader coming back to work they
@@ -1146,7 +1276,7 @@ void main() {
     expect(seen.awaitingResume, isEmpty, reason: 'the strip stops being drawn');
     // And nothing else changed: the copy is still paused, the app is still
     // holding it, and no page has been asked for.
-    expect(seen.paused, contains(12));
+    expect(seen.pausedByApp, contains(12));
     expect(seen.interrupted, isEmpty);
     expect(adapter.requestedPages, isEmpty);
 
@@ -1156,7 +1286,7 @@ void main() {
     mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
     await pumpEventQueue();
     expect(adapter.requestedPages, isEmpty);
-    expect(mine.read(downloadsProvider).value!.paused, contains(12));
+    expect(mine.read(downloadsProvider).value!.pausedByApp, contains(12));
   });
 
   test('a profile entered again finds its queue going on', () async {
