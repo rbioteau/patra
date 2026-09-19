@@ -137,7 +137,17 @@ EOF
 fi
 
 if [ "$CLEAR" = 1 ]; then
-  "$ADB" -s "$DEVICE" shell pm clear "$PACKAGE" >/dev/null
+  # Uninstalled, not `pm clear`ed. `pm clear` needs
+  # android.permission.CLEAR_APP_USER_DATA, which `adb shell` does not have on
+  # a device that is not rooted and whose app is not debuggable — it fails
+  # with a SecurityException, and a step that quietly does nothing is how the
+  # recipe ends up photographing the profiles somebody left behind. An
+  # uninstall needs no permission and leaves no doubt; the drive that follows
+  # installs the build again, so it costs a few seconds.
+  #
+  # The cost, said out loud: a store-installed Patra on this device is gone
+  # and comes back as a debug build.
+  "$ADB" -s "$DEVICE" uninstall "$PACKAGE" >/dev/null 2>&1 || true
 fi
 
 SHOT_DIR="store/screenshots/$LOCALE"
@@ -159,7 +169,13 @@ PATRA_SHOT_DIR="$SHOT_DIR" flutter drive \
 
 # Flattened in place, and only after the run succeeded: a half-processed
 # directory is worse than none, because it looks like an answer.
-for file in "$SHOT_DIR"/*.png; do
+shopt -s nullglob
+shots=("$SHOT_DIR"/*.png)
+if [ ${#shots[@]} -eq 0 ]; then
+  echo "The run finished but wrote no screenshots — nothing to flatten." >&2
+  exit 1
+fi
+for file in "${shots[@]}"; do
   convert "$file" -alpha remove -alpha off -strip PNG24:"$file.flattened"
   mv "$file.flattened" "$file"
 done
