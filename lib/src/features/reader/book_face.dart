@@ -1,5 +1,5 @@
-/// The face a book asks for in its own stylesheet, and the files it is set
-/// from.
+/// What a book asks for in its own stylesheet: the face its words are set in,
+/// the files that face is set from, and the direction it is written in.
 ///
 /// Kavita inlines a book's CSS into every page it hands over, scoped to a
 /// container of its own, and rewrites every `@font-face` source to
@@ -12,6 +12,15 @@
 /// choice resolves to CSS `inherit`, which leaves the book's stylesheet to win
 /// — and this is that answer written out, because a page drawn by us has no
 /// browser to inherit anything (see the reader's rules).
+///
+/// The **direction** is read out of the same `<style>`, and for the same
+/// reason there is nowhere else to read it: `PrepareFinalHtml` copies the
+/// classes off a book's `<html>` and `<body>` and throws both elements away,
+/// so the two conventional places for a base direction — a `dir` attribute
+/// and an `<html lang>` — never arrive, while the stylesheet does (#118). One
+/// walk over a page's stylesheets therefore answers both questions, which is
+/// why the direction is read here beside the `@font-face` walk rather than in
+/// the page parser.
 library;
 
 import 'dart:io';
@@ -281,7 +290,7 @@ BookFace? parseBookFace(String html) {
           ? (roman: was.roman, italic: was.italic ?? src)
           : (roman: was.roman ?? src, italic: was.italic);
     }
-    for (final match in _rule.allMatches(css.replaceAll(_fontFaceRule, ''))) {
+    for (final match in _rules(css)) {
       final named = _declaration('font-family').firstMatch(match.group(2)!);
       if (named == null) continue;
       usage.add((
@@ -330,6 +339,134 @@ Iterable<String> bookStyleSheets(String html) sync* {
   // mid-markup says what it says.
   if (inside && css.isNotEmpty) yield css.toString();
 }
+
+/// The direction [html] declares it is written in, or null where it declares
+/// none this app will act on.
+///
+/// Only **right-to-left** is ever read, and that is a decision rather than an
+/// omission: `direction: ltr` is the CSS default and is written as a reset far
+/// more often than as a statement, so it cannot be told from a stylesheet that
+/// says nothing — where `rtl` is never written by accident. What is answered
+/// is therefore evidence for the detected rung of the chain (ADR-0007) and
+/// never a direction of its own: the reading goes to
+/// `reading_direction.dart`, which is the one place a direction is resolved.
+///
+/// **A declaration is not a match.** `ScopeStyles` rewrites selectors and
+/// leaves inert declarations behind by the handful — `html{}`, `:root{}`,
+/// `html[dir=rtl]{}` and `body[dir=rtl]{}` all survive as text and apply to
+/// nothing once the elements they named are gone — so reading "is
+/// `direction:rtl` anywhere in the stylesheet" would over-trigger on books
+/// that say the opposite. What counts is a declaration whose selector still
+/// picks out the page as a whole: see [_saysSoForTheWholePage].
+ReadingDirection? parseBookDirection(String html) {
+  final wrapper = _wrapperClasses(html);
+  for (final css in bookStyleSheets(html)) {
+    for (final rule in _rules(css)) {
+      final declared = _declaration('direction').firstMatch(rule.group(2)!);
+      if (declared == null) continue;
+      if (declared.group(1)!.trim().toLowerCase() != 'rtl') continue;
+      for (final selector in rule.group(1)!.split(',')) {
+        if (_stillPicksOutThePage(selector, wrapper)) {
+          return ReadingDirection.rightToLeft;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/// Whether a selector the server rescoped still picks out the page rather
+/// than one element of it.
+///
+/// The same distinction [_speaksForThePage] draws for the face, and a
+/// deliberately stricter one: a rule that names the wrong family sets a
+/// paragraph in the wrong type, where a rule that names the wrong direction
+/// turns the whole book round.
+///
+/// Every `.book-content ` in front of the rule is undone first, because that
+/// prefix is what `ScopeStyles` adds and what makes a rule inert: one of them
+/// is the scoping, and a **second** is the wrapper inside itself, which is
+/// what it makes of a book's own `body.rtl`. Undoing them is what lets an
+/// inert declaration still be a declaration — and the wrapper's own class
+/// list is then what says whether it was ever about the page. That is where
+/// the class list is weighed and the only place it counts: Kavita assembles
+/// it deliberately *because* some right-to-left books mark `<html>` rather
+/// than writing CSS, but it is never trusted alone — what is being read is
+/// still a `direction` the book declared.
+///
+/// What is left has to be one compound selector, and one of two things: the
+/// wrapper itself, or the prose inside it. Anything carrying an attribute, a
+/// pseudo-class, an id or a combinator is refused outright — `[dir=rtl]` is
+/// the family this rule exists to refuse, and nothing the wrapper is can
+/// satisfy one.
+bool _stillPicksOutThePage(String selector, Set<String> wrapperClasses) {
+  var rest = selector.trim().toLowerCase();
+  while (rest.startsWith(_wrapperPrefix)) {
+    rest = rest.substring(_wrapperPrefix.length).trimLeft();
+  }
+  if (rest.isEmpty || rest.contains(_neverMatches)) return false;
+  final parts = rest.split('.');
+  final element = parts.first;
+  // What it names has to speak for the page rather than for a run of words
+  // in it. Every paragraph of a page is what the page says, so a book that
+  // declares its paragraphs right-to-left has declared itself right-to-left;
+  // a `span`, a heading or a list item has not — a single quotation in
+  // another script is exactly what those are for. `div` stands beside `p`
+  // because this app's own grammar already reads one as the other
+  // (`_blockTags`, `book_page.dart`): a book's chapters and its paragraphs
+  // are as often divs as they are `p`s.
+  if (element.isNotEmpty && !_thePageItself.contains(element)) return false;
+  final classes = parts.skip(1).where((name) => name.isNotEmpty).toList();
+  if (classes.isEmpty) return element.isNotEmpty;
+  // A class is only ever read as the **wrapper's** own, so a compound
+  // carrying one has to be the wrapper: `.book-content`, or the classes
+  // Kavita moved off the book's `<html>`/`<body>`, on the `div` it put them
+  // on. A class on an inner element is what marks one Arabic quotation in an
+  // English book, and reading that as the book's direction is the
+  // over-trigger this whole function exists to refuse.
+  if (element.isNotEmpty && element != 'div') return false;
+  return classes.every(
+    (name) => name == 'book-content' || wrapperClasses.contains(name),
+  );
+}
+
+/// The elements a selector can name and still be speaking for the page: the
+/// wrapper Kavita hands a page over in, everything on it, or its prose.
+
+/// The classes the wrapper Kavita hands a page over in carries.
+///
+/// `PrepareFinalHtml` returns `<div class="{classes}">{body}</div>`, the
+/// classes being the ones it moved off the book's own `<html>` and `<body>` —
+/// so the page's first tag is the wrapper, and a page whose first tag is
+/// something else was not handed over in one.
+Set<String> _wrapperClasses(String html) {
+  for (final piece in markupPieces(html)) {
+    if (!piece.isTag) {
+      if (piece.text.trim().isEmpty) continue;
+      return const {};
+    }
+    if (bookTagName(piece.text) != 'div') return const {};
+    return {
+      for (final name
+          in (bookAttribute(piece.text, 'class') ?? '').toLowerCase().split(
+            RegExp(r'\s+'),
+          ))
+        if (name.isNotEmpty) name,
+    };
+  }
+  return const {};
+}
+
+const Set<String> _thePageItself = {'*', 'div', 'p'};
+
+/// The prefix `ScopeStyles` puts in front of every rule of a book's CSS.
+const String _wrapperPrefix = '.book-content ';
+
+/// What no selector reaching this app can match: an attribute — the wrapper
+/// carries classes and nothing else, and `[dir=rtl]` is the whole reason this
+/// reading has to be stricter than a text search — a pseudo-class, an id, or
+/// a combinator other than the descendant one the scoping itself uses.
+final RegExp _neverMatches = RegExp(r'[\[\]:>+~#]|\s');
 
 /// Which of the families a book ships is the one its words are in.
 ///
@@ -431,6 +568,31 @@ final _fontFaceRule = RegExp(
   caseSensitive: false,
   dotAll: true,
 );
+
+/// Any at-rule and its whole block, one level of nesting deep — which is as
+/// deep as CSS puts rules inside one. See [_rules] for why they go.
+final _atRule = RegExp(
+  r'@[a-zA-Z-]+[^{;]*(?:\{(?:[^{}]|\{[^{}]*\})*\}|;)',
+  caseSensitive: false,
+  dotAll: true,
+);
+
+/// Every rule of one stylesheet that applies to the page in front of the
+/// reader: its selector, and its body.
+///
+/// **At-rules are dropped whole, and with them the rules inside them.** A
+/// `@font-face` is not a rule at all — its body carries no selector, and
+/// reading one as a rule would have the face a book ships declaring things
+/// about the page — and a `@media` or a `@supports` holds real rules that
+/// apply only *sometimes*. Nothing here can evaluate one: there is no browser
+/// (ADR-0010), and the medium a `@media print` names is not the one anybody
+/// is reading on. A conditional declaration is therefore not a declaration,
+/// which is the same rule an inert selector is refused by — and without this,
+/// `@media print{.book-content{direction:rtl}}` reads as a book declaring
+/// itself right-to-left on screen, because the grammar below matches the
+/// **inner** rule as though it stood on its own.
+Iterable<RegExpMatch> _rules(String css) =>
+    _rule.allMatches(css.replaceAll(_atRule, ''));
 
 /// One rule: everything before its braces, and what is inside them.
 final _rule = RegExp(r'([^{}]*)\{([^{}]*)\}');

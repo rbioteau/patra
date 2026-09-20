@@ -272,3 +272,82 @@ is guessed wrong. The key is left on the device and is simply not read.
 *A guess must never beat a choice* still holds, and is the whole of what is
 left to state: the two rungs above the detected one are the series' and the
 library's, and both are choices about works.
+
+## Amendment — 2026-09-20 (#118)
+
+The detected rung gains a **third kind of evidence**, and it is the first of
+the three asked: **what a book declared of itself**.
+
+The two signals #57 named are both inferences from what the server measured.
+This one is not — it is the work's own statement, and it arrives because
+Kavita hands a book's CSS over with every page of it. Both conventional
+places for a base direction are thrown away on the way: `PrepareFinalHtml`
+copies the classes off a book's `<html>` and `<body>` and returns their inner
+HTML in a wrapper of its own, so a `dir` attribute and an `<html lang>` never
+reach us while the stylesheet does. A book that declares itself right-to-left
+was therefore laid out left-to-right with nothing in the app knowing it.
+
+It is asked **before** the two measurements rather than beside them, and that
+is not a precedence between competing answers — it is where the questions
+stop overlapping. A declaration answers *which way the words run*, which the
+library type only witnesses as a convention of origin. And a book has no page
+dimensions at all for `chapter-info` to report, so asking the pages first
+would read every book left to right and leave the declaration with nothing to
+say. **Whether** a work is vertical stays the pages' answer alone, because no
+book declares that: `direction` is an axis of writing and not a way of
+turning pages.
+
+It is evidence for the **detected** rung and nothing more, so nothing above
+it moved: a series or a library somebody set still outranks it, and *a guess
+must never beat a choice* holds unchanged. A reading of a book's own
+stylesheet is closer to a fact than the other two are, but it is still the
+app reading a file rather than a person choosing — and a book that scopes its
+CSS unusually is exactly the case the rungs above exist for.
+
+**A declaration is not a match.** `ScopeStyles` rewrites selectors and leaves
+inert declarations behind by the handful — `html{}`, `:root{}`,
+`html[dir=rtl]{}` and `body[dir=rtl]{}` all survive as text and apply to
+nothing once the elements they named are gone — so "is `direction:rtl`
+anywhere in the stylesheet" would over-trigger on books saying the opposite.
+What counts is a rule whose selector still picks out the page as a whole: the
+wrapper Kavita scopes a page into, everything, or the page's own paragraphs.
+The wrapper's class list is weighed in one place only — it is what can make a
+selector the rescoping broke match the page again, which is the case Kavita
+assembles that list *for* — and it is never trusted alone, because what is
+being read is still a `direction` the book declared.
+
+**Nor is a rule that only applies sometimes.** At-rules are dropped whole,
+with the rules inside them: nothing here can evaluate a media query, there is
+no browser (ADR-0010), and the medium a `@media print` names is not the one
+anybody is reading on. That matters more than it sounds, because the grammar
+this app reads CSS with matches the *inner* rule of
+`@media print{.book-content{direction:rtl}}` as though it stood on its own —
+so an at-rule left in place turns a book on the strength of its print
+stylesheet. The correction belongs to the one definition of what a rule is,
+so it applies to the face as well: a font named in a print stylesheet was
+never the face a page is set in either.
+
+**Only right-to-left is read.** `direction: ltr` is the CSS default and is
+written as a reset far more often than as a statement, so it cannot be told
+from a stylesheet that says nothing; `rtl` is never written by accident.
+
+Recorded against the **series**, like #57's measurement and for the reason
+this ADR already gives: a direction read off one chapter of a work is a
+direction for the work. An omnibus carrying a single right-to-left story
+would turn whole, which is the case that could argue for per-chapter and is
+written up on #118 rather than decided here.
+
+The reader sets **both halves from that one answer** — the prose's
+`Directionality`, so its `TextAlign.start` resolves to the right, and the
+pager, which turns inside the same `Directionality` — because a book that
+reads right-to-left while its pages turn left-to-right is worse than one that
+does neither. `ReadingDirection.verticalScroll` collapses to left-to-right
+for a book rather than becoming a third case: a book's pages are the server's
+and they are turned, so what a vertical direction names is not something a
+book has.
+
+**The book's own language is the same hole and is not closed here.** Kavita
+drops a book's `lang` exactly as it drops its `dir`, and #119 needs it for
+hyphenation. This amendment establishes the shape an answer to it should take
+— read out of what the page already hands over, recorded per work, feeding
+the rung that guesses — and nothing more.

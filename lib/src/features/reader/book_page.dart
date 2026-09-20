@@ -71,7 +71,7 @@ class BookPicture extends BookBlock {
 
 /// One page of a book: the server's HTML, taken apart once.
 class BookPage {
-  const BookPage(this.blocks, {this.face});
+  const BookPage(this.blocks, {this.face, this.direction});
 
   final List<BookBlock> blocks;
 
@@ -90,8 +90,17 @@ class BookPage {
   Iterable<String> get pictureSources =>
       blocks.whereType<BookPicture>().map((picture) => picture.src);
 
-  factory BookPage.fromHtml(String html) =>
-      BookPage(parseBookPage(html), face: parseBookFace(html));
+  /// The direction the page's own stylesheet declares the book is written in,
+  /// or null where it declares none this app acts on. Parsed once beside the
+  /// face, out of the same `<style>`, and carried so the reader can record it
+  /// against the work as evidence for the chain's detected rung (#118).
+  final ReadingDirection? direction;
+
+  factory BookPage.fromHtml(String html) => BookPage(
+    parseBookPage(html),
+    face: parseBookFace(html),
+    direction: parseBookDirection(html),
+  );
 }
 
 /// What a stored page carries a picture as, in place of the name it named it
@@ -401,11 +410,17 @@ class _BookPageBodyState extends State<BookPageBody> {
           Expanded(child: words),
         ],
       ),
+      // The rule down the side of a quotation, and the room it leaves, are
+      // **directional**: in a book that reads from the right they belong on
+      // the right, like the bullet of a list item the `Row` above already
+      // mirrors.
       BookBlockStyle.quotation => Container(
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: patraBorder, width: 2)),
+        decoration: const BoxDecoration(
+          border: BorderDirectional(
+            start: BorderSide(color: patraBorder, width: 2),
+          ),
         ),
-        padding: const EdgeInsets.only(left: 12),
+        padding: const EdgeInsetsDirectional.only(start: 12),
         child: words,
       ),
       _ => words,
@@ -561,7 +576,7 @@ List<BookBlock> parseBookPage(String html) {
         // A picture sits between the words around it rather than inside a run
         // of them: what was said before it is its own block, so the page
         // keeps the order it was written in.
-        final src = _attributeOf(tag, 'src') ?? _attributeOf(tag, 'href');
+        final src = bookAttribute(tag, 'src') ?? bookAttribute(tag, 'href');
         endBlock();
         if (src != null && src.isNotEmpty) blocks.add(BookPicture(src));
         break;
@@ -654,7 +669,12 @@ String _renamedPicture(String tag, String? Function(String src) rename) {
 }
 
 /// What [tag] says [name] is, or null where it says nothing.
-String? _attributeOf(String tag, String name) {
+///
+/// Public for the same reason [bookTagName] is: the wrapper's own class list
+/// is read where the direction a book declares is (`book_face.dart`), and a
+/// second answer to what an attribute is would be a second answer to what a
+/// page says.
+String? bookAttribute(String tag, String name) {
   final match = _attributeMatch(tag, name);
   return match == null ? null : _attributeValue(match);
 }

@@ -740,19 +740,84 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (anchor != null) _anchors[_page] = anchor;
   }
 
+  /// Records what a page of [chapter]'s book declared about the direction it
+  /// is written in, against the work it belongs to (#118).
+  ///
+  /// Deferred a frame for the reason [_saveInitialProgress] is: this is
+  /// reached from `build`, and writing to a provider while the tree is
+  /// building is what Riverpod refuses outright. What it costs is a book
+  /// drawn left-to-right for the frame its first page lands on — the same
+  /// re-layout the book's own face already causes when it arrives.
+  ///
+  /// A page that declares nothing records nothing rather than recording a
+  /// left-to-right: every page of a book carries the same stylesheet, but a
+  /// page still coming has said nothing at all, and the two must not look
+  /// alike.
+  ///
+  /// Recorded **once**, like [_openBook] and [_saveInitialProgress] before
+  /// it: this is reached from every build of the reader — a scroll settling,
+  /// a page turn, progress saved — and the notifier would answer the second
+  /// one with the record it already holds anyway. What the field saves is a
+  /// callback per build, and it keeps the same shape the two effects beside
+  /// it have.
+  void _recordDeclaredDirection(
+    ChapterInfo chapter,
+    ReadingDirection? declared,
+  ) {
+    if (declared == null || declared == _declaredDirection) return;
+    _declaredDirection = declared;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(declaredDirectionsProvider.notifier)
+          .record(chapter.seriesId, declared);
+    });
+  }
+
+  /// What the book being read has already been recorded as declaring.
+  ReadingDirection? _declaredDirection;
+
   /// A chapter of words, read a page at a time.
   ///
   /// The pages are the server's, and it is the server that turns them: one
   /// page per screen, handed over as HTML (ADR-0008). So a book is paged like
-  /// an image chapter and by the same two gestures, but none of what the
-  /// picture reader is built on is asked of it — there is no page to measure,
-  /// so there is no direction to detect, no spread to pair, and no page
-  /// pictures to fill a strip with. What the bar's cog offers instead is how
-  /// the book is set: a text size and a line spacing (#75), both the reader's
-  /// own and both one number for every book.
+  /// an image chapter and by the same two gestures, but almost none of what
+  /// the picture reader is built on is asked of it — there is no page to
+  /// measure, so there is no spread to pair and no page pictures to fill a
+  /// strip with. What the bar's cog offers instead is how the book is set: a
+  /// text size and a line spacing (#75), both the reader's own and both one
+  /// number for every book.
+  ///
+  /// **A direction it does have** (#118). A book's own stylesheet reaches us
+  /// where its `dir` and its `lang` do not, so a book that declares itself
+  /// right-to-left is evidence for the detected rung of the same chain a
+  /// chapter of pictures is resolved through — and that one answer sets both
+  /// halves: the prose's `Directionality`, so its `TextAlign.start` resolves
+  /// to the right, and the pager, which turns inside that same
+  /// `Directionality`. Doing only the text half would produce a book that
+  /// reads right-to-left while its pages turn left-to-right, which is worse
+  /// than leaving it as it is.
+  ///
+  /// Vertical scrolling collapses to left-to-right here rather than being a
+  /// third case: a book's pages are the server's and they are turned, so what
+  /// a vertical direction names — a strip scrolled through — is not something
+  /// a book has. Only whether the pages read from the right is asked of the
+  /// chain.
   Widget _buildBookReader(BuildContext context, ChapterInfo chapter) {
     _openBook(chapter);
     _saveInitialProgress(chapter);
+    // The same chain a chapter of pictures is resolved through: the series'
+    // own choice, then the library's, then what the work itself suggests —
+    // which for a book is what the book declared of itself (#118).
+    final rtl = ref
+        .watch(
+          chapterDirectionProvider((
+            seriesId: chapter.seriesId,
+            libraryId: chapter.libraryId,
+          )),
+        )
+        .direction
+        .isRightToLeft;
     // What the book is made of, as only the server can say: it read the
     // file's own navigation, and no client can reconstruct the shape of a
     // book from the pages it was laid out into. Watched here rather than by
@@ -789,21 +854,40 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           : null,
       orElse: () => null,
     );
+    // What the page said about the direction the book is written in, recorded
+    // against the work — the reader is where a page lands, exactly as it is
+    // where a chapter's page dimensions land (#118).
+    _recordDeclaredDirection(chapter, currentPage.value?.direction);
     return Stack(
       fit: StackFit.expand,
       children: [
-        _BookView(
-          chapterId: widget.chapterId,
-          pages: chapter.pages,
-          page: _page,
-          anchorFor: _anchorFor,
-          picture: _bookPicture,
-          onPageChanged: (page) => _onPageChanged(page, chapter),
-          onScrolled: (page, at) => _onBookScrolled(page, at, chapter),
+        // The book's own direction, and the one place it is set: the prose
+        // resolves its `TextAlign.start` against this, and the pager inside
+        // it turns on the same axis, a horizontal `PageView` scrolling the
+        // way the text around it reads. There must be no `reverse` on top of
+        // it, for the reason the tap zones are named for where they are — a
+        // second mirror undoes the first.
+        Directionality(
+          textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
+          child: _BookView(
+            chapterId: widget.chapterId,
+            pages: chapter.pages,
+            page: _page,
+            anchorFor: _anchorFor,
+            picture: _bookPicture,
+            onPageChanged: (page) => _onPageChanged(page, chapter),
+            onScrolled: (page, at) => _onBookScrolled(page, at, chapter),
+          ),
         ),
+        // Outside that `Directionality` on purpose: the zones are named for
+        // where they are on the screen, so which of them reads on is passed
+        // the other way round rather than mirrored a second time — and
+        // through `_step`, which is the one definition of what advancing is,
+        // exactly as the picture reader passes it. A book has no spread, so
+        // it steps by a page.
         _TapZones(
-          onLeft: () => _goTo(_page - 1, chapter),
-          onRight: () => _goTo(_page + 1, chapter),
+          onLeft: () => _step(rtl, chapter, null),
+          onRight: () => _step(!rtl, chapter, null),
           onMiddle: () => _showChromeAndBars(!_showChrome),
         ),
         if (_showChrome) ...[
@@ -818,6 +902,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             chapter: chapter,
             page: _page,
             span: 1,
+            // The chrome never turns with the book (#118). What this mirrors
+            // is the seek control, and a book draws none — so passing the
+            // book's own direction here would be an inert line saying the
+            // opposite of the rule.
             rtl: false,
             showStrip: false,
             thumbQueue: _thumbs,

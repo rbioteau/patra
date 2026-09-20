@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/features/reader/book_face.dart';
 import 'package:patra/src/features/reader/page_shape.dart';
 import 'package:patra/src/features/reader/reading_direction.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
@@ -47,15 +48,33 @@ const _panel = (800, 4000);
 /// A double-page scan: two pages' width presented as one.
 const _spread = (1600, 1200);
 
-/// A container that has measured [shapes] and nothing else — which is where
+/// A container that has measured [chapters] and nothing else — which is where
 /// the app is the moment a chapter's `chapter-info` has landed.
-ProviderContainer _measured(List<ChapterInfo> chapters) {
+///
+/// [declared] is the other kind of evidence the detected rung has (#118): what
+/// a book's own stylesheet said, by series, recorded the way the reader
+/// records it when a page lands.
+ProviderContainer _measured(
+  List<ChapterInfo> chapters, {
+  Map<int, ReadingDirection> declared = const {},
+}) {
   final container = ProviderContainer(overrides: [testKeychain()]);
   addTearDown(container.dispose);
   for (final chapter in chapters) {
     container.read(pageShapesProvider.notifier).record(chapter);
   }
+  _record(container, declared);
   return container;
+}
+
+/// What a book's own stylesheet said, recorded the way the reader records it
+/// when a page lands.
+void _record(ProviderContainer container, Map<int, ReadingDirection> declared) {
+  for (final entry in declared.entries) {
+    container
+        .read(declaredDirectionsProvider.notifier)
+        .record(entry.key, entry.value);
+  }
 }
 
 /// Somebody reading, and a device that has never been given a direction of
@@ -69,7 +88,10 @@ final _romain = Profile(
   token: signedToken(1),
 );
 
-Future<ProviderContainer> _reading(List<ChapterInfo> chapters) async {
+Future<ProviderContainer> _reading(
+  List<ChapterInfo> chapters, {
+  Map<int, ReadingDirection> declared = const {},
+}) async {
   final container = ProviderContainer(
     overrides: [
       testKeychain(),
@@ -85,6 +107,7 @@ Future<ProviderContainer> _reading(List<ChapterInfo> chapters) async {
   for (final chapter in chapters) {
     container.read(pageShapesProvider.notifier).record(chapter);
   }
+  _record(container, declared);
   return container;
 }
 
@@ -310,7 +333,110 @@ void main() {
     });
   });
 
+  group('what the book says of itself', () {
+    test('a declared direction is what the work suggests', () {
+      // A book has no page dimensions for `chapter-info` to report, so the
+      // pages say nothing about it at all and the library type alone would
+      // read every book left to right.
+      final container = _measured([
+        _chapter(libraryType: LibraryType.book),
+      ], declared: {3: ReadingDirection.rightToLeft});
+
+      expect(
+        container.read(detectedDirectionProvider(3)),
+        ReadingDirection.rightToLeft,
+      );
+    });
+
+    test('only right-to-left is ever read off a book', () {
+      // `direction: ltr` is the CSS default and cannot be told from a
+      // stylesheet that says nothing, so a recording is only ever
+      // right-to-left — which is why no test here fixes a declared
+      // left-to-right and asserts on a state the parser cannot produce.
+      // Pinned on the parser, since that is where the decision is made.
+      expect(
+        parseBookDirection(
+          '<div class="book-content"><style>'
+          '.book-content { direction: ltr; }</style><p>Hi</p></div>',
+        ),
+        isNull,
+      );
+      expect(
+        parseBookDirection(
+          '<div class="book-content"><style>'
+          '.book-content { direction: rtl; }</style><p>مرحبا</p></div>',
+        ),
+        ReadingDirection.rightToLeft,
+      );
+    });
+
+    test('is asked of the work, not of the chapter it was read on', () {
+      final container = _measured(const [], declared: {
+        3: ReadingDirection.rightToLeft,
+      });
+
+      expect(
+        container.read(detectedDirectionProvider(3)),
+        ReadingDirection.rightToLeft,
+      );
+      expect(container.read(detectedDirectionProvider(9)), isNull);
+    });
+
+    test('a book that declares nothing leaves the pages to answer', () {
+      final container = _measured([
+        _chapter(libraryType: LibraryType.manga, pages: [_page, _page, _page]),
+      ]);
+
+      expect(
+        container.read(detectedDirectionProvider(3)),
+        ReadingDirection.rightToLeft,
+      );
+    });
+  });
+
   group('in the chain', () {
+    test('a book that declares itself is still only a guess', () async {
+      // The whole point of reading a declaration as *evidence*: it fills the
+      // detected rung, so a series or a library somebody has set stands above
+      // it. A guess must never beat a choice (ADR-0007).
+      final container = await _reading([
+        _chapter(libraryType: LibraryType.book),
+      ], declared: {3: ReadingDirection.rightToLeft});
+
+      final guessed = container.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(guessed.direction, ReadingDirection.rightToLeft);
+      expect(guessed.source, ReadingDirectionSource.detected);
+
+      await container
+          .read(seriesDirectionsProvider.notifier)
+          .set(3, ReadingDirection.leftToRight);
+      final chosen = container.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(chosen.direction, ReadingDirection.leftToRight);
+      expect(chosen.source, ReadingDirectionSource.series);
+      // And the row back lands on what the book said of itself.
+      expect(chosen.withoutSeries, ReadingDirection.rightToLeft);
+    });
+
+    test("a library's own direction outranks what the book declared", () async {
+      final container = await _reading([
+        _chapter(libraryType: LibraryType.book),
+      ], declared: {3: ReadingDirection.rightToLeft});
+
+      await container
+          .read(libraryDirectionsProvider.notifier)
+          .set(1, ReadingDirection.leftToRight);
+      final resolved = container.read(
+        chapterDirectionProvider((seriesId: 3, libraryId: 1)),
+      );
+      expect(resolved.direction, ReadingDirection.leftToRight);
+      expect(resolved.source, ReadingDirectionSource.library);
+      expect(resolved.withoutLibrary, ReadingDirection.rightToLeft);
+    });
+
     test('a series nobody has set opens the way the work suggests', () async {
       final container = await _reading([
         _chapter(pages: [_panel, _panel, _panel]),

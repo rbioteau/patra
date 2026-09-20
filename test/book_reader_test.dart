@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
@@ -1212,6 +1213,186 @@ void main() {
         everyElement(FontStyle.normal),
         reason: 'the fallback sans has no italic when the book has none',
       );
+    });
+  });
+
+  group('the direction a book declares', () {
+    /// A page in the shape the server hands one over: the wrapper Kavita
+    /// scopes a book into, the book's own CSS inlined at the top of it, and
+    /// some words.
+    String page(String css) =>
+        '<div class="book-content"><style>$css</style>'
+        '<h1>الفصل الأول</h1><p>مرحبا بالعالم.</p>'
+        '<blockquote>قال الرجل.</blockquote></div>';
+
+    /// Which way the pager itself runs, read off the scroll position rather
+    /// than off the `Directionality` that set it: a stray `reverse:` on top
+    /// of that `Directionality` would undo the flip and nothing about the
+    /// words would show it.
+    AxisDirection pager(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find.descendant(
+            of: find.byType(PageView),
+            matching: find.byType(Scrollable),
+          ).first,
+        )
+        .position
+        .axisDirection;
+
+    /// Where the rule down the side of a quotation is drawn, as the room it
+    /// leaves between itself and the words: a quotation in a book that reads
+    /// from the right is indented from the right.
+    ({double start, double end}) quotationInset(WidgetTester tester) {
+      final rule = find.ancestor(
+        of: find.textContaining('قال الرجل'),
+        matching: find.byType(Container),
+      );
+      final box = tester.getRect(rule.first);
+      final words = tester.getRect(
+        find.descendant(of: rule.first, matching: find.byType(RichText)).first,
+      );
+      return (start: words.left - box.left, end: box.right - words.right);
+    }
+
+    /// Which direction the page's own prose is laid out in, read off the
+    /// render tree: `TextAlign.start` is the right *form* and resolves
+    /// against this, so it is the whole of whether a book reads from the
+    /// right.
+    TextDirection prose(WidgetTester tester) => tester
+        .renderObjectList<RenderParagraph>(
+          find.descendant(
+            of: find.byType(BookPageBody),
+            matching: find.byType(RichText),
+          ),
+        )
+        .first
+        .textDirection;
+
+    /// The direction the page itself is laid out in, which is what the pager
+    /// turns on.
+    TextDirection laidOut(WidgetTester tester) => Directionality.of(
+      tester.element(find.byType(BookPageBody).first),
+    );
+
+    testWidgets('a book that declares itself is laid out that way', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        html: page('.book-content { direction: rtl; }'),
+      );
+
+      expect(laidOut(tester), TextDirection.rtl);
+      expect(
+        prose(tester),
+        TextDirection.rtl,
+        reason: 'the prose resolves `start` to the right',
+      );
+      expect(
+        pager(tester),
+        AxisDirection.left,
+        reason: 'the pages turn the way the words run, and only once',
+      );
+
+      // The rule down the side of a quotation is directional too, like the
+      // bullet of a list item: in a book that reads from the right it
+      // belongs on the right.
+      final inset = quotationInset(tester);
+      expect(inset.end, greaterThan(inset.start));
+    });
+
+    testWidgets('and its pages turn the way it reads', (tester) async {
+      // Doing only the text half would produce a book that reads
+      // right-to-left while its pages turn left-to-right — worse than
+      // leaving it as it is. The pager is inside the book's own
+      // `Directionality`, so it mirrors with the words.
+      final (requested, posted) = await _pumpBook(
+        tester,
+        html: page('.book-content { direction: rtl; }'),
+      );
+      final size = tester.getSize(find.byType(Scaffold));
+
+      await tester.tapAt(Offset(size.width * .15, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(_postedPages(posted), [
+        0,
+        1,
+      ], reason: 'the left-hand side reads on in a book that reads that way');
+      expect(requested, contains(1));
+
+      await tester.tapAt(Offset(size.width * .85, size.height / 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(_postedPages(posted), [0, 1, 0]);
+    });
+
+    testWidgets('a book that declares nothing is laid out as it always was', (
+      tester,
+    ) async {
+      await _pumpBook(tester, html: page('.book-content { font-size: 1em; }'));
+
+      expect(laidOut(tester), TextDirection.ltr);
+      expect(prose(tester), TextDirection.ltr);
+      expect(pager(tester), AxisDirection.right);
+      final inset = quotationInset(tester);
+      expect(
+        inset.start,
+        greaterThan(inset.end),
+        reason: 'the rule stays on the left where the book reads that way',
+      );
+    });
+
+    testWidgets('an inert declaration is not a declaration', (tester) async {
+      // `PrepareFinalHtml` keeps no `<html>`, so this rule applies to
+      // nothing: a book saying the opposite of what the reader would read
+      // out of a text search.
+      await _pumpBook(
+        tester,
+        html: page('.book-content html[dir=rtl] { direction: rtl; }'),
+      );
+
+      expect(laidOut(tester), TextDirection.ltr);
+    });
+
+    testWidgets('a saved book reads the way the streamed one does', (
+      tester,
+    ) async {
+      // A copy is the pages the server rendered (ADR-0009), stylesheet and
+      // all, so the app is what reads the direction in both cases and a
+      // reader on a train gets the same book. Nothing here asks the server.
+      final (requested, _) = await _pumpBook(
+        tester,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          pageHtml: page('.book-content { direction: rtl; }'),
+        ),
+      );
+
+      expect(requested, isEmpty, reason: 'the copy is the page');
+      expect(laidOut(tester), TextDirection.rtl);
+      expect(prose(tester), TextDirection.rtl);
+    });
+
+    testWidgets('the chrome and its numerals never turn with the book', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        html: page('.book-content { direction: rtl; }'),
+      );
+      await _showChrome(tester);
+
+      // The counter is the app's own furniture and reads the app's own way,
+      // whatever the book says.
+      final counter = find.text('1 / $_pages');
+      expect(counter, findsOneWidget);
+      expect(Directionality.of(tester.element(counter)), TextDirection.ltr);
     });
   });
 }

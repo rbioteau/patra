@@ -6,9 +6,10 @@
 /// 1. the **series** — a direction chosen for that one series;
 /// 2. the **library** — a direction chosen for every series shelved there
 ///    (#65);
-/// 3. the **detected** — the direction the work itself suggests (#57): the
-///    library a work was shelved in and the shape of its pages, measured by
-///    `page_shape.dart` from the chapter being read;
+/// 3. the **detected** — the direction the work itself suggests (#57): what
+///    a book declared of itself in its own stylesheet (#118), and otherwise
+///    the library a work was shelved in and the shape of its pages, measured
+///    by `page_shape.dart` from the chapter being read;
 /// 4. the left-to-right a chapter has always opened in.
 ///
 /// There used to be two rungs between the series' own and the detected one —
@@ -140,11 +141,22 @@ class ChapterDirection {
 /// #57's rung: the direction the work itself suggests, for one series.
 ///
 /// Asked only where no direction above it has been chosen, and answering
-/// nothing for a series the app has not measured — which is why the chain
-/// reads as two rungs until a chapter of that series has been opened. Filled
-/// from [pageShapesProvider], which is what the reader's own `chapter-info`
-/// records: page dimensions reach the app nowhere else, so a work nobody has
-/// opened is a work nothing has been guessed about.
+/// nothing for a series the app has neither measured nor read a declaration
+/// off — which is why the chain reads as two rungs until a chapter of that
+/// series has been opened. Both kinds of evidence reach the app in the reader
+/// and nowhere else: page dimensions in the `chapter-info` it asks for
+/// ([pageShapesProvider]), and a book's own declaration in the pages it is
+/// handed ([declaredDirectionsProvider]). A work nobody has opened is a work
+/// nothing has been guessed about.
+///
+/// **What the book said of itself is asked first** (#118). The two are not
+/// two answers to one question: a declaration is the work's own statement,
+/// where the library type is only a witness to a convention of origin — and
+/// a book has no page dimensions for `chapter-info` to report at all, so
+/// asking the pages first would read every book left to right and leave the
+/// declaration with nothing to say. Whether a work is vertical stays the
+/// pages' answer, because no book declares that: `direction` is an axis of
+/// writing and not a way of turning pages.
 ///
 /// Keyed by series and not by chapter because what is remembered is per
 /// series: a direction detected for one chapter of a work is a direction for
@@ -153,12 +165,63 @@ final detectedDirectionProvider = Provider.family<ReadingDirection?, int>((
   ref,
   seriesId,
 ) {
+  final declared = ref.watch(declaredDirectionsProvider)[seriesId];
+  if (declared != null) return declared;
   final shape = ref.watch(pageShapesProvider)[seriesId];
   if (shape == null) return null;
   return shape.isVertical
       ? ReadingDirection.verticalScroll
       : _horizontal(shape.libraryType);
 });
+
+/// What the books this session has opened declared of themselves, by series
+/// (#118).
+///
+/// Kavita hands a book's own CSS over with every page and discards both of
+/// the conventional places a base direction is written — `PrepareFinalHtml`
+/// keeps the classes off `<html>` and `<body>` and throws the elements away —
+/// so the stylesheet is the only witness, and `parseBookDirection`
+/// (`book_face.dart`) is what reads it. A page is where it arrives, so the
+/// reader is what records it, exactly as it is what records the shape of a
+/// chapter's pages.
+///
+/// Recorded against the **series** rather than the chapter it was read on,
+/// for the reason ADR-0007 already gives: a direction read off one chapter of
+/// a work is a direction for the work. An omnibus carrying one right-to-left
+/// story would turn whole, which is the case that could argue for per-chapter
+/// and is written up on #118 rather than guessed at here.
+///
+/// A record of a reading and not a preference, like [pageShapesProvider]:
+/// nothing is written to the device, a series is read again when it is opened
+/// again, and the container it lives in is rebuilt for every profile.
+final declaredDirectionsProvider =
+    NotifierProvider<DeclaredDirectionsNotifier, Map<int, ReadingDirection>>(
+      DeclaredDirectionsNotifier.new,
+    );
+
+class DeclaredDirectionsNotifier extends Notifier<Map<int, ReadingDirection>> {
+  @override
+  Map<int, ReadingDirection> build() => const {};
+
+  /// Records what a page of [seriesId] declared.
+  ///
+  /// The only reading that reaches here today is right-to-left, because that
+  /// is the only one `parseBookDirection` makes: a declared `ltr` cannot be
+  /// told from a stylesheet that says nothing. It takes a whole
+  /// [ReadingDirection] all the same, because that is the currency the chain
+  /// is resolved in and the shape [pageShapesProvider]'s own record answers
+  /// in — a set of series that declared one direction would be a shape of its
+  /// own to unpick the moment a second reading is worth making.
+  ///
+  /// A record it already holds is left alone rather than written again: the
+  /// reader records from a page landing, every page of a book carries the same
+  /// stylesheet, and a new map on each of them would rebuild the chain — and
+  /// the page set from it — once per page turn.
+  void record(int seriesId, ReadingDirection direction) {
+    if (state[seriesId] == direction) return;
+    state = {...state, seriesId: direction};
+  }
+}
 
 /// Which way a work goes when its pages are not panels, from the library it
 /// was shelved in.
