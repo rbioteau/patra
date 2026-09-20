@@ -51,6 +51,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Whether the password is legible. It is **not** put back on submit: this
+  /// screen is gone the moment a sign-in works, and on one that failed the
+  /// person is looking at exactly what they are correcting, which is the
+  /// only moment the eye is worth having.
+  bool _showPassword = false;
+
   /// The profile being signed back in, resolved once: it is still remembered
   /// after its key was dropped, which is what makes this possible at all.
   Profile? _profile;
@@ -229,16 +235,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             // The footer is pinned to the bottom edge, never centred with the
             // rest: it is a note about the app, not part of the form.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(gateGutter, 8, gateGutter, 24),
-              child: Text(
-                l10n.loginFooter,
-                textAlign: TextAlign.center,
-                style: PatraText.metadata(
-                  color: patraText.withValues(alpha: .35),
+            //
+            // And it stands down while the keyboard is up. It is the one
+            // thing on this screen that does not scroll, so it went on
+            // taking two French lines and some sixty points off the top of
+            // the keyboard while the part holding Sign in was the part being
+            // squeezed — a note about the app, at the one moment it has
+            // nothing to say. It comes back as the keyboard falls.
+            if (MediaQuery.viewInsetsOf(context).bottom == 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  gateGutter,
+                  8,
+                  gateGutter,
+                  24,
+                ),
+                child: Text(
+                  l10n.loginFooter,
+                  textAlign: TextAlign.center,
+                  style: PatraText.metadata(
+                    color: patraText.withValues(alpha: .35),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -263,6 +282,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 decoration: InputDecoration(hintText: l10n.serverAddressHint),
                 keyboardType: TextInputType.url,
                 autocorrect: false,
+                textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.url],
                 validator: (v) {
                   final value = v?.trim() ?? '';
@@ -282,13 +302,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 6),
-            // A self-hosted server is usually a bare IP with no certificate,
-            // and nothing on this screen used to say that was allowed.
-            Text(
-              l10n.serverAddressLocalHint,
-              style: PatraText.metadata(size: 11),
-            ),
+            // No standing note that `http://` is allowed. A self-hosted
+            // server is usually a bare IP with no certificate, but the
+            // validator below already says so — "starting with http:// or
+            // https://" — at the one moment somebody is asking, and a
+            // permanent two-line caption told everyone in advance for the
+            // sake of the few who would have got it wrong once.
             const SizedBox(height: 14),
           ],
           _Field(
@@ -297,6 +316,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               controller: _usernameController,
               focusNode: _usernameFocus,
               autocorrect: false,
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
               validator: (v) =>
                   (v?.trim().isEmpty ?? true) ? l10n.usernameRequired : null,
             ),
@@ -307,8 +328,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: TextFormField(
               controller: _passwordController,
               focusNode: _passwordFocus,
-              obscureText: true,
+              obscureText: !_showPassword,
+              // The last field, so the keyboard offers the verb rather than
+              // a carriage return: the button under this one is reachable
+              // without ever being looked for.
+              textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _submit(),
+              // Keeps what follows the field on screen and not merely the
+              // field: the default 20 lands the caret just above the
+              // keyboard with Sign in behind it, which is the scroll this
+              // screen used to cost on every attempt.
+              scrollPadding: const EdgeInsets.only(bottom: 140),
+              decoration: InputDecoration(
+                // Worded for a screen reader and for a long press, never a
+                // bare glyph. Neither progress nor a download, so no colour.
+                suffixIcon: IconButton(
+                  tooltip: _showPassword
+                      ? l10n.passwordHide
+                      : l10n.passwordShow,
+                  icon: Icon(
+                    _showPassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      setState(() => _showPassword = !_showPassword),
+                ),
+              ),
               validator: (v) =>
                   (v?.isEmpty ?? true) ? l10n.passwordRequired : null,
             ),

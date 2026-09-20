@@ -12,13 +12,14 @@
   "serverAddressHint": "https://kavita.example.com",
   "serverAddressRequired": "Server address is required",
   "serverAddressInvalid": "Enter a full address, starting with http:// or https://",
-  "serverAddressLocalHint": "A server on your own network can use http:// — for example http://192.168.1.10:5000",
-  "@serverAddressLocalHint": {
-    "description": "Helper under the server address field, saying cleartext is allowed"
-  },
   "username": "Username",
   "usernameRequired": "Username is required",
   "password": "Password",
+  "passwordShow": "Show password",
+  "@passwordShow": {
+    "description": "Tooltip and screen-reader label of the eye that makes the password on the sign-in form legible"
+  },
+  "passwordHide": "Hide password",
   "passwordRequired": "Password is required",
   "signIn": "Sign in",
   "unexpectedError": "Something went wrong: {error}",

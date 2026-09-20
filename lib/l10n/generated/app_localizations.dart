@@ -134,12 +134,6 @@ abstract class AppLocalizations {
   /// **'Enter a full address, starting with http:// or https://'**
   String get serverAddressInvalid;
 
-  /// Helper under the server address field, saying cleartext is allowed
-  ///
-  /// In en, this message translates to:
-  /// **'A server on your own network can use http:// — for example http://192.168.1.10:5000'**
-  String get serverAddressLocalHint;
-
   /// No description provided for @username.
   ///
   /// In en, this message translates to:
@@ -157,6 +151,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Password'**
   String get password;
+
+  /// Tooltip and screen-reader label of the eye that makes the password on the sign-in form legible
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get passwordShow;
+
+  /// No description provided for @passwordHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get passwordHide;
 
   /// No description provided for @passwordRequired.
   ///

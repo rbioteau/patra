@@ -30,10 +30,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a full address, starting with http:// or https://';
 
   @override
-  String get serverAddressLocalHint =>
-      'A server on your own network can use http:// — for example http://192.168.1.10:5000';
-
-  @override
   String get username => 'Username';
 
   @override
@@ -41,6 +37,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get password => 'Password';
+
+  @override
+  String get passwordShow => 'Show password';
+
+  @override
+  String get passwordHide => 'Hide password';
 
   @override
   String get passwordRequired => 'Password is required';

@@ -31,10 +31,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez une adresse complète, commençant par http:// ou https://';
 
   @override
-  String get serverAddressLocalHint =>
-      'Un serveur sur votre réseau peut utiliser http:// — par exemple http://192.168.1.10:5000';
-
-  @override
   String get username => 'Utilisateur';
 
   @override
@@ -42,6 +38,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get password => 'Mot de passe';
+
+  @override
+  String get passwordShow => 'Afficher le mot de passe';
+
+  @override
+  String get passwordHide => 'Masquer le mot de passe';
 
   @override
   String get passwordRequired => 'Mot de passe requis';

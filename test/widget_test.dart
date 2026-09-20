@@ -955,15 +955,20 @@ void main() {
       );
     });
 
-    testWidgets('the form says cleartext is allowed', (tester) async {
+    testWidgets('the refusal is what says cleartext is allowed', (
+      tester,
+    ) async {
+      // A standing caption under the field used to say a local server may be
+      // plain http, in two French lines, to everybody, in advance. The
+      // message above says it too — and only to the person who has just got
+      // it wrong, which is the one moment the question is being asked.
       await tester.pumpWidget(_app());
       await tester.pumpAndSettle();
+      expect(find.textContaining('http://'), findsNothing);
 
-      expect(
-        find.textContaining('can use http://'),
-        findsOneWidget,
-        reason: 'nothing else on this screen says a local server may be http',
-      );
+      await submit(tester, 'kavita.local');
+      expect(find.text(invalid), findsOneWidget);
+      expect(invalid, contains('http://'));
     });
   });
 }
