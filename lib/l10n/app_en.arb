@@ -673,6 +673,14 @@
   "@licensesTitle": {
     "description": "The row under Settings > About that opens what the app ships under: its own bundled faces, and every package it is built from. Spelled the way the page it opens titles itself, because that title is one tap away and two spellings of one word read as a mistake."
   },
+  "sourceCode": "Source code",
+  "@sourceCode": {
+    "description": "About row that opens the repository in a browser; it leaves the app, so it ends in open_in_new rather than a chevron"
+  },
+  "privacyPolicy": "Privacy policy",
+  "@privacyPolicy": {
+    "description": "About row that opens the published privacy policy in a browser. Play wants the policy reachable from within the app as well as from the store listing"
+  },
   "sizeBytes": "{count} B",
   "@sizeBytes": {
     "placeholders": {

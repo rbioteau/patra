@@ -59,5 +59,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- The two rows under Settings > About that leave for a browser:
+             the repository, and the privacy policy Play wants reachable from
+             inside the app. On API 30+ package visibility is opt-in, so
+             without this `canLaunchUrl` simply answers no and the rows do
+             nothing at all, on a device where a browser is plainly there. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

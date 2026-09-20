@@ -180,6 +180,8 @@
   "aboutSectionLabel": "À propos",
   "aboutVersion": "Version {version}",
   "licensesTitle": "Licences",
+  "sourceCode": "Code source",
+  "privacyPolicy": "Politique de confidentialité",
   "sizeBytes": "{count} o",
   "sizeMegabytes": "{count} Mo",
   "sizeGigabytes": "{count} Go",

@@ -8,6 +8,7 @@ import '../../branding/patra_lockup.dart';
 import '../../catalogue/catalogue_provider.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/image_cache_store.dart';
+import '../../external_links.dart';
 import '../../format.dart';
 import '../../lifecycle.dart';
 import '../../lock/profile_lock.dart';
@@ -125,6 +126,10 @@ class SettingsScreen extends ConsumerWidget {
                   applicationVersion: ref
                       .watch(clientIdentityProvider)
                       .appVersion,
+                  // The field Flutter leaves empty. Nothing in the repository
+                  // named a copyright holder at all, which for an Apache 2.0
+                  // project is a notice there is none of to keep (§4(c)).
+                  applicationLegalese: ExternalLinks.legalese,
                   // On the root navigator, as `/series` and `/reader` are
                   // declared outside the shell: this is a page of its own
                   // rather than a tab's child, and a bar of tabs under a
@@ -133,6 +138,43 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
 
+              // Two rows that leave. `open_in_new` rather than the chevron
+              // every other row ends with: a chevron means the next thing
+              // opens here, and these hand the reader to a browser. Nothing
+              // about them is conditioned on `offlineProvider` — that says
+              // the *Kavita server* is out of reach, which for a
+              // self-hoster is the ordinary case on a train while
+              // github.io answers perfectly well, and the policy is the
+              // last thing to make unreachable.
+              _SettingRow(
+                icon: const Icon(Icons.code, size: 18),
+                title: l10n.sourceCode,
+                external: true,
+                onTap: () =>
+                    ref.read(externalLinksProvider).open(ExternalLinks.source),
+              ),
+              _SettingRow(
+                icon: const Icon(Icons.shield_outlined, size: 18),
+                title: l10n.privacyPolicy,
+                external: true,
+                onTap: () =>
+                    ref.read(externalLinksProvider).open(ExternalLinks.privacy),
+              ),
+
+              // Whose work this is, at the foot of the screen. The terms it
+              // is published under are named on the licence page instead,
+              // where that answers the question; here it would be jargon
+              // under a signature.
+              const SizedBox(height: sectionGap),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: gutter),
+                child: Text(
+                  ExternalLinks.copyright,
+                  style: PatraText.metadata(
+                    color: patraText.withValues(alpha: .45),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -1093,6 +1135,7 @@ class _SettingRow extends StatelessWidget {
     required this.icon,
     required this.title,
     this.value,
+    this.external = false,
     required this.onTap,
   });
 
@@ -1103,6 +1146,11 @@ class _SettingRow extends StatelessWidget {
   /// and so on. A row that only opens a page has nothing to report, and says
   /// so with the chevron alone rather than an empty gap where a value goes.
   final String? value;
+
+  /// Whether the tap hands the reader to a browser. The trailing glyph says
+  /// which: a chevron means the next thing opens here.
+  final bool external;
+
   final VoidCallback onTap;
 
   @override
@@ -1121,7 +1169,7 @@ class _SettingRow extends StatelessWidget {
               Text(value!, style: PatraText.metadata()),
               const SizedBox(width: 4),
             ],
-            const Icon(Icons.chevron_right, size: 18),
+            Icon(external ? Icons.open_in_new : Icons.chevron_right, size: 18),
           ],
         ),
       ),

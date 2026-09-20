@@ -661,6 +661,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get licensesTitle => 'Licences';
 
   @override
+  String get sourceCode => 'Code source';
+
+  @override
+  String get privacyPolicy => 'Politique de confidentialité';
+
+  @override
   String sizeBytes(int count) {
     return '$count o';
   }

@@ -659,6 +659,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get licensesTitle => 'Licenses';
 
   @override
+  String get sourceCode => 'Source code';
+
+  @override
+  String get privacyPolicy => 'Privacy policy';
+
+  @override
   String sizeBytes(int count) {
     return '$count B';
   }

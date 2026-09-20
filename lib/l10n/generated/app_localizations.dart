@@ -1106,6 +1106,18 @@ abstract class AppLocalizations {
   /// **'Licenses'**
   String get licensesTitle;
 
+  /// About row that opens the repository in a browser; it leaves the app, so it ends in open_in_new rather than a chevron
+  ///
+  /// In en, this message translates to:
+  /// **'Source code'**
+  String get sourceCode;
+
+  /// About row that opens the published privacy policy in a browser. Play wants the policy reachable from within the app as well as from the store listing
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPolicy;
+
   /// No description provided for @sizeBytes.
   ///
   /// In en, this message translates to:

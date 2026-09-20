@@ -12,6 +12,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/external_links.dart';
 import 'package:patra/src/keychain.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
@@ -36,6 +37,21 @@ Future<void> pumpUntil(
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 5)),
     );
+  }
+}
+
+/// The outward links, recorded rather than opened.
+///
+/// A test cannot open a browser, so this is what makes the two things that
+/// can be wrong about an outward row checkable: the address it carries, and
+/// whether a tap fires at all.
+class MemoryLinks implements ExternalLinks {
+  final opened = <String>[];
+
+  @override
+  Future<bool> open(String url) async {
+    opened.add(url);
+    return true;
   }
 }
 

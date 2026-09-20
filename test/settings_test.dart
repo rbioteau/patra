@@ -8,6 +8,7 @@ import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/external_links.dart';
 import 'package:patra/src/features/settings/settings_screen.dart';
 import 'package:patra/src/lock/biometrics.dart';
 import 'package:patra/src/lock/profile_lock.dart';
@@ -49,6 +50,7 @@ Future<void> _pumpSettings(
   List<Profile>? profiles,
   Size size = const Size(1200, 2800),
   double textScale = 1,
+  MemoryLinks? links,
 }) async {
   final root = mockPathProvider();
   final people = profiles ?? [_profile()];
@@ -75,6 +77,7 @@ Future<void> _pumpSettings(
         profileLockStoreProvider.overrideWithValue(await lockStore()),
         biometricsProvider.overrideWithValue(FakeBiometrics()),
         downloadsRootProvider.overrideWithValue(root),
+        if (links != null) externalLinksProvider.overrideWithValue(links),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -178,5 +181,56 @@ void main() {
     expect(find.text('SERVER'), findsNothing);
     // The other profiles keep their own sub-heading inside it.
     expect(find.text('OTHER PROFILES ON THIS DEVICE'), findsOneWidget);
+  });
+
+  testWidgets('the two rows that leave say so, and carry the right address', (
+    tester,
+  ) async {
+    final links = MemoryLinks();
+    await _pumpSettings(tester, links: links);
+
+    // The chevron means "opens here"; these hand the reader to a browser.
+    for (final row in [
+      find.widgetWithText(InkWell, 'Source code'),
+      find.widgetWithText(InkWell, 'Privacy policy'),
+    ]) {
+      expect(
+        find.descendant(of: row, matching: find.byIcon(Icons.open_in_new)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.byIcon(Icons.chevron_right)),
+        findsNothing,
+      );
+    }
+    // The licences still open in the app, and still say so.
+    expect(
+      find.descendant(
+        of: find.widgetWithText(InkWell, 'Licenses'),
+        matching: find.byIcon(Icons.chevron_right),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Source code'));
+    await tester.tap(find.text('Privacy policy'));
+    await tester.pumpAndSettle();
+
+    expect(links.opened, [
+      'https://github.com/rbioteau/patra',
+      'https://rbioteau.github.io/patra/privacy.html',
+    ]);
+  });
+
+  testWidgets('the screen ends on whose work it is', (tester) async {
+    await _pumpSettings(tester);
+
+    final copyright = find.text('\u00a9 2026 Romain Bioteau');
+    expect(copyright, findsOneWidget);
+    // The last thing on the screen, under the licences it follows.
+    expect(
+      _topOf(tester, copyright),
+      greaterThan(_topOf(tester, find.text('Licenses'))),
+    );
   });
 }
