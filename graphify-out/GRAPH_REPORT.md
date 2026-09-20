@@ -1,7 +1,7 @@
 # Graph Report - patra  (2026-09-20)
 
 ## Corpus Check
-- 202 files · ~442,849 words
+- 202 files · ~442,905 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d099d4b4`
+- Built from commit: `d13e166d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -89,9 +89,9 @@
 - resume_point.dart
 - downloads_provider_test.dart
 - store_screenshots_test.dart
-- server_version_test.dart
+- ConsumerWidget
 - ADR-0006 — The strip is zoomed by laying it out wider, not by transforming it
-- authProvider
+- ../theme.dart
 - deep_link_test.dart
 - demo_server.dart
 - saved_copies_test.dart
@@ -121,7 +121,7 @@
 - strip_geometry_test.dart
 - patra_signature.dart
 - Patra
-- downloadsProvider
+- server_version_test.dart
 - ADR-0004 — The auth key is the only secret a profile keeps
 - Domain Docs
 - AppLocalizations
@@ -129,7 +129,7 @@
 - MainActivity.kt
 - page_shape_test.dart
 - library_scan_test.dart
-- ../theme.dart
+- downloadsProvider
 - The graphify union merge driver (two halves)
 - Issue tracker agent skill (GitHub issues via gh)
 - Spread
@@ -163,7 +163,7 @@
 - downloads/CLAUDE.md
 - launch/CLAUDE.md
 - AsyncValue.isResolvedFailure
-- ConsumerWidget
+- authProvider
 - CustomPainter
 - ADR-0011 — A second theme is deferred, not rejected
 - CLAUDE.md
@@ -188,10 +188,10 @@
 - @immutable
 - openapi_contract_test.dart
 - package:flutter/material.dart
-- ImageProvider
+- batch_hint.dart
 - static const
 - UserDto.isAdmin (role read from the login response)
-- batch_hint.dart
+- ImageProvider
 - package:patra/src/settings/reading_settings.dart
 - StripWidthController
 - _ProbeThumb
@@ -550,17 +550,17 @@ Nodes (40): package:patra/src/lifecycle.dart, Profile? session,
 Cohesion: 0.04
 Nodes (44): Duration, back, bar, _beat, binding, centre, cover, _deadline (+36 more)
 
-### Community 74 - "server_version_test.dart"
-Cohesion: 0.12
-Nodes (16): Completer, DioException, _Adapter, client, close, fetch, held, main (+8 more)
+### Community 74 - "ConsumerWidget"
+Cohesion: 0.06
+Nodes (50): catalogue, ConsumerWidget, kavitaClientProvider, offlineProvider, chapterDirProvider, _run, savedChapterProvider, syncPendingProgress (+42 more)
 
 ### Community 75 - "ADR-0006 — The strip is zoomed by laying it out wider, not by transforming it"
 Cohesion: 0.20
 Nodes (9): ADR-0006 — The strip is zoomed by laying it out wider, not by transforming it, Consequences, Considered options, and why not, Context, Cost, accepted, Decision, Prototype, Sources (+1 more)
 
-### Community 76 - "authProvider"
-Cohesion: 0.14
-Nodes (17): authProvider, profileCatalogueProvider, profileDownloadsProvider, _ProfileFace, LibraryScanNotifier, scan, build, initState (+9 more)
+### Community 76 - "../theme.dart"
+Cohesion: 0.09
+Nodes (21): ../branding/patra_lockup.dart, ../../../l10n/generated/app_localizations.dart, formatBytes, gb, mb, sizeBytes, build, _gateGapEm (+13 more)
 
 ### Community 77 - "deep_link_test.dart"
 Cohesion: 0.06
@@ -680,9 +680,9 @@ Nodes (18): _baseline, build, _dotCentre, _dotGap, _dotRadius, dotScale, _em, he
 Cohesion: 0.29
 Nodes (6): Architecture, Development, Install, Patra, Roadmap, Status
 
-### Community 106 - "downloadsProvider"
-Cohesion: 0.16
-Nodes (15): ../downloads/downloads_provider.dart, didUpdateWidget, downloadRecordProvider, downloadsProvider, _CopyRow, _RefreshCopy, _StorageMeterCard, build (+7 more)
+### Community 106 - "server_version_test.dart"
+Cohesion: 0.12
+Nodes (16): Completer, DioException, _Adapter, client, close, fetch, held, main (+8 more)
 
 ### Community 107 - "ADR-0004 — The auth key is the only secret a profile keeps"
 Cohesion: 0.33
@@ -709,9 +709,9 @@ Cohesion: 0.10
 Nodes (20): PopupMenuItem, required bool admin,
   bool, _Adapter, client, close, _container, empty, fetch (+12 more)
 
-### Community 114 - "../theme.dart"
-Cohesion: 0.09
-Nodes (21): ../branding/patra_lockup.dart, ../../../l10n/generated/app_localizations.dart, formatBytes, gb, mb, sizeBytes, build, _gateGapEm (+13 more)
+### Community 114 - "downloadsProvider"
+Cohesion: 0.16
+Nodes (15): ../downloads/downloads_provider.dart, didUpdateWidget, downloadRecordProvider, downloadsProvider, _CopyRow, _RefreshCopy, _StorageMeterCard, build (+7 more)
 
 ### Community 119 - "downloads_screen.dart"
 Cohesion: 0.08
@@ -789,9 +789,9 @@ Nodes (11): ../api/models.dart, chaptersTitle, chapterTitle, numberedChapterLabe
 Cohesion: 0.21
 Nodes (12): AuthState.atLaunch, DashedBorderPainter (the mark for a place to fill), An empty library is a state, not a blank screen, isLaunchProvider, AsyncValue.isResolvedFailure, kavitaClientProvider, _OfflineHome (an empty state, not the banner returning), OfflineIndicator (a status in the app bar, not a banner) (+4 more)
 
-### Community 152 - "ConsumerWidget"
-Cohesion: 0.06
-Nodes (50): catalogue, ConsumerWidget, kavitaClientProvider, offlineProvider, chapterDirProvider, _run, savedChapterProvider, syncPendingProgress (+42 more)
+### Community 152 - "authProvider"
+Cohesion: 0.14
+Nodes (17): authProvider, profileCatalogueProvider, profileDownloadsProvider, _ProfileFace, LibraryScanNotifier, scan, build, initState (+9 more)
 
 ### Community 153 - "CustomPainter"
 Cohesion: 0.29
@@ -889,9 +889,9 @@ Nodes (7): File, main, resolve, schema, schemas, spec, specName
 Cohesion: 0.07
 Nodes (24): ColoredBox, FractionallySizedBox, ImageInfo, package:flutter/material.dart, package:flutter_test/flutter_test.dart, package:patra/src/api/account_id.dart, package:patra/src/features/reader/page_loading.dart, package:patra/src/features/reader/spread_layout.dart (+16 more)
 
-### Community 177 - "ImageProvider"
-Cohesion: 1.33
-Nodes (3): ImageProvider, _Arrives, _NeverArrives
+### Community 177 - "batch_hint.dart"
+Cohesion: 0.29
+Nodes (6): ../keychain.dart, BatchSizeHintStore, _key, _keychain, markShown, wasShown
 
 ### Community 178 - "static const"
 Cohesion: 0.13
@@ -901,9 +901,9 @@ Nodes (13): ../branding/patra_signature.dart, build, gapEm, PatraLockup, size, b
 Cohesion: 0.47
 Nodes (6): Admin scan request from the Library tab's app-bar menu, AuthNotifier.clearAdmin (a 403 clears the flag), currentLibraryProvider, POST /api/Library/scan (admin only), LibraryScanNotifier, UserDto.isAdmin (role read from the login response)
 
-### Community 180 - "batch_hint.dart"
-Cohesion: 0.29
-Nodes (6): ../keychain.dart, BatchSizeHintStore, _key, _keychain, markShown, wasShown
+### Community 180 - "ImageProvider"
+Cohesion: 1.33
+Nodes (3): ImageProvider, _Arrives, _NeverArrives
 
 ### Community 181 - "package:patra/src/settings/reading_settings.dart"
 Cohesion: 0.50
@@ -945,7 +945,7 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **Why does `Profile lock (lib/src/lock/profile_lock.dart)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `ProfilePreferencesStore (profile_preferences.dart)`, `patraAccent = progress/identity, patraOffline = downloads/offline`, `The profile picker (/profiles)`, `AsyncValue.isResolvedFailure`, `profile_lock_sheet.dart`?**
   _High betweenness centrality (0.041) - this node is a cross-community bridge._
-- **Why does `_` connect `_` to `profile_picker_screen.dart`, `List`, `connection_failure.dart`, `authProvider`, `page_rail.dart`, `dart:async`, `package:flutter/material.dart`, `home_screen.dart`, `../api/models.dart`, `../theme.dart`, `static const`, `VoidCallback?`, `downloads_screen.dart`, `ConsumerWidget`, `package:flutter_riverpod/flutter_riverpod.dart`, `../auth/session.dart`?**
+- **Why does `_` connect `_` to `profile_picker_screen.dart`, `ConsumerWidget`, `connection_failure.dart`, `../theme.dart`, `List`, `page_rail.dart`, `dart:async`, `package:flutter/material.dart`, `home_screen.dart`, `../api/models.dart`, `static const`, `VoidCallback?`, `downloads_screen.dart`, `authProvider`, `package:flutter_riverpod/flutter_riverpod.dart`, `../auth/session.dart`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **Why does `suggestsLock (the suggestion goes to the unrestricted profile)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `UserDto.isAdmin (role read from the login response)`?**
   _High betweenness centrality (0.017) - this node is a cross-community bridge._
