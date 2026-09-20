@@ -944,11 +944,11 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsTitle;
 
-  /// No description provided for @serverSectionLabel.
+  /// Settings section heading over the active profile's card, its lock, the other remembered profiles and the button that forgets the active one. One heading rather than two: the card names a person on a server, not a server
   ///
   /// In en, this message translates to:
-  /// **'Server'**
-  String get serverSectionLabel;
+  /// **'Profiles'**
+  String get profilesSectionLabel;
 
   /// Settings section heading over the remembered profiles that are not the one being read as; each can be removed without being signed into
   ///
@@ -971,7 +971,7 @@ abstract class AppLocalizations {
   /// What turning the profile lock on does, and the one thing it must never be taken to mean. The auth key each profile keeps is a whole Kavita account and only its owner can rotate it (ADR-0004), so the second sentence is not modesty — it is the fact
   ///
   /// In en, this message translates to:
-  /// **'A PIN keeps the people you share this device with out of your profile. It is not protection for a lost or stolen device: what is stored here can still be read off one.'**
+  /// **'Keeps the other people on this device out. Not protection against theft: what is stored here can still be read off it.'**
   String get profileLockExplained;
 
   /// Shown under the lock row only for a profile the server puts no age restriction on, or an administrator. A restricted profile is never told this: the server already holds it back, and a lock on it would protect nothing (ADR-0003)

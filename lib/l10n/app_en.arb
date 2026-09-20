@@ -577,7 +577,10 @@
     }
   },
   "settingsTitle": "Settings",
-  "serverSectionLabel": "Server",
+  "profilesSectionLabel": "Profiles",
+  "@profilesSectionLabel": {
+    "description": "Settings section heading over the active profile's card, its lock, the other remembered profiles and the button that forgets the active one. One heading rather than two: the card names a person on a server, not a server"
+  },
   "otherProfilesSectionLabel": "Other profiles on this device",
   "@otherProfilesSectionLabel": {
     "description": "Settings section heading over the remembered profiles that are not the one being read as; each can be removed without being signed into"
@@ -587,7 +590,7 @@
   "@profileLock": {
     "description": "Title of the settings row that gives the active profile a PIN"
   },
-  "profileLockExplained": "A PIN keeps the people you share this device with out of your profile. It is not protection for a lost or stolen device: what is stored here can still be read off one.",
+  "profileLockExplained": "Keeps the other people on this device out. Not protection against theft: what is stored here can still be read off it.",
   "@profileLockExplained": {
     "description": "What turning the profile lock on does, and the one thing it must never be taken to mean. The auth key each profile keeps is a whole Kavita account and only its owner can rotate it (ADR-0004), so the second sentence is not modesty \u2014 it is the fact"
   },

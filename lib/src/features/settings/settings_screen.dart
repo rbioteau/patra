@@ -37,16 +37,28 @@ class SettingsScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.only(bottom: sectionGap),
             children: [
-              _Section(label: l10n.serverSectionLabel),
-              if (session != null)
-                _ServerCard(
-                  host: session.host,
-                  username: session.username,
-                  actionLabel: l10n.switchProfile,
+              // One heading for one subject: who is reading, on what server,
+              // and who else this device knows. It said "Server" while the
+              // card below described a server and borrowed a verb about a
+              // profile, which is where its label ran off the row.
+              _Section(label: l10n.profilesSectionLabel),
+              if (session != null) ...[
+                _ActiveProfileCard(
+                  profile: session,
                   onTap: () => ref.read(authProvider.notifier).switchProfile(),
                 ),
-              if (session != null) _ProfileLockRow(profile: session),
+                _ProfileLockRow(profile: session),
+              ],
               const _OtherProfiles(),
+              // With the people it is about, rather than after the licences.
+              // It kept its shape — a bordered button and not one of the
+              // icons the rows above carry — because forgetting the profile
+              // being read as ends the session, which the other verb does
+              // not.
+              if (session != null) ...[
+                const SizedBox(height: 12),
+                _ForgetProfile(profile: session),
+              ],
 
               _Section(label: l10n.generalSectionLabel),
               _SettingRow(
@@ -121,13 +133,6 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
 
-              const SizedBox(height: sectionGap),
-              // No sign-out button, deliberately: there are two verbs and this
-              // was neither of them. Leaving is switching — the card above,
-              // which keeps the credential — and the signed-out state still
-              // exists for the one thing that really produces it, a key the
-              // server has stopped accepting.
-              if (session != null) _ForgetProfile(profile: session),
             ],
           ),
         ),
@@ -880,24 +885,41 @@ class _Section extends StatelessWidget {
 /// is where connectivity usually changes, and the four tabs live in an
 /// `IndexedStack`, so this card is never rebuilt from scratch and nothing
 /// else would think to ask again.
-class _ServerCard extends ConsumerStatefulWidget {
-  const _ServerCard({
-    required this.host,
-    required this.username,
-    required this.actionLabel,
-    required this.onTap,
-  });
+/// The profile being read as, and the server it is on.
+///
+/// It was a card about the **server** that borrowed a verb about a
+/// **profile**, and the two together are what broke it: the verb sat in the
+/// row as a `Text` with no flex of its own, so "Switch profile" took its
+/// intrinsic width, squeezed what was beside it and then ran off the row
+/// outright under a large system font. Shortening the word would have moved
+/// that threshold rather than removed it.
+///
+/// Drawn as a profile instead, the verb has nothing to say: a face that opens
+/// opens the [[Picker]], which is exactly what the face on the Home bar
+/// already means, and the chevron alone carries it. What is left is
+/// `avatar + Expanded(text) + chevron`, a row with no competitor for width,
+/// which cannot overflow however the type is scaled — pinned at 320pt by
+/// `test/settings_test.dart`.
+///
+/// The state dot went down with the host it qualifies. It is about the
+/// **server**, and above the host it would have read as a state of the
+/// person; an avatar is also where the picker draws its own badge, and two
+/// vocabularies on one face is one too many.
+class _ActiveProfileCard extends ConsumerStatefulWidget {
+  const _ActiveProfileCard({required this.profile, required this.onTap});
 
-  final String host;
-  final String username;
-  final String actionLabel;
+  final Profile profile;
   final VoidCallback onTap;
 
   @override
-  ConsumerState<_ServerCard> createState() => _ServerCardState();
+  ConsumerState<_ActiveProfileCard> createState() => _ActiveProfileCardState();
 }
 
-class _ServerCardState extends ConsumerState<_ServerCard> {
+class _ActiveProfileCardState extends ConsumerState<_ActiveProfileCard> {
+  /// Larger than the 32 an other-profile row carries: this is the face the
+  /// app is being read as, and the card is the one place it is stated.
+  static const _avatarSize = 40.0;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -948,76 +970,87 @@ class _ServerCardState extends ConsumerState<_ServerCard> {
               borderRadius: BorderRadius.circular(radiusCard),
               border: Border.all(color: patraBorder),
             ),
-            child: Row(
-              children: [
-                // The state reaches a screen reader as a word; an 8pt dot
-                // that only changes colour reaches no one who cannot tell
-                // these two colours apart.
-                Semantics(
-                  label: status,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      shape: BoxShape.circle,
+            // One stop for a screen reader, announced whole: whose profile
+            // this is, where it lives, and how that server is answering.
+            child: MergeSemantics(
+              child: Row(
+                children: [
+                  ProfileAvatar(profile: widget.profile, size: _avatarSize),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          // The same name the rows underneath use. A server
+                          // has no business being named two ways on one
+                          // screen, and `username` was the other way.
+                          widget.profile.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: PatraText.rowTitle(),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            // The state reaches a screen reader as a word; an
+                            // 8pt dot that only changes colour reaches no one
+                            // who cannot tell these two colours apart.
+                            Semantics(
+                              label: status,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                margin: const EdgeInsets.only(right: 7),
+                                decoration: BoxDecoration(
+                                  color: dotColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            Flexible(
+                              // Always drawn, unlike the host under an other
+                              // profile's name, which only appears where the
+                              // device knows several servers: this is the one
+                              // card carrying a server's state, and a dot with
+                              // nothing beside it qualifies nothing.
+                              child: Text(
+                                widget.profile.host,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: PatraText.metadata(),
+                              ),
+                            ),
+                            // Not flexible: eight characters that a long host
+                            // should shorten around rather than push off the
+                            // row. It can never share the line with the
+                            // status word — being offline is what takes the
+                            // version away.
+                            if (version != null) ...[
+                              Text(' · ', style: PatraText.metadata()),
+                              Text(
+                                l10n.serverVersion(version),
+                                style: PatraText.metadata(),
+                              ),
+                            ],
+                            // Said in words only when it is bad news: a green
+                            // dot needs no caption, an unreachable server
+                            // does.
+                            if (reachable == false) ...[
+                              Text(' · ', style: PatraText.metadata()),
+                              Text(
+                                status,
+                                style: PatraText.metadata(color: patraDanger),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.host,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: PatraText.rowTitle(),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              widget.username,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: PatraText.metadata(),
-                            ),
-                          ),
-                          // Not flexible: eight characters that a long
-                          // username should shorten around rather than push
-                          // off the row. It can never share the line with
-                          // the status word below — being offline is what
-                          // takes the version away.
-                          if (version != null) ...[
-                            Text(' · ', style: PatraText.metadata()),
-                            Text(
-                              l10n.serverVersion(version),
-                              style: PatraText.metadata(),
-                            ),
-                          ],
-                          // Said in words only when it is bad news: a green
-                          // dot needs no caption, an unreachable server does.
-                          if (reachable == false) ...[
-                            Text(' · ', style: PatraText.metadata()),
-                            Text(
-                              status,
-                              style: PatraText.metadata(color: patraDanger),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  widget.actionLabel,
-                  style: PatraText.metadata(color: patraAccent),
-                ),
-                const Icon(Icons.chevron_right, size: 18),
-              ],
+                  const Icon(Icons.chevron_right, size: 18),
+                ],
+              ),
             ),
           ),
         ),

@@ -571,7 +571,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsTitle => 'Réglages';
 
   @override
-  String get serverSectionLabel => 'Serveur';
+  String get profilesSectionLabel => 'Profils';
 
   @override
   String get otherProfilesSectionLabel => 'Autres profils sur cet appareil';
@@ -584,7 +584,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get profileLockExplained =>
-      'Un code empêche les personnes avec qui vous partagez cet appareil d\'entrer dans votre profil. Ce n\'est pas une protection en cas de perte ou de vol : ce qui est enregistré ici reste lisible sur un appareil perdu.';
+      'Empêche les autres personnes de cet appareil d\'y entrer. Pas une protection contre le vol : ce qui est enregistré reste lisible.';
 
   @override
   String get profileLockSuggested =>

@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/material.dart'
+    show BoxDecoration, BoxShape, Color, Container, Icons, InkWell;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -36,6 +37,29 @@ Future<void> pumpUntil(
       () => Future<void>.delayed(const Duration(milliseconds: 5)),
     );
   }
+}
+
+/// The colour of the reachability dot inside Settings' profile card.
+///
+/// Named by its size rather than by being the only circle in the card: since
+/// the card became the active profile's own, there are two circles in it and
+/// the 40pt one is the face. Shared because two suites ask the same question
+/// of the same widget, and they were two copies that one change broke twice.
+Color serverDotColour(WidgetTester tester, {String host = 'kavita.example'}) {
+  final card = find
+      .ancestor(of: find.text(host), matching: find.byType(InkWell))
+      .first;
+  final dot = tester
+      .widgetList<Container>(
+        find.descendant(of: card, matching: find.byType(Container)),
+      )
+      .firstWhere(
+        (c) =>
+            c.decoration is BoxDecoration &&
+            (c.decoration! as BoxDecoration).shape == BoxShape.circle &&
+            c.constraints?.maxWidth == 8,
+      );
+  return (dot.decoration! as BoxDecoration).color!;
 }
 
 /// Points path_provider at a temp directory for the duration of a test.

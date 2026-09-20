@@ -97,29 +97,12 @@ Future<_Adapter> _pump(
   return adapter;
 }
 
-/// The reachability dot: the one circular Container inside the server card.
-Color _dotColor(WidgetTester tester) {
-  final card = find
-      .ancestor(of: find.text('kavita.example'), matching: find.byType(InkWell))
-      .first;
-  final dot = tester
-      .widgetList<Container>(
-        find.descendant(of: card, matching: find.byType(Container)),
-      )
-      .firstWhere(
-        (c) =>
-            c.decoration is BoxDecoration &&
-            (c.decoration! as BoxDecoration).shape == BoxShape.circle,
-      );
-  return (dot.decoration! as BoxDecoration).color!;
-}
-
 /// What a screen reader announces for the card.
 ///
 /// The dot's `Semantics` label merges into the tappable card's own node
 /// rather than standing as a node of its own, which is what one wants here:
-/// one stop, announced whole — "Connected, kavita.example, romain, Switch
-/// server" — instead of a bare status dot the user has to swipe onto.
+/// one stop, announced whole — "romain, Connected, kavita.example" — instead
+/// of a bare status dot the user has to swipe onto.
 ///
 /// The semantics tree is only built on demand, and its handle has to be
 /// released before the framework's end-of-test check — which runs ahead of
@@ -144,7 +127,7 @@ void main() {
         contains('/api/Health'),
         reason: 'the dot has to ask something, not assume',
       );
-      expect(_dotColor(tester), patraOnline);
+      expect(serverDotColour(tester), patraOnline);
       expect(await _announcement(tester), contains('Connected'));
       // Good news needs no caption; only the bad case is spelled out.
       expect(find.text('Offline'), findsNothing);
@@ -158,8 +141,8 @@ void main() {
       // The regression this file exists for: the dot was a `const`
       // patraOnline, so it said "connected" from the moment it was drawn and
       // never asked anything.
-      expect(_dotColor(tester), isNot(patraOnline));
-      expect(_dotColor(tester), patraDanger);
+      expect(serverDotColour(tester), isNot(patraOnline));
+      expect(serverDotColour(tester), patraDanger);
       // Colour alone is no indicator at 8pt — two colours a good share of
       // people cannot tell apart — so the state is also said in words.
       expect(find.text('Offline'), findsOneWidget);
@@ -175,7 +158,7 @@ void main() {
       // here would contradict the rest of the app, which is working.
       await _pump(tester, healthStatus: 500);
 
-      expect(_dotColor(tester), patraOnline);
+      expect(serverDotColour(tester), patraOnline);
       expect(find.text('Offline'), findsNothing);
     });
 
@@ -183,7 +166,7 @@ void main() {
       tester,
     ) async {
       await _pump(tester);
-      expect(_dotColor(tester), patraOnline);
+      expect(serverDotColour(tester), patraOnline);
 
       // The connection drops while the screen sits there. Nothing re-probes
       // on its own, but the next request anywhere in the app fails and sets
@@ -195,7 +178,7 @@ void main() {
           .set(true);
       await tester.pumpAndSettle();
 
-      expect(_dotColor(tester), patraDanger);
+      expect(serverDotColour(tester), patraDanger);
       expect(find.text('Offline'), findsOneWidget);
       expect(await _announcement(tester), isNot(contains('Connected')));
     });

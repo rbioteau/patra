@@ -569,7 +569,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
-  String get serverSectionLabel => 'Server';
+  String get profilesSectionLabel => 'Profiles';
 
   @override
   String get otherProfilesSectionLabel => 'Other profiles on this device';
@@ -582,7 +582,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileLockExplained =>
-      'A PIN keeps the people you share this device with out of your profile. It is not protection for a lost or stolen device: what is stored here can still be read off one.';
+      'Keeps the other people on this device out. Not protection against theft: what is stored here can still be read off it.';
 
   @override
   String get profileLockSuggested =>

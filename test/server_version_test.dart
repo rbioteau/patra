@@ -113,23 +113,6 @@ Future<_Adapter> _pump(WidgetTester tester, {_Adapter? adapter}) async {
   return used;
 }
 
-/// The reachability dot: the one circular Container inside the server card.
-Color _dotColor(WidgetTester tester) {
-  final card = find
-      .ancestor(of: find.text('kavita.example'), matching: find.byType(InkWell))
-      .first;
-  final dot = tester
-      .widgetList<Container>(
-        find.descendant(of: card, matching: find.byType(Container)),
-      )
-      .firstWhere(
-        (c) =>
-            c.decoration is BoxDecoration &&
-            (c.decoration! as BoxDecoration).shape == BoxShape.circle,
-      );
-  return (dot.decoration! as BoxDecoration).color!;
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -196,7 +179,7 @@ void main() {
       await _pump(tester, adapter: _Adapter(versionStatus: 404));
       await tester.pumpAndSettle();
 
-      expect(_dotColor(tester), patraOnline);
+      expect(serverDotColour(tester), patraOnline);
       expect(find.text('Offline'), findsNothing);
       expect(find.textContaining('Kavita'), findsNothing);
     });

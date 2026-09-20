@@ -1,0 +1,182 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:patra/l10n/generated/app_localizations.dart';
+import 'package:patra/src/api/kavita_client.dart';
+import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/features/settings/settings_screen.dart';
+import 'package:patra/src/lock/biometrics.dart';
+import 'package:patra/src/lock/profile_lock.dart';
+import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/profile_avatar.dart';
+
+import 'test_support.dart';
+
+Profile _profile({
+  int accountId = 1,
+  String username = 'romain',
+  String baseUrl = 'https://kavita.example',
+}) => Profile(
+  baseUrl: baseUrl,
+  accountId: accountId,
+  username: username,
+  apiKey: 'key',
+  token: 'token',
+);
+
+/// Answers everything, so the screen's own reachability probe settles.
+class _Adapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, _, _) async =>
+      ResponseBody.fromString(
+        jsonEncode(const <Object>[]),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+
+  @override
+  void close({bool force = false}) {}
+}
+
+Future<void> _pumpSettings(
+  WidgetTester tester, {
+  List<Profile>? profiles,
+  Size size = const Size(1200, 2800),
+  double textScale = 1,
+}) async {
+  final root = mockPathProvider();
+  final people = profiles ?? [_profile()];
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 2;
+  addTearDown(tester.view.reset);
+  final client = KavitaClient(
+    baseUrl: people.first.baseUrl,
+    token: 'token',
+    username: people.first.username,
+    apiKey: 'key',
+  );
+  client.httpClient.httpClientAdapter = _Adapter();
+  client.bareHttpClient.httpClientAdapter = _Adapter();
+  await tester.pumpWidget(
+    ProviderScope(
+      key: UniqueKey(),
+      overrides: [
+        testKeychain(),
+        initialAuthStateProvider.overrideWithValue(
+          AuthState(profiles: people, activeId: people.first.id),
+        ),
+        kavitaClientProvider.overrideWithValue(client),
+        profileLockStoreProvider.overrideWithValue(await lockStore()),
+        biometricsProvider.overrideWithValue(FakeBiometrics()),
+        downloadsRootProvider.overrideWithValue(root),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: patraTheme(),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+          child: const SettingsScreen(),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Where a widget's top edge sits in the screen's own coordinates, for
+/// asserting that one thing is drawn before another down the list.
+double _topOf(WidgetTester tester, Finder finder) =>
+    tester.getTopLeft(finder.first).dy;
+
+void main() {
+  testWidgets('the card names the active profile, not the server', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    // The person in the title, the server underneath it. It was the other
+    // way round while this was a card about a server.
+    final name = find.text('romain');
+    final host = find.text('kavita.example');
+    expect(name, findsOneWidget);
+    expect(host, findsOneWidget);
+    expect(_topOf(tester, name), lessThan(_topOf(tester, host)));
+    expect(find.byType(ProfileAvatar), findsWidgets);
+
+    // The verb is gone: a face that opens opens the picker, and the chevron
+    // is all that has to say so.
+    expect(find.text('Switch profile'), findsNothing);
+  });
+
+  testWidgets('the card does not overflow a narrow screen at large type', (
+    tester,
+  ) async {
+    // 320pt wide — the narrowest phone this ships to — with the system font
+    // at double size, which is what used to run "Switch profile" off the row.
+    // `tablet_layout_test.dart` pins the other end of the same spectrum.
+    await _pumpSettings(
+      tester,
+      size: const Size(640, 2400),
+      textScale: 2,
+      profiles: [
+        _profile(
+          username: 'a-rather-long-account-name',
+          baseUrl: 'https://kavita.a-rather-long-hostname.example',
+        ),
+      ],
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping the card asks for another profile', (tester) async {
+    await _pumpSettings(tester);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsScreen)),
+    );
+    expect(container.read(authProvider).activeId, isNotNull);
+
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+
+    // Switching drops the active profile and keeps its key, which is what
+    // sends the app back to the picker.
+    expect(container.read(authProvider).activeId, isNull);
+    expect(container.read(authProvider).profiles, hasLength(1));
+  });
+
+  testWidgets('forgetting the active profile sits with the profiles', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    // Between the profiles it is about and the next section, rather than
+    // after the licences at the very bottom of the screen.
+    final forget = find.text('Forget this profile');
+    expect(forget, findsOneWidget);
+    expect(
+      _topOf(tester, forget),
+      lessThan(_topOf(tester, find.text('GENERAL'))),
+    );
+  });
+
+  testWidgets('one heading covers the profiles', (tester) async {
+    await _pumpSettings(
+      tester,
+      profiles: [_profile(), _profile(accountId: 2, username: 'other')],
+    );
+
+    expect(find.text('PROFILES'), findsOneWidget);
+    expect(find.text('SERVER'), findsNothing);
+    // The other profiles keep their own sub-heading inside it.
+    expect(find.text('OTHER PROFILES ON THIS DEVICE'), findsOneWidget);
+  });
+}

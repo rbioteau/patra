@@ -317,10 +317,10 @@ void main() {
       expect(find.text('Lock this profile'), findsOneWidget);
       final explained = tester
           .widget<Text>(
-            find.textContaining('keeps the people you share this device with'),
+            find.textContaining('Keeps the other people on this device out'),
           )
           .data!;
-      expect(explained, contains('not protection for a lost or stolen device'));
+      expect(explained, contains('Not protection against theft'));
     });
 
     testWidgets(
