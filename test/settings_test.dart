@@ -192,7 +192,7 @@ void main() {
     // acts on the card at the top.
     expect(
       _topOf(tester, forget),
-      lessThan(_topOf(tester, find.text('OTHER PROFILES ON THIS DEVICE'))),
+      lessThan(_topOf(tester, find.text('Other profiles on this device'))),
     );
   });
 
@@ -204,8 +204,19 @@ void main() {
 
     expect(find.text('PROFILES'), findsOneWidget);
     expect(find.text('SERVER'), findsNothing);
-    // The other profiles keep their own sub-heading inside it.
-    expect(find.text('OTHER PROFILES ON THIS DEVICE'), findsOneWidget);
+    // The other profiles are a group **inside** it, so their heading is a
+    // sub-header — sentence case in the muted row-title face — and not a
+    // second uppercase section label standing beside "PROFILES".
+    final sub = find.text('Other profiles on this device');
+    expect(sub, findsOneWidget);
+    expect(
+      tester.widget<Text>(sub).style?.letterSpacing,
+      isNot(PatraText.sectionLabel().letterSpacing),
+    );
+    expect(
+      tester.widget<Text>(sub).style?.fontSize,
+      PatraText.rowTitle().fontSize,
+    );
   });
 
   testWidgets('the two rows that leave say so, and carry the right address', (

@@ -239,7 +239,7 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OTHER PROFILES ON THIS DEVICE'), findsOneWidget);
+    expect(find.text('Other profiles on this device'), findsOneWidget);
     expect(find.text('lea'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Forget'));

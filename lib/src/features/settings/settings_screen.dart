@@ -376,7 +376,13 @@ class _OtherProfiles extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Section(label: l10n.otherProfilesSectionLabel),
+        // A sub-header and not a `_Section`: these people are part of the
+        // Profiles section, not a section beside it. Drawn as one was the
+        // whole of what said otherwise — the same uppercase, letter-spaced
+        // label the screen's four real sections wear — so "Other profiles"
+        // read as a sibling of "Profiles", and the button above it looked
+        // like it belonged to whichever of the two you took it to end.
+        _SubSection(label: l10n.otherProfilesSectionLabel),
         for (final profile in others)
           _OtherProfileRow(profile: profile, showHost: showHost),
       ],
@@ -928,6 +934,28 @@ class _AppVersion extends ConsumerWidget {
     return Text(
       l10n.aboutVersion(ref.watch(clientIdentityProvider).appVersion),
       style: PatraText.metadata(),
+    );
+  }
+}
+
+/// A heading **inside** a section, for a group of rows that belongs to what
+/// the section above already named.
+///
+/// Sentence case in the muted row-title face rather than the uppercase,
+/// letter-spaced label a [_Section] wears — the same two levels the series
+/// screen draws, where a volume's name heads its own chapters under the
+/// storyline's own heading. The distinction is the whole point: one is a
+/// subject, the other is a part of one.
+class _SubSection extends StatelessWidget {
+  const _SubSection({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
+      child: Text(label, style: PatraText.rowTitle(color: patraTextMuted)),
     );
   }
 }
