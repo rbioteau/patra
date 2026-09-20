@@ -352,7 +352,15 @@ for all 53 epubs of a library whose type is *Books*, while reporting
 rare case of a book shelved oddly: **every book on every server** opened
 right-to-left, with nothing in the book saying so and nothing on the shelf
 either. The guard therefore keys off the chapter's *content* — derived from
-the format, which the server does report — and never off the type it states. `PageShapesNotifier.record` now
+the format, which the server does report — and never off the type it states.
+
+The same measurement found `libraryType: 0` reported for a **comic** of a
+*Comics* library, and `pageDimensions: null` throughout — so the detected rung
+answers right-to-left for scans it should not either, whenever nobody has set
+a series or a library direction. That is this ADR's own rung rather than the
+book guard's, it predates #118, and it is **#120**: the two signals #57 gave
+this rung both rest on fields this server does not fill, and what to put in
+their place is a decision rather than a patch. `PageShapesNotifier.record` now
 refuses a reflowable chapter, which is a refusal of a *measurement* and not of
 a work: a series holding both scans and words keeps what its scans measured. A
 book declaring nothing therefore opens at the built-in left-to-right, which is

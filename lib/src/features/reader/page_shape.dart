@@ -152,7 +152,7 @@ class PageShapesNotifier extends Notifier<Map<int, PageShape>> {
   /// a *Comics* library, and `pageDimensions: null` throughout — so the
   /// detected rung answers right-to-left for scans it should not either. That
   /// is #57's rung rather than this guard's business, it predates #118, and
-  /// it is filed rather than quietly widened into here.
+  /// it is #120 rather than something quietly widened into here.
   void record(ChapterInfo info) {
     if (info.content == ChapterContent.reflowable) return;
     state = {...state, info.seriesId: PageShape.of(info)};
