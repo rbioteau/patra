@@ -368,10 +368,13 @@ where a book has always opened.
 
 What still reaches a book from above is the two rungs that are **choices** —
 the series' and the library's — and that follows this ADR rather than
-contradicting it. It leaves one sharp edge, recorded on #118 rather than
+contradicting it. It leaves one sharp edge, filed as #121 rather than
 answered here: the book's cog offers no direction row, so a library set
 right-to-left while reading its scans turns the epubs shelved beside them with
-no row back.
+no row back — and a reading of a book's own CSS that goes wrong has none
+either. The sheet that would carry it is built on the opposite premise, its
+three rows being one choice for every book and belonging to the person
+reading, so what to make of it is a decision rather than a row.
 
 The reader sets **both halves from that one answer** — the prose's
 `Directionality`, so its `TextAlign.start` resolves to the right, and the
