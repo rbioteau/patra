@@ -598,8 +598,16 @@ Iterable<RegExpMatch> _rules(String css) =>
 final _rule = RegExp(r'([^{}]*)\{([^{}]*)\}');
 
 /// One declaration of a rule's body, as the value it was given.
+///
+/// The property has to *begin* where the match does, which `\b` alone does
+/// not say: a hyphen is a non-word character, so `\bdirection` matches inside
+/// `-epub-writing-direction` and `\bfont-family` inside `-epub-font-family`.
+/// A vendor-prefixed property is a different property and one this app does
+/// not honour, and reading `-epub-writing-direction: rtl` as a book declaring
+/// its direction is exactly the over-trigger the direction reading is built
+/// to refuse.
 RegExp _declaration(String property) => RegExp(
-  '\\b$property\\s*:\\s*([^;}]+)',
+  '(?<![-\\w])$property\\s*:\\s*([^;}]+)',
   caseSensitive: false,
   dotAll: true,
 );

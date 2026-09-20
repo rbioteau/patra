@@ -337,6 +337,26 @@ direction for the work. An omnibus carrying a single right-to-left story
 would turn whole, which is the case that could argue for per-chapter and is
 written up on #118 rather than decided here.
 
+**For a book the declaration is the whole of the detected rung.** The two
+measurements above it are about scans and have nothing to go on for a book: it
+carries no page dimensions at all, so a shape recorded for one answers
+`isVertical: false` about a work nothing was measured of — and the library
+type beside it then speaks, though what that type witnesses is a convention
+about how *scans* are bound. This amendment first shipped without that guard,
+and the result was that every epub shelved in a manga library opened
+right-to-left with nothing in it saying so. `PageShapesNotifier.record` now
+refuses a reflowable chapter, which is a refusal of a *measurement* and not of
+a work: a series holding both scans and words keeps what its scans measured. A
+book declaring nothing therefore opens at the built-in left-to-right, which is
+where a book has always opened.
+
+What still reaches a book from above is the two rungs that are **choices** —
+the series' and the library's — and that follows this ADR rather than
+contradicting it. It leaves one sharp edge, recorded on #118 rather than
+answered here: the book's cog offers no direction row, so a library set
+right-to-left while reading its scans turns the epubs shelved beside them with
+no row back.
+
 The reader sets **both halves from that one answer** — the prose's
 `Directionality`, so its `TextAlign.start` resolves to the right, and the
 pager, which turns inside the same `Directionality` — because a book that

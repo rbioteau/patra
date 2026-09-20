@@ -20,6 +20,7 @@ ChapterInfo _chapter({
   LibraryType libraryType = LibraryType.manga,
   List<(int, int)> pages = const [],
   Set<int> wide = const {},
+  MangaFormat format = MangaFormat.archive,
 }) => ChapterInfo(
   seriesId: seriesId,
   volumeId: 4,
@@ -28,6 +29,9 @@ ChapterInfo _chapter({
   seriesName: 'Berserk',
   title: 'Chapter 1',
   libraryType: libraryType,
+  // What makes a chapter words rather than pictures: `ChapterInfo.content`
+  // is read off the series' format, and `epub` is the one that reflows.
+  seriesFormat: format,
   pageDimensions: {
     for (final (page, size) in pages.indexed)
       page: PageDimension(
@@ -335,11 +339,14 @@ void main() {
 
   group('what the book says of itself', () {
     test('a declared direction is what the work suggests', () {
-      // A book has no page dimensions for `chapter-info` to report, so the
-      // pages say nothing about it at all and the library type alone would
-      // read every book left to right.
+      // A book has no page dimensions for `chapter-info` to report, so
+      // nothing is measured of it at all and what it declared is the only
+      // evidence there is.
       final container = _measured([
-        _chapter(libraryType: LibraryType.book),
+        _chapter(
+          libraryType: LibraryType.book,
+          format: MangaFormat.epub,
+        ),
       ], declared: {3: ReadingDirection.rightToLeft});
 
       expect(
@@ -382,6 +389,60 @@ void main() {
       expect(container.read(detectedDirectionProvider(9)), isNull);
     });
 
+    test('a book in a manga library is not turned by the shelf it is on', () {
+      // The regression #118 shipped with and the reason this guard exists.
+      // A book has no page dimensions for `chapter-info` to report, so a
+      // shape recorded for one says `isVertical: false` about a work nothing
+      // was measured of — and the library type beside it then speaks. But the
+      // type witnesses a convention about how *scans* are bound, and an epub
+      // shelved in a manga library is not bound at all: every book on that
+      // shelf opened right-to-left with nothing in it saying so.
+      final container = _measured([
+        _chapter(
+          libraryType: LibraryType.manga,
+          format: MangaFormat.epub,
+        ),
+      ]);
+
+      expect(container.read(detectedDirectionProvider(3)), isNull);
+      expect(
+        container.read(pageShapesProvider)[3],
+        isNull,
+        reason: 'a book measures nothing, so nothing is recorded for it',
+      );
+    });
+
+    test('a book that declares itself is turned, whatever shelf it is on', () {
+      // The other half: the guard refuses a *measurement*, never the book's
+      // own word.
+      for (final type in [LibraryType.book, LibraryType.manga]) {
+        final container = _measured([
+          _chapter(libraryType: type, format: MangaFormat.epub),
+        ], declared: {3: ReadingDirection.rightToLeft});
+
+        expect(
+          container.read(detectedDirectionProvider(3)),
+          ReadingDirection.rightToLeft,
+          reason: '$type',
+        );
+      }
+    });
+
+    test('a series holding both scans and words keeps what its scans '
+        'measured', () {
+      // The guard refuses a measurement, not a work: an omnibus with an epub
+      // chapter beside its scans is still a work whose pages were measured.
+      final container = _measured([
+        _chapter(pages: [_panel, _panel, _panel]),
+        _chapter(format: MangaFormat.epub),
+      ]);
+
+      expect(
+        container.read(detectedDirectionProvider(3)),
+        ReadingDirection.verticalScroll,
+      );
+    });
+
     test('a book that declares nothing leaves the pages to answer', () {
       final container = _measured([
         _chapter(libraryType: LibraryType.manga, pages: [_page, _page, _page]),
@@ -400,7 +461,10 @@ void main() {
       // detected rung, so a series or a library somebody has set stands above
       // it. A guess must never beat a choice (ADR-0007).
       final container = await _reading([
-        _chapter(libraryType: LibraryType.book),
+        _chapter(
+          libraryType: LibraryType.book,
+          format: MangaFormat.epub,
+        ),
       ], declared: {3: ReadingDirection.rightToLeft});
 
       final guessed = container.read(
@@ -423,7 +487,10 @@ void main() {
 
     test("a library's own direction outranks what the book declared", () async {
       final container = await _reading([
-        _chapter(libraryType: LibraryType.book),
+        _chapter(
+          libraryType: LibraryType.book,
+          format: MangaFormat.epub,
+        ),
       ], declared: {3: ReadingDirection.rightToLeft});
 
       await container

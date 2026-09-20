@@ -12,6 +12,10 @@
 ///
 /// What turns the two into a direction is the chain's business and lives in
 /// `reading_direction.dart`; this file only measures.
+///
+/// **And it measures pictures only.** A chapter of words has no page with a
+/// size, so there is nothing here for it and nothing is recorded — see
+/// [PageShapesNotifier.record], which is where that refusal is argued.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -116,6 +120,27 @@ class PageShapesNotifier extends Notifier<Map<int, PageShape>> {
   Map<int, PageShape> build() => const {};
 
   /// Records what [info] measured, against the work it belongs to.
-  void record(ChapterInfo info) =>
-      state = {...state, info.seriesId: PageShape.of(info)};
+  ///
+  /// **A book measures nothing, so nothing is recorded for one** (#118). Its
+  /// pages are the server's, laid out from words and carrying no dimensions
+  /// for `chapter-info` to report, so [PageShape.of] would answer `isVertical:
+  /// false` about a work nothing was measured of — and the library type
+  /// beside it would then speak. That is the bug this guard exists for: the
+  /// type witnesses a convention about how *scans* are bound, and an epub
+  /// shelved in a manga library is not bound at all. Left unguarded, every
+  /// book on that shelf opened right-to-left with nothing in it saying so.
+  ///
+  /// What answers for a book instead is what the book *declared*
+  /// (`declaredDirectionsProvider`), which is a statement rather than an
+  /// inference — and where it declares nothing, the built-in left-to-right at
+  /// the end of the chain, which is where a book has always opened.
+  ///
+  /// The guard is here rather than at the one call site so that no later
+  /// caller can record a book by accident. A series holding both scans and
+  /// words keeps what its scans measured: this refuses a measurement, not a
+  /// work.
+  void record(ChapterInfo info) {
+    if (info.content == ChapterContent.reflowable) return;
+    state = {...state, info.seriesId: PageShape.of(info)};
+  }
 }

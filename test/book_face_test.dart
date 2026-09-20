@@ -346,6 +346,18 @@ void main() {
       );
     });
 
+    test('a prefixed property is a different property', () {
+      // A hyphen is a non-word character, so a `\b` before the name matches
+      // inside `-epub-writing-direction` — and the prefixed properties are
+      // exactly the ones an EPUB writes and this app does not honour.
+      expect(
+        parseBookDirection(
+          page('.book-content { -epub-writing-direction: rtl; }'),
+        ),
+        isNull,
+      );
+    });
+
     test('a page with no stylesheet says nothing', () {
       expect(parseBookDirection('<div class="book-content"><p>Hello</p></div>'), isNull);
     });
