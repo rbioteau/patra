@@ -62,8 +62,11 @@ class MemoryLinks implements ExternalLinks {
 /// the 40pt one is the face. Shared because two suites ask the same question
 /// of the same widget, and they were two copies that one change broke twice.
 Color serverDotColour(WidgetTester tester, {String host = 'kavita.example'}) {
+  // `textContaining`: the card's second line is one `Text.rich` carrying
+  // the host, the release and the status word at once, so the host is no
+  // longer a text node of its own.
   final card = find
-      .ancestor(of: find.text(host), matching: find.byType(InkWell))
+      .ancestor(of: find.textContaining(host), matching: find.byType(InkWell))
       .first;
   final dot = tester
       .widgetList<Container>(

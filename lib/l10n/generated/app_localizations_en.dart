@@ -665,6 +665,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get privacyPolicy => 'Privacy policy';
 
   @override
+  String linkCouldNotOpen(String url) {
+    return 'Could not open a browser. The address is $url';
+  }
+
+  @override
   String sizeBytes(int count) {
     return '$count B';
   }

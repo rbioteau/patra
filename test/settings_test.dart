@@ -29,12 +29,17 @@ Profile _profile({
   token: 'token',
 );
 
-/// Answers everything, so the screen's own reachability probe settles.
+/// Answers everything, so the screen's own reachability probe settles — and
+/// names a version, so the card draws the longest second line it can:
+/// dot, host, ` · `, and the release.
 class _Adapter implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async =>
       ResponseBody.fromString(
-        jsonEncode(const <Object>[]),
+        // `/api/Plugin/version` answers a bare string, not an object.
+        options.path == '/api/Plugin/version'
+            ? jsonEncode('0.9.1.4')
+            : jsonEncode(const <Object>[]),
         200,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -83,9 +88,16 @@ Future<void> _pumpSettings(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: patraTheme(),
-        home: MediaQuery(
-          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-          child: const SettingsScreen(),
+        // `copyWith`, never a fresh `MediaQueryData`: a bare one leaves
+        // `MediaQuery.sizeOf` at zero, and the five screens that ask it
+        // which shape to draw would silently take the wrong branch.
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: const SettingsScreen(),
+          ),
         ),
       ),
     ),
@@ -107,7 +119,8 @@ void main() {
     // The person in the title, the server underneath it. It was the other
     // way round while this was a card about a server.
     final name = find.text('romain');
-    final host = find.text('kavita.example');
+    // One `Text.rich` now: the host shares its line with the release.
+    final host = find.textContaining('kavita.example');
     expect(name, findsOneWidget);
     expect(host, findsOneWidget);
     expect(_topOf(tester, name), lessThan(_topOf(tester, host)));
@@ -137,6 +150,9 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    // And it met the longest second line it can draw, rather than a short
+    // one that would have fitted anything: dot, host, and the release.
+    expect(find.textContaining('Kavita 0.9.1.4'), findsOneWidget);
   });
 
   testWidgets('tapping the card asks for another profile', (tester) async {
@@ -156,18 +172,27 @@ void main() {
     expect(container.read(authProvider).profiles, hasLength(1));
   });
 
-  testWidgets('forgetting the active profile sits with the profiles', (
+  testWidgets('forgetting the active profile sits under its own card', (
     tester,
   ) async {
-    await _pumpSettings(tester);
+    await _pumpSettings(
+      tester,
+      profiles: [_profile(), _profile(accountId: 2, username: 'other')],
+    );
 
-    // Between the profiles it is about and the next section, rather than
-    // after the licences at the very bottom of the screen.
     final forget = find.text('Forget this profile');
     expect(forget, findsOneWidget);
+    // Out of the foot of the screen, where it sat past the licences.
     expect(
       _topOf(tester, forget),
       lessThan(_topOf(tester, find.text('GENERAL'))),
+    );
+    // And above the other faces, not below them: a destructive button drawn
+    // under a list of people reads as acting on the last one, and this one
+    // acts on the card at the top.
+    expect(
+      _topOf(tester, forget),
+      lessThan(_topOf(tester, find.text('OTHER PROFILES ON THIS DEVICE'))),
     );
   });
 

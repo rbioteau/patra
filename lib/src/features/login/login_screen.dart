@@ -329,6 +329,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               controller: _passwordController,
               focusNode: _passwordFocus,
               obscureText: !_showPassword,
+              // Stated rather than left to `obscureText`, which does not
+              // imply them: `EditableText` passes both straight through to
+              // the platform, so revealing the password would otherwise
+              // hand the keyboard a field it may autocorrect mid-entry and
+              // add to the device's own dictionary — offered back, later,
+              // in somebody else's app.
+              autocorrect: false,
+              enableSuggestions: false,
               // The last field, so the keyboard offers the verb rather than
               // a carriage return: the button under this one is reachable
               // without ever being looked for.

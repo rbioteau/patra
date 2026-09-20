@@ -110,7 +110,9 @@ Future<_Adapter> _pump(
 Future<String> _announcement(WidgetTester tester) async {
   final handle = tester.ensureSemantics();
   await tester.pump();
-  final label = tester.getSemantics(find.text('kavita.example')).label;
+  final label = tester
+      .getSemantics(find.textContaining('kavita.example'))
+      .label;
   handle.dispose();
   return label;
 }
@@ -130,7 +132,7 @@ void main() {
       expect(serverDotColour(tester), patraOnline);
       expect(await _announcement(tester), contains('Connected'));
       // Good news needs no caption; only the bad case is spelled out.
-      expect(find.text('Offline'), findsNothing);
+      expect(find.textContaining('Offline'), findsNothing);
     });
 
     testWidgets('a server that cannot be reached is not shown green', (
@@ -145,7 +147,7 @@ void main() {
       expect(serverDotColour(tester), patraDanger);
       // Colour alone is no indicator at 8pt — two colours a good share of
       // people cannot tell apart — so the state is also said in words.
-      expect(find.text('Offline'), findsOneWidget);
+      expect(find.textContaining('Offline'), findsOneWidget);
       expect(await _announcement(tester), contains('Offline'));
     });
 
@@ -159,7 +161,7 @@ void main() {
       await _pump(tester, healthStatus: 500);
 
       expect(serverDotColour(tester), patraOnline);
-      expect(find.text('Offline'), findsNothing);
+      expect(find.textContaining('Offline'), findsNothing);
     });
 
     testWidgets('a failed request outranks a probe that once succeeded', (
@@ -179,7 +181,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(serverDotColour(tester), patraDanger);
-      expect(find.text('Offline'), findsOneWidget);
+      expect(find.textContaining('Offline'), findsOneWidget);
       expect(await _announcement(tester), isNot(contains('Connected')));
     });
   });

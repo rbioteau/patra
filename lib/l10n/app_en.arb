@@ -678,6 +678,13 @@
     "description": "About row that opens the repository in a browser; it leaves the app, so it ends in open_in_new rather than a chevron"
   },
   "privacyPolicy": "Privacy policy",
+  "linkCouldNotOpen": "Could not open a browser. The address is {url}",
+  "@linkCouldNotOpen": {
+    "description": "Shown when an outward row cannot hand the reader to a browser. It gives the address rather than the failure: it is short, it is all the row was going to offer, and it can still be read or written down",
+    "placeholders": {
+      "url": {"type": "String"}
+    }
+  },
   "@privacyPolicy": {
     "description": "About row that opens the published privacy policy in a browser. Play wants the policy reachable from within the app as well as from the store listing"
   },

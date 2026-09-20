@@ -1118,6 +1118,12 @@ abstract class AppLocalizations {
   /// **'Privacy policy'**
   String get privacyPolicy;
 
+  /// Shown when an outward row cannot hand the reader to a browser. It gives the address rather than the failure: it is short, it is all the row was going to offer, and it can still be read or written down
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open a browser. The address is {url}'**
+  String linkCouldNotOpen(String url);
+
   /// No description provided for @sizeBytes.
   ///
   /// In en, this message translates to:

@@ -49,17 +49,17 @@ class SettingsScreen extends ConsumerWidget {
                   onTap: () => ref.read(authProvider.notifier).switchProfile(),
                 ),
                 _ProfileLockRow(profile: session),
-              ],
-              const _OtherProfiles(),
-              // With the people it is about, rather than after the licences.
-              // It kept its shape — a bordered button and not one of the
-              // icons the rows above carry — because forgetting the profile
-              // being read as ends the session, which the other verb does
-              // not.
-              if (session != null) ...[
+                // Under the card it acts on, not after the licences where it
+                // used to sit — and **above** the other profiles rather than
+                // below them, because a destructive button drawn under a
+                // list of faces reads as acting on the last one. It kept its
+                // shape, a bordered button and not one of the icons those
+                // rows carry, because forgetting the profile being read as
+                // ends the session, which the other verb does not.
                 const SizedBox(height: 12),
                 _ForgetProfile(profile: session),
               ],
+              const _OtherProfiles(),
 
               _Section(label: l10n.generalSectionLabel),
               _SettingRow(
@@ -150,15 +150,13 @@ class SettingsScreen extends ConsumerWidget {
                 icon: const Icon(Icons.code, size: 18),
                 title: l10n.sourceCode,
                 external: true,
-                onTap: () =>
-                    ref.read(externalLinksProvider).open(ExternalLinks.source),
+                onTap: () => _leave(context, ref, ExternalLinks.source),
               ),
               _SettingRow(
                 icon: const Icon(Icons.shield_outlined, size: 18),
                 title: l10n.privacyPolicy,
                 external: true,
-                onTap: () =>
-                    ref.read(externalLinksProvider).open(ExternalLinks.privacy),
+                onTap: () => _leave(context, ref, ExternalLinks.privacy),
               ),
 
               // Whose work this is, at the foot of the screen. The terms it
@@ -180,6 +178,28 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Hands the reader to a browser, and says so when there is none.
+  ///
+  /// `launchUrl` both **returns false** where the platform declines and
+  /// **throws** where no app claims the intent, and an unawaited future
+  /// turns the second into an unhandled async error — so a tap on a device
+  /// with no browser did nothing at all and said nothing either. The
+  /// address is put up instead of the failure: it is short, it is the whole
+  /// of what the row was going to give, and somebody who cannot open it
+  /// here can still read it.
+  Future<void> _leave(BuildContext context, WidgetRef ref, String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context);
+    var opened = false;
+    try {
+      opened = await ref.read(externalLinksProvider).open(url);
+    } on Object {
+      opened = false;
+    }
+    if (opened) return;
+    messenger.showSnackBar(SnackBar(content: Text(l10n.linkCouldNotOpen(url))));
   }
 
   /// The languages this build ships, under their own names, with the device's
@@ -919,14 +939,6 @@ class _Section extends StatelessWidget {
   }
 }
 
-/// The active server, with an indicator saying whether it is actually there.
-///
-/// The dot used to be a `const` [patraOnline]: it said "connected" from the
-/// moment the screen was drawn, with nothing behind it. It now reads a real
-/// probe, and re-runs it when the app comes back to the foreground — which
-/// is where connectivity usually changes, and the four tabs live in an
-/// `IndexedStack`, so this card is never rebuilt from scratch and nothing
-/// else would think to ask again.
 /// The profile being read as, and the server it is on.
 ///
 /// It was a card about the **server** that borrowed a verb about a
@@ -937,7 +949,7 @@ class _Section extends StatelessWidget {
 /// that threshold rather than removed it.
 ///
 /// Drawn as a profile instead, the verb has nothing to say: a face that opens
-/// opens the [[Picker]], which is exactly what the face on the Home bar
+/// opens the picker, which is exactly what the face on the Home bar
 /// already means, and the chevron alone carries it. What is left is
 /// `avatar + Expanded(text) + chevron`, a row with no competitor for width,
 /// which cannot overflow however the type is scaled — pinned at 320pt by
@@ -947,6 +959,13 @@ class _Section extends StatelessWidget {
 /// **server**, and above the host it would have read as a state of the
 /// person; an avatar is also where the picker draws its own badge, and two
 /// vocabularies on one face is one too many.
+///
+/// That dot used to be a `const` [patraOnline]: it said "connected" from the
+/// moment the screen was drawn, with nothing behind it. It reads a real
+/// probe, and re-runs it when the app comes back to the foreground — which
+/// is where connectivity usually changes, and the four tabs live in an
+/// `IndexedStack`, so this card is never rebuilt from scratch and nothing
+/// else would think to ask again.
 class _ActiveProfileCard extends ConsumerStatefulWidget {
   const _ActiveProfileCard({required this.profile, required this.onTap});
 
@@ -1000,98 +1019,123 @@ class _ActiveProfileCardState extends ConsumerState<_ActiveProfileCard> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: gutter),
-      child: Material(
-        color: patraSurface,
-        borderRadius: BorderRadius.circular(radiusCard),
-        child: InkWell(
-          onTap: widget.onTap,
+      // The verb left the row, and a chevron says nothing to a screen
+      // reader. What the tap does is spoken as a **hint** — after the face,
+      // the server and its state, rather than in place of them — which keeps
+      // the rule that a tap is always worded, without drawing a word or
+      // costing the row a point of width.
+      child: Semantics(
+        button: true,
+        hint: l10n.switchProfile,
+        child: Material(
+          color: patraSurface,
           borderRadius: BorderRadius.circular(radiusCard),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radiusCard),
-              border: Border.all(color: patraBorder),
-            ),
-            // One stop for a screen reader, announced whole: whose profile
-            // this is, where it lives, and how that server is answering.
-            child: MergeSemantics(
-              child: Row(
-                children: [
-                  ProfileAvatar(profile: widget.profile, size: _avatarSize),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          // The same name the rows underneath use. A server
-                          // has no business being named two ways on one
-                          // screen, and `username` was the other way.
-                          widget.profile.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: PatraText.rowTitle(),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            // The state reaches a screen reader as a word; an
-                            // 8pt dot that only changes colour reaches no one
-                            // who cannot tell these two colours apart.
-                            Semantics(
-                              label: status,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                margin: const EdgeInsets.only(right: 7),
-                                decoration: BoxDecoration(
-                                  color: dotColor,
-                                  shape: BoxShape.circle,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(radiusCard),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(radiusCard),
+                border: Border.all(color: patraBorder),
+              ),
+              // One stop for a screen reader, announced whole: whose profile
+              // this is, where it lives, and how that server is answering.
+              child: MergeSemantics(
+                child: Row(
+                  children: [
+                    ProfileAvatar(profile: widget.profile, size: _avatarSize),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            // The same name the rows underneath use. A server
+                            // has no business being named two ways on one
+                            // screen, and `username` was the other way.
+                            widget.profile.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: PatraText.rowTitle(),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              // The state reaches a screen reader as a word; an
+                              // 8pt dot that only changes colour reaches no one
+                              // who cannot tell these two colours apart.
+                              Semantics(
+                                label: status,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.only(right: 7),
+                                  decoration: BoxDecoration(
+                                    color: dotColor,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Flexible(
-                              // Always drawn, unlike the host under an other
-                              // profile's name, which only appears where the
-                              // device knows several servers: this is the one
-                              // card carrying a server's state, and a dot with
-                              // nothing beside it qualifies nothing.
-                              child: Text(
-                                widget.profile.host,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: PatraText.metadata(),
-                              ),
-                            ),
-                            // Not flexible: eight characters that a long host
-                            // should shorten around rather than push off the
-                            // row. It can never share the line with the
-                            // status word — being offline is what takes the
-                            // version away.
-                            if (version != null) ...[
-                              Text(' · ', style: PatraText.metadata()),
-                              Text(
-                                l10n.serverVersion(version),
-                                style: PatraText.metadata(),
+                              // One `Text` and not three in a row, so there
+                              // is one place the line can give. Three of
+                              // them, with only the host flexible, meant the
+                              // release was drawn at its intrinsic width
+                              // whatever was left: at double type on a 320pt
+                              // screen that ran the row over by 219 points,
+                              // which is the very thing the card was redrawn
+                              // to make impossible.
+                              //
+                              // It gives at the **end**, so the host — which
+                              // says which server this is — is the part that
+                              // survives, and the release, which is a
+                              // courtesy, is the part that goes. The version
+                              // and the status word can never share the line
+                              // anyway: being offline is what takes the
+                              // version away. Where the ellipsis does reach
+                              // "Offline", the dot beside it is already red
+                              // and already worded for a screen reader.
+                              Expanded(
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      // Always drawn, unlike the host under
+                                      // an other profile's name, which
+                                      // appears only where the device knows
+                                      // several servers: this is the one card
+                                      // carrying a server's state, and a dot
+                                      // beside nothing qualifies nothing.
+                                      TextSpan(text: widget.profile.host),
+                                      if (version != null)
+                                        TextSpan(
+                                          text:
+                                              ' · ${l10n.serverVersion(version)}',
+                                        ),
+                                      // Said in words only when it is bad
+                                      // news: a green dot needs no caption,
+                                      // an unreachable server does.
+                                      if (reachable == false)
+                                        TextSpan(
+                                          text: ' · $status',
+                                          style: PatraText.metadata(
+                                            color: patraDanger,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: PatraText.metadata(),
+                                ),
                               ),
                             ],
-                            // Said in words only when it is bad news: a green
-                            // dot needs no caption, an unreachable server
-                            // does.
-                            if (reachable == false) ...[
-                              Text(' · ', style: PatraText.metadata()),
-                              Text(
-                                status,
-                                style: PatraText.metadata(color: patraDanger),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.chevron_right, size: 18),
-                ],
+                    const Icon(Icons.chevron_right, size: 18),
+                  ],
+                ),
               ),
             ),
           ),

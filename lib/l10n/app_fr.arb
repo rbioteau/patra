@@ -182,6 +182,7 @@
   "licensesTitle": "Licences",
   "sourceCode": "Code source",
   "privacyPolicy": "Politique de confidentialité",
+  "linkCouldNotOpen": "Impossible d'ouvrir un navigateur. L'adresse est {url}",
   "sizeBytes": "{count} o",
   "sizeMegabytes": "{count} Mo",
   "sizeGigabytes": "{count} Go",

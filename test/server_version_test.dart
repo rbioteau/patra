@@ -128,7 +128,7 @@ void main() {
       expect(adapter.queries['/api/Plugin/version'], {'apiKey': 'key'});
       // Verbatim, four parts and no `v` — the string Kavita's own admin
       // screen prints, so the two can be read against each other.
-      expect(find.text('Kavita 0.9.1.4'), findsOneWidget);
+      expect(find.textContaining('Kavita 0.9.1.4'), findsOneWidget);
     });
 
     testWidgets('nothing is said before the answer arrives', (tester) async {
@@ -143,13 +143,13 @@ void main() {
 
       held.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Kavita 0.9.1.4'), findsOneWidget);
+      expect(find.textContaining('Kavita 0.9.1.4'), findsOneWidget);
     });
 
     testWidgets('being offline takes the version away', (tester) async {
       await _pump(tester);
       await tester.pumpAndSettle();
-      expect(find.text('Kavita 0.9.1.4'), findsOneWidget);
+      expect(find.textContaining('Kavita 0.9.1.4'), findsOneWidget);
 
       // The connection drops while the screen sits there, with a perfectly
       // good version already in hand. It still has to go: a version is only
@@ -163,7 +163,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Kavita'), findsNothing);
-      expect(find.text('Offline'), findsOneWidget);
+      expect(find.textContaining('Offline'), findsOneWidget);
     });
 
     testWidgets('a server that will not name itself is still connected', (
@@ -180,7 +180,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(serverDotColour(tester), patraOnline);
-      expect(find.text('Offline'), findsNothing);
+      expect(find.textContaining('Offline'), findsNothing);
       expect(find.textContaining('Kavita'), findsNothing);
     });
   });
