@@ -411,6 +411,17 @@ footer.site nav {
   gap: 6px 16px;
 }
 
+/* A line of its own under the two above it, rather than a third thing
+   competing for the row: whose work this is, and the disclaimer about
+   Kavita, are two different facts and neither belongs in the other's
+   sentence. `flex-basis: 100%` is what wraps it, the footer being a flex
+   row. Matches `ExternalLinks.copyright`, which the app draws at the foot
+   of Settings — one year, written down in both places. */
+footer.site .copyright {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+
 footer.site a {
   color: var(--muted);
 }
