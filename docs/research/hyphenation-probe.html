@@ -105,8 +105,8 @@
   var probe = document.getElementById('probe');
 
   // How many characters the engine left on the first line, by binary search
-  // over "is this character still on line one?".
-  function firstLineChars() {
+  // over "is this character still on line one?". Method A.
+  function firstLineCharsA() {
     var node = probe.firstChild;
     if (!node) return null;
     var n = node.length, range = document.createRange();
@@ -124,6 +124,41 @@
     return hi;                                   // the break sits before hi
   }
 
+  // Method B: the largest prefix that still fits on one line. A range's client
+  // rects are one per line fragment, so this asks the layout directly rather
+  // than inferring a line from a character's top edge.
+  //
+  // A and B do not agree, and the disagreement is the point. Measured on an
+  // Android System WebView on 2026-09-20, A is exactly one character past the
+  // TeX break and B exactly one before it, on all ten word/language pairs — two
+  // boundary-resolution artefacts pointing opposite ways, bracketing the true
+  // break rather than hitting it. Neither has been explained; filtering empty
+  // rects moved nothing. So read an absolute position as the midpoint and never
+  // as a measurement, and read the comparison — does `fr` differ from `en`? —
+  // as sound, because a constant offset cancels between two columns taken with
+  // one instrument.
+  function firstLineCharsB() {
+    var node = probe.firstChild;
+    if (!node) return null;
+    var n = node.length, r = document.createRange();
+    function lines(i) {
+      r.setStart(node, 0); r.setEnd(node, i);
+      // Empty rects are not lines. Filtering them was an attempt to explain B's
+      // offset and did not change a single measurement, so that is not the
+      // cause; the filter is kept because it is correct on its own terms.
+      var rects = r.getClientRects(), seen = 0;
+      for (var k = 0; k < rects.length; k++) if (rects[k].width > 0.01) seen++;
+      return seen;
+    }
+    if (lines(n) < 2) return null;            // never broke
+    var lo = 1, hi = n;                       // lines(lo) === 1, lines(hi) >= 2
+    while (hi - lo > 1) {
+      var mid = (lo + hi) >> 1;
+      if (lines(mid) < 2) lo = mid; else hi = mid;
+    }
+    return lo;                                // the whole of line one
+  }
+
   // Sweep the column and collect every break the engine was willing to make.
   function breaksFor(word, lang) {
     probe.setAttribute('lang', lang);
@@ -134,14 +169,18 @@
     var whole = document.createRange();
     whole.selectNodeContents(probe);
     var full = whole.getBoundingClientRect().width;
-    var seen = {}, broke = false;
-    for (var w = Math.ceil(full * 0.20); w <= Math.ceil(full * 0.95); w += 1) {
+    var seenA = {}, seenB = {}, broke = false;
+    // From 12%: at 20% the earliest break of a long word was never forced.
+    for (var w = Math.ceil(full * 0.12); w <= Math.ceil(full * 0.95); w += 1) {
       probe.parentNode.style.width = w + 'px';
-      var at = firstLineChars();
-      if (at !== null) { seen[at] = true; broke = true; }
+      var a = firstLineCharsA(), b = firstLineCharsB();
+      if (a !== null) { seenA[a] = true; broke = true; }
+      if (b !== null) { seenB[b] = true; broke = true; }
     }
-    var out = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
-    return { breaks: out, broke: broke, natural: full };
+    function sorted(seen) {
+      return Object.keys(seen).map(Number).sort(function (x, y) { return x - y; });
+    }
+    return { breaks: sorted(seenB), breaksA: sorted(seenA), broke: broke, natural: full };
   }
 
   function show(arr, word) {
@@ -175,7 +214,11 @@
                    (differs ? '<br><span class="pts" style="font-size:11px">fr ≠ en</span>' : '') +
                    '</td>' : '') +
         '<td class="mono">' + lang + '</td>' +
-        '<td>' + show(got[lang].breaks, entry.w) + '</td>' +
+        '<td>' + show(got[lang].breaks, entry.w) +
+          (got[lang].breaksA.join(',') !== got[lang].breaks.join(',')
+            ? '<br><span class="mono" style="color:var(--bad);font-size:11px">A: [' +
+              got[lang].breaksA.join(', ') + ']</span>'
+            : '') + '</td>' +
         '<td>' + expect + '</td>';
       tbody.appendChild(tr);
     });
