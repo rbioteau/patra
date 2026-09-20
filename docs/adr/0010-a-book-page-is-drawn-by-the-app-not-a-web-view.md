@@ -1,6 +1,6 @@
 # ADR-0010 — A book's page is drawn by the app, not handed to a web view
 
-**Status:** accepted · **Date:** 2026-09-14
+**Status:** superseded by [ADR-0013](0013-a-book-page-is-rendered-by-a-web-view-sanitised-first.md) · **Date:** 2026-09-14
 
 ## Context
 
