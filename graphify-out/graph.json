@@ -46142,7 +46142,7 @@
       "node_kind": "heading",
       "norm_label": "sources",
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L269"
+      "source_location": "L273"
     },
     {
       "id": "docs_research_book_hyphenation_what_is_still_thin",
@@ -68789,7 +68789,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L269",
+      "source_location": "L273",
       "weight": 1.0
     },
     {
@@ -128541,7 +128541,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L321",
+      "source_location": "L325",
       "weight": 1.0
     },
     {
@@ -128552,7 +128552,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L325",
+      "source_location": "L329",
       "weight": 1.0
     },
     {
@@ -128563,7 +128563,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L326",
+      "source_location": "L330",
       "weight": 1.0
     },
     {
@@ -128574,7 +128574,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L327",
+      "source_location": "L331",
       "weight": 1.0
     },
     {
@@ -128585,7 +128585,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/research/book-hyphenation.md",
-      "source_location": "L328",
+      "source_location": "L332",
       "weight": 1.0
     },
     {
@@ -133608,5 +133608,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "bec21f84dae271b2aa728e50a8f00b79878a6704"
+  "built_at_commit": "70d14eae83f3d2a4463fbb48ca611988fc24f171"
 }

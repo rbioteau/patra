@@ -1,7 +1,7 @@
 # Graph Report - patra  (2026-09-20)
 
 ## Corpus Check
-- 204 files · ~456,470 words
+- 204 files · ~457,059 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bec21f84`
+- Built from commit: `70d14eae`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -216,8 +216,8 @@
 6. `sessionProvider` - 18 edges
 7. `_ReaderScreenState` - 16 edges
 8. `build` - 15 edges
-9. `DownloadsNotifier` - 15 edges
-10. `authProvider` - 15 edges
+9. `authProvider` - 15 edges
+10. `DownloadsNotifier` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Server version` --semantically_similar_to--> `pubspec version is only a local fallback`  [INFERRED] [semantically similar]
@@ -945,7 +945,7 @@ Nodes (3): ThumbStrip, _ThumbStripState, TickerProviderStateMixin
   .github/dependabot.yml · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **3621 isolated node(s):** `Context`, `Decision`, `Why`, `Cost, accepted`, `Consequence` (+3616 more)
+- **3621 isolated node(s):** `What "the pinned SDK" is, exactly`, `1. Where the break points come from`, `2. Which languages, and what they cost`, `3. Which language a book is in — and how that answers #118 consistently`, `4. Who draws the hyphen — the question with no cheap answer` (+3616 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3893 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -955,12 +955,12 @@ _Questions this graph is uniquely positioned to answer:_
 - **What is the exact relationship between `Dependabot github-actions ecosystem (weekly)` and `Upload to the internal test track`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **Why does `Profile lock (lib/src/lock/profile_lock.dart)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `ProfilePreferencesStore (profile_preferences.dart)`, `patraAccent = progress/identity, patraOffline = downloads/offline`, `The profile picker (/profiles)`, `AsyncValue.isResolvedFailure`, `profile_lock_sheet.dart`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
-- **Why does `_` connect `_` to `login_screen.dart`, `home_screen.dart`, `book_contents.dart`, `package:flutter/material.dart`, `authProvider`, `List`, `profile_picker_test.dart`, `page_rail.dart`, `../theme.dart`, `static const`, `../api/models.dart`, `series_hero.dart`, `../auth/session.dart`, `kavitaClientProvider`, `package:flutter_riverpod/flutter_riverpod.dart`, `profile_picker_screen.dart`, `connection_failure.dart`, `offlineProvider`, `downloads_screen.dart`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
+  _High betweenness centrality (0.033) - this node is a cross-community bridge._
 - **Why does `suggestsLock (the suggestion goes to the unrestricted profile)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `UserDto.isAdmin (role read from the login response)`?**
-  _High betweenness centrality (0.016) - this node is a cross-community bridge._
-- **What connects `Context`, `Decision`, `Why` to the rest of the system?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+- **Why does `_` connect `_` to `catalogue_overlay.dart`, `page_loading.dart`, `package:flutter_riverpod/flutter_riverpod.dart`, `catalogue_reads.dart`, `../api/models.dart`, `return`, `series_hero.dart`, `../auth/session.dart`, `catalogue_provider.dart`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+- **What connects `What "the pinned SDK" is, exactly`, `1. Where the break points come from`, `2. Which languages, and what they cost` to the rest of the system?**
   _3621 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `app_localizations.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.0091324200913242 - nodes in this community are weakly interconnected._
