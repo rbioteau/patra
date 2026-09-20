@@ -1,7 +1,7 @@
 # Graph Report - patra  (2026-09-20)
 
 ## Corpus Check
-- 202 files · ~442,260 words
+- 202 files · ~442,758 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2d2bc301`
+- Built from commit: `29c0afc7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -34,7 +34,7 @@
 - series_detail_screen.dart
 - _
 - home_screen.dart
-- connection_failure_test.dart
+- VoidCallback?
 - profile_preferences.dart
 - test_support.dart
 - client_identity.dart
@@ -125,7 +125,7 @@
 - ADR-0004 — The auth key is the only secret a profile keeps
 - Domain Docs
 - AppLocalizations
-- downloadsProvider
+- authProvider
 - MainActivity.kt
 - page_shape_test.dart
 - library_scan_test.dart
@@ -158,11 +158,11 @@
 - SKILL.md
 - .github/CLAUDE.md
 - widget_test.dart
-- _ReaderSettings
+- downloadsProvider
 - auth/CLAUDE.md
 - downloads/CLAUDE.md
 - launch/CLAUDE.md
-- profile_preferences_test.dart
+- connection_failure_test.dart
 - ConsumerWidget
 - CustomPainter
 - ADR-0011 — A second theme is deferred, not rejected
@@ -174,17 +174,17 @@
 - ADR-0010 — A book's page is drawn by the app, not handed to a web view
 - package:flutter/foundation.dart
 - BookPicture
-- connection_failure.dart
-- VoidCallback?
+- profile_avatar.dart
+- profile_preferences_test.dart
 - gen_app_icons.sh
 - cover.dart
 - cache_settings.dart
 - downloads_service_test.dart
 - auth_test.dart
 - List
-- batch_hint.dart
+- connection_failure.dart
 - image_cache_store_test.dart
-- profile_avatar.dart
+- batch_hint.dart
 - @immutable
 - openapi_contract_test.dart
 - package:flutter/material.dart
@@ -201,8 +201,8 @@
 - ADR-0012 — A book is set in the face the book asks for
 - store_screenshots.sh
 - Credential
+- _ReaderSettings
 - gen_demo_library.sh
-- authProvider
 - BookPageBody
 
 ## God Nodes (most connected - your core abstractions)
@@ -311,9 +311,9 @@ Nodes (41): _, alreadyRunning, any, asked, _askForScan, available, build, canSca
 Cohesion: 0.05
 Nodes (43): ../catalogue/catalogue_reads.dart, continue_hero.dart, ../downloads/resume_strip.dart, Library, best, date, featuredSeries, incumbent (+35 more)
 
-### Community 19 - "connection_failure_test.dart"
-Cohesion: 0.13
-Nodes (14): DioExceptionType?, Object?, package:patra/src/api/connection_failure.dart, _Adapter, body, close, contentType, _failureOf (+6 more)
+### Community 19 - "VoidCallback?"
+Cohesion: 0.11
+Nodes (19): ../../branding/patra_launch.dart, double?, EdgeInsetsGeometry, build, child, createState, isLaunchProvider, LaunchAnimation (+11 more)
 
 ### Community 20 - "profile_preferences.dart"
 Cohesion: 0.03
@@ -696,9 +696,9 @@ Nodes (5): Before exploring, read these, Domain Docs, File structure, Flag ADR c
 Cohesion: 0.40
 Nodes (6): AppLocalizations, _AppLocalizationsDelegate, AppLocalizationsEn, AppLocalizationsFr, of, LocalizationsDelegate
 
-### Community 110 - "downloadsProvider"
-Cohesion: 0.16
-Nodes (15): ../downloads/downloads_provider.dart, didUpdateWidget, downloadRecordProvider, downloadsProvider, _CopyRow, _RefreshCopy, _StorageMeterCard, build (+7 more)
+### Community 110 - "authProvider"
+Cohesion: 0.14
+Nodes (17): authProvider, profileCatalogueProvider, profileDownloadsProvider, _ProfileFace, LibraryScanNotifier, scan, build, initState (+9 more)
 
 ### Community 112 - "page_shape_test.dart"
 Cohesion: 0.10
@@ -781,13 +781,13 @@ Nodes (13): catalogue_overlay.dart, catalogue_read.dart, dart:async, SeriesMetad
 Cohesion: 0.07
 Nodes (29): NavigationBar, package:patra/src/downloads/downloads_provider.dart, package:patra/src/downloads/downloads_service.dart, package:patra/src/features/downloads/resume_strip.dart, _chapter, client, close, container (+21 more)
 
-### Community 147 - "_ReaderSettings"
-Cohesion: 0.67
-Nodes (3): _BookSettings, _PictureSettings, _ReaderSettings
+### Community 147 - "downloadsProvider"
+Cohesion: 0.16
+Nodes (15): ../downloads/downloads_provider.dart, didUpdateWidget, downloadRecordProvider, downloadsProvider, _CopyRow, _RefreshCopy, _StorageMeterCard, build (+7 more)
 
-### Community 151 - "profile_preferences_test.dart"
-Cohesion: 0.17
-Nodes (11): ProfilePreferencesStore, package:patra/src/settings/cache_settings.dart, package:patra/src/settings/profile_preferences.dart, container, _CountingStore, _lea, main, of (+3 more)
+### Community 151 - "connection_failure_test.dart"
+Cohesion: 0.13
+Nodes (14): DioExceptionType?, Object?, package:patra/src/api/connection_failure.dart, _Adapter, body, close, contentType, _failureOf (+6 more)
 
 ### Community 152 - "ConsumerWidget"
 Cohesion: 0.06
@@ -833,13 +833,13 @@ Nodes (5): _families, _registered, registerPatraFontLicenses, package:flutter/fo
 Cohesion: 0.50
 Nodes (5): BookBlock, BookPicture, BookWords, endBlock, parseBookPage
 
-### Community 163 - "connection_failure.dart"
-Cohesion: 0.18
-Nodes (10): int?, ConnectionFailure, ConnectionFailureKind, detail, from, _fromStatus, kind, message (+2 more)
+### Community 163 - "profile_avatar.dart"
+Cohesion: 0.14
+Nodes (13): ../api/kavita_client.dart, Profile, Session, build, dimmed, hex, _Initial, on (+5 more)
 
-### Community 164 - "VoidCallback?"
-Cohesion: 0.11
-Nodes (19): ../../branding/patra_launch.dart, double?, EdgeInsetsGeometry, build, child, createState, isLaunchProvider, LaunchAnimation (+11 more)
+### Community 164 - "profile_preferences_test.dart"
+Cohesion: 0.17
+Nodes (11): ProfilePreferencesStore, package:patra/src/settings/cache_settings.dart, package:patra/src/settings/profile_preferences.dart, container, _CountingStore, _lea, main, of (+3 more)
 
 ### Community 165 - "gen_app_icons.sh"
 Cohesion: 0.47
@@ -865,17 +865,17 @@ Nodes (21): DioException get, Exception, SignInExpired, package:patra/src/keycha
 Cohesion: 0.18
 Nodes (10): int get, firstOf, indexOf, length, of, _slotOfPage, slots, spanOf (+2 more)
 
-### Community 171 - "batch_hint.dart"
-Cohesion: 0.29
-Nodes (6): ../keychain.dart, BatchSizeHintStore, _key, _keychain, markShown, wasShown
+### Community 171 - "connection_failure.dart"
+Cohesion: 0.18
+Nodes (10): int?, ConnectionFailure, ConnectionFailureKind, detail, from, _fromStatus, kind, message (+2 more)
 
 ### Community 172 - "image_cache_store_test.dart"
 Cohesion: 0.25
 Nodes (7): Directory, ImageCacheStore, package:patra/src/downloads/image_cache_store.dart, dir, main, store, write
 
-### Community 173 - "profile_avatar.dart"
-Cohesion: 0.14
-Nodes (13): ../api/kavita_client.dart, Profile, Session, build, dimmed, hex, _Initial, on (+5 more)
+### Community 173 - "batch_hint.dart"
+Cohesion: 0.29
+Nodes (6): ../keychain.dart, BatchSizeHintStore, _key, _keychain, markShown, wasShown
 
 ### Community 174 - "@immutable"
 Cohesion: 0.40
@@ -925,9 +925,9 @@ Nodes (6): ADR-0012 — A book is set in the face the book asks for, Consequence
 Cohesion: 0.67
 Nodes (3): AuthKeyCredential, Credential, PasswordCredential
 
-### Community 193 - "authProvider"
-Cohesion: 0.14
-Nodes (17): authProvider, profileCatalogueProvider, profileDownloadsProvider, _ProfileFace, LibraryScanNotifier, scan, build, initState (+9 more)
+### Community 190 - "_ReaderSettings"
+Cohesion: 0.67
+Nodes (3): _BookSettings, _PictureSettings, _ReaderSettings
 
 ## Ambiguous Edges - Review These
 - `Dependabot github-actions ecosystem (weekly)` → `Upload to the internal test track`  [AMBIGUOUS]
@@ -945,7 +945,7 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **Why does `Profile lock (lib/src/lock/profile_lock.dart)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `ProfilePreferencesStore (profile_preferences.dart)`, `patraAccent = progress/identity, patraOffline = downloads/offline`, `AsyncValue.isResolvedFailure`, `The profile picker (/profiles)`, `profile_lock_sheet.dart`?**
   _High betweenness centrality (0.041) - this node is a cross-community bridge._
-- **Why does `_` connect `_` to `profile_picker_screen.dart`, `authProvider`, `connection_failure.dart`, `VoidCallback?`, `List`, `page_rail.dart`, `dart:async`, `package:flutter/material.dart`, `home_screen.dart`, `../theme.dart`, `static const`, `downloads_screen.dart`, `ConsumerWidget`, `package:flutter_riverpod/flutter_riverpod.dart`, `../auth/session.dart`, `../api/models.dart`?**
+- **Why does `_` connect `_` to `profile_picker_screen.dart`, `List`, `connection_failure.dart`, `page_rail.dart`, `authProvider`, `dart:async`, `package:flutter/material.dart`, `home_screen.dart`, `../theme.dart`, `static const`, `VoidCallback?`, `downloads_screen.dart`, `ConsumerWidget`, `package:flutter_riverpod/flutter_riverpod.dart`, `../auth/session.dart`, `../api/models.dart`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **Why does `suggestsLock (the suggestion goes to the unrestricted profile)` connect `Profile lock (lib/src/lock/profile_lock.dart)` to `UserDto.isAdmin (role read from the login response)`?**
   _High betweenness centrality (0.017) - this node is a cross-community bridge._
