@@ -420,6 +420,7 @@ footer.site nav {
 footer.site .copyright {
   flex-basis: 100%;
   margin-top: 6px;
+  text-align: center;
 }
 
 footer.site a {

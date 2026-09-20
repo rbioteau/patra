@@ -252,6 +252,11 @@ void main() {
 
     final copyright = find.text('\u00a9 2026 Romain Bioteau');
     expect(copyright, findsOneWidget);
+    // Centred, unlike the rows above it: they line up on the gutter with
+    // each other, and this is a signature under the lot. Asserted on the
+    // property rather than on painted pixels — the `Text` fills the width
+    // either way, so its box says nothing about where the words sit.
+    expect(tester.widget<Text>(copyright).textAlign, TextAlign.center);
     // The last thing on the screen, under the licences it follows.
     expect(
       _topOf(tester, copyright),

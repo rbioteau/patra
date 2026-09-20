@@ -163,11 +163,18 @@ class SettingsScreen extends ConsumerWidget {
               // is published under are named on the licence page instead,
               // where that answers the question; here it would be jargon
               // under a signature.
+              //
+              // Centred, unlike every row above it: those are things to
+              // press and line up on the gutter with each other, and this
+              // is a signature under the lot. The same shape the sign-in
+              // screen's own footer has, which is the app's other note
+              // about itself rather than about what is on the screen.
               const SizedBox(height: sectionGap),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: gutter),
                 child: Text(
                   ExternalLinks.copyright,
+                  textAlign: TextAlign.center,
                   style: PatraText.metadata(
                     color: patraText.withValues(alpha: .45),
                   ),
