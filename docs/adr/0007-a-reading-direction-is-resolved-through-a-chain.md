@@ -355,16 +355,14 @@ either. The guard therefore keys off the chapter's *content* — derived from
 the format, which the server does report — and never off the type it states.
 
 The same measurement found `libraryType: 0` reported for a **comic** of a
-*Comics* library, and `pageDimensions: null` throughout — so the detected rung
-answers right-to-left for scans it should not either, whenever nobody has set
-a series or a library direction. That is this ADR's own rung rather than the
-book guard's, it predates #118, and it is **#120**: the two signals #57 gave
-this rung both rest on fields this server does not fill, and what to put in
-their place is a decision rather than a patch. `PageShapesNotifier.record` now
-refuses a reflowable chapter, which is a refusal of a *measurement* and not of
-a work: a series holding both scans and words keeps what its scans measured. A
-book declaring nothing therefore opens at the built-in left-to-right, which is
-where a book has always opened.
+*Comics* library, so the detected rung answered right-to-left for scans it
+should not either, whenever nobody had set a series or a library direction.
+That was this ADR's own rung rather than the book guard's, and it is **#120**,
+amended below. `PageShapesNotifier.record` now refuses a reflowable chapter,
+which is a refusal of a *measurement* and not of a work: a series holding both
+scans and words keeps what its scans measured. A book declaring nothing
+therefore opens at the built-in left-to-right, which is where a book has
+always opened.
 
 What still reaches a book from above is the two rungs that are **choices** —
 the series' and the library's — and that follows this ADR rather than
@@ -390,3 +388,80 @@ drops a book's `lang` exactly as it drops its `dir`, and #119 needs it for
 hyphenation. This amendment establishes the shape an answer to it should take
 — read out of what the page already hands over, recorded per work, feeding
 the rung that guesses — and nothing more.
+
+## Amendment — 2026-09-20 (#120)
+
+The detected rung takes the library type from **the catalogue the device
+already holds**, and never from the chapter it is opening.
+
+`chapter-info` declares a `libraryType`, and the amendment above read it as a
+field that one server failed to fill. It is not: **no Kavita has ever filled
+it.** `ReaderController.GetChapterInfo` asks the repository for a DTO — where
+`LibraryType = series.Library.Type` really is resolved — and then rebuilds the
+response field by field into a fresh `ChapterInfoDto`, copying `LibraryId` and
+not `LibraryType`. The resolved value is computed and dropped, so what every
+client receives is the enum's default. Checked at v0.7.14, v0.8.0, v0.8.9,
+v0.9.1.0, v0.9.1.4 and on `develop`: the field is assigned on none of them.
+The only two mentions of it inside that action are *reads* of the default,
+which Kavita spends on its own `Subtitle` — so the server's own wording
+carries the same fault, which is likely why nobody had reported it.
+
+The default is `Manga = 0`, and manga is the one type that carries a
+direction. So the rung did not merely lose a signal; it gained a constant that
+reads **right-to-left**, for every work whose pages produced no vertical
+verdict and whose series and library nobody had set. On a server that reports
+no page dimensions, that is every scan on it.
+
+Three answers were weighed, and the first was the only one that restores
+anything. Reading the type **off the catalogue** is what every naming decision
+in the app already does, and it makes #57's case work for the first time
+rather than merely stopping the wrong answer. **Dropping the type signal
+altogether** would leave the rung saying only whether a work is vertical —
+costed at the time as losing the one case #57 was built for, which on this
+evidence was already lost, so it would fix the wrong answer without restoring
+the right one. **Asking the server for the library** is refused by a rule this
+ADR already keeps: opening a chapter puts no new request on the wire.
+
+Two consequences follow from taking it off the catalogue, and both are the
+decision rather than details of it.
+
+**A shelf the device has not learned is not a shelf that reads left-to-right.**
+`heldLibraryTypeProvider` reads the spine already in hand — `libraryName`'s
+mechanism, for `libraryName`'s reason — and answers **nothing** where the
+device holds nothing of that library. `libraryTypeProvider` beside it falls
+back to manga, which is right for wording a row and exactly wrong here: it
+would rebuild this very bug one layer down, right-to-left for every work whose
+shelf has not arrived. A rung with no witness stands down, the chain reaches
+the built-in left-to-right that nobody chose, and the sheet says so.
+
+**`PageShape` measures the pages and nothing else.** The type was carried on
+it because it arrived on the same response; it does not arrive there any more,
+and the file's own contract — *this file only measures* — is what is left.
+`detectedDirectionProvider` is therefore a family of the series **and** its
+library, which is the pair `chapterDirectionProvider` was already a family of,
+so the two cannot be asked different questions about one chapter. What the
+rung *remembers* is still per series.
+
+**And a rung that stands down has to be able to stand up again.** Standing
+down is only right while the answer is *not known yet*, and the spine is a
+plain field on the store that a write replaces with no notification — so a
+provider that has read it answers with the list as it stood when it was built.
+Every other reader of the spine gets away with that by asking from a body that
+re-runs on its own fetch; these two have no fetch to ride on, by design. Worse,
+this one is watched by a rung kept for the whole session, so nothing would ever
+drop a stale "the device knows no such library": a chapter opened at launch
+from a link, on a profile whose device has never stored a library list, would
+read left to right and every manga chapter opened afterwards would too, until
+the app was restarted. `CatalogueStore` therefore ticks a revision when — and
+only when — the **library list** is replaced, and the two providers watch it.
+Only that list, because a series list or a volume landing says nothing about
+which libraries exist, and a tick per write would rebuild every screen reading
+the catalogue right through the eager fill.
+
+`ChapterInfo` stops parsing the field. A parsed constant wearing the name of a
+fact is a trap for whoever reaches for it next, and `libraryId` beside it is
+what the catalogue is asked with.
+
+Nothing else about the chain moves: a guess is still asked last but one, and a
+series' or a library's own direction still outranks it.
+

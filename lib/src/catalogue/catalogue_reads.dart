@@ -60,6 +60,11 @@ final libraries = CatalogueRead.spine<List<Library>>(
 /// Derived rather than fetched, so it is a plain provider and has no request
 /// of its own to refresh. It reads [libraries] and not its fetch, or offline
 /// a comic library would say "chapitre".
+///
+/// **For naming a thing, and never for guessing one.** Both of the things it
+/// does to stay out of a screen's way — asking [libraries], and standing in
+/// manga until the answer lands — are wrong for a guess. What a guess asks is
+/// [heldLibraryTypeProvider].
 final libraryTypeProvider = Provider.autoDispose.family<LibraryType, int>((
   ref,
   libraryId,
@@ -91,12 +96,53 @@ final libraryNameProvider = Provider.autoDispose.family<String, int>((
   ref,
   libraryId,
 ) {
+  ref.watch(librariesRevisionProvider);
   final spine = heldSpine(ref);
   if (spine == null) return '';
   for (final library in spine.libraries) {
     if (library.id == libraryId) return library.name;
   }
   return '';
+});
+
+/// The type of one library as the device **already holds it**, or null where
+/// it holds nothing of that library yet (#120).
+///
+/// The same question [libraryTypeProvider] answers, and deliberately not the
+/// same read — for both of the reasons [libraryNameProvider] beside it gives,
+/// and it is the second of them that this exists for.
+///
+/// It is read **off the spine and never through [libraries]**, because
+/// watching that read is a request, and not a small one: the library list's
+/// write starts the eager fill, which pages every library's series. The one
+/// caller is the reader, for the rung that guesses a direction, and opening a
+/// chapter is not the moment to fill a household's catalogue.
+///
+/// And it answers **nothing** where the spine has nothing to say, where
+/// [libraryTypeProvider] falls back to manga. That fallback is right for a
+/// *name*: a screen must not wait to word a row, and the wording settles as
+/// soon as the list lands. It is exactly wrong for a *guess*, because manga is
+/// the one type that carries a direction with it — so falling back to it is
+/// falling back to right-to-left for every work whose shelf the device has not
+/// learned yet, which is the whole of #120 rebuilt one layer down. A rung with
+/// no evidence stands down; [libraryNameProvider]'s empty string is the same
+/// refusal, in the currency a name is paid in.
+final heldLibraryTypeProvider = Provider.autoDispose.family<LibraryType?, int>((
+  ref,
+  libraryId,
+) {
+  // Answered again when the list the device holds is replaced. Without it
+  // this answer is the list as it stood when the provider was built — and it
+  // is watched by a rung that is kept for the session, so a chapter opened
+  // before the list arrived would keep "no such library" until the app was
+  // restarted. See [librariesRevisionProvider].
+  ref.watch(librariesRevisionProvider);
+  final spine = heldSpine(ref);
+  if (spine == null) return null;
+  for (final library in spine.libraries) {
+    if (library.id == libraryId) return library.type;
+  }
+  return null;
 });
 
 /// Every series in one library, and the catalogue's copy of that list.

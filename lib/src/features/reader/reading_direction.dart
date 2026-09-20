@@ -8,8 +8,9 @@
 ///    (#65);
 /// 3. the **detected** — the direction the work itself suggests (#57): what
 ///    a book declared of itself in its own stylesheet (#118), and otherwise
-///    the library a work was shelved in and the shape of its pages, measured
-///    by `page_shape.dart` from the chapter being read;
+///    the shape of its pages, measured by `page_shape.dart` from the chapter
+///    being read, and the library it was shelved in, taken off the catalogue
+///    the device already holds (#120);
 /// 4. the left-to-right a chapter has always opened in.
 ///
 /// There used to be two rungs between the series' own and the detected one —
@@ -37,6 +38,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/models.dart';
+import '../../catalogue/catalogue_reads.dart';
 import '../../settings/profile_preferences.dart';
 import '../../settings/reading_settings.dart';
 import 'page_shape.dart';
@@ -158,21 +160,40 @@ class ChapterDirection {
 /// pages' answer, because no book declares that: `direction` is an axis of
 /// writing and not a way of turning pages.
 ///
-/// Keyed by series and not by chapter because what is remembered is per
-/// series: a direction detected for one chapter of a work is a direction for
-/// the work.
-final detectedDirectionProvider = Provider.family<ReadingDirection?, int>((
-  ref,
-  seriesId,
-) {
-  final declared = ref.watch(declaredDirectionsProvider)[seriesId];
-  if (declared != null) return declared;
-  final shape = ref.watch(pageShapesProvider)[seriesId];
-  if (shape == null) return null;
-  return shape.isVertical
-      ? ReadingDirection.verticalScroll
-      : _horizontal(shape.libraryType);
-});
+/// **The library type comes from the catalogue and never from the chapter**
+/// (#120). `chapter-info` states one, and `GetChapterInfo` has never assigned
+/// it: from Kavita v0.7.14 to today the value its repository resolves is
+/// dropped when the response is rebuilt field by field, so every chapter of
+/// every library comes back with the enum's default — *manga*, the one type
+/// that carries a direction. Read off the chapter, this rung therefore
+/// answered right-to-left for every work whose pages produced no verdict,
+/// which on a server reporting no dimensions is every work on it. The type
+/// the device holds in its own catalogue is right, and asking it costs
+/// nothing: [heldLibraryTypeProvider] reads the spine already in hand and
+/// puts nothing on the wire, because opening a chapter is not the moment to
+/// fill a household's catalogue.
+///
+/// **A shelf the device has not learned is not a shelf that reads
+/// left-to-right.** Where the catalogue holds no answer the rung has no
+/// witness to the convention and answers nothing at all, which is how it
+/// stands down rather than guessing — the built-in left-to-right behind it is
+/// then reached as what nobody chose, and the sheet says so. That is the same
+/// refusal `libraryNameProvider` makes with an empty name, and the opposite
+/// of what `libraryTypeProvider` does for a screen wording a row.
+///
+/// Keyed by the series **and its library**, the pair `chapterDirectionProvider`
+/// is already a family of, so the two cannot be asked different questions
+/// about one chapter. What is *remembered* is still per series, because a
+/// direction detected for one chapter of a work is a direction for the work.
+final detectedDirectionProvider =
+    Provider.family<ReadingDirection?, ChapterDirectionKey>((ref, key) {
+      final declared = ref.watch(declaredDirectionsProvider)[key.seriesId];
+      if (declared != null) return declared;
+      final shape = ref.watch(pageShapesProvider)[key.seriesId];
+      if (shape == null) return null;
+      if (shape.isVertical) return ReadingDirection.verticalScroll;
+      return _horizontal(ref.watch(heldLibraryTypeProvider(key.libraryId)));
+    });
 
 /// What the books this session has opened declared of themselves, by series
 /// (#118).
@@ -233,9 +254,16 @@ class DeclaredDirectionsNotifier extends Notifier<Map<int, ReadingDirection>> {
 /// images all open the way a chapter always has. Where the type is wrong for
 /// a whole library, that library's own direction (#65) is what corrects it,
 /// and a series' own is what corrects one work.
-ReadingDirection _horizontal(LibraryType type) => type == LibraryType.manga
-    ? ReadingDirection.rightToLeft
-    : ReadingDirection.leftToRight;
+///
+/// **No type is no answer, and not the answer for "not manga"** (#120). The
+/// two are told apart here rather than upstream because this is the one place
+/// that knows what a type is for: a shelf nobody has told the device about
+/// witnesses nothing, and a rung with no witness stands down.
+ReadingDirection? _horizontal(LibraryType? type) => switch (type) {
+  null => null,
+  LibraryType.manga => ReadingDirection.rightToLeft,
+  _ => ReadingDirection.leftToRight,
+};
 
 /// What the chain is asked about: the series a chapter belongs to, and the
 /// library that series is shelved in — two ids because the library's rung is
@@ -253,7 +281,7 @@ final chapterDirectionProvider =
       return ChapterDirection(
         series: ref.watch(seriesDirectionsProvider)[key.seriesId],
         library: ref.watch(libraryDirectionsProvider)[key.libraryId],
-        detected: ref.watch(detectedDirectionProvider(key.seriesId)),
+        detected: ref.watch(detectedDirectionProvider(key)),
       );
     });
 

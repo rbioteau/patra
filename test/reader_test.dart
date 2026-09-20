@@ -10,6 +10,8 @@ import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/page_rail.dart';
@@ -33,12 +35,16 @@ class _ReaderAdapter implements HttpClientAdapter {
     this.dimensions = true,
     this.offline = false,
     this.seriesId = 3,
-    this.libraryType = LibraryType.manga,
     this.pageSize = const Size(800, 1200),
-  });
+    List<String>? paths,
+  }) : paths = paths ?? <String>[];
 
   /// Every progress post, in the order the reader made them.
   final List<int> posted;
+
+  /// Every path asked for, so a test can pin what the reader must **not**
+  /// ask: opening a chapter fills no catalogue (#120).
+  final List<String> paths;
 
   /// Which series the chapter belongs to: what a direction chosen in the
   /// reader is remembered against.
@@ -50,12 +56,12 @@ class _ReaderAdapter implements HttpClientAdapter {
   /// How long the chapter is.
   final int pages;
 
-  /// The kind of library the series was shelved in. Half of what a direction
-  /// is guessed from (#57).
-  final LibraryType libraryType;
-
-  /// The size of an ordinary page, which is the other half: 800×1200 is a
-  /// comic or manga page (1.5 tall), 800×4000 is a panel.
+  /// The size of an ordinary page, which is half of what a direction is
+  /// guessed from (#57): 800×1200 is a comic or manga page (1.5 tall),
+  /// 800×4000 is a panel. The other half is the type of the library the
+  /// series is shelved in, and it does not come from here — `chapter-info`
+  /// states one and Kavita has never populated it (#120), so the reader takes
+  /// it off the catalogue the device holds.
   final Size pageSize;
 
   /// Whether the server measured the pages at all. A server that has not
@@ -68,6 +74,7 @@ class _ReaderAdapter implements HttpClientAdapter {
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
+    paths.add(options.path);
     if (options.path == '/api/Reader/progress') {
       posted.add((options.data as Map<String, dynamic>)['pageNum'] as int);
       return ResponseBody.fromString(
@@ -92,7 +99,6 @@ class _ReaderAdapter implements HttpClientAdapter {
           'seriesId': seriesId,
           'volumeId': 4,
           'libraryId': 1,
-          'libraryType': libraryType.id,
           'pages': pages,
           'seriesName': 'Berserk',
           'title': 'Chapter 1',
@@ -182,10 +188,25 @@ Future<List<int>> _pumpReader(
   bool dimensions = true,
   bool offline = false,
   int seriesId = 3,
-  LibraryType libraryType = LibraryType.manga,
+  // The shelf the series is on, as the device's own catalogue holds it — the
+  // half of the guess the pages cannot make (#120). Null is a device whose
+  // library list has not arrived, which is where most of these tests are and
+  // is why the rung then says nothing at all. Nothing serves this over the
+  // wire: the reader must reach a chapter without filling a catalogue.
+  LibraryType? libraryType,
   Size pageSize = const Size(800, 1200),
+  List<String>? requested,
 }) async {
   final dir = mockPathProvider();
+  final catalogue = CatalogueStore(
+    root: Directory('${dir.path}/catalogue')..createSync(),
+    profileId: 'https://kavita.test#1',
+  );
+  if (libraryType != null) {
+    await catalogue.putLibraries([
+      Library(id: 1, name: 'Shelf', type: libraryType),
+    ]);
+  }
   final downloads = DownloadsService(
     root: Directory('${dir.path}/downloads')..createSync(),
     profileId: 'https://kavita.test#1',
@@ -212,8 +233,8 @@ Future<List<int>> _pumpReader(
     dimensions: dimensions,
     offline: offline,
     seriesId: seriesId,
-    libraryType: libraryType,
     pageSize: pageSize,
+    paths: requested,
   );
   client.httpClient.httpClientAdapter = adapter;
   client.bareHttpClient.httpClientAdapter = adapter;
@@ -224,6 +245,7 @@ Future<List<int>> _pumpReader(
         testKeychain(),
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
+        catalogueStoreProvider.overrideWithValue(catalogue),
         if (profile != null)
           initialAuthStateProvider.overrideWithValue(
             AuthState(profiles: [profile], activeId: profile.id),
@@ -616,17 +638,32 @@ void main() {
   ) async {
     // The other half of the guess, and the one the dimensions can never
     // answer: a manhua's pages are the shape of manga's and it reads the
-    // other way.
+    // other way. The shelf is the **catalogue's** and never the chapter's
+    // (#120), so what the two pumps differ by is the library list the device
+    // already held when the chapter was opened.
+    final asked = <String>[];
     await _pumpReader(
       tester,
       initialPage: 0,
       direction: null,
+      libraryType: LibraryType.manga,
+      // Somebody reading, because a catalogue belongs to a session — and a
+      // store nobody has written to is still a profile that has chosen
+      // nothing, which is what leaves the guess to answer.
+      profile: _reader,
       store: ProfilePreferencesStore(keychain: MemoryKeychain()),
+      requested: asked,
     );
     expect(
       tester.widget<PageView>(find.byType(PageView)).reverse,
       isTrue,
       reason: 'a manga library reads right to left',
+    );
+    expect(
+      asked,
+      isNot(contains('/api/Library/libraries')),
+      reason: 'opening a chapter fills no catalogue: the type is read off '
+          'the spine the device already holds',
     );
 
     await _pumpReader(
@@ -634,12 +671,34 @@ void main() {
       initialPage: 0,
       direction: null,
       libraryType: LibraryType.comic,
+      profile: _reader,
       store: ProfilePreferencesStore(keychain: MemoryKeychain()),
     );
     expect(
       tester.widget<PageView>(find.byType(PageView)).reverse,
       isFalse,
       reason: 'a comic library reads left to right',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a chapter opened before the library list has arrived opens '
+      'where a chapter always has', (tester) async {
+    // #120's own case, end to end: the pages are measured and say nothing
+    // about being vertical, and the shelf is not in the catalogue yet — so
+    // the rung has no witness to a convention and stands down, rather than
+    // reading right-to-left off a type no Kavita has ever sent.
+    await _pumpReader(
+      tester,
+      initialPage: 0,
+      direction: null,
+      profile: _reader,
+      store: ProfilePreferencesStore(keychain: MemoryKeychain()),
+    );
+    expect(
+      tester.widget<PageView>(find.byType(PageView)).reverse,
+      isFalse,
+      reason: 'the built-in left-to-right, which is what nobody chose',
     );
     expect(tester.takeException(), isNull);
   });

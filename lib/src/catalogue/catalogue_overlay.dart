@@ -58,6 +58,26 @@ Spine? heldSpine(Ref ref) {
   return _storeOrNull(ref)?.spine ?? read.value;
 }
 
+/// Which revision of the **library list** the device is holding (#120).
+///
+/// The spine is a plain field on the store and a write replaces it with no
+/// notification (`CatalogueStore.librariesWritten` argues the rest), so a
+/// provider that has read it is holding the list as it stood when it was
+/// built. Every read below gets away with that by asking from a body that
+/// re-runs on its own fetch; the two questions answered off the spine alone —
+/// `libraryNameProvider` and `heldLibraryTypeProvider` — have no fetch to
+/// ride on and watch this instead.
+///
+/// The value is of no interest to anybody: what it is for is *moving*. It
+/// stays `AsyncLoading` until the first list lands, which is exactly the
+/// state those two report as "the device holds nothing of this library", so
+/// nothing has to wait on it either.
+final librariesRevisionProvider = StreamProvider<int>((ref) {
+  final store = _storeOrNull(ref);
+  if (store == null) return const Stream<int>.empty();
+  return store.librariesWritten;
+});
+
 /// One list, laid over what the device remembers of it: [fetch] is the
 /// request, and [held] picks that list out of the spine.
 ///

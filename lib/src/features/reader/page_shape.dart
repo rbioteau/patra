@@ -1,14 +1,20 @@
 /// What the shape of a work's pages says about how it is read (#57).
 ///
-/// Two things are known about a chapter the moment it opens — the library it
-/// was shelved in, and the dimensions of its pages — and between them they
-/// suggest a direction for a work nobody has chosen one for. They answer
-/// **different questions and never compete**:
+/// The guess about a work nobody has chosen a direction for rests on two
+/// facts, and they answer **different questions and never compete**:
 ///
 /// - **whether** a work is vertical is a property of the pages, and only the
 ///   dimensions can say it;
 /// - **which way** it goes when it is not is a convention of origin, and only
 ///   the library type was ever a witness to it.
+///
+/// **Only the first of the two is measured here**, and the second is not
+/// measured at all: the library type is read off the catalogue the device
+/// already holds (`heldLibraryTypeProvider`) and never off the chapter, for
+/// the reason #120 establishes — `chapter-info` states the type but has never
+/// once populated it, on any version of Kavita, so what it answers is the
+/// enum's default and that default is *manga*. A shape that carried it would
+/// be carrying a constant that reads right-to-left.
 ///
 /// What turns the two into a direction is the chain's business and lives in
 /// `reading_direction.dart`; this file only measures.
@@ -22,10 +28,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/models.dart';
 
-/// What the app has measured of one work: the library it was shelved in, and
-/// whether its pages are panels rather than pages.
+/// What the app has measured of one work: whether its pages are panels rather
+/// than pages.
+///
+/// One fact, and it stays a class rather than collapsing into the `bool` it
+/// holds because it is the value a work is remembered by — a map of series to
+/// *nothing measured yet* against series *measured and found not vertical* is
+/// the distinction the rung is built on, and `Map<int, bool>` says it far
+/// less plainly.
 class PageShape {
-  const PageShape({required this.libraryType, required this.isVertical});
+  const PageShape({required this.isVertical});
 
   /// Measures what [info] says about the work it belongs to.
   ///
@@ -54,14 +66,11 @@ class PageShape {
           page.value.height / page.value.width,
     ]..sort();
     return PageShape(
-      libraryType: info.libraryType,
       isVertical:
           tallness.length >= measuredPagesNeeded &&
           _median(tallness) >= verticalTallness,
     );
   }
-
-  final LibraryType libraryType;
 
   /// Whether the pages measured are panels rather than pages: a work that is
   /// scrolled rather than turned.
@@ -127,16 +136,20 @@ class PageShapesNotifier extends Notifier<Map<int, PageShape>> {
   /// false` about a work nothing was measured of — and the library type
   /// beside it would then speak.
   ///
-  /// **And the type it would speak with is not the library's.** Measured
-  /// against the demo server (Kavita 0.9.1.4, `demo.kavitareader.com`):
-  /// `chapter-info` reports `libraryType: 0` — manga — for all 53 epubs of a
-  /// library whose type is *Books*, and `seriesFormat: 3` correctly for every
-  /// one of them. So this is not the rare case of a book shelved oddly: left
-  /// unguarded, **every book on every server** opened right-to-left, with
-  /// nothing in the book saying so and nothing on the shelf either. That is
-  /// the bug this guard exists for, and it is why the guard keys off
-  /// [ChapterInfo.content] — derived from the format, which the server does
-  /// report — and never off the type.
+  /// **And the type it would have spoken with was not the library's.** It was
+  /// nobody's: `chapter-info` declares a library type and `GetChapterInfo`
+  /// has never assigned one, on any Kavita from v0.7.14 to today — the value
+  /// the repository resolves is dropped when the response DTO is rebuilt
+  /// field by field, so what reaches a client is the enum's default, *manga*,
+  /// for every chapter of every library. Measured first against the demo
+  /// server (Kavita 0.9.1.4), where all 53 epubs of a library whose type is
+  /// *Books* came back `libraryType: 0` with `seriesFormat: 3` correct for
+  /// every one of them, then read in the server's own source. So this was
+  /// never the rare case of a book shelved oddly: left unguarded, **every
+  /// book on every server** opened right-to-left, with nothing in the book
+  /// saying so and nothing on the shelf either. That is the bug this guard
+  /// exists for, and it is why it keys off [ChapterInfo.content] — derived
+  /// from the format, which the server does report — and never off a type.
   ///
   /// What answers for a book instead is what the book *declared*
   /// (`declaredDirectionsProvider`), which is a statement rather than an
@@ -148,11 +161,13 @@ class PageShapesNotifier extends Notifier<Map<int, PageShape>> {
   /// words keeps what its scans measured: this refuses a measurement, not a
   /// work.
   ///
-  /// The same measurement found `libraryType: 0` reported for a **comic** of
-  /// a *Comics* library, and `pageDimensions: null` throughout — so the
-  /// detected rung answers right-to-left for scans it should not either. That
-  /// is #57's rung rather than this guard's business, it predates #118, and
-  /// it is #120 rather than something quietly widened into here.
+  /// The same fault reached **scans** as well — a comic of a *Comics* library
+  /// came back `libraryType: 0` too — so the detected rung answered
+  /// right-to-left for works it should not have. That was #57's rung rather
+  /// than this guard's business, and #120 closed it by taking the type off
+  /// the catalogue instead. What is left here is unchanged by that: a book
+  /// still measures nothing, so a shape recorded for one would still be a
+  /// verdict about a work nothing was measured of.
   void record(ChapterInfo info) {
     if (info.content == ChapterContent.reflowable) return;
     state = {...state, info.seriesId: PageShape.of(info)};

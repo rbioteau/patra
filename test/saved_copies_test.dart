@@ -90,7 +90,6 @@ class _BookServer implements HttpClientAdapter {
           'seriesId': 3,
           'volumeId': 4,
           'libraryId': 1,
-          'libraryType': LibraryType.book.id,
           'pages': 0,
           'seriesName': 'Dune',
           'title': 'Dune',

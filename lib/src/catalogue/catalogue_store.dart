@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -58,6 +59,31 @@ class CatalogueStore {
   /// what `main()` awaits before the first frame. Nothing would be gained by
   /// awaiting a read whose answer the next reader has to fetch again.
   Spine? _spine;
+
+  /// Ticks whenever the **library list** held here is replaced.
+  ///
+  /// [_spine] is a plain field and a write simply swaps it, so anything that
+  /// has read the list once answers with the list as it stood then. Every
+  /// read in `catalogue_reads.dart` gets away with that by asking from a body
+  /// that re-runs on its own fetch — but the two questions answered off the
+  /// spine **alone** (`libraryNameProvider`, `heldLibraryTypeProvider`) have
+  /// no fetch to ride on, deliberately: opening a chapter must put nothing on
+  /// the wire. Without this they would answer "the device knows no such
+  /// library" for as long as they were kept, which for the rung that guesses
+  /// a direction is the whole session — a chapter opened before the list
+  /// arrived would go on reading left to right in a manga library until the
+  /// app was restarted (#120).
+  ///
+  /// Only the **library list** ticks it, not every write: a series list or a
+  /// volume landing says nothing about which libraries exist, and a tick per
+  /// write would rebuild every screen reading the catalogue right through the
+  /// eager fill.
+  ///
+  /// It carries a revision rather than nothing at all because a stream of
+  /// identical values is a stream Riverpod cannot tell has moved.
+  Stream<int> get librariesWritten => _librariesWritten.stream;
+  final _librariesWritten = StreamController<int>.broadcast();
+  var _librariesRevision = 0;
 
   /// The catalogue root, which the **device** owns: every profile's
   /// catalogue is a directory inside it.
@@ -141,6 +167,10 @@ class CatalogueStore {
         ),
       );
     });
+    // Said after the write and inside no queue: what a listener is being told
+    // is that the list it holds is out of date, and it has to be true by the
+    // time anybody is told it.
+    _librariesWritten.add(++_librariesRevision);
     // The volumes and descriptions of what was under a library nothing lists
     // any more. Left behind they would be files no screen could reach or
     // explain, and only removing the profile would ever collect them.

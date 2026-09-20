@@ -661,7 +661,6 @@ class ChapterInfo {
     required this.seriesName,
     required this.title,
     this.seriesFormat = MangaFormat.unknown,
-    this.libraryType = LibraryType.manga,
     this.pageDimensions = const {},
     this.progress,
   });
@@ -676,7 +675,15 @@ class ChapterInfo {
   /// The format of the whole series: a series is one format in Kavita, and
   /// this is the only place the reader can learn it before opening a page.
   final MangaFormat seriesFormat;
-  final LibraryType libraryType;
+
+  // `chapter-info` also declares a `libraryType`, and it is **not** mapped
+  // here (#120). `GetChapterInfo` rebuilds its response field by field and
+  // has never assigned that one, on any Kavita from v0.7.14 to today, so what
+  // comes down the wire is the enum's default — manga — for every chapter of
+  // every library. A parsed field would be a constant wearing the name of a
+  // fact. What needs a library's type asks the catalogue, which holds the
+  // right one (`catalogue.heldLibraryTypeProvider`), and [libraryId] beside
+  // this is what it is asked with.
 
   /// What the chapter is made of. See [MangaFormat.content].
   ChapterContent get content => seriesFormat.content;
@@ -730,7 +737,6 @@ class ChapterInfo {
     seriesName: book.seriesName,
     title: book.title,
     seriesFormat: book.seriesFormat,
-    libraryType: libraryType,
     progress: progress,
   );
 
@@ -742,7 +748,6 @@ class ChapterInfo {
     seriesName: json['seriesName'] as String? ?? '',
     title: json['title'] as String? ?? '',
     seriesFormat: MangaFormat.fromId(json['seriesFormat'] as int?),
-    libraryType: LibraryType.fromId(json['libraryType'] as int?),
     pageDimensions: {
       for (final dimension
           in (json['pageDimensions'] as List<dynamic>? ?? [])

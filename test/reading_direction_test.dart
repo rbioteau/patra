@@ -41,10 +41,14 @@ ProviderContainer _container({
       initialAuthStateProvider.overrideWithValue(
         AuthState(profiles: [_romain, _lea], activeId: active?.id),
       ),
-      // The seam, filled in here the way #57 will fill it in the app: one
-      // provider, and nothing else about the chain moves.
-      for (final entry in detected.entries)
-        detectedDirectionProvider(entry.key).overrideWithValue(entry.value),
+      // The seam, filled in here the way #57 fills it in the app: one
+      // provider, and nothing else about the chain moves. Keyed by series,
+      // because that is what the rung remembers — it is asked with the
+      // library beside it (#120) only so that it can read the shelf's type
+      // off the catalogue, which is not what any test here is about.
+      detectedDirectionProvider.overrideWith(
+        (ref, key) => detected[key.seriesId],
+      ),
     ],
   );
   addTearDown(container.dispose);
