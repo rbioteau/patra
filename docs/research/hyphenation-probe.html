@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hyphenation probe — #119</title>
+<style>
+  :root {
+    --night: #111722; --ivory: #F3EEE3; --gold: #D7B976;
+    --blue: #8EACD8; --muted: #8A93A3; --ok: #7FC08A; --bad: #E0736B;
+    --rule: #2A3243;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--night); color: var(--ivory);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  h2 { font-size: 13px; letter-spacing: .09em; text-transform: uppercase;
+       color: var(--muted); margin: 28px 0 10px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  .verdict { border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin: 16px 0; }
+  .verdict .line { display: flex; gap: 10px; align-items: baseline; margin: 6px 0; }
+  .verdict .k { color: var(--muted); font-size: 13px; min-width: 190px; }
+  .verdict .v { font-weight: 700; }
+  .yes { color: var(--ok); } .no { color: var(--bad); } .maybe { color: var(--gold); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--rule);
+           vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px;
+       letter-spacing: .06em; text-transform: uppercase; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 12px; }
+  .pts { color: var(--gold); }
+  .env { font-size: 11px; color: var(--muted); word-break: break-all; line-height: 1.6; }
+
+  /* The measuring rig: never seen, never emergency-broken. */
+  #rig { position: absolute; left: -10000px; top: 0; }
+  #rig p {
+    margin: 0; font-family: serif; font-size: 16px; line-height: 1.5;
+    hyphens: auto; -webkit-hyphens: auto; -ms-hyphens: auto;
+    overflow-wrap: normal; word-break: normal; text-align: left;
+  }
+
+  /* The visual check, at the reader's own column. */
+  .column {
+    width: 350px; max-width: 100%; margin: 0 0 18px;
+    font-family: Literata, Georgia, serif; font-size: 16px; line-height: 1.5;
+    overflow-wrap: normal; word-break: normal;
+  }
+  .column.hy { hyphens: auto; -webkit-hyphens: auto; -ms-hyphens: auto; }
+  .column.ju { text-align: justify; }
+  .label { color: var(--gold); font-size: 11px; letter-spacing: .08em;
+           text-transform: uppercase; margin: 0 0 6px; }
+</style>
+</head>
+<body>
+
+<h1>Césure : la langue est-elle entendue ?</h1>
+<p class="sub">Sonde pour <a href="https://github.com/rbioteau/patra/issues/119" style="color:var(--blue)">#119</a> — à ouvrir sur un vrai appareil Android <em>et</em> iOS.</p>
+
+<div class="verdict" id="verdict">
+  <div class="line"><span class="k">Césure disponible</span><span class="v" id="v-on">…</span></div>
+  <div class="line"><span class="k">Sensible à <code>lang</code></span><span class="v" id="v-lang">…</span></div>
+  <div class="line"><span class="k">Mots discriminants séparés</span><span class="v" id="v-count">…</span></div>
+</div>
+
+<h2>Mesure — points de coupe observés</h2>
+<p class="sub" style="margin:-4px 0 12px">Chaque mot est balayé sur toute une gamme de largeurs ; ce qui est listé est l'ensemble des coupes que le moteur a réellement acceptées. <span class="pts">L'or</span> signale une différence entre <code>fr</code> et <code>en</code>.</p>
+<table id="results"><thead><tr>
+  <th>Mot</th><th>lang</th><th>Coupes observées</th><th>Attendu (TeX)</th>
+</tr></thead><tbody></tbody></table>
+
+<h2>À l'œil — la colonne du reader (350 px)</h2>
+
+<p class="label">Français · hyphens: auto · justify</p>
+<div class="column hy ju" lang="fr">L'incompréhensibilité des responsabilités gouvernementales démontre les conséquences inévitables de l'institutionnalisation dans la construction administrative contemporaine, dont l'instruction reste un obstacle considérable.</div>
+
+<p class="label">Français · justify seul (témoin)</p>
+<div class="column ju" lang="fr">L'incompréhensibilité des responsabilités gouvernementales démontre les conséquences inévitables de l'institutionnalisation dans la construction administrative contemporaine, dont l'instruction reste un obstacle considérable.</div>
+
+<p class="label">English · hyphens: auto · justify</p>
+<div class="column hy ju" lang="en">The extraordinary incomprehensibility of governmental responsibilities demonstrates the unavoidable consequences of institutionalization throughout contemporary civilization, whose construction remains a considerable obstacle.</div>
+
+<h2>Environnement</h2>
+<div class="env" id="env"></div>
+
+<div id="rig"><p id="probe"></p></div>
+
+<script>
+(function () {
+  // Two independent families of French/English disagreement.
+  //   s + consonant : English breaks BEFORE the s, French AFTER it.
+  //   gn digraph    : French never splits it, English does.
+  var WORDS = [
+    { w: 'construction', en: [3, 8],  fr: [4, 8],  note: 's + consonne' },
+    { w: 'instruction',  en: [2, 7],  fr: [3, 7],  note: 's + consonne' },
+    { w: 'description',  en: [2, 7],  fr: [3, 7],  note: 's + consonne' },
+    { w: 'obstacle',     en: [2, 5],  fr: [3],     note: 's + consonne' },
+    { w: 'signal',       en: [3],     fr: [2],     note: 'digramme gn' }
+  ];
+  var LANGS = ['en', 'fr', 'xx-nonesuch'];
+
+  var probe = document.getElementById('probe');
+
+  // How many characters the engine left on the first line, by binary search
+  // over "is this character still on line one?".
+  function firstLineChars() {
+    var node = probe.firstChild;
+    if (!node) return null;
+    var n = node.length, range = document.createRange();
+    function topOf(i) {
+      range.setStart(node, i); range.setEnd(node, i + 1);
+      return range.getBoundingClientRect().top;
+    }
+    var first = topOf(0);
+    if (topOf(n - 1) - first < 1) return null;   // never broke
+    var lo = 0, hi = n - 1;
+    while (hi - lo > 1) {
+      var mid = (lo + hi) >> 1;
+      if (topOf(mid) - first < 1) lo = mid; else hi = mid;
+    }
+    return hi;                                   // the break sits before hi
+  }
+
+  // Sweep the column and collect every break the engine was willing to make.
+  function breaksFor(word, lang) {
+    probe.setAttribute('lang', lang);
+    probe.textContent = word;
+    probe.parentNode.style.width = '2000px';
+    // A <p> is a block: its own rect is the container's width and says nothing
+    // about the text. A range around the contents is what measures the word.
+    var whole = document.createRange();
+    whole.selectNodeContents(probe);
+    var full = whole.getBoundingClientRect().width;
+    var seen = {}, broke = false;
+    for (var w = Math.ceil(full * 0.20); w <= Math.ceil(full * 0.95); w += 1) {
+      probe.parentNode.style.width = w + 'px';
+      var at = firstLineChars();
+      if (at !== null) { seen[at] = true; broke = true; }
+    }
+    var out = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+    return { breaks: out, broke: broke, natural: full };
+  }
+
+  function show(arr, word) {
+    if (!arr.length) return '<span class="no">aucune</span>';
+    var parts = [], prev = 0;
+    for (var i = 0; i < arr.length; i++) { parts.push(word.slice(prev, arr[i])); prev = arr[i]; }
+    parts.push(word.slice(prev));
+    return '<span class="mono">' + parts.join('-') + '</span> ' +
+           '<span class="muted mono" style="color:var(--muted)">[' + arr.join(', ') + ']</span>';
+  }
+
+  var tbody = document.querySelector('#results tbody');
+  var anyBreak = false, discriminating = 0;
+
+  WORDS.forEach(function (entry) {
+    var got = {};
+    LANGS.forEach(function (lang) { got[lang] = breaksFor(entry.w, lang); });
+
+    var differs = got.en.breaks.join(',') !== got.fr.breaks.join(',');
+    if (differs) discriminating++;
+    LANGS.forEach(function (lang) { if (got[lang].broke) anyBreak = true; });
+
+    LANGS.forEach(function (lang, i) {
+      var tr = document.createElement('tr');
+      var expect = entry[lang] ? '<span class="mono" style="color:var(--muted)">[' +
+                   entry[lang].join(', ') + ']</span>' : '—';
+      tr.innerHTML =
+        (i === 0 ? '<td rowspan="3"><strong>' + entry.w + '</strong><br>' +
+                   '<span style="color:var(--muted);font-size:11px">' + entry.note +
+                   ' · ' + Math.round(got.en.natural) + 'px</span>' +
+                   (differs ? '<br><span class="pts" style="font-size:11px">fr ≠ en</span>' : '') +
+                   '</td>' : '') +
+        '<td class="mono">' + lang + '</td>' +
+        '<td>' + show(got[lang].breaks, entry.w) + '</td>' +
+        '<td>' + expect + '</td>';
+      tbody.appendChild(tr);
+    });
+  });
+
+  probe.parentNode.style.width = '';
+
+  function set(id, text, cls) {
+    var el = document.getElementById(id);
+    el.textContent = text; el.className = 'v ' + cls;
+  }
+  set('v-on', anyBreak ? 'oui' : 'NON', anyBreak ? 'yes' : 'no');
+  set('v-lang', !anyBreak ? '—' : (discriminating > 0 ? 'OUI' : 'non'),
+      !anyBreak ? 'maybe' : (discriminating > 0 ? 'yes' : 'no'));
+  set('v-count', discriminating + ' / ' + WORDS.length,
+      discriminating === WORDS.length ? 'yes' : (discriminating ? 'maybe' : 'no'));
+
+  document.getElementById('env').innerHTML =
+    '<div>' + navigator.userAgent + '</div>' +
+    '<div>dpr ' + window.devicePixelRatio + ' · viewport ' +
+    window.innerWidth + '×' + window.innerHeight +
+    ' · document.lang ' + (document.documentElement.lang || '—') + '</div>';
+})();
+</script>
+</body>
+</html>

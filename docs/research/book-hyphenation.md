@@ -252,7 +252,19 @@ sed -n '/^% licence:/,/^% hyphenmins:/p' hyph-fr.tex   # the grant, per language
 curl -sL https://raw.githubusercontent.com/flutter/flutter/3.47.2/engine/src/flutter/lib/ui/text.dart | grep -c -i hyphen   # 0
 ```
 
-**When that stops being 0, reopen §4 and §6 together.** The probe used for this note is kept in the session scratchpad rather than the repository; §1's `Hyphenator` above is the whole of the part worth keeping.
+**When that stops being 0, reopen §4 and §6 together.** §1's `Hyphenator` above is the whole of the Dart worth keeping. The Flutter probes are not committed, for the reason given above; the **browser** probe is, at [hyphenation-probe.html](hyphenation-probe.html), because unlike them it measures a platform rather than this SDK and its answer moves with Android and iOS rather than with a version this repository can name.
+
+## Addendum, 2026-09-20 — the browser distinguishes the language, and a fourth route was never instructed
+
+Everything above costs what it costs because the app draws the page itself. [#119] establishes that a browser hyphenates and then instructs three **native** routes, and §6 records the one Kavita-side fact that makes the question look different in a browser. Neither the issue nor this note weighs handing the page body to a web view — [ADR-0010] had settled that, and both inherited it.
+
+The wall both stop at is the same: [#119]'s probe *"hyphenated `lang="en"` and `lang="fr"` identically in this Chromium, so the dictionary was not distinguishable from here"*. So *a browser hyphenates* was established and *a browser hyphenates in the book's language* was not, and only the second decides anything.
+
+That probe could not distinguish them because its sentence holds no word whose break differs between the two languages. [hyphenation-probe.html](hyphenation-probe.html) is built from words that do, over two independent families so one dictionary quirk cannot fake a result — `s` + consonant, where English breaks **before** the `s` and French **after** it (`con-struction` / `cons-truction`), and the `gn` digraph French never splits (`sig-nal` / `si-gnal`). For each of five words under `lang="en"`, `lang="fr"` and an unknown tag, it sweeps the column from 20% to 95% of the word's natural width and reads the break back at every width by binary search over "is this character still on the first line?". The sweep is what makes it sound: an engine takes the **latest** break that fits, so one width reveals one point and not the set.
+
+**Measured on device, 2026-09-20: 5 words of 5 separated, on Chrome/Android and on Safari/iOS alike.** Hyphenation is available and `lang` genuinely selects the dictionary.
+
+What that changes, and what it does not, is argued on [#119] rather than here — including the three costs a web view carries (the Linux dev loop, two renderers that can drift, the header-authenticated pictures) and the one thing still unproven: **Chrome/Android is not the Android System WebView and Safari/iOS is not WKWebView**, so this is a strong proxy and not a proof. The recommendation at the head of this note stands until that route is weighed; it is not amended by this addendum, and the measurement is recorded here because the probe is.
 
 ## Sources
 
