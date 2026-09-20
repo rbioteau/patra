@@ -126,11 +126,18 @@ class _BookAdapter implements HttpClientAdapter {
       case '/api/Reader/chapter-info':
         // A book has no image pages for this endpoint to count, so it says
         // none: how long the book is has to be asked of the book.
+        //
+        // **And it mislabels the library.** Measured against the demo server
+        // (Kavita 0.9.1.4, `demo.kavitareader.com`): all 53 epubs of a
+        // library whose type is *Books* are reported `libraryType: 0` —
+        // manga — and so is every comic of a *Comics* library. The type this
+        // endpoint states is not the library's, so the fixture states what
+        // the server really states rather than what the shelf really is.
         return _answer({
           'seriesId': 3,
           'volumeId': 4,
           'libraryId': 1,
-          'libraryType': LibraryType.book.id,
+          'libraryType': LibraryType.manga.id,
           'pages': 0,
           'seriesName': 'Dune',
           'title': 'Dune',
@@ -1325,6 +1332,21 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(_postedPages(posted), [0, 1, 0]);
+    });
+
+    testWidgets('the library the server names cannot turn a book', (
+      tester,
+    ) async {
+      // The regression #118 shipped with, at the level a reader meets it.
+      // `chapter-info` reports `libraryType: 0` for a book — measured on all
+      // 53 epubs of the demo server's *Books* library — so wiring the book
+      // reader into the chain let the manga convention answer for every book
+      // on every server, not merely for one shelved oddly. Nothing is
+      // measured of a book now, so the type it names says nothing.
+      await _pumpBook(tester, html: page('.book-content { font-size: 1em; }'));
+
+      expect(laidOut(tester), TextDirection.ltr);
+      expect(pager(tester), AxisDirection.right);
     });
 
     testWidgets('a book that declares nothing is laid out as it always was', (

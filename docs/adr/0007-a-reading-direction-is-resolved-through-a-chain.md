@@ -342,9 +342,17 @@ measurements above it are about scans and have nothing to go on for a book: it
 carries no page dimensions at all, so a shape recorded for one answers
 `isVertical: false` about a work nothing was measured of — and the library
 type beside it then speaks, though what that type witnesses is a convention
-about how *scans* are bound. This amendment first shipped without that guard,
-and the result was that every epub shelved in a manga library opened
-right-to-left with nothing in it saying so. `PageShapesNotifier.record` now
+about how *scans* are bound.
+
+This amendment first shipped without that guard, and the cost was measured
+rather than imagined. Against the demo server (Kavita 0.9.1.4,
+`demo.kavitareader.com`), `chapter-info` reports `libraryType: 0` — **manga** —
+for all 53 epubs of a library whose type is *Books*, while reporting
+`seriesFormat: 3` correctly for every one of them. So the fault was not the
+rare case of a book shelved oddly: **every book on every server** opened
+right-to-left, with nothing in the book saying so and nothing on the shelf
+either. The guard therefore keys off the chapter's *content* — derived from
+the format, which the server does report — and never off the type it states. `PageShapesNotifier.record` now
 refuses a reflowable chapter, which is a refusal of a *measurement* and not of
 a work: a series holding both scans and words keeps what its scans measured. A
 book declaring nothing therefore opens at the built-in left-to-right, which is

@@ -125,10 +125,18 @@ class PageShapesNotifier extends Notifier<Map<int, PageShape>> {
   /// pages are the server's, laid out from words and carrying no dimensions
   /// for `chapter-info` to report, so [PageShape.of] would answer `isVertical:
   /// false` about a work nothing was measured of — and the library type
-  /// beside it would then speak. That is the bug this guard exists for: the
-  /// type witnesses a convention about how *scans* are bound, and an epub
-  /// shelved in a manga library is not bound at all. Left unguarded, every
-  /// book on that shelf opened right-to-left with nothing in it saying so.
+  /// beside it would then speak.
+  ///
+  /// **And the type it would speak with is not the library's.** Measured
+  /// against the demo server (Kavita 0.9.1.4, `demo.kavitareader.com`):
+  /// `chapter-info` reports `libraryType: 0` — manga — for all 53 epubs of a
+  /// library whose type is *Books*, and `seriesFormat: 3` correctly for every
+  /// one of them. So this is not the rare case of a book shelved oddly: left
+  /// unguarded, **every book on every server** opened right-to-left, with
+  /// nothing in the book saying so and nothing on the shelf either. That is
+  /// the bug this guard exists for, and it is why the guard keys off
+  /// [ChapterInfo.content] — derived from the format, which the server does
+  /// report — and never off the type.
   ///
   /// What answers for a book instead is what the book *declared*
   /// (`declaredDirectionsProvider`), which is a statement rather than an
@@ -139,6 +147,12 @@ class PageShapesNotifier extends Notifier<Map<int, PageShape>> {
   /// caller can record a book by accident. A series holding both scans and
   /// words keeps what its scans measured: this refuses a measurement, not a
   /// work.
+  ///
+  /// The same measurement found `libraryType: 0` reported for a **comic** of
+  /// a *Comics* library, and `pageDimensions: null` throughout — so the
+  /// detected rung answers right-to-left for scans it should not either. That
+  /// is #57's rung rather than this guard's business, it predates #118, and
+  /// it is filed rather than quietly widened into here.
   void record(ChapterInfo info) {
     if (info.content == ChapterContent.reflowable) return;
     state = {...state, info.seriesId: PageShape.of(info)};
