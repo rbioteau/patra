@@ -14,7 +14,7 @@ import 'models.dart';
 /// it should have had.
 ///
 /// Best-effort by design: every failure is swallowed. A server older than
-/// 0.9.1 has no such endpoint (404), a read-only account may not rename (403),
+/// 0.8.9 has no such endpoint (404), a read-only account may not rename (403),
 /// and a device with no id cannot be found at all — none of which should reach
 /// the user, since nothing about reading depends on it.
 Future<void> announceDevice(KavitaClient client) async {

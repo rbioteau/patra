@@ -723,7 +723,7 @@ class KavitaClient {
   ///
   /// Kavita registers (or refreshes) the calling device in middleware, before
   /// the controller runs, so this call also creates the entry it returns.
-  /// Only exists since Kavita 0.9.1.
+  /// Only exists since Kavita 0.8.9.
   Future<List<ClientDeviceDto>> clientDevices() async {
     final res = await _dio.get<List<dynamic>>('/api/Device/client/devices');
     return res.data!

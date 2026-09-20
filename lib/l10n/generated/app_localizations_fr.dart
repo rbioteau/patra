@@ -14,8 +14,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Feuille après feuille. Un lecteur pour votre bibliothèque Kavita.';
 
   @override
-  String get loginFooter =>
-      'Nécessite un serveur Kavita v0.9+ · Connexion conservée dans le stockage sécurisé';
+  String get loginFooter => 'Connexion conservée dans le stockage sécurisé';
 
   @override
   String get serverAddress => 'Adresse du serveur';

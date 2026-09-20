@@ -77,10 +77,10 @@ void main() {
     tester,
   ) async {
     await _pumpLogin(tester);
-    expect(find.textContaining('Requires a Kavita server'), findsOneWidget);
+    expect(find.textContaining('kept in secure storage'), findsOneWidget);
 
     await _pumpLogin(tester, keyboard: 320);
-    expect(find.textContaining('Requires a Kavita server'), findsNothing);
+    expect(find.textContaining('kept in secure storage'), findsNothing);
   });
 
   testWidgets('the keyboard offers the next field, then the verb', (

@@ -13,8 +13,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTagline => 'Leaf by leaf. A reader for your Kavita library.';
 
   @override
-  String get loginFooter =>
-      'Requires a Kavita server v0.9+ · Sign-in kept in secure storage';
+  String get loginFooter => 'Sign-in kept in secure storage';
 
   @override
   String get serverAddress => 'Server address';
