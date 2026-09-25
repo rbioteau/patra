@@ -184,6 +184,7 @@ Future<SavedChapter> saveChapterFixture(
   int volumeId = 1,
   int libraryId = 1,
   MangaFormat format = MangaFormat.unknown,
+  String? language,
   String? pageHtml,
 }) async {
   final chapter = SavedChapter(
@@ -197,6 +198,7 @@ Future<SavedChapter> saveChapterFixture(
     bytes: bytes,
     pagesRead: pagesRead,
     format: format,
+    language: language,
   );
   final dir = (await DownloadsService(
     root: root,

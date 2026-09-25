@@ -364,6 +364,7 @@ class SeriesDetailScreen extends ConsumerWidget {
       bytes: 0,
       pagesRead: chapter.pagesRead,
       format: chapter.format,
+      language: chapter.language,
     );
 
     /// A header inside a section — a volume's name over its chapters, or
@@ -1295,6 +1296,7 @@ class _ChapterRow extends ConsumerWidget {
                 bytes: 0,
                 pagesRead: chapter.pagesRead,
                 format: chapter.format,
+                language: chapter.language,
               ),
             ),
         ],

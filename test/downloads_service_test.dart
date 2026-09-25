@@ -821,6 +821,43 @@ void main() {
       ]);
     });
 
+    // A copy keeps the pagination it was made with (ADR-0009), and the
+    // language too — or a book read on a train is hyphenated in nothing.
+    test('a copy records the language it was made with', () async {
+      await service.download(
+        client: _client(_BookAdapter()),
+        chapter: const SavedChapter(
+          chapterId: _bookId,
+          seriesId: 3,
+          volumeId: 4,
+          libraryId: 1,
+          seriesName: 'Dune',
+          title: 'Book 1',
+          pages: 0,
+          bytes: 0,
+          format: MangaFormat.epub,
+          language: 'fr',
+        ),
+        onProgress: (_, _) {},
+      );
+
+      final saved = (await service.scan())[_bookId]!;
+      expect(saved.language, 'fr');
+      // And keeps it through what the device does to a copy afterwards.
+      expect(saved.copyWith(pagesRead: 2).language, 'fr');
+    });
+
+    test('a copy stored before its language was recorded has none', () {
+      final saved = SavedChapter.fromJson({
+        'chapterId': 42,
+        'pages': 3,
+        'format': MangaFormat.epub.id,
+      })!;
+
+      expect(saved.language, isNull);
+      expect(saved.content, ChapterContent.reflowable);
+    });
+
     test('a copy stored before a book could be saved reads as pictures', () {
       // What `meta.json` held until now: no `format`, and every copy there
       // was a copy of pages that were pictures.

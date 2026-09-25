@@ -166,11 +166,23 @@ class BookPageBody extends StatefulWidget {
     required this.textSize,
     required this.lineHeight,
     required this.face,
+    this.language,
     this.anchor,
     this.onScroll,
   });
 
   final BookPage page;
+
+  /// The language the book is written in, as the BCP-47 code it declared, or
+  /// null where nobody recorded one (#125).
+  ///
+  /// **Not drawn by this renderer**, and deliberately: it is what the page is
+  /// hyphenated in, and this engine draws no hyphen at a break (ADR-0013). It
+  /// is handed over here so the page is built knowing it, which is where the
+  /// rewrite pass that sets it on the document takes it from (#122) — and
+  /// null stays null there too, since an engine with no language declines to
+  /// hyphenate on its own.
+  final String? language;
 
   /// What a picture the page refers to is drawn with: a [BookPicture]'s own
   /// name in, a widget out. The reader owns it, because resolving that name

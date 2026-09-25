@@ -105,6 +105,7 @@ void main() {
       '/api/Series/{seriesId}': 'get',
       '/api/Series/metadata': 'get',
       '/api/Series/volumes': 'get',
+      '/api/Chapter': 'get',
       '/api/Reader/chapter-info': 'get',
       '/api/Reader/mark-multiple-read': 'post',
       '/api/Reader/mark-multiple-unread': 'post',

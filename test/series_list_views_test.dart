@@ -33,8 +33,10 @@ Map<String, dynamic> _chapter(
   int pagesRead = 0,
   bool isSpecial = false,
   String title = '',
+  String? language,
 }) => {
   'id': id,
+  'language': ?language,
   'range': range,
   'title': title,
   'titleName': title,
@@ -575,6 +577,50 @@ void main() {
         ]),
       ]);
       expect(find.text("Download what's next"), findsNothing);
+    });
+
+    testWidgets('a copy is saved in the language its chapter is written in', (
+      tester,
+    ) async {
+      // The series screen's volumes carry each chapter's language, and a copy
+      // records the one it was made with (ADR-0009, #125) — or a book read on
+      // a train is hyphenated in nothing.
+      final gate = Completer<void>();
+      await _pump(tester, [
+        _volume(10, '1', [
+          _chapter(101, '1', pagesRead: 4, language: 'fr'),
+          _chapter(102, '2', language: 'fr'),
+          _chapter(103, '3'),
+        ]),
+      ], imageGate: gate.future);
+
+      await tester.tap(find.text("Download what's next"));
+      await tester.pump();
+      await tester.pump();
+
+      // What is queued is what the copy is made from: the downloader writes
+      // the request's language into the copy (`downloads_service_test`).
+      final records = ProviderScope.containerOf(
+        tester.element(find.byType(SeriesDetailScreen)),
+      ).read(downloadsProvider).value!.records;
+      expect(records.keys.toSet(), {101, 102, 103});
+      expect(records[101]!.request.language, 'fr');
+      expect(records[102]!.request.language, 'fr');
+      expect(
+        records[103]!.request.language,
+        isNull,
+        reason: 'the server gave none',
+      );
+
+      // Let go of the fetches, or their timeouts outlive the test.
+      final notifier = ProviderScope.containerOf(
+        tester.element(find.byType(SeriesDetailScreen)),
+      ).read(downloadsProvider.notifier);
+      for (final id in records.keys) {
+        unawaited(notifier.cancel(id));
+      }
+      gate.complete();
+      await tester.pumpAndSettle();
     });
 
     testWidgets('saves only what is not here, and reports as it goes', (

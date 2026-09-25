@@ -75,6 +75,7 @@ class SavedChapter {
     this.format = MangaFormat.unknown,
     this.pending,
     this.serverPages,
+    this.language,
   });
 
   final int chapterId;
@@ -95,6 +96,16 @@ class SavedChapter {
   /// as [[ChapterContent.fixedPages]] — the only thing a copy could ever hold
   /// until now.
   final MangaFormat format;
+
+  /// The language the book was written in when the copy was made — see
+  /// [Chapter.language] — or null where the server gave none.
+  ///
+  /// A copy keeps the pagination it was made with (ADR-0009), and it keeps
+  /// this with it for the same reason: with no server to ask, the copy is
+  /// the only thing that can say, and a book read on a train would otherwise
+  /// be hyphenated in nothing (ADR-0013). Null too for every copy made before
+  /// it was recorded, which opens exactly as it always did.
+  final String? language;
 
   /// Mirrored locally so the Downloads tab can show progress with no server.
   final int pagesRead;
@@ -158,6 +169,7 @@ class SavedChapter {
     bytes: bytes ?? this.bytes,
     pagesRead: pagesRead ?? this.pagesRead,
     format: format,
+    language: language,
     // Two fields that are *cleared* rather than set, which is why they do
     // not follow the keep-what-is-there rule: what the server has taken, and
     // what it has come back into step about, are off the copy rather than
@@ -182,6 +194,7 @@ class SavedChapter {
     'bytes': bytes,
     'pagesRead': pagesRead,
     'format': format.id,
+    'language': ?language,
     'pending': pending?.toJson(),
     'serverPages': serverPages,
   };
@@ -202,6 +215,7 @@ class SavedChapter {
       bytes: json['bytes'] as int? ?? 0,
       pagesRead: json['pagesRead'] as int? ?? 0,
       format: MangaFormat.fromId(json['format'] as int?),
+      language: Chapter.languageFrom(json['language'] as String?),
       pending: PendingProgress.fromJson(json['pending']),
       serverPages: json['serverPages'] as int?,
     );
@@ -742,6 +756,7 @@ class DownloadsService {
       // page — and a place within it — that were never posted.
       pending: chapter.pending,
       format: chapter.format,
+      language: chapter.language,
     );
     File('${dir.path}/meta.json').writeAsStringSync(jsonEncode(saved.toJson()));
     return saved;

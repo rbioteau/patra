@@ -123,6 +123,35 @@ void main() {
     });
   });
 
+  group('the language a chapter is written in', () {
+    // `ChapterDto.language` is the BCP-47 code Kavita reads out of the
+    // book's own `dc:language`, and it rides on `/api/Series/volumes` — the
+    // call the series screen already makes (#125).
+    test('is the code the server sends', () {
+      final chapter = Chapter.fromJson({'id': 1, 'language': 'fr-FR'});
+      expect(chapter.language, 'fr-FR');
+    });
+
+    test('is nothing where the server sends nothing', () {
+      // Absent, null and empty are all Kavita saying it does not know, and a
+      // book with no language is a book with no language: nothing stands in.
+      expect(Chapter.fromJson({'id': 1}).language, isNull);
+      expect(Chapter.fromJson({'id': 1, 'language': null}).language, isNull);
+      expect(Chapter.fromJson({'id': 1, 'language': ''}).language, isNull);
+      expect(Chapter.fromJson({'id': 1, 'language': '  '}).language, isNull);
+    });
+
+    test('survives the catalogue, and marking the chapter read', () {
+      final chapter = Chapter.fromJson({'id': 1, 'language': 'ja'});
+      expect(Chapter.fromJson(chapter.toJson()).language, 'ja');
+      expect(chapter.copyWith(pagesRead: 3).language, 'ja');
+      expect(
+        Chapter.fromJson(Chapter.fromJson({'id': 1}).toJson()).language,
+        isNull,
+      );
+    });
+  });
+
   group('what a chapter is made of', () {
     // The reader learns the nature of a chapter's content from the one place
     // that says it before a page is opened, and refuses it there.

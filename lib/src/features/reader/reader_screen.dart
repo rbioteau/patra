@@ -10,7 +10,9 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/kavita_client.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
+import '../../catalogue/catalogue_provider.dart';
 import '../../catalogue/catalogue_reads.dart';
+import '../../catalogue/catalogue_store.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../downloads/image_cache_store.dart';
@@ -38,6 +40,9 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
   retry: serverRetry,
   (ref, chapterId) async {
     final client = ref.watch(kavitaClientProvider);
+    // In hand before the first request, because leaving the reader
+    // mid-fetch disposes this provider and a `ref` read after that throws.
+    final catalogue = _heldCatalogue(ref);
     final info = await client.chapterInfo(chapterId);
     // Page dimensions reach the app nowhere else, and they arrive a chapter
     // at a time for a work that is one thing: recording what they say about
@@ -52,13 +57,65 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
     // book can be longer than the screen, so the page number alone opens it
     // again at words already read.
     if (info.content != ChapterContent.reflowable) return info;
-    final (book, progress) = await (
+    final (book, progress, language) = await (
       client.bookInfo(chapterId),
       client.chapterProgress(chapterId),
+      _bookLanguage(
+        client,
+        catalogue,
+        chapterId: chapterId,
+        seriesId: info.seriesId,
+      ),
     ).wait;
-    return info.withBook(book, progress);
+    return info.withBook(book, progress, language: language);
   },
 );
+
+/// The catalogue this reader may read, or null where there is none to read —
+/// no session, which is a harness rather than a device.
+CatalogueStore? _heldCatalogue(Ref ref) {
+  try {
+    return ref.read(catalogueStoreProvider);
+  } on Object {
+    return null;
+  }
+}
+
+/// The language a book is written in, from the device where it already holds
+/// it, and asked of the server only where it does not (#125).
+///
+/// A saved copy's own language outranks this answer, and is laid over it by
+/// the reader rather than here — see [_ReaderScreenState._buildBookReader].
+///
+/// **The catalogue first**, which is where the normal way in leaves it: the series screen's volumes
+/// carry every chapter's language and are written to the device before a row
+/// can be tapped, so opening a book from there costs no request. A chapter
+/// held there with no language is the server's answer, not an absence, and is
+/// not asked about again. **Then the chapter itself**, which is a book opened
+/// from a link — no series screen behind it, and nothing on the device.
+///
+/// A question that fails is answered with none rather than failing the book:
+/// the reader can read a book without knowing its language, and could not
+/// read one it refused to open over it. Nothing else stands in — not the
+/// interface language, the library type or the profile.
+Future<String?> _bookLanguage(
+  KavitaClient client,
+  CatalogueStore? catalogue, {
+  required int chapterId,
+  required int seriesId,
+}) async {
+  final volumes = (await catalogue?.loadSeries(seriesId))?.volumes;
+  for (final volume in volumes ?? const <Volume>[]) {
+    for (final chapter in volume.chapters) {
+      if (chapter.id == chapterId) return chapter.language;
+    }
+  }
+  try {
+    return (await client.chapter(chapterId)).language;
+  } on Object {
+    return null;
+  }
+}
 
 /// What one page of a book is asked about: the chapter, and which page of it.
 typedef BookPageKey = ({int chapterId, int page});
@@ -538,6 +595,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 seriesName: saved.seriesName,
                 title: saved.title,
                 seriesFormat: saved.format,
+                language: saved.language,
               ));
 
     // A saved copy keeps the pagination it was made with (ADR-0009), so what
@@ -872,6 +930,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
           child: _BookView(
             chapterId: widget.chapterId,
+            // The copy's own language where there is a copy: a saved book is
+            // read as it was made (ADR-0009), and with no server the copy is
+            // the only thing that can say. A copy made before its language
+            // was recorded says nothing, and what the device or the server
+            // knows stands in — the same book, asked the same question.
+            language: _savedChapter?.language ?? chapter.language,
             pages: chapter.pages,
             page: _page,
             anchorFor: _anchorFor,
@@ -1668,6 +1732,7 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
 class _BookView extends StatefulWidget {
   const _BookView({
     required this.chapterId,
+    required this.language,
     required this.pages,
     required this.page,
     required this.anchorFor,
@@ -1677,6 +1742,10 @@ class _BookView extends StatefulWidget {
   });
 
   final int chapterId;
+
+  /// The language the book is written in, or null where nobody recorded one.
+  final String? language;
+
   final int pages;
   final int page;
 
@@ -1756,6 +1825,7 @@ class _BookViewState extends State<_BookView> {
       },
       itemBuilder: (context, page) => _BookPage(
         chapterId: widget.chapterId,
+        language: widget.language,
         page: page,
         picture: widget.picture,
         anchor: widget.anchorFor(page),
@@ -1782,6 +1852,7 @@ class _BookViewState extends State<_BookView> {
 class _BookPage extends ConsumerWidget {
   const _BookPage({
     required this.chapterId,
+    required this.language,
     required this.page,
     required this.picture,
     required this.anchor,
@@ -1789,6 +1860,7 @@ class _BookPage extends ConsumerWidget {
   });
 
   final int chapterId;
+  final String? language;
   final int page;
   final Widget Function(String src) picture;
 
@@ -1813,6 +1885,7 @@ class _BookPage extends ConsumerWidget {
       AsyncError() => const BookPageUnavailable(),
       AsyncData(:final value) => _ResolvedBookPage(
         chapterId: chapterId,
+        language: language,
         page: value,
         picture: picture,
         textSize: textSize,
@@ -1838,6 +1911,7 @@ class _BookPage extends ConsumerWidget {
 class _ResolvedBookPage extends ConsumerWidget {
   const _ResolvedBookPage({
     required this.chapterId,
+    required this.language,
     required this.page,
     required this.picture,
     required this.textSize,
@@ -1848,6 +1922,7 @@ class _ResolvedBookPage extends ConsumerWidget {
   });
 
   final int chapterId;
+  final String? language;
   final BookPage page;
   final Widget Function(String src) picture;
   final double textSize;
@@ -1882,6 +1957,7 @@ class _ResolvedBookPage extends ConsumerWidget {
 
     return BookPageBody(
       page: page,
+      language: language,
       picture: picture,
       textSize: textSize,
       lineHeight: lineHeight,

@@ -466,6 +466,20 @@ class KavitaClient {
         .toList();
   }
 
+  /// One chapter, as the series screen's volumes carry it.
+  ///
+  /// `GET /api/Chapter?chapterId=`. Asked for one thing only — the language a
+  /// book is written in — and only by a reader that has nothing on the device
+  /// to read it from, which is a book opened from a link (#125): the normal
+  /// way in is the series screen, whose volumes already carry it.
+  Future<Chapter> chapter(int chapterId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/Chapter',
+      queryParameters: {'chapterId': chapterId},
+    );
+    return Chapter.fromJson(res.data!);
+  }
+
   Future<ChapterInfo> chapterInfo(int chapterId) async {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/Reader/chapter-info',

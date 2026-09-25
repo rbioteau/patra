@@ -2,7 +2,7 @@
 ///
 /// These are **not** Kavita's DTOs, which is why they no longer carry the
 /// suffix. Only the fields the app actually uses are mapped — 8 of `SeriesDto`'s
-/// 38, 10 of `ChapterDto`'s 81 — and what they carry besides is knowledge the
+/// 38, 11 of `ChapterDto`'s 81 — and what they carry besides is knowledge the
 /// wire does not: [Volume.isLooseLeaf], [Chapter.isVolumePlaceholder],
 /// [LibraryType.hasStoryline], [MangaFormat.content],
 /// [ChapterInfo.isWide], and a [SeriesMetadata] that flattens two nested lists
@@ -406,6 +406,7 @@ class Chapter {
     required this.isSpecial,
     this.sortOrder = 0,
     this.format = MangaFormat.unknown,
+    this.language,
   });
 
   /// Kavita sentinel for the placeholder chapter of a volume that has no
@@ -432,6 +433,18 @@ class Chapter {
   /// What the files are.
   final MangaFormat format;
 
+  /// The language the chapter is written in, as the BCP-47 code Kavita read
+  /// out of the file's own `dc:language` — or null where the server gives
+  /// none (#125).
+  ///
+  /// Null is an answer and not a gap to fill: nothing stands in for it — not
+  /// the interface language, not the library type, not the profile — because
+  /// a book hyphenated in a language it is not written in is worse than one
+  /// hyphenated in nothing, and the engine declines an unknown language on
+  /// its own (ADR-0013). It is kept verbatim, since the engine is what reads
+  /// the code, and the one thing done to it is that an empty one is none.
+  final String? language;
+
   /// What this chapter is made of: the one thing the reader asks of a format.
   /// See [MangaFormat.content].
   ChapterContent get content => format.content;
@@ -457,6 +470,7 @@ class Chapter {
     isSpecial: isSpecial,
     sortOrder: sortOrder,
     format: format,
+    language: language,
   );
 
   /// True for the placeholder chapter Kavita creates inside a volume with no
@@ -482,6 +496,7 @@ class Chapter {
     'isSpecial': isSpecial,
     'sortOrder': sortOrder,
     'format': format.id,
+    'language': ?language,
   };
 
   factory Chapter.fromJson(Map<String, dynamic> json) => Chapter(
@@ -495,7 +510,17 @@ class Chapter {
     isSpecial: json['isSpecial'] as bool? ?? false,
     sortOrder: json['sortOrder'] as num? ?? 0,
     format: MangaFormat.fromId(json['format'] as int?),
+    language: languageFrom(json['language'] as String?),
   );
+
+  /// A language code as it was written down, or null where none was: Kavita
+  /// writes an empty string for a file that declared nothing, and an empty
+  /// code is no code. Shared with the saved copy, which stores what this
+  /// returned and reads it back the same way.
+  static String? languageFrom(String? code) {
+    final trimmed = code?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
 }
 
 /// Pixel size of one page, as measured by the server. Lets the vertical-scrolling view
@@ -663,6 +688,7 @@ class ChapterInfo {
     this.seriesFormat = MangaFormat.unknown,
     this.pageDimensions = const {},
     this.progress,
+    this.language,
   });
 
   final int seriesId;
@@ -671,6 +697,12 @@ class ChapterInfo {
   final int pages;
   final String seriesName;
   final String title;
+
+  /// The language a book is written in — see [Chapter.language], which is
+  /// where it comes from. `chapter-info` does not carry it, so it is null
+  /// until [withBook] is handed one, and always null for a chapter of
+  /// pictures, which has no words to hyphenate.
+  final String? language;
 
   /// The format of the whole series: a series is one format in Kavita, and
   /// this is the only place the reader can learn it before opening a page.
@@ -729,7 +761,14 @@ class ChapterInfo {
   /// asked three questions rather than one: the page a book is opened at is
   /// the page the server says, and the reader's own place in it is a string
   /// only the reader can read back.
-  ChapterInfo withBook(BookInfo book, ChapterProgress progress) => ChapterInfo(
+  ///
+  /// And the language, which none of the three calls carries: it is the
+  /// chapter's own, asked of whatever already holds it (#125).
+  ChapterInfo withBook(
+    BookInfo book,
+    ChapterProgress progress, {
+    String? language,
+  }) => ChapterInfo(
     seriesId: book.seriesId,
     volumeId: book.volumeId,
     libraryId: book.libraryId,
@@ -738,6 +777,7 @@ class ChapterInfo {
     title: book.title,
     seriesFormat: book.seriesFormat,
     progress: progress,
+    language: language,
   );
 
   factory ChapterInfo.fromJson(Map<String, dynamic> json) => ChapterInfo(

@@ -43,7 +43,12 @@ class CatalogueStore {
   /// migrates**, on the same argument that deletes the old auth layouts
   /// instead of reading them: a catalogue is recoverable by one refresh, so a
   /// migration path is code that can only ever be wrong.
-  static const version = 1;
+  ///
+  /// 2: a chapter carries its language (#125). A chapter stored at 1 has
+  /// none, and would read exactly like a book the server gave no language
+  /// for — which the reader takes as an answer and does not ask again — so a
+  /// catalogue written before is dropped rather than believed.
+  static const version = 2;
 
   static const _versionKey = 'version';
   static const _spineFile = 'spine.json';

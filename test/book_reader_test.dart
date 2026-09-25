@@ -11,6 +11,8 @@ import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
+import 'package:patra/src/catalogue/catalogue_provider.dart';
+import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_markup.dart';
@@ -75,6 +77,7 @@ class _BookAdapter implements HttpClientAdapter {
     this.progressPage = 0,
     this.bookScrollId,
     this.contents = _contents,
+    this.language = 'en',
   });
 
   /// Every page the reader asked the server for, in order.
@@ -105,6 +108,14 @@ class _BookAdapter implements HttpClientAdapter {
   /// Empty for a book the server listed nothing for, which is a book the
   /// reader offers no contents for.
   final List<Object>? contents;
+
+  /// The language the server says the book is written in — `ChapterDto`'s
+  /// BCP-47 code — or null for a book nobody recorded one for.
+  final String? language;
+
+  /// How many times the reader asked the server about the chapter itself,
+  /// which is the one call a language can cost (#125).
+  var chapterAsked = 0;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
@@ -166,6 +177,15 @@ class _BookAdapter implements HttpClientAdapter {
           );
         }
         return _answer(html ?? _pageHtml(page));
+      case '/api/Chapter':
+        chapterAsked++;
+        return _answer({
+          'id': 7,
+          'minNumber': 1,
+          'pages': 0,
+          'format': MangaFormat.epub.id,
+          'language': ?language,
+        }, json: true);
       case '/api/Book/7/chapters':
         return _answer(contents ?? const <Object>[], json: true);
     }
@@ -247,11 +267,21 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   _BookAdapter? server,
   List<Object>? contents,
   Future<void> Function(Directory root)? saved,
+  List<Volume>? held,
+  bool offline = false,
 }) async {
   final dir = mockPathProvider();
   final root = Directory('${dir.path}/downloads')..createSync();
   final downloads = DownloadsService(root: root, profileId: _profileId);
   if (saved != null) await saved(root);
+  // What the device already holds of the series, where a test says it holds
+  // anything: what the series screen writes when it draws the series, which
+  // is the screen a book is normally opened from.
+  final catalogue = CatalogueStore(
+    root: Directory('${dir.path}/catalogue')..createSync(),
+    profileId: _profileId,
+  );
+  if (held != null) await catalogue.putVolumes(3, held);
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
     token: 'token',
@@ -269,8 +299,10 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         bookScrollId: bookScrollId,
         contents: contents ?? _contents,
       );
-  client.httpClient.httpClientAdapter = adapter;
-  client.bareHttpClient.httpClientAdapter = adapter;
+  // No server at all, where a test says so: the train, with only the copy.
+  final HttpClientAdapter wire = offline ? UnreachableServer() : adapter;
+  client.httpClient.httpClientAdapter = wire;
+  client.bareHttpClient.httpClientAdapter = wire;
 
   await tester.pumpWidget(
     ProviderScope(
@@ -278,6 +310,7 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         testKeychain(),
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
+        catalogueStoreProvider.overrideWithValue(catalogue),
       ],
       child: MaterialApp(
         theme: patraTheme(),
@@ -1418,6 +1451,153 @@ void main() {
       final counter = find.text('1 / $_pages');
       expect(counter, findsOneWidget);
       expect(Directionality.of(tester.element(counter)), TextDirection.ltr);
+    });
+  });
+
+  // The language a book is written in is the book's, and it is what the
+  // engine will hyphenate in (#122). Kavita sends it on the call the series
+  // screen already makes, so the normal way in costs nothing; a link has no
+  // series screen behind it and is the one case that asks for itself (#125).
+  group('the language a book is written in', () {
+    /// The series as the series screen leaves it on the device: its one
+    /// volume, holding this chapter, with whatever language the server gave.
+    List<Volume> heldSeries({String? language}) => [
+      Volume(
+        id: 4,
+        name: '1',
+        minNumber: 1,
+        pages: _pages,
+        pagesRead: 0,
+        chapters: [
+          Chapter(
+            id: 7,
+            title: _title,
+            titleName: _title,
+            range: '1',
+            minNumber: 1,
+            pages: _pages,
+            pagesRead: 0,
+            isSpecial: false,
+            format: MangaFormat.epub,
+            language: language,
+          ),
+        ],
+      ),
+    ];
+
+    /// The language the page on screen is drawn knowing.
+    String? drawnIn(WidgetTester tester) =>
+        tester.widget<BookPageBody>(find.byType(BookPageBody).first).language;
+
+    _BookAdapter server({String? language = 'en'}) =>
+        _BookAdapter(requested: <int>[], posted: <_Post>[], language: language);
+
+    testWidgets('opened from the series screen, it costs no request', (
+      tester,
+    ) async {
+      final adapter = server(language: 'de');
+      await _pumpBook(
+        tester,
+        server: adapter,
+        held: heldSeries(language: 'fr'),
+      );
+
+      expect(drawnIn(tester), 'fr', reason: 'what the series screen stored');
+      expect(adapter.chapterAsked, 0);
+    });
+
+    testWidgets('opened from a link, it is asked for', (tester) async {
+      final adapter = server(language: 'fr-CA');
+      await _pumpBook(tester, server: adapter);
+
+      expect(drawnIn(tester), 'fr-CA');
+      expect(adapter.chapterAsked, 1, reason: 'once, and only here');
+    });
+
+    testWidgets('a book the server gives no language has none', (tester) async {
+      // Held with none, which is the server's answer and not an absence:
+      // asking again would be asking the same question for the same answer,
+      // and nothing — the interface, the library, the profile — stands in.
+      final adapter = server(language: null);
+      await _pumpBook(tester, server: adapter, held: heldSeries());
+
+      expect(drawnIn(tester), isNull);
+      expect(adapter.chapterAsked, 0);
+
+      final linked = server(language: null);
+      await _pumpBook(tester, server: linked);
+      expect(drawnIn(tester), isNull);
+      expect(linked.chapterAsked, 1);
+    });
+
+    testWidgets('a saved copy is read in the language it was made with', (
+      tester,
+    ) async {
+      final adapter = server(language: 'en');
+      await _pumpBook(
+        tester,
+        server: adapter,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          seriesId: 3,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          language: 'fr',
+          pageHtml: '<p>La spice doit couler.</p>',
+        ),
+      );
+
+      // The server says English today; the copy was made in French, and a
+      // copy is read as it was made.
+      expect(drawnIn(tester), 'fr');
+    });
+
+    testWidgets('a saved copy is read in its language with no server', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        offline: true,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          seriesId: 3,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          language: 'fr',
+          pageHtml: '<p>La spice doit couler.</p>',
+        ),
+      );
+
+      expect(find.text('La spice doit couler.'), findsOneWidget);
+      expect(drawnIn(tester), 'fr');
+    });
+
+    testWidgets('a copy saved before its language was recorded still opens', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        offline: true,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          seriesId: 3,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          pageHtml: '<p>The spice must flow.</p>',
+        ),
+      );
+
+      expect(find.text('The spice must flow.'), findsOneWidget);
+      expect(drawnIn(tester), isNull);
     });
   });
 }
