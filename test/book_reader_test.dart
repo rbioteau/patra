@@ -311,6 +311,11 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
         catalogueStoreProvider.overrideWithValue(catalogue),
+        // Somebody reading, whose catalogue that is: a device with nobody
+        // signed in holds nothing, whatever is on its disk.
+        initialAuthStateProvider.overrideWithValue(
+          AuthState(profiles: [_reader], activeId: _reader.id),
+        ),
       ],
       child: MaterialApp(
         theme: patraTheme(),
@@ -329,6 +334,15 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
 
 /// Whose store the reader reads: the profile its downloads were saved under.
 const _profileId = 'https://kavita.test#1';
+
+/// Who is reading: the profile [_profileId] names.
+final _reader = Profile(
+  baseUrl: 'http://kavita.test',
+  accountId: 1,
+  username: 'romain',
+  apiKey: 'key',
+  token: signedToken(1),
+);
 
 /// Where the page on screen is scrolled to, read out of the render tree
 /// rather than off anything the reader said about it.
@@ -1553,6 +1567,9 @@ void main() {
       // The server says English today; the copy was made in French, and a
       // copy is read as it was made.
       expect(drawnIn(tester), 'fr');
+      // And a copy that says costs nothing to ask, though nothing of the
+      // series is held — the way in from the Downloads tab.
+      expect(adapter.chapterAsked, 0);
     });
 
     testWidgets('a saved copy is read in its language with no server', (

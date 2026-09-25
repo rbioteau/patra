@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,9 +11,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../api/kavita_client.dart';
 import '../../api/models.dart';
 import '../../auth/session.dart';
-import '../../catalogue/catalogue_provider.dart';
 import '../../catalogue/catalogue_reads.dart';
-import '../../catalogue/catalogue_store.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../downloads/downloads_service.dart';
 import '../../downloads/image_cache_store.dart';
@@ -42,7 +41,15 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
     final client = ref.watch(kavitaClientProvider);
     // In hand before the first request, because leaving the reader
     // mid-fetch disposes this provider and a `ref` read after that throws.
-    final catalogue = _heldCatalogue(ref);
+    // The copy as the device holds it once its saved chapters have been read
+    // off the disk, which a reader opened at launch can be waiting on.
+    final saved = ref
+        .read(downloadsProvider.future)
+        .then<SavedChapter?>(
+          (downloads) => downloads.saved[chapterId],
+          onError: (Object _) => null,
+        );
+    final held = heldChapter(ref);
     final info = await client.chapterInfo(chapterId);
     // Page dimensions reach the app nowhere else, and they arrive a chapter
     // at a time for a work that is one thing: recording what they say about
@@ -62,57 +69,48 @@ final chapterInfoProvider = FutureProvider.autoDispose.family<ChapterInfo, int>(
       client.chapterProgress(chapterId),
       _bookLanguage(
         client,
-        catalogue,
+        held,
         chapterId: chapterId,
         seriesId: info.seriesId,
+        saved: saved,
       ),
     ).wait;
     return info.withBook(book, progress, language: language);
   },
 );
 
-/// The catalogue this reader may read, or null where there is none to read —
-/// no session, which is a harness rather than a device.
-CatalogueStore? _heldCatalogue(Ref ref) {
-  try {
-    return ref.read(catalogueStoreProvider);
-  } on Object {
-    return null;
-  }
-}
-
 /// The language a book is written in, from the device where it already holds
 /// it, and asked of the server only where it does not (#125).
 ///
-/// A saved copy's own language outranks this answer, and is laid over it by
-/// the reader rather than here — see [_ReaderScreenState._buildBookReader].
+/// **A saved copy first**, because a copy is read as it was made (ADR-0009)
+/// and a copy that says spends no request. Offline there is no answer from
+/// here at all, so the reader lays the copy's over whatever this said — see
+/// [_ReaderScreenState._buildBookReader].
+/// **Then the catalogue**, which is where the normal way in leaves it: the
+/// series screen's volumes carry every chapter's language and are written to
+/// the device before a row can be tapped, so opening a book from there costs
+/// no request. A chapter held there with no language is the server's answer,
+/// not an absence, and is not asked about again. **Then the chapter itself**,
+/// which is a book opened from a link — no series screen behind it, and
+/// nothing on the device.
 ///
-/// **The catalogue first**, which is where the normal way in leaves it: the series screen's volumes
-/// carry every chapter's language and are written to the device before a row
-/// can be tapped, so opening a book from there costs no request. A chapter
-/// held there with no language is the server's answer, not an absence, and is
-/// not asked about again. **Then the chapter itself**, which is a book opened
-/// from a link — no series screen behind it, and nothing on the device.
-///
-/// A question that fails is answered with none rather than failing the book:
+/// A request that fails is answered with none rather than failing the book:
 /// the reader can read a book without knowing its language, and could not
 /// read one it refused to open over it. Nothing else stands in — not the
 /// interface language, the library type or the profile.
 Future<String?> _bookLanguage(
   KavitaClient client,
-  CatalogueStore? catalogue, {
+  HeldChapter held, {
   required int chapterId,
   required int seriesId,
+  required Future<SavedChapter?> saved,
 }) async {
-  final volumes = (await catalogue?.loadSeries(seriesId))?.volumes;
-  for (final volume in volumes ?? const <Volume>[]) {
-    for (final chapter in volume.chapters) {
-      if (chapter.id == chapterId) return chapter.language;
-    }
-  }
+  if ((await saved)?.language case final String language) return language;
+  final chapter = await held(seriesId: seriesId, chapterId: chapterId);
+  if (chapter != null) return chapter.language;
   try {
     return (await client.chapter(chapterId)).language;
-  } on Object {
+  } on DioException {
     return null;
   }
 }

@@ -19,7 +19,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/models.dart';
+import '../auth/session.dart';
 import 'catalogue_overlay.dart';
+import 'catalogue_provider.dart';
 import 'catalogue_read.dart';
 
 /// The libraries this profile can see.
@@ -144,6 +146,40 @@ final heldLibraryTypeProvider = Provider.autoDispose.family<LibraryType?, int>((
   }
   return null;
 });
+
+/// Where the device looks a chapter up by its series, with nothing put on
+/// the wire: null where it holds no such chapter.
+typedef HeldChapter =
+    Future<Chapter?> Function({required int seriesId, required int chapterId});
+
+/// A chapter as this session's catalogue holds it, off the stored volumes of
+/// its series — the reader's question for a book's language (#125), which
+/// the series screen's volumes carry and write here before a row can be
+/// tapped.
+///
+/// A **lookup** rather than a provider, because the one caller asks from
+/// inside an autoDispose fetch that may be disposed while it waits: what it
+/// needs of `ref` is taken here, before anything is awaited, and the lookup
+/// itself touches nothing but the store. Answered off the session for the
+/// reason `heldSpine` is, so nobody reading is a device holding nothing
+/// rather than a failure.
+///
+/// **Null is "not held", and a chapter held with no language is a chapter**:
+/// the two are different answers, and only the first sends the reader to ask.
+HeldChapter heldChapter(Ref ref) {
+  final store = ref.read(sessionProvider) == null
+      ? null
+      : ref.read(catalogueStoreProvider);
+  return ({required seriesId, required chapterId}) async {
+    final volumes = (await store?.loadSeries(seriesId))?.volumes;
+    for (final volume in volumes ?? const <Volume>[]) {
+      for (final chapter in volume.chapters) {
+        if (chapter.id == chapterId) return chapter;
+      }
+    }
+    return null;
+  };
+}
 
 /// Every series in one library, and the catalogue's copy of that list.
 ///
