@@ -29,7 +29,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'book_page.dart';
+import 'book_markup.dart';
 import '../../api/kavita_client.dart';
 import '../../auth/session.dart';
 import '../../downloads/downloads_provider.dart';

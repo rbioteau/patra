@@ -13,6 +13,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/features/reader/book_markup.dart';
 import 'package:patra/src/features/reader/book_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/settings/reading_settings.dart';

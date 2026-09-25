@@ -22,6 +22,7 @@ import '../../widgets/chrome_pill.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import 'book_contents.dart';
 import 'book_face.dart';
+import 'book_markup.dart';
 import 'book_page.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';

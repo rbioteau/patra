@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../api/kavita_client.dart';
 import '../api/models.dart';
 import '../features/reader/book_face.dart';
+import '../features/reader/book_markup.dart';
 import '../features/reader/book_page.dart';
 import '../profile_files.dart';
 
