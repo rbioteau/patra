@@ -26,11 +26,13 @@ String _rewrite(
   String? language = 'fr',
   BookSetting setting = _setting,
   String? Function(String src)? localFile,
+  FaceFiles? faceFiles,
 }) => rewriteBookPage(
   html,
   language: language,
   setting: setting,
   localFile: localFile ?? (src) => _onDevice[src],
+  faceFiles: faceFiles,
 );
 
 /// Everything in [document] a browser could fetch from, execute, or be told
@@ -592,6 +594,96 @@ void main() {
     test('with an attribute that needed escaping still escaped', () {
       final document = _rewrite('<img alt=\'say "hi" &amp; &eacute;\'>');
       expect(document, contains('alt="say &quot;hi&quot; &amp; &eacute;"'));
+    });
+  });
+
+  group('the face the reader chose is one the engine has', () {
+    // The app's faces are bundled with the app and nowhere else: an engine
+    // told to set a page in Literata has no Literata unless the document says
+    // where its files are.
+    const files = (
+      roman: 'file:///cache/fonts/roman.ttf',
+      italic: 'file:///cache/fonts/italic.ttf',
+    );
+
+    List<String> faces(String document) =>
+        RegExp(r'@font-face \{[^}]*\}')
+            .allMatches(document)
+            .map((match) => match.group(0)!)
+            .toList();
+
+    test('is declared, roman and italic, before the layer imposing it', () {
+      final document = _rewrite('<p>a</p>', faceFiles: files);
+      final declared = faces(document);
+      expect(declared, hasLength(2));
+      expect(declared[0], contains('font-family: "$fontLiterata"'));
+      expect(declared[0], contains('url("${files.roman}")'));
+      expect(declared[0], contains('font-style: normal'));
+      expect(declared[1], contains('url("${files.italic}")'));
+      expect(declared[1], contains('font-style: italic'));
+      expect(
+        document.indexOf('@font-face'),
+        lessThan(document.indexOf('@layer patra')),
+      );
+    });
+
+    test('follows the face chosen', () {
+      final document = _rewrite(
+        '<p>a</p>',
+        faceFiles: files,
+        setting: (textSize: 16, lineHeight: 1.2, face: ReadingFace.sans),
+      );
+      expect(
+        faces(document).first,
+        contains('font-family: "$fontAtkinsonHyperlegibleNext"'),
+      );
+    });
+
+    test("is not declared where the book's own face was chosen", () {
+      final document = _rewrite(
+        '<p>a</p>',
+        faceFiles: files,
+        setting: (textSize: 16, lineHeight: 1.55, face: ReadingFace.book),
+      );
+      expect(faces(document), isEmpty);
+    });
+
+    test('is never declared from anywhere but the device', () {
+      final document = _lowered(
+        _rewrite(
+          '<p>a</p>',
+          faceFiles: (
+            roman: 'https://fonts.example/roman.ttf',
+            italic: '//fonts.example/italic.ttf',
+          ),
+        ),
+      );
+      expect(document, isNot(contains('fonts.example')));
+    });
+  });
+
+  group("the reader's canvas", () {
+    String overrides(String document) => RegExp(
+      r'@layer patra \{.*?\n\}',
+      dotAll: true,
+    ).firstMatch(document)!.group(0)!;
+
+    test('is what a page with no colours of its own is set on', () {
+      final css = overrides(_rewrite('<p>a</p>'));
+      final canvas = RegExp(r'html \{[^}]*background-color[^}]*\}')
+          .firstMatch(css)!
+          .group(0)!;
+      expect(canvas, contains('background-color: #000000'));
+      expect(canvas, contains('color: #f3eee3'));
+      // A default and nothing more: the book's own colours are its design.
+      expect(canvas, isNot(contains('!important')));
+    });
+
+    test("does not outrank a book's own colours", () {
+      final document = _rewrite(
+        '<style>p { color: #333; background: white }</style><p>a</p>',
+      );
+      expect(document, contains('p { color: #333; background: white }'));
     });
   });
 

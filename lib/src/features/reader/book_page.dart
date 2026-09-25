@@ -5,10 +5,13 @@
 /// output — nothing here parses an EPUB, and nothing here is a browser. What
 /// is taken apart is the handful of tags a page of a book is actually made of:
 /// paragraphs, headings, quotations, list items and pictures. They are then set
-/// in the app's own type on the app's own background, which is what a book
-/// opened in this app is meant to look like — and which is also why a page is
-/// drawn by us rather than handed to a web view: a web view's own `<img>` can
-/// carry no header of ours, and a book's pictures are header-authenticated.
+/// in the app's own type on the app's own background.
+///
+/// **This renderer draws a page only where there is no web engine** — Linux,
+/// and a test binding. On Android and iOS a page is handed to the platform's
+/// engine instead (`book_web_page.dart`, ADR-0013). The parser stays either
+/// way: [BookPage.pictureSources] is what the downloader and the web engine
+/// both read to know which pictures a page holds.
 library;
 
 import 'package:flutter/material.dart';
@@ -69,9 +72,13 @@ class BookPicture extends BookBlock {
 
 /// One page of a book: the server's HTML, taken apart once.
 class BookPage {
-  const BookPage(this.blocks, {this.face, this.direction});
+  const BookPage(this.blocks, {this.face, this.direction, this.html = ''});
 
   final List<BookBlock> blocks;
+
+  /// The page as the server handed it over, or as a copy stored it: what the
+  /// web engine is given, once the rewrite pass has been over it (#127).
+  final String html;
 
   /// The face the page's own stylesheet asks for, or null if it asks for
   /// nothing. This is parsed once from the page's HTML and carried so that
@@ -98,6 +105,7 @@ class BookPage {
     parseBookPage(html),
     face: parseBookFace(html),
     direction: parseBookDirection(html),
+    html: html,
   );
 }
 

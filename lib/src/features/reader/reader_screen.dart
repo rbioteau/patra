@@ -22,9 +22,12 @@ import '../../theme.dart';
 import '../../widgets/chrome_pill.dart';
 import '../../widgets/reader_settings_sheet.dart';
 import 'book_contents.dart';
+import 'book_document.dart';
 import 'book_face.dart';
 import 'book_markup.dart';
 import 'book_page.dart';
+import 'book_rewrite.dart';
+import 'book_web_page.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'page_rail.dart';
@@ -151,6 +154,42 @@ Future<BookPage?> _storedBookPage(Ref ref, BookPageKey key) async {
   if (!file.existsSync()) return null;
   return BookPage.fromHtml(file.readAsStringSync());
 }
+
+/// The files one page of a book names — its pictures, and the files of the
+/// face its stylesheet asks for — fetched onto the device for the web engine,
+/// which can carry no header of ours and so cannot be pointed at the server
+/// (ADR-0013, #127).
+///
+/// A family of the page like [bookPageProvider], and watched beside it for the
+/// pages either side of the one being read, so a page's pictures are fetched
+/// while the reader is at rest. A saved copy's face is copied out of the copy
+/// rather than fetched, the copy's own stylesheet still naming it at an
+/// address that is dead offline; its pictures are carried in its pages.
+final bookPageFilesProvider = FutureProvider.autoDispose
+    .family<BookPageFiles, BookPageKey>((ref, key) async {
+      final page = await ref.watch(bookPageProvider(key).future);
+      final root = await ref.watch(bookDocumentRootProvider.future);
+      final face = page.face;
+      final onDevice = <String, File>{};
+      if (face != null &&
+          ref.watch(savedChapterProvider(key.chapterId)) != null) {
+        final dir = await ref.watch(chapterDirProvider(key.chapterId).future);
+        for (final (src, name) in [
+          (face.roman, BookFontFile.roman),
+          (face.italic, BookFontFile.italic),
+        ]) {
+          final file = File('${dir.path}/$name');
+          if (src != null && file.existsSync()) onDevice[src] = file;
+        }
+      }
+      final client = ref.watch(kavitaClientProvider);
+      return fetchBookPageFiles(
+        [...page.pictureSources, ?face?.roman, ?face?.italic],
+        into: Directory('${root.path}/${key.chapterId}'),
+        fetch: (src) => client.bookPictureBytes(key.chapterId, src),
+        onDevice: onDevice,
+      );
+    });
 
 /// What a book is made of, as the server lists it: a tree of parts and their
 /// children, each with the page it begins on.
@@ -896,9 +935,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // re-fetch it. A provider something is watching is not disposed, so the
     // two beside this one stay in hand and the rest of the book is still
     // forgotten with the screen, which is the point of the family.
+    final webEngine = ref.watch(bookWebEngineProvider);
     for (var near = _page - 1; near <= _page + 1; near++) {
       if (near < 0 || near >= chapter.pages || near == _page) continue;
-      ref.watch(bookPageProvider((chapterId: widget.chapterId, page: near)));
+      final key = (chapterId: widget.chapterId, page: near);
+      ref.watch(bookPageProvider(key));
+      // In the web engine a page is drawn only once its pictures are on the
+      // device, so they are fetched out of sight too.
+      if (webEngine) ref.watch(bookPageFilesProvider(key));
     }
     // Watch the current page to get the book's own face (if any) for the
     // settings cog. The sheet's "the book's own" row is composed in this face.
@@ -1883,6 +1927,7 @@ class _BookPage extends ConsumerWidget {
       AsyncError() => const BookPageUnavailable(),
       AsyncData(:final value) => _ResolvedBookPage(
         chapterId: chapterId,
+        pageIndex: page,
         language: language,
         page: value,
         picture: picture,
@@ -1909,6 +1954,7 @@ class _BookPage extends ConsumerWidget {
 class _ResolvedBookPage extends ConsumerWidget {
   const _ResolvedBookPage({
     required this.chapterId,
+    required this.pageIndex,
     required this.language,
     required this.page,
     required this.picture,
@@ -1920,6 +1966,9 @@ class _ResolvedBookPage extends ConsumerWidget {
   });
 
   final int chapterId;
+
+  /// Which page of the book this is.
+  final int pageIndex;
   final String? language;
   final BookPage page;
   final Widget Function(String src) picture;
@@ -1953,6 +2002,27 @@ class _ResolvedBookPage extends ConsumerWidget {
       if (!cache.knows(key)) unawaited(cache.loadFont(key));
     }
 
+    // The platform's engine where there is one (ADR-0013); the page drawn by
+    // the app where there is none, which is Linux and a test binding.
+    if (ref.watch(bookWebEngineProvider)) {
+      // What the engine can draw is not only what the parser reads as a
+      // block — a picture set as a background is a page too — so only an
+      // answer with nothing in it is a page the server did not produce.
+      if (page.html.trim().isEmpty) return const BookPageUnavailable();
+      return _WebBookPage(
+        pageKey: (chapterId: chapterId, page: pageIndex),
+        page: page,
+        language: language,
+        setting: (
+          textSize: textSize,
+          lineHeight: lineHeight,
+          face: readingFace,
+        ),
+        anchor: anchor,
+        onScroll: onScroll,
+      );
+    }
+
     return BookPageBody(
       page: page,
       language: language,
@@ -1960,6 +2030,56 @@ class _ResolvedBookPage extends ConsumerWidget {
       textSize: textSize,
       lineHeight: lineHeight,
       face: resolvedFace,
+      anchor: anchor,
+      onScroll: onScroll,
+    );
+  }
+}
+
+/// A page of a book in the web engine, once what it names is on the device.
+///
+/// Its pictures are fetched **before** it is drawn rather than arriving under
+/// the words: the engine can fetch nothing itself (ADR-0013's accepted cost),
+/// which is why the pages either side are fetched while the reader is at rest.
+/// A file that cannot be had costs its page a hole, never the page.
+class _WebBookPage extends ConsumerWidget {
+  const _WebBookPage({
+    required this.pageKey,
+    required this.page,
+    required this.language,
+    required this.setting,
+    required this.anchor,
+    required this.onScroll,
+  });
+
+  final BookPageKey pageKey;
+  final BookPage page;
+  final String? language;
+  final BookSetting setting;
+  final BookAnchor? anchor;
+  final ValueChanged<BookAnchor> onScroll;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final root = ref.watch(bookDocumentRootProvider);
+    final files = ref.watch(bookPageFilesProvider(pageKey));
+    final faceFiles = ref.watch(appFaceFilesProvider(setting.face));
+    if (root.hasError || files.hasError) return const BookPageUnavailable();
+    final (rootDir, pageFiles) = (root.value, files.value);
+    // The face is not waited for: until its files are written — once, the
+    // first time it is chosen — the page is set in whatever the engine has of
+    // it and set again when they land, which keeps the page and the reader's
+    // place in it rather than swapping both for a spinner.
+    if (rootDir == null || pageFiles == null) {
+      return const Center(child: CircularProgressIndicator(color: patraAccent));
+    }
+    return BookWebPage(
+      file: File('${rootDir.path}/${pageKey.chapterId}-${pageKey.page}.html'),
+      html: page.html,
+      language: language,
+      setting: setting,
+      files: pageFiles,
+      faceFiles: faceFiles.value,
       anchor: anchor,
       onScroll: onScroll,
     );

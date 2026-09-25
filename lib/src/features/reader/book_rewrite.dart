@@ -23,7 +23,10 @@
 ///   for after it is read. It is the backstop to the two rules above, not a
 ///   substitute for them.
 /// - **The reader's three settings**, in a cascade layer declared before the
-///   book, whose `!important` outranks every `!important` a book can make.
+///   book, whose `!important` outranks every `!important` a book can make —
+///   and the files the chosen face is set from, since an engine has none of
+///   the faces the app bundles. The same layer sets the page on the reader's
+///   canvas, as a default the book's own colours outrank.
 /// - **The book's language** on the document where it is known, and none
 ///   where it is not — an engine given none declines to hyphenate, which is
 ///   the behaviour wanted and needs nothing built.
@@ -40,6 +43,7 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:ui' show Color;
 
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
@@ -53,6 +57,10 @@ typedef LocalFile = String? Function(String src);
 /// reader's eyes rather than the work (#75, #92).
 typedef BookSetting = ({double textSize, double lineHeight, ReadingFace face});
 
+/// The files on the device the face the reader chose is set from: the app's
+/// own, which an engine does not have until a document says where they are.
+typedef FaceFiles = ({String roman, String italic});
+
 /// The document an engine may be given for one page of a book.
 ///
 /// [html] is the page as the server handed it over, or as a copy stored it.
@@ -60,12 +68,15 @@ typedef BookSetting = ({double textSize, double lineHeight, ReadingFace face});
 /// [localFile] names the file on the device that stands for a picture or a
 /// font the page refers to — given the name exactly as the page wrote it, the
 /// one `pictureSources` reads — or null where there is none; an answer that is
-/// not itself local is refused like no answer at all.
+/// not itself local is refused like no answer at all. [faceFiles] are where
+/// the face [setting] names is set from, refused the same way; with none, the
+/// face is named and left to whatever the engine holds of it.
 String rewriteBookPage(
   String html, {
   required String? language,
   required BookSetting setting,
   required LocalFile localFile,
+  FaceFiles? faceFiles,
 }) {
   final lang = _language(language);
   return '<!DOCTYPE html>\n'
@@ -74,7 +85,7 @@ String rewriteBookPage(
       '<meta http-equiv="Content-Security-Policy" content="$_policy">\n'
       '<meta charset="utf-8">\n'
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-      '<style>\n${_overrides(setting)}\n</style>\n'
+      '<style>\n${_faces(setting, faceFiles)}${_overrides(setting)}\n</style>\n'
       '</head>\n'
       '<body>\n${_Rewrite(html, localFile).run()}\n</body>\n'
       '</html>\n';
@@ -98,6 +109,29 @@ String? _language(String? language) {
       : null;
 }
 
+/// The family the reader chose to impose, or null where the choice was the
+/// book's own face — the book's stylesheet winning, as in the server's own
+/// client: nothing is imposed.
+String? _imposedFamily(ReadingFace face) => switch (face) {
+  ReadingFace.book => null,
+  ReadingFace.serif => fontLiterata,
+  ReadingFace.sans => fontAtkinsonHyperlegibleNext,
+};
+
+/// Where the imposed family's roman and italic are, declared ahead of the
+/// layer that imposes it. Every app face is variable, so one file answers
+/// every weight.
+String _faces(BookSetting setting, FaceFiles? files) {
+  final family = _imposedFamily(setting.face);
+  if (family == null || files == null) return '';
+  String face(String file, String style) =>
+      _isRemote(file) || file.contains(RegExp('["\\\\\n<>]'))
+      ? ''
+      : '@font-face { font-family: "$family"; src: url("$file"); '
+            'font-style: $style; font-weight: 100 900; }\n';
+  return face(files.roman, 'normal') + face(files.italic, 'italic');
+}
+
 /// The reader's settings as a layer the book comes after.
 ///
 /// An `!important` in the **first** layer declared outranks every
@@ -107,14 +141,15 @@ String? _language(String? language) {
 /// would flatten a heading to the size of the words under it — so a size the
 /// book fixes is read as a share of it instead (see [_shareOfTheRoot]).
 String _overrides(BookSetting setting) {
-  final family = switch (setting.face) {
-    // The book's own face is the book's stylesheet winning, as in the
-    // server's own client: nothing is imposed.
-    ReadingFace.book => null,
-    ReadingFace.serif => fontLiterata,
-    ReadingFace.sans => fontAtkinsonHyperlegibleNext,
-  };
+  final family = _imposedFamily(setting.face);
   return '@layer $_layer {\n'
+      // The reader's canvas, and room at the foot for the page counter: a
+      // default, not an override, so a book that sets its own colours or its
+      // own margins is set in them.
+      '  html { background-color: ${_hex(patraReaderCanvas)}; '
+      'color: ${_hex(patraText)}; '
+      'padding: ${_number(gutter)}px ${_number(gutter)}px '
+      '${_number(4 * gutter)}px; }\n'
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '
       'line-height: ${_number(setting.lineHeight)} !important; }\n'
@@ -125,6 +160,9 @@ String _overrides(BookSetting setting) {
 }
 
 const String _layer = 'patra';
+
+String _hex(Color color) =>
+    '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
 
 String _number(double value) {
   final rounded = (value * 10000).round() / 10000;

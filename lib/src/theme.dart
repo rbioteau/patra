@@ -33,6 +33,10 @@ const _serif = fontLiterata;
 /// lift out of the same colour rather than a cut to a different one.
 const patraBg = Color(0xFF111722);
 
+/// What a page is read on: pure black, the reader's own ground, and what a
+/// page of a book with no colours of its own is set on in the web engine.
+const patraReaderCanvas = Color(0xFF000000);
+
 /// Cards, sheets, tiles — a surface raised off the page.
 const patraSurface = Color(0xFF1C293E);
 const patraSurfaceHi = Color(0xFF26354B);

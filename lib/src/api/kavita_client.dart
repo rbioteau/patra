@@ -539,9 +539,9 @@ class KavitaClient {
   /// **Header-authenticated, and the one image URL here with no `apiKey` in
   /// it**: the other image endpoints accept the key in the query string
   /// because an `<img>` cannot send a header, and this one does not. A page's
-  /// picture is therefore fetched with [imageHeaders] — which is also why a
-  /// page is rendered by the app rather than handed to a web view, since a
-  /// web view's own `<img>` can carry no header of ours.
+  /// picture is therefore fetched with [imageHeaders] — which is also why the
+  /// web engine a page is drawn in is handed files the app fetched rather
+  /// than addresses, since its own `<img>` can carry no header of ours.
   String bookResourceUrl(int chapterId, String file) =>
       '$baseUrl/api/Book/$chapterId/book-resources'
       '?file=${Uri.encodeQueryComponent(file)}';

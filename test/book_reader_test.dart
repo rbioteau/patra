@@ -17,9 +17,11 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_markup.dart';
 import 'package:patra/src/features/reader/book_page.dart';
+import 'package:patra/src/features/reader/book_web_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/settings/reading_settings.dart';
 import 'package:patra/src/theme.dart';
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
 import 'test_support.dart';
 
@@ -117,6 +119,10 @@ class _BookAdapter implements HttpClientAdapter {
   /// which is the one call a language can cost (#125).
   var chapterAsked = 0;
 
+  /// Every picture or font a page named that the app fetched from the book,
+  /// as it was asked for.
+  final resources = <RequestOptions>[];
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
     switch (options.path) {
@@ -189,6 +195,11 @@ class _BookAdapter implements HttpClientAdapter {
       case '/api/Book/7/chapters':
         return _answer(contents ?? const <Object>[], json: true);
     }
+    // Asked for by a whole address, which is what dio then calls its path.
+    if (options.uri.path == '/api/Book/7/book-resources') {
+      resources.add(options);
+      return ResponseBody.fromBytes(base64Decode(_carried), 200);
+    }
     throw DioException(
       requestOptions: options,
       type: DioExceptionType.unknown,
@@ -259,6 +270,8 @@ bool _waiting(WidgetTester tester) {
 /// every fixture here goes through the service (`saveChapterFixture`).
 Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   WidgetTester tester, {
+  bool webEngine = false,
+  void Function(_BookAdapter server)? onServer,
   int initialPage = 0,
   int? unavailable,
   String? html,
@@ -299,6 +312,7 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         bookScrollId: bookScrollId,
         contents: contents ?? _contents,
       );
+  onServer?.call(adapter);
   // No server at all, where a test says so: the train, with only the copy.
   final HttpClientAdapter wire = offline ? UnreachableServer() : adapter;
   client.httpClient.httpClientAdapter = wire;
@@ -311,6 +325,9 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         kavitaClientProvider.overrideWithValue(client),
         downloadsServiceProvider.overrideWithValue(downloads),
         catalogueStoreProvider.overrideWithValue(catalogue),
+        // Which reader is being asked about: the page the app draws, unless a
+        // test says the platform has an engine.
+        bookWebEngineProvider.overrideWithValue(webEngine),
         // Somebody reading, whose catalogue that is: a device with nobody
         // signed in holds nothing, whatever is on its disk.
         initialAuthStateProvider.overrideWithValue(
@@ -1617,4 +1634,295 @@ void main() {
       expect(drawnIn(tester), isNull);
     });
   });
+
+  group('the web engine', () {
+    // Where the platform has an engine — Android and iOS — a page is drawn by
+    // it, and nothing of it paints under a test binding. What can be asked
+    // is what a reader or the server would observe: the document the engine
+    // was handed, what was fetched and how, and what was posted.
+    late _FakeWebEngine engine;
+    setUp(() => WebViewPlatform.instance = engine = _FakeWebEngine());
+
+    /// Lets the files a page is written into land: real I/O, which a test's
+    /// clock does not move.
+    Future<void> settle(WidgetTester tester) async {
+      // Each step of a write is a round trip the clock does not move, and a
+      // page is several: its pictures, the app's face, the document.
+      for (var i = 0; i < 40; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    testWidgets('draws the page it was handed, made inert, from a file', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        html:
+            '<p onclick="steal()">The spice must flow.</p>'
+            '<script>steal()</script>'
+            '<img src="OEBPS/images/worm.jpg"/>',
+      );
+      await settle(tester);
+
+      final page = engine.pageShowing(0)!;
+      expect(page.javaScript, JavaScriptMode.unrestricted);
+      expect(page.bridge, 'PatraBridge');
+      final document = page.document!;
+      expect(document, contains('Content-Security-Policy'));
+      expect(document, contains('<html lang="en">'));
+      expect(document, contains('The spice must flow.'));
+      expect(document.toLowerCase(), isNot(contains('steal')));
+      // Nothing addressed at the server: the page could send no header.
+      expect(document, isNot(contains('kavita.test')));
+      expect(document, isNot(contains('OEBPS/images')));
+    });
+
+    testWidgets("a page's pictures are fetched by the app, and drawn from "
+        'the file beside the page', (tester) async {
+      late _BookAdapter server;
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        html: '<p>a</p><img src="OEBPS/images/worm.jpg"/>$_addressedPicture',
+        onServer: (it) => server = it,
+      );
+      await settle(tester);
+
+      final asked = {
+        for (final request in server.resources)
+          request.uri.queryParameters['file'],
+      };
+      expect(
+        asked,
+        containsAll(['OEBPS/images/worm.jpg', 'OEBPS/images/cover.jpg']),
+      );
+      for (final request in server.resources) {
+        // With the client's own headers, which is the only way these are had.
+        expect(request.headers['Authorization'], 'Bearer token');
+        expect(request.uri.host, 'kavita.test');
+      }
+
+      final page = engine.pageShowing(0)!;
+      final pictures = RegExp(r'<img src="([^"]*)"')
+          .allMatches(page.document!)
+          .map((match) => match.group(1)!)
+          .toList();
+      expect(pictures, hasLength(2));
+      final directory = File(page.file!).parent.path;
+      for (final picture in pictures) {
+        expect(picture, startsWith('file:///'));
+        final file = File.fromUri(Uri.parse(picture));
+        // Inside the directory the page is read from, which is all an engine
+        // on iOS is allowed to read.
+        expect(file.path, startsWith(directory));
+        expect(file.readAsBytesSync(), base64Decode(_carried));
+      }
+    });
+
+    testWidgets("the reader's settings reach the document", (tester) async {
+      await _pumpBook(tester, webEngine: true);
+      await settle(tester);
+      final document = engine.pageShowing(0)!.document!;
+      expect(document, contains('@layer patra'));
+      expect(document, contains('!important'));
+    });
+
+    testWidgets('progress is posted as it always was', (tester) async {
+      final (_, posted) = await _pumpBook(
+        tester,
+        webEngine: true,
+        progressPage: 2,
+      );
+      await settle(tester);
+      expect(_postedPages(posted), [2]);
+
+      // Where in the page the reader came to rest, as the app's own bridge
+      // tells it: the same call, the same field.
+      engine.pageShowing(2)!.tell('0.25');
+      await settle(tester);
+      expect(posted.last, (pageNum: 2, anchor: '0.2500'));
+    });
+
+    testWidgets('the sides of the screen still turn the page', (tester) async {
+      final (_, posted) = await _pumpBook(tester, webEngine: true);
+      await settle(tester);
+      final size = tester.getSize(find.byType(Scaffold));
+      await tester.tapAt(Offset(size.width - 10, size.height / 2));
+      await settle(tester);
+      expect(_postedPages(posted), [0, 1]);
+      expect(engine.pageShowing(1), isNotNull);
+    });
+
+    testWidgets('a swipe still turns the page', (tester) async {
+      final (_, posted) = await _pumpBook(tester, webEngine: true);
+      await settle(tester);
+      await _swipe(tester);
+      await settle(tester);
+      expect(_postedPages(posted), [0, 1]);
+    });
+
+    testWidgets('a book declared right to left still turns from the right', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        html: '<style>.book-content { direction: rtl }</style><p>a</p>',
+      );
+      await settle(tester);
+      final pager = find.byType(PageView);
+      expect(Directionality.of(tester.element(pager)), TextDirection.rtl);
+      // And the engine is handed the declaration itself.
+      expect(engine.pageShowing(0)!.document, contains('direction: rtl'));
+    });
+
+    testWidgets('a saved book opens with no server, its pictures carried', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        offline: true,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          seriesId: 3,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          language: 'fr',
+          pageHtml:
+              '<p>La spice doit couler.</p>'
+              '<img src="data:image/png;base64,$_carried"/>',
+        ),
+      );
+      await settle(tester);
+      final document = engine.pageShowing(0)!.document!;
+      expect(document, contains('<html lang="fr">'));
+      expect(document, contains('La spice doit couler.'));
+      expect(document, contains('src="data:image/png;base64,$_carried"'));
+    });
+
+    testWidgets('goes nowhere but the page it was handed', (tester) async {
+      await _pumpBook(tester, webEngine: true);
+      await settle(tester);
+      final page = engine.pageShowing(0)!;
+      final own = Uri.file(page.file!).toString();
+      expect(await page.ask(own), NavigationDecision.navigate);
+      expect(await page.ask('$own#note-1'), NavigationDecision.navigate);
+      expect(
+        await page.ask('https://tracker.example/'),
+        NavigationDecision.prevent,
+      );
+      expect(await page.ask('file:///etc/passwd'), NavigationDecision.prevent);
+    });
+  });
+}
+
+/// A web engine that paints nothing and remembers what it was handed.
+class _FakeWebEngine extends WebViewPlatform {
+  final pages = <_FakeWebPage>[];
+
+  /// The last page loaded with the document for [page] of the book.
+  _FakeWebPage? pageShowing(int page) => pages.reversed
+      .where((it) => it.file?.endsWith('/7-$page.html') ?? false)
+      .firstOrNull;
+
+  @override
+  PlatformWebViewController createPlatformWebViewController(
+    PlatformWebViewControllerCreationParams params,
+  ) {
+    final page = _FakeWebPage(params);
+    pages.add(page);
+    return page;
+  }
+
+  @override
+  PlatformNavigationDelegate createPlatformNavigationDelegate(
+    PlatformNavigationDelegateCreationParams params,
+  ) => _FakeNavigation(params);
+
+  @override
+  PlatformWebViewWidget createPlatformWebViewWidget(
+    PlatformWebViewWidgetCreationParams params,
+  ) => _FakeWebView(params);
+}
+
+class _FakeWebPage extends PlatformWebViewController {
+  _FakeWebPage(super.params) : super.implementation();
+
+  JavaScriptMode? javaScript;
+  String? bridge;
+  void Function(JavaScriptMessage)? _bridge;
+  _FakeNavigation? _navigation;
+
+  /// The file the page was loaded from, and what it held when it was.
+  String? file;
+  String? document;
+
+  /// What the app's own bridge says, as the page's script would say it.
+  void tell(String message) => _bridge!(JavaScriptMessage(message: message));
+
+  /// Whether the page may go to [url].
+  Future<NavigationDecision> ask(String url) async =>
+      _navigation!.onNavigationRequest!(
+        NavigationRequest(url: url, isMainFrame: true),
+      );
+
+  @override
+  Future<void> setJavaScriptMode(JavaScriptMode mode) async =>
+      javaScript = mode;
+
+  @override
+  Future<void> setBackgroundColor(Color color) async {}
+
+  @override
+  Future<void> addJavaScriptChannel(JavaScriptChannelParams params) async {
+    bridge = params.name;
+    _bridge = params.onMessageReceived;
+  }
+
+  @override
+  Future<void> setPlatformNavigationDelegate(
+    PlatformNavigationDelegate handler,
+  ) async => _navigation = handler as _FakeNavigation;
+
+  @override
+  Future<void> loadFile(String absoluteFilePath) async {
+    file = absoluteFilePath;
+    document = File(absoluteFilePath).readAsStringSync();
+    _navigation?.onPageFinished?.call(Uri.file(absoluteFilePath).toString());
+  }
+
+  @override
+  Future<void> runJavaScript(String javaScript) async {}
+}
+
+class _FakeNavigation extends PlatformNavigationDelegate {
+  _FakeNavigation(super.params) : super.implementation();
+
+  NavigationRequestCallback? onNavigationRequest;
+  PageEventCallback? onPageFinished;
+
+  @override
+  Future<void> setOnNavigationRequest(
+    NavigationRequestCallback handler,
+  ) async => onNavigationRequest = handler;
+
+  @override
+  Future<void> setOnPageFinished(PageEventCallback handler) async =>
+      onPageFinished = handler;
+}
+
+class _FakeWebView extends PlatformWebViewWidget {
+  _FakeWebView(super.params) : super.implementation();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.expand();
 }
