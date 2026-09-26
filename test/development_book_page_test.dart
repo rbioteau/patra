@@ -108,13 +108,14 @@ void main() {
       // whatever platform it lands on.
       final reader = File('lib/src/features/reader/reader_screen.dart')
           .readAsStringSync();
-      final guard = reader.indexOf(
-        'if (kReleaseMode) return const BookPageUnavailable();',
-      );
+      final guard = RegExp(
+        r'if\s*\(\s*kReleaseMode\s*\)\s*return\s+const\s+'
+        r'BookPageUnavailable\(\)\s*;',
+      ).firstMatch(reader)?.start;
       final uses = RegExp(r'DevelopmentBookPage\(').allMatches(reader);
-      expect(guard, isNot(-1), reason: 'the reader guards the renderer');
+      expect(guard, isNotNull, reason: 'the reader guards the renderer');
       expect(uses, hasLength(1), reason: 'and reaches it in one place');
-      expect(uses.single.start, greaterThan(guard));
+      expect(uses.single.start, greaterThan(guard!));
     });
   });
 

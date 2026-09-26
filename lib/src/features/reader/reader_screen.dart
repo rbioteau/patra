@@ -2014,7 +2014,6 @@ class _ResolvedBookPage extends ConsumerWidget {
     if (kReleaseMode) return const BookPageUnavailable();
     return DevelopmentBookPage(
       page: page,
-      language: language,
       picture: (src) => DevelopmentBookPicture(chapterId: chapterId, src: src),
       textSize: textSize,
       lineHeight: lineHeight,

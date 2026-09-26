@@ -404,3 +404,16 @@ Future<void> swipeBookPage(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
   await tester.pump(const Duration(seconds: 1));
 }
+
+/// Lets the files a page is written into for the web engine land: real I/O,
+/// which a test's clock does not move.
+Future<void> settleBookFiles(WidgetTester tester) async {
+  // Each step of a write is a round trip the clock does not move, and a page
+  // is several: its pictures, the app's face, the document.
+  for (var i = 0; i < 40; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}

@@ -9,7 +9,7 @@ import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_markup.dart';
 import 'package:patra/src/features/reader/book_page.dart';
-import 'package:patra/src/features/reader/development/development_book_page.dart';
+import 'package:patra/src/features/reader/book_web_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
@@ -564,15 +564,21 @@ void main() {
       ),
     ];
 
+    // Asked of the web engine, which is what a reader's page is drawn by:
+    // what it does with the language is *the web engine*'s question, and
+    // what is asked here is what the reader obtained and what it cost.
+    setUp(() => WebViewPlatform.instance = _FakeWebEngine());
+
+    /// The page the engine was handed, once the files it is written into
+    /// have landed.
+    Future<BookWebPage> handed(WidgetTester tester) async {
+      await settleBookFiles(tester);
+      return tester.widget<BookWebPage>(find.byType(BookWebPage));
+    }
+
     /// The language the page on screen was handed.
-    ///
-    /// Read off the development renderer, which is what draws a page under a
-    /// test binding and draws nothing with the language: what is asked here
-    /// is what the reader obtained and what it cost, not what a page does
-    /// with it — the web engine's document is asked that in *the web engine*.
-    String? drawnIn(WidgetTester tester) => tester
-        .widget<DevelopmentBookPage>(find.byType(DevelopmentBookPage).first)
-        .language;
+    Future<String?> drawnIn(WidgetTester tester) async =>
+        (await handed(tester)).language;
 
     BookAdapter server({String? language = 'en'}) => BookAdapter(
       requested: <int>[],
@@ -586,19 +592,24 @@ void main() {
       final adapter = server(language: 'de');
       await pumpBook(
         tester,
+        webEngine: true,
         server: adapter,
         held: heldSeries(language: 'fr'),
       );
 
-      expect(drawnIn(tester), 'fr', reason: 'what the series screen stored');
+      expect(
+        await drawnIn(tester),
+        'fr',
+        reason: 'what the series screen stored',
+      );
       expect(adapter.chapterAsked, 0);
     });
 
     testWidgets('opened from a link, it is asked for', (tester) async {
       final adapter = server(language: 'fr-CA');
-      await pumpBook(tester, server: adapter);
+      await pumpBook(tester, webEngine: true, server: adapter);
 
-      expect(drawnIn(tester), 'fr-CA');
+      expect(await drawnIn(tester), 'fr-CA');
       expect(adapter.chapterAsked, 1, reason: 'once, and only here');
     });
 
@@ -607,14 +618,19 @@ void main() {
       // asking again would be asking the same question for the same answer,
       // and nothing — the interface, the library, the profile — stands in.
       final adapter = server(language: null);
-      await pumpBook(tester, server: adapter, held: heldSeries());
+      await pumpBook(
+        tester,
+        webEngine: true,
+        server: adapter,
+        held: heldSeries(),
+      );
 
-      expect(drawnIn(tester), isNull);
+      expect(await drawnIn(tester), isNull);
       expect(adapter.chapterAsked, 0);
 
       final linked = server(language: null);
-      await pumpBook(tester, server: linked);
-      expect(drawnIn(tester), isNull);
+      await pumpBook(tester, webEngine: true, server: linked);
+      expect(await drawnIn(tester), isNull);
       expect(linked.chapterAsked, 1);
     });
 
@@ -624,6 +640,7 @@ void main() {
       final adapter = server(language: 'en');
       await pumpBook(
         tester,
+        webEngine: true,
         server: adapter,
         saved: (root) => saveChapterFixture(
           root,
@@ -640,7 +657,7 @@ void main() {
 
       // The server says English today; the copy was made in French, and a
       // copy is read as it was made.
-      expect(drawnIn(tester), 'fr');
+      expect(await drawnIn(tester), 'fr');
       // And a copy that says costs nothing to ask, though nothing of the
       // series is held — the way in from the Downloads tab.
       expect(adapter.chapterAsked, 0);
@@ -651,6 +668,7 @@ void main() {
     ) async {
       await pumpBook(
         tester,
+        webEngine: true,
         offline: true,
         saved: (root) => saveChapterFixture(
           root,
@@ -665,8 +683,8 @@ void main() {
         ),
       );
 
-      expect(find.text('La spice doit couler.'), findsOneWidget);
-      expect(drawnIn(tester), 'fr');
+      expect((await handed(tester)).html, contains('La spice doit couler.'));
+      expect(await drawnIn(tester), 'fr');
     });
 
     testWidgets('a copy saved before its language was recorded still opens', (
@@ -674,6 +692,7 @@ void main() {
     ) async {
       await pumpBook(
         tester,
+        webEngine: true,
         offline: true,
         saved: (root) => saveChapterFixture(
           root,
@@ -687,8 +706,8 @@ void main() {
         ),
       );
 
-      expect(find.text('The spice must flow.'), findsOneWidget);
-      expect(drawnIn(tester), isNull);
+      expect((await handed(tester)).html, contains('The spice must flow.'));
+      expect(await drawnIn(tester), isNull);
     });
   });
 
@@ -702,16 +721,7 @@ void main() {
 
     /// Lets the files a page is written into land: real I/O, which a test's
     /// clock does not move.
-    Future<void> settle(WidgetTester tester) async {
-      // Each step of a write is a round trip the clock does not move, and a
-      // page is several: its pictures, the app's face, the document.
-      for (var i = 0; i < 40; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 5)),
-        );
-        await tester.pump(const Duration(milliseconds: 50));
-      }
-    }
+    Future<void> settle(WidgetTester tester) => settleBookFiles(tester);
 
     testWidgets('draws the page it was handed, made inert, from a file', (
       tester,

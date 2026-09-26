@@ -75,21 +75,11 @@ class DevelopmentBookPage extends StatefulWidget {
     required this.textSize,
     required this.lineHeight,
     required this.face,
-    this.language,
     this.anchor,
     this.onScroll,
   });
 
   final BookPage page;
-
-  /// The language the book is written in, as the BCP-47 code it declared, or
-  /// null where nobody recorded one (#125).
-  ///
-  /// **Not drawn by this renderer**, and deliberately: it is what a page is
-  /// hyphenated in, and Flutter draws no hyphen at a break (ADR-0013). It is
-  /// handed over all the same, so that where there is no engine the language
-  /// the reader obtained can still be seen to have reached the page.
-  final String? language;
 
   /// What a picture the page refers to is drawn with: a [BookPicture]'s own
   /// name in, a widget out. The reader owns it, because resolving that name
@@ -363,26 +353,32 @@ class _DevelopmentBookPictureState
   /// often.
   late final Uint8List? _carried = carriedPictureBytes(widget.src);
 
-  /// The file beside a saved copy's pages the picture is kept in, once
-  /// looked for.
-  File? _copied;
-  var _lookedForCopy = false;
+  /// The file beside a saved copy's pages the picture is kept in, looked for
+  /// once per copy directory.
+  (Directory, File?)? _copied;
 
-  File? _copy() {
-    if (_lookedForCopy) return _copied;
-    if (ref.read(savedChapterProvider(widget.chapterId)) == null) return null;
-    final dir = ref.read(chapterDirProvider(widget.chapterId)).value;
-    if (dir == null) return null;
-    _lookedForCopy = true;
+  File? _copy(Directory dir) {
+    if (_copied case (final from, final file) when from.path == dir.path) {
+      return file;
+    }
     final file = bookPictureFile(dir, widget.src);
-    return _copied = file.existsSync() ? file : null;
+    return (_copied = (dir, file.existsSync() ? file : null)).$2;
   }
 
   @override
   Widget build(BuildContext context) {
+    // Watched in a build a lazy pager runs during layout, as the page around
+    // it already watches its own: this renderer is a development tool, and
+    // the rule the reader keeps for its layout path is kept by what ships.
+    final saved = ref.watch(
+      savedChapterProvider(widget.chapterId).select((copy) => copy != null),
+    );
+    final dir = saved
+        ? ref.watch(chapterDirProvider(widget.chapterId)).value
+        : null;
     // The width of the column of words it sits in, and its own height from
     // that: a picture in a page of a book is as wide as the page's text.
-    final copied = _copy();
+    final copied = dir == null ? null : _copy(dir);
     if (copied != null) {
       return Image.file(copied, width: double.infinity, fit: BoxFit.fitWidth);
     }
