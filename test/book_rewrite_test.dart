@@ -349,7 +349,7 @@ void main() {
     test('a picture carried inside the page stays where it is', () {
       // A copy saved before a copy was a directory carries its pictures as
       // data (ADR-0013): such a page is still valid and must keep opening.
-      final carried = carriedPictureName(const [1, 2, 3]);
+      const carried = 'data:;base64,AQID';
       final document = _rewrite('<img src="$carried">');
       expect(document, contains('src="$carried"'));
     });

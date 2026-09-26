@@ -80,11 +80,12 @@ class BookFace {
 
 /// What a copy of a book calls the face it carries.
 ///
-/// A copy is pages and nothing else — promotion deletes every file in a
-/// chapter's directory that is not a page — so the face is the one exception
-/// that rule has to know about. It is named here rather than in the download
-/// code so that the two cannot disagree about it, and it is extension-less
-/// like a page, because what the file holds is whatever the book shipped.
+/// A copy is pages and the pictures beside them — promotion deletes every
+/// file in a chapter's directory that is not a page — so the face is the one
+/// exception that rule has to know about. It is named here rather than in the
+/// download code so that the two cannot disagree about it, and it is
+/// extension-less like a page, because what the file holds is whatever the
+/// book shipped.
 abstract final class BookFontFile {
   static const roman = 'book-font';
   static const italic = 'book-font-italic';

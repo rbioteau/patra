@@ -92,6 +92,34 @@ void main() {
       expect(written.parent.path, '${root.path}/7');
       expect(written.readAsStringSync(), 'face');
     });
+
+    test('already copied out of a copy are not copied again', () async {
+      // A saved book is opened again and again, and a picture of megabytes
+      // copied on every page turn is a wait the reader pays each time.
+      const src = 'OEBPS/images/worm.jpg';
+      final copy = File('${root.path}/worm')..writeAsStringSync('worm');
+      final into = Directory('${root.path}/7');
+      final first = await fetchBookPageFiles(
+        const [src],
+        into: into,
+        onDevice: {src: copy},
+        fetch: (_) async => const [],
+      );
+      final written = File.fromUri(Uri.parse(first[src]!));
+      final copiedAt = written.lastModifiedSync();
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final again = await fetchBookPageFiles(
+        const [src],
+        into: into,
+        onDevice: {src: copy},
+        fetch: (_) async => const [],
+      );
+
+      expect(again[src], first[src]);
+      expect(written.lastModifiedSync(), copiedAt);
+      expect(written.readAsStringSync(), 'worm');
+    });
   });
 
   group('the document a page is loaded from', () {

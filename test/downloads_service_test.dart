@@ -8,6 +8,7 @@ import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_face.dart';
+import 'package:patra/src/features/reader/book_markup.dart';
 
 /// Serves fake page bytes, and can fail on a chosen page.
 class _PageAdapter implements HttpClientAdapter {
@@ -701,45 +702,155 @@ void main() {
   });
 
   // A book is stored the way ADR-0009 says it must be: the pages the server
-  // rendered, each carrying its own pictures, and the total it was made with
-  // — because with no server there is nothing left to lay the words out or
-  // to fetch a picture from.
+  // rendered and the total it was made with — because with no server there is
+  // nothing left to lay the words out. And a copy is a directory (#129): each
+  // page as the server wrote it, beside the pictures it names, so a stored
+  // page is the same page a streamed one is.
   group('saving a book', () {
-    test('the copy is the pages the server rendered, self-contained', () async {
-      final adapter = _BookAdapter();
+    test(
+      'the copy is the pages the server rendered, beside their pictures',
+      () async {
+        final adapter = _BookAdapter();
 
-      final saved = await service.download(
+        final saved = await service.download(
+          client: _client(adapter),
+          chapter: _book,
+          onProgress: (_, _) {},
+        );
+
+        // How long the book is is the book's to say, not the chapter's: the
+        // chapter counts image pages, and a book has none.
+        expect(saved.pages, 3);
+        expect(saved.content, ChapterContent.reflowable);
+
+        // Every page the server made is here, exactly as it made it: the name
+        // a picture was given is what the reader finds it by.
+        for (var page = 0; page < 3; page++) {
+          final file = await service.pageFile(_bookId, page);
+          expect(file.existsSync(), isTrue, reason: 'page $page is stored');
+          expect(file.readAsStringSync(), _bookPageHtml(page));
+        }
+
+        // Each picture sits beside the pages, once, under the name the reader
+        // will look for it by.
+        final dir = await service.chapterDir(_bookId);
+        for (final src in ['OEBPS/images/worm.jpg', 'OEBPS/images/cover.jpg']) {
+          final picture = File(
+            '${dir.path}/$bookPicturesDirectory/${bookFileName(src)}',
+          );
+          expect(
+            picture.readAsBytesSync(),
+            _picture,
+            reason: '$src is carried',
+          );
+        }
+
+        // A picture two pages name is fetched once.
+        expect(
+          adapter.requested,
+          unorderedEquals(['OEBPS/images/worm.jpg', 'OEBPS/images/cover.jpg']),
+        );
+
+        // And the copy costs its pages and each of its pictures once — the
+        // total the Downloads tab reports.
+        final pages = [
+          for (var page = 0; page < 3; page++) utf8.encode(_bookPageHtml(page)),
+        ].fold<int>(0, (sum, page) => sum + page.length);
+        expect(saved.bytes, pages + 2 * _picture.length);
+      },
+    );
+
+    test('saving a book is no more requests than it was', () async {
+      // A copy that is a directory is the same fetches written differently:
+      // one page request per page and one per picture, never a second trip.
+      final adapter = _BookAdapter();
+      await service.download(
         client: _client(adapter),
         chapter: _book,
         onProgress: (_, _) {},
       );
+      expect(adapter.requestedPages..sort(), [0, 1, 2]);
+      expect(adapter.requested, hasLength(2));
+    });
 
-      // How long the book is is the book's to say, not the chapter's: the
-      // chapter counts image pages, and a book has none.
-      expect(saved.pages, 3);
-      expect(saved.content, ChapterContent.reflowable);
-      expect(saved.bytes, greaterThan(0));
+    test('removing a copy removes its pictures with it', () async {
+      await service.download(
+        client: _client(_BookAdapter()),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+      final dir = await service.chapterDir(_bookId);
+      expect(
+        Directory('${dir.path}/$bookPicturesDirectory').existsSync(),
+        isTrue,
+      );
 
-      // Every page the server made is here, and each carries the picture it
-      // named rather than the name it named it by.
-      for (var page = 0; page < 3; page++) {
-        final file = await service.pageFile(_bookId, page);
-        expect(file.existsSync(), isTrue, reason: 'page $page is stored');
-        final html = file.readAsStringSync();
-        expect(html, contains('The spice must flow.'));
-        expect(
-          html,
-          contains(base64Encode(_picture)),
-          reason: 'page $page carries its picture',
+      await service.remove(_bookId);
+
+      expect(dir.existsSync(), isFalse);
+      expect(await service.scan(), isEmpty);
+    });
+
+    test(
+      'a copy stored again keeps only the pictures its pages name now',
+      () async {
+        await service.download(
+          client: _client(_BookAdapter()),
+          chapter: _book,
+          onProgress: (_, _) {},
         );
-        expect(html, isNot(contains('OEBPS/')), reason: 'and no name to fetch');
-      }
+        final dir = await service.chapterDir(_bookId);
+        final cover = File(
+          '${dir.path}/$bookPicturesDirectory/'
+          '${bookFileName('OEBPS/images/cover.jpg')}',
+        );
+        expect(cover.existsSync(), isTrue);
 
-      // A picture two pages name is fetched once.
-      expect(adapter.requested, [
-        'OEBPS/images/worm.jpg',
-        'OEBPS/images/cover.jpg',
-      ]);
+        // Recounted to two pages: the page naming the cover is gone, and a
+        // picture nothing names is disk the Downloads tab cannot explain.
+        final saved = await service.download(
+          client: _client(_BookAdapter(pages: 2)),
+          chapter: _book,
+          onProgress: (_, _) {},
+        );
+
+        expect(saved.pages, 2);
+        expect(cover.existsSync(), isFalse);
+        expect(
+          File(
+            '${dir.path}/$bookPicturesDirectory/'
+            '${bookFileName('OEBPS/images/worm.jpg')}',
+          ).existsSync(),
+          isTrue,
+        );
+      },
+    );
+
+    test('a retried book does not fetch a picture it already has', () async {
+      await expectLater(
+        service.download(
+          client: _client(_BookAdapter(failOnPage: 2)),
+          chapter: _book,
+          onProgress: (_, _) {},
+        ),
+        throwsA(isA<DioException>()),
+      );
+
+      final retry = _BookAdapter();
+      final saved = await service.download(
+        client: _client(retry),
+        chapter: _book,
+        onProgress: (_, _) {},
+        knownTotalPages: 3,
+      );
+
+      // The page that failed names the cover, which the first attempt never
+      // reached; the worm it did fetch is already beside the pages.
+      expect(retry.requested, ['OEBPS/images/cover.jpg']);
+      final pages = [
+        for (var page = 0; page < 3; page++) utf8.encode(_bookPageHtml(page)),
+      ].fold<int>(0, (sum, page) => sum + page.length);
+      expect(saved.bytes, pages + 2 * _picture.length);
     });
 
     test('a copy read back knows it is a book', () async {
@@ -816,13 +927,19 @@ void main() {
       final html = (await service.pageFile(_bookId, 0)).readAsStringSync();
       expect(html, contains('The spice must flow.'));
       expect(html, contains('OEBPS/images/worm.jpg'));
-      expect(html, isNot(contains('data:')));
+      final dir = await service.chapterDir(_bookId);
+      final pictures = Directory('${dir.path}/$bookPicturesDirectory');
+      expect(
+        pictures.existsSync() ? pictures.listSync() : const [],
+        isEmpty,
+        reason: 'nothing stands in for a picture the server refused',
+      );
       // And it is not asked for again on the page that names it too: a book
       // whose pictures are all refused is not a book that fetches forever.
-      expect(adapter.requested, [
-        'OEBPS/images/worm.jpg',
-        'OEBPS/images/cover.jpg',
-      ]);
+      expect(
+        adapter.requested,
+        unorderedEquals(['OEBPS/images/worm.jpg', 'OEBPS/images/cover.jpg']),
+      );
     });
 
     // A copy keeps the pagination it was made with (ADR-0009), and the
@@ -899,10 +1016,10 @@ void main() {
           'fonts/italic.woff2',
         ]);
         // Pictures were still fetched as before.
-        expect(adapter.requested, [
-          'OEBPS/images/worm.jpg',
-          'OEBPS/images/cover.jpg',
-        ]);
+        expect(
+          adapter.requested,
+          unorderedEquals(['OEBPS/images/worm.jpg', 'OEBPS/images/cover.jpg']),
+        );
 
         // The font files exist in the chapter directory under the frozen names.
         final dir = await service.chapterDir(_bookId);
@@ -921,15 +1038,18 @@ void main() {
         expect(romanFile.lengthSync(), _picture.length);
         expect(italicFile.lengthSync(), _picture.length);
 
-        // Pages still carry their pictures.
+        // Pages are stored as the server wrote them, their pictures beside.
         for (var page = 0; page < 3; page++) {
           final file = await service.pageFile(_bookId, page);
-          expect(file.existsSync(), isTrue, reason: 'page $page is stored');
-          final html = file.readAsStringSync();
-          expect(html, contains('The spice must flow.'));
-          expect(html, contains(base64Encode(_picture)));
-          expect(html, isNot(contains('OEBPS/')));
+          expect(file.readAsStringSync(), _bookWithFontPageHtml(page));
         }
+        expect(
+          File(
+            '${dir.path}/$bookPicturesDirectory/'
+            '${bookFileName('OEBPS/images/worm.jpg')}',
+          ).readAsBytesSync(),
+          _picture,
+        );
       },
     );
 
@@ -1028,14 +1148,18 @@ void main() {
           reason: 'no italic font written',
         );
 
-        // Pages are still stored and carry their pictures.
+        // Pages are still stored, and their pictures beside them.
         for (var page = 0; page < 3; page++) {
           final file = await service.pageFile(_bookId, page);
-          expect(file.existsSync(), isTrue, reason: 'page $page is stored');
-          final html = file.readAsStringSync();
-          expect(html, contains('The spice must flow.'));
-          expect(html, contains(base64Encode(_picture)));
+          expect(file.readAsStringSync(), contains('The spice must flow.'));
         }
+        expect(
+          File(
+            '${dir.path}/$bookPicturesDirectory/'
+            '${bookFileName('OEBPS/images/worm.jpg')}',
+          ).existsSync(),
+          isTrue,
+        );
       },
     );
 

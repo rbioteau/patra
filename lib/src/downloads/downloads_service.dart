@@ -663,7 +663,8 @@ class DownloadsService {
   /// What a page is differs by what the chapter is made of, and so does where
   /// the pages come from: a chapter of pictures is one image per page, and a
   /// book is the pages the server laid its words out into (ADR-0008), stored
-  /// as it rendered them and made to carry their own pictures (ADR-0009).
+  /// as it rendered them beside the pictures and the face they name, so the
+  /// copy is a directory that opens with no server (ADR-0009, #129).
   ///
   /// Pages land beside the copy they replace and move into place only after
   /// every page is present. A failed attempt keeps that staging directory: a
@@ -737,10 +738,13 @@ class DownloadsService {
           if (completed > 0) await onProgress(completed, pages);
           // A picture named on several newly fetched pages is fetched once,
           // including while those pages are being fetched concurrently.
-          final carried = <String, Future<String?>>{};
+          final carried = <String, Future<void>>{};
           await _runPageWorkers(pages, (page) async {
             if (_isCompletePage(stored[page])) return;
-            bytes += await _storeBookPage(
+            // Awaited before it is added: `bytes += await …` reads the total
+            // before the wait, and pages fetched together would each add to
+            // the total as it was when they started.
+            final size = await _storeBookPage(
               staging,
               client: client,
               chapterId: chapter.chapterId,
@@ -748,9 +752,19 @@ class DownloadsService {
               cancelToken: cancelToken,
               carried: carried,
             );
+            bytes += size;
             completed++;
             await onProgress(completed, pages);
           });
+          // What the pages name is counted once, whichever attempt fetched
+          // it: a retry reuses what an earlier one left beside the pages.
+          bytes += _filesSize(
+            Directory('${staging.path}/$bookPicturesDirectory'),
+          );
+          for (final name in BookFontFile.names) {
+            final font = File('${dir.path}/$name');
+            if (font.existsSync()) bytes += font.lengthSync();
+          }
       }
     } on Object {
       // The queue record already describes whether this partial failed,
@@ -797,6 +811,13 @@ class DownloadsService {
 
   static void _adoptUncommittedPages(Directory dir, Directory staging) {
     if (_readSavedChapter(dir) != null) return;
+    // Pictures promoted beside pages whose copy was never finished go back
+    // with those pages, or the promotion that finishes it would drop them.
+    final pictures = Directory('${dir.path}/$bookPicturesDirectory');
+    final staged = Directory('${staging.path}/$bookPicturesDirectory');
+    if (pictures.existsSync() && !staged.existsSync()) {
+      pictures.renameSync(staged.path);
+    }
     for (final entity in dir.listSync()) {
       if (entity is! File || !_isCompletePage(entity)) continue;
       final name = entity.path.split(Platform.pathSeparator).last;
@@ -810,6 +831,15 @@ class DownloadsService {
 
   static bool _isCompletePage(File file) =>
       file.existsSync() && file.lengthSync() > 0;
+
+  /// What the files in [dir] cost, or nothing where there is no [dir].
+  static int _filesSize(Directory dir) => !dir.existsSync()
+      ? 0
+      : dir
+            .listSync()
+            .whereType<File>()
+            .where((file) => !file.path.endsWith('.tmp'))
+            .fold(0, (sum, file) => sum + file.lengthSync());
 
   static Future<void> _writePage(File file, List<int> bytes) async {
     final temp = File('${file.path}.tmp');
@@ -862,10 +892,20 @@ class DownloadsService {
   /// lives in the reader's module so the two cannot disagree about it — the
   /// download code does not know what a font file is, only that these two
   /// names are not pages and must survive promotion.
+  ///
+  /// A book's pictures are a directory beside its pages
+  /// ([bookPicturesDirectory]), and it is swapped whole: what the copy's
+  /// pages name now is exactly what the attempt fetched, and a picture only
+  /// an old page named is disk nothing could explain.
   Future<void> _promote(Directory dir, Directory staging, int pages) async {
     for (var page = 0; page < pages; page++) {
       File('${staging.path}/${pageFileName(page)}')
           .renameSync('${dir.path}/${pageFileName(page)}');
+    }
+    await _deleteQuietly(Directory('${dir.path}/$bookPicturesDirectory'));
+    final pictures = Directory('${staging.path}/$bookPicturesDirectory');
+    if (pictures.existsSync()) {
+      pictures.renameSync('${dir.path}/$bookPicturesDirectory');
     }
     for (final entity in dir.listSync()) {
       if (entity is! File) continue;
@@ -878,17 +918,24 @@ class DownloadsService {
     await _deleteQuietly(staging);
   }
 
-  /// Stores one page of a book: the HTML the server laid out, with every
-  /// picture it named carried inside it, and the book's own face carried once
-  /// per copy.
+  /// Stores one page of a book: the HTML the server laid out, exactly as it
+  /// laid it out, with every picture it names fetched into the pictures
+  /// directory beside it and the book's own face carried once per copy.
   ///
-  /// Returns what the page cost, which is what the Downloads tab reports.
+  /// The page is not rewritten to carry its pictures (#129): it names them
+  /// as the server named them, which is the name [bookFileName] files each
+  /// under, so a stored page goes through the rewrite pass as the streamed
+  /// one does. A picture is written before the page that names it, so a page
+  /// a retry finds complete is one whose pictures are already here.
+  ///
+  /// Returns what the page itself cost; what it names is counted once the
+  /// copy is whole, since two pages may name one picture.
   Future<int> _storeBookPage(
     Directory dir, {
     required KavitaClient client,
     required int chapterId,
     required int page,
-    required Map<String, Future<String?>> carried,
+    required Map<String, Future<void>> carried,
     CancelToken? cancelToken,
   }) async {
     final html = await client.bookPage(
@@ -904,101 +951,66 @@ class DownloadsService {
     final face = parseBookFace(html);
     if (face != null && !face.isEmpty) {
       final chapterDir = dir.parent;
-      if (face.roman != null) {
+      for (final (src, name) in [
+        (face.roman, BookFontFile.roman),
+        (face.italic, BookFontFile.italic),
+      ]) {
+        if (src == null) continue;
         await carried.putIfAbsent(
-          'font:roman:${face.roman}',
-          () => _carryFont(
+          'font:$name:$src',
+          () => _carry(
             client,
             chapterId,
-            face.roman!,
-            BookFontFile.roman,
-            chapterDir,
-            cancelToken,
-          ),
-        );
-      }
-      if (face.italic != null) {
-        await carried.putIfAbsent(
-          'font:italic:${face.italic}',
-          () => _carryFont(
-            client,
-            chapterId,
-            face.italic!,
-            BookFontFile.italic,
-            chapterDir,
+            src,
+            File('${chapterDir.path}/$name'),
             cancelToken,
           ),
         );
       }
     }
 
-    final resolved = <String, String?>{};
+    final pictures = Directory('${dir.path}/$bookPicturesDirectory');
     for (final src in BookPage.fromHtml(html).pictureSources) {
+      // A name the page carries the bytes of needs no file of its own.
+      if (src.trim().startsWith('data:')) continue;
       // Asked for once however many pages name it — including a picture the
       // server refuses, which is why the in-flight future itself is memoized.
-      resolved[src] = await carried.putIfAbsent(
-        src,
-        () => _carryPicture(client, chapterId, src, cancelToken),
-      );
+      await carried.putIfAbsent(src, () async {
+        final file = bookPictureFile(dir, src);
+        // An earlier attempt's picture is kept, and not asked for again.
+        if (_isCompletePage(file)) return;
+        await pictures.create(recursive: true);
+        await _carry(client, chapterId, src, file, cancelToken);
+      });
     }
-    final stored = utf8.encode(
-      renameBookPictures(html, (src) => resolved[src]),
-    );
+    final stored = utf8.encode(html);
     await _writePage(File('${dir.path}/${pageFileName(page)}'), stored);
     return stored.length;
   }
 
-  /// What a page names a picture by once the copy carries the picture itself.
+  /// Fetches what a page names by [src] from the book and writes it to
+  /// [file]: a picture beside the pages, or a face under its frozen name
+  /// ([BookFontFile]).
   ///
-  /// A picture the server will not hand over is left as the page named it: it
-  /// costs the page its picture and not the reader the book, which is a
-  /// better answer than a copy that failed over one illustration.
-  Future<String?> _carryPicture(
+  /// One the server will not hand over is not written: it costs the copy that
+  /// picture or that face and not the reader the book, which is a better
+  /// answer than a copy that failed over one illustration — and the page
+  /// still names it, so a reader with a server can still ask for it.
+  Future<void> _carry(
     KavitaClient client,
     int chapterId,
     String src,
+    File file,
     CancelToken? cancelToken,
   ) async {
     try {
-      return carriedPictureName(
+      await _writePage(
+        file,
         await client.bookPictureBytes(chapterId, src, cancelToken: cancelToken),
       );
     } on DioException catch (error) {
-      // A cancelled download is not a picture that could not be fetched.
+      // A cancelled download is not a file that could not be fetched.
       if (error.type == DioExceptionType.cancel) rethrow;
-      return null;
-    }
-  }
-
-  /// Fetches a font file from the book-resources endpoint and writes it to the
-  /// chapter directory under the frozen name ([fontName] — either
-  /// [BookFontFile.roman] or [BookFontFile.italic]).
-  ///
-  /// A font the server refuses costs the copy its font and not the reader the
-  /// book — the same shape as a refused picture in [_carryPicture]. The future
-  /// completes with null on failure so the memoization in [carried] remembers
-  /// the refusal and does not retry on subsequent pages.
-  Future<String?> _carryFont(
-    KavitaClient client,
-    int chapterId,
-    String src,
-    String fontName,
-    Directory chapterDir,
-    CancelToken? cancelToken,
-  ) async {
-    try {
-      final bytes = await client.bookPictureBytes(
-        chapterId,
-        src,
-        cancelToken: cancelToken,
-      );
-      final file = File('${chapterDir.path}/$fontName');
-      await _writePage(file, bytes);
-      return fontName;
-    } on DioException catch (error) {
-      // A cancelled download is not a font that could not be fetched.
-      if (error.type == DioExceptionType.cancel) rethrow;
-      return null;
     }
   }
 

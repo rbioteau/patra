@@ -27,6 +27,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../downloads/downloads_provider.dart';
 
 import '../../settings/reading_settings.dart';
+import 'book_markup.dart';
 import 'book_rewrite.dart';
 
 /// The directory every page of a book is written into, with what each page
@@ -81,11 +82,20 @@ Future<BookPageFiles> fetchBookPageFiles(
   await into.create(recursive: true);
   final landed = await Future.wait(
     wanted.map((src) async {
-      final file = File('${into.path}/${_fileName(src)}');
+      final file = File('${into.path}/${bookFileName(src)}');
       try {
         final copy = onDevice[src];
         if (copy != null) {
-          await copy.copy(file.path);
+          // Copied once: a saved book is opened again and again, and what
+          // its copy holds does not change under the same name.
+          if (!file.existsSync() || file.lengthSync() != copy.lengthSync()) {
+            // Copied aside and moved into place: two neighbouring pages may
+            // name one picture, and an engine must never read one half
+            // written by the other.
+            final part = File('${file.path}.${identityHashCode(wanted)}.part');
+            await copy.copy(part.path);
+            await part.rename(file.path);
+          }
         } else {
           await file.writeAsBytes(await fetch(src), flush: true);
         }
@@ -96,21 +106,6 @@ Future<BookPageFiles> fetchBookPageFiles(
     }),
   );
   return Map.fromEntries(landed.nonNulls);
-}
-
-/// A file's name for [src]: the same for the same name, and keeping the
-/// extension of what it names — an engine reading a file names its type by
-/// it. A whole address's own `file` is what it names, never its query, so a
-/// key in the address never reaches a file name.
-String _fileName(String src) {
-  final named = Uri.tryParse(src.trim());
-  final path = named?.queryParameters['file'] ?? named?.path ?? src;
-  final extension = RegExp(r'\.([A-Za-z0-9]{1,5})$')
-      .firstMatch(path)
-      ?.group(1)
-      ?.toLowerCase();
-  final name = sha1.convert(src.codeUnits).toString().substring(0, 16);
-  return extension == null ? name : '$name.$extension';
 }
 
 /// Writes the document an engine is given for one page into [file], and

@@ -353,6 +353,44 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
 /// Whose store the reader reads: the profile its downloads were saved under.
 const _profileId = 'https://kavita.test#1';
 
+/// Saves the book [server] holds the way the app does — through the
+/// downloader, into the store under [root] — for a copy that is exactly what
+/// saving this book makes of it, rather than a fixture's idea of one.
+Future<void> _saveThroughDownloader(
+  WidgetTester tester,
+  Directory root,
+  _BookAdapter server, {
+  String? language,
+}) async {
+  final client = KavitaClient(
+    baseUrl: 'http://kavita.test',
+    token: 'token',
+    username: 'romain',
+    apiKey: 'key',
+  );
+  client.httpClient.httpClientAdapter = server;
+  client.bareHttpClient.httpClientAdapter = server;
+  // Real requests and real files, which a test's clock does not move.
+  await tester.runAsync(
+    () => DownloadsService(root: root, profileId: _profileId).download(
+      client: client,
+      chapter: SavedChapter(
+        chapterId: 7,
+        seriesId: 3,
+        volumeId: 4,
+        libraryId: 1,
+        seriesName: 'Dune',
+        title: _title,
+        pages: 0,
+        bytes: 0,
+        format: MangaFormat.epub,
+        language: language,
+      ),
+      onProgress: (_, _) {},
+    ),
+  );
+}
+
 /// Who is reading: the profile [_profileId] names.
 final _reader = Profile(
   baseUrl: 'http://kavita.test',
@@ -819,6 +857,32 @@ void main() {
     expect(pictures.single.image, isA<MemoryImage>());
   });
 
+  // A copy is a directory (#129): the page as the server wrote it, beside
+  // the pictures it names. With no server, a picture is the file beside it.
+  testWidgets('a saved book draws its pictures from the copy, with no server', (
+    tester,
+  ) async {
+    await _pumpBook(
+      tester,
+      offline: true,
+      saved: (root) => _saveThroughDownloader(
+        tester,
+        root,
+        _BookAdapter(requested: [], posted: []),
+      ),
+    );
+
+    expect(find.textContaining('The spice must flow'), findsOneWidget);
+    final pictures = tester.widgetList<Image>(find.byType(Image));
+    expect(pictures, hasLength(1));
+    final picture = pictures.single.image;
+    expect(picture, isA<FileImage>());
+    expect(
+      (picture as FileImage).file.readAsBytesSync(),
+      base64Decode(_carried),
+    );
+  });
+
   group('the contents of a book', () {
     /// Choosing an entry in the contents, and waiting for the page it names
     /// to have been asked for and reported.
@@ -1010,43 +1074,10 @@ void main() {
     });
   });
 
-  // What makes a page storable: the picture a page names has to be able to
-  // travel inside it, because there is no server left to fetch one from
-  // (ADR-0009).
+  // A copy saved before a copy was a directory carried its pictures inside
+  // its pages (ADR-0009), and such a copy still opens: the name is the bytes.
   group('what a stored page carries', () {
     const carried = 'data:;base64,QUJD';
-
-    test('a picture is named by its bytes instead', () {
-      final renamed = renameBookPictures(
-        '<p>Words.</p><img class="worm" src="OEBPS/worm.jpg"/>',
-        (src) => carried,
-      );
-
-      expect(renamed, '<p>Words.</p><img class="worm" src="$carried"/>');
-      // And it parses back to the picture the copy is carrying.
-      expect(BookPage.fromHtml(renamed).pictureSources, [carried]);
-    });
-
-    test('a picture the copy does not carry keeps the name it had', () {
-      // A picture the server would not hand over is not a reason to lose the
-      // page: it stays a name, and a server that can answer it still can.
-      expect(
-        renameBookPictures('<img src="OEBPS/worm.jpg"/>', (_) => null),
-        '<img src="OEBPS/worm.jpg"/>',
-      );
-    });
-
-    test('a picture named by an href is renamed by its href', () {
-      // Otherwise a page that named it that way would carry a second `src`
-      // beside the first, and the copy would fetch a name that is not there.
-      final renamed = renameBookPictures(
-        '<image href="a.jpg"/>',
-        (_) => carried,
-      );
-
-      expect(renamed, '<image href="$carried"/>');
-      expect(renamed, isNot(contains('src=')));
-    });
 
     test('the bytes a name carries, and nothing else', () {
       expect(carriedPictureBytes(carried), [65, 66, 67]);
@@ -1966,9 +1997,74 @@ void main() {
       expect(engine.pageShowing(0)!.document, contains('direction: rtl'));
     });
 
-    testWidgets('a saved book opens with no server, its pictures carried', (
-      tester,
-    ) async {
+    // What a reader on a train opens is the book they would have read at
+    // home: the same document, set in the book's own face, in its language
+    // — its pictures and its face files beside the page rather than at an
+    // address that is dead offline (#129).
+    testWidgets('a saved book with no server is handed the document the '
+        'streamed one is', (tester) async {
+      const html =
+          '<style>'
+          '@font-face { font-family: "Book Face"; src: url("//kavita.test/api/'
+          'book/7/book-resources?apiKey=key&file=fonts/face.woff2") '
+          'format("woff2") }'
+          '.book-content p { font-family: "Book Face", serif }'
+          '</style>'
+          '<p>La spice doit couler.</p>'
+          '<p><img src="OEBPS/images/worm.jpg"/></p>'
+          '$_addressedPicture';
+      _BookAdapter server() =>
+          _BookAdapter(requested: [], posted: [], html: html, language: 'fr');
+
+      /// The document the engine was handed, with the directory it was
+      /// written in named the same way whichever run wrote it.
+      String handed() {
+        final page = engine.pageShowing(0)!;
+        return page.document!.replaceAll(
+          File(page.file!).parent.path,
+          '<pages>',
+        );
+      }
+
+      await _pumpBook(tester, webEngine: true, server: server());
+      await settle(tester);
+      final streamed = handed();
+
+      engine.pages.clear();
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        offline: true,
+        saved: (root) =>
+            _saveThroughDownloader(tester, root, server(), language: 'fr'),
+      );
+      await settle(tester);
+      final stored = handed();
+
+      expect(stored, streamed);
+      // Which is a page hyphenated in its own language, set in its own face,
+      // and drawn with its pictures — every one of them a file the engine
+      // can read with no server.
+      expect(stored, contains('<html lang="fr">'));
+      final page = engine.pageShowing(0)!;
+      final files = RegExp(r'url\("?(file:[^")]*)|src="(file:[^"]*)"')
+          .allMatches(page.document!)
+          .map((match) => match.group(1) ?? match.group(2)!)
+          .toList();
+      expect(files, hasLength(3), reason: 'the face and two pictures');
+      for (final file in files) {
+        expect(
+          File.fromUri(Uri.parse(file)).readAsBytesSync(),
+          base64Decode(_carried),
+        );
+      }
+    });
+
+    // A copy saved before a copy was a directory carries its pictures inside
+    // its pages. Such a page is still valid, and it opens as it is: nothing
+    // is migrated, and nothing is fetched again.
+    testWidgets('a copy saved before it was a directory still opens, its '
+        'pictures carried', (tester) async {
       await _pumpBook(
         tester,
         webEngine: true,

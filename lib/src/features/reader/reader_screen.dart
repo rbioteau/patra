@@ -169,26 +169,31 @@ Future<BookPage?> _storedBookPage(Ref ref, BookPageKey key) async {
 ///
 /// A family of the page like [bookPageProvider], and watched beside it for the
 /// pages either side of the one being read, so a page's pictures are fetched
-/// while the reader is at rest. A saved copy's face is copied out of the copy
-/// rather than fetched, the copy's own stylesheet still naming it at an
-/// address that is dead offline; its pictures are carried in its pages.
+/// while the reader is at rest. What a saved copy holds is copied out of the
+/// copy rather than fetched (#129) — its pictures from beside its pages, its
+/// face from under the names [BookFontFile] gives it — because the page names
+/// each by an address that is dead offline, exactly as the streamed page
+/// does. Anything the copy does not hold is asked for, so a picture the
+/// server refused on the day the copy was made is still drawn where there is
+/// a server to ask.
 final bookPageFilesProvider = FutureProvider.autoDispose
     .family<BookPageFiles, BookPageKey>((ref, key) async {
       final page = await ref.watch(bookPageProvider(key).future);
       final root = await ref.watch(bookDocumentRootProvider.future);
       final face = page.face;
       final onDevice = <String, File>{};
-      if (face != null &&
-          ref.watch(
-            savedChapterProvider(key.chapterId)
-                .select((saved) => saved != null),
-          )) {
+      if (ref.watch(
+        savedChapterProvider(key.chapterId).select((saved) => saved != null),
+      )) {
         final dir = await ref.watch(chapterDirProvider(key.chapterId).future);
-        for (final (src, name) in [
-          (face.roman, BookFontFile.roman),
-          (face.italic, BookFontFile.italic),
+        for (final (src, file) in [
+          if (face != null) ...[
+            (face.roman, File('${dir.path}/${BookFontFile.roman}')),
+            (face.italic, File('${dir.path}/${BookFontFile.italic}')),
+          ],
+          for (final src in page.pictureSources)
+            (src, bookPictureFile(dir, src)),
         ]) {
-          final file = File('${dir.path}/$name');
           if (src != null && file.existsSync()) onDevice[src] = file;
         }
       }
@@ -1099,6 +1104,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // its own cache key: a new list on every build is a new picture for the
     // decoder, and reading a saved book rebuilds its page often.
     final carried = _carried.putIfAbsent(src, () => carriedPictureBytes(src));
+    // A copy that is a directory keeps it beside its pages (#129).
+    final dir = ref.read(savedChapterProvider(widget.chapterId)) == null
+        ? null
+        : ref.read(chapterDirProvider(widget.chapterId)).value;
+    final copied = dir == null
+        ? null
+        : _copied.putIfAbsent(src, () {
+            final file = bookPictureFile(dir, src);
+            return file.existsSync() ? file : null;
+          });
+    if (copied != null) {
+      return Image.file(copied, width: double.infinity, fit: BoxFit.fitWidth);
+    }
     if (carried != null) {
       return Image.memory(
         carried,
@@ -1128,6 +1146,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// The bytes of the pictures the pages being read carry, by the name the
   /// page gave them. See [_bookPicture]. Dies with the chapter.
   final Map<String, Uint8List?> _carried = {};
+
+  /// The files beside a saved copy's pages its pictures are kept in, by the
+  /// name the page gave them. See [_bookPicture]. Dies with the chapter.
+  final Map<String, File?> _copied = {};
 
   /// What the cog's sheet asked for, whichever chapter it was opened on.
   void _onSettingsOutcome(
