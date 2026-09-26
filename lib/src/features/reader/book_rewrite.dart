@@ -460,12 +460,27 @@ bool _isData(String address) =>
 bool _isFragment(String address) => _asBrowserReadsIt(address).startsWith('#');
 
 /// [address] with what a URL parser throws away thrown away: every tab and
-/// line break inside it, and the spaces and controls around it.
-String _asBrowserReadsIt(String address) =>
-    address.replaceAll(_lineBreaks, '').replaceAll(_edges, '');
+/// line break inside it, and the spaces and controls — U+0000 to U+0020 —
+/// around it.
+///
+/// The edges are trimmed by walking in from each end rather than by a
+/// pattern: an address can be a picture a page carries, a megabyte of it,
+/// and a pattern anchored at the end is tried from every position of that
+/// megabyte — measured, it was most of the time a heavy page took to pass.
+String _asBrowserReadsIt(String address) {
+  final kept = address.replaceAll(_lineBreaks, '');
+  var start = 0;
+  var end = kept.length;
+  while (start < end && kept.codeUnitAt(start) <= 0x20) {
+    start++;
+  }
+  while (end > start && kept.codeUnitAt(end - 1) <= 0x20) {
+    end--;
+  }
+  return kept.substring(start, end);
+}
 
 final RegExp _lineBreaks = RegExp('[\t\n\r]');
-final RegExp _edges = RegExp(r'^[\x00-\x20]+|[\x00-\x20]+$');
 
 // ---------------------------------------------------------------------------
 // Character references.
@@ -478,23 +493,29 @@ final RegExp _edges = RegExp(r'^[\x00-\x20]+|[\x00-\x20]+$');
 /// that decodes to anything outside ASCII cannot make a scheme, a slash, a
 /// colon or a `url(`, so those are left for the browser, and the pass
 /// decides nothing on them.
-String _decodeReferences(String value) => value.replaceAllMapped(
-  RegExp(r'&(?:#[xX]([0-9A-Fa-f]+);?|#([0-9]+);?|([A-Za-z][A-Za-z0-9]*);)'),
-  (match) {
-    final named = match.group(3);
-    if (named != null) return _asciiEntities[named] ?? match.group(0)!;
-    final code = match.group(1) != null
-        ? int.tryParse(match.group(1)!, radix: 16)
-        : int.tryParse(match.group(2)!);
-    if (code == null ||
-        code == 0 ||
-        code > 0x10FFFF ||
-        (code >= 0xD800 && code <= 0xDFFF)) {
-      return '\uFFFD';
-    }
-    return String.fromCharCode(code);
-  },
-);
+///
+/// A value with no `&` has no reference in it, and is answered as it is
+/// without being searched — a picture a page carries is a megabyte of none.
+String _decodeReferences(String value) {
+  if (!value.contains('&')) return value;
+  return value.replaceAllMapped(
+    RegExp(r'&(?:#[xX]([0-9A-Fa-f]+);?|#([0-9]+);?|([A-Za-z][A-Za-z0-9]*);)'),
+    (match) {
+      final named = match.group(3);
+      if (named != null) return _asciiEntities[named] ?? match.group(0)!;
+      final code = match.group(1) != null
+          ? int.tryParse(match.group(1)!, radix: 16)
+          : int.tryParse(match.group(2)!);
+      if (code == null ||
+          code == 0 ||
+          code > 0x10FFFF ||
+          (code >= 0xD800 && code <= 0xDFFF)) {
+        return '\uFFFD';
+      }
+      return String.fromCharCode(code);
+    },
+  );
+}
 
 /// Every named reference HTML defines whose value is ASCII.
 const Map<String, String> _asciiEntities = {

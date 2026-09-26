@@ -1859,6 +1859,50 @@ void main() {
       );
     });
 
+    testWidgets('where the reader is, written into the copy, does not read '
+        'the page again', (tester) async {
+      // The copy is written every time a scroll settles; a page taken apart
+      // again on every one is seconds of work for a page of megabytes.
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        progressPage: 1,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          seriesId: 3,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          pageHtml: '<p>La spice doit couler.</p>',
+        ),
+      );
+      await settle(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ReaderScreen)),
+      );
+      var read = 0;
+      final listening = container.listen(
+        bookPageProvider((chapterId: 7, page: 1)),
+        (_, next) {
+          if (next.hasValue && !next.isLoading) read++;
+        },
+      );
+      addTearDown(listening.close);
+
+      engine.pageShowing(1)!.tell('{"block":0,"at":0.5}');
+      await settle(tester);
+      engine.pageShowing(1)!.tell('{"block":0,"at":0.7}');
+      await settle(tester);
+
+      expect(
+        container.read(savedChapterProvider(7))!.place!.bookScrollId,
+        'patra:0@0.7000',
+      );
+      expect(read, 0);
+    });
+
     testWidgets('a saved copy opens with no server on the words it was left '
         'at', (tester) async {
       await _pumpBook(

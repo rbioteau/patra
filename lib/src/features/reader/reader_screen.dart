@@ -145,8 +145,16 @@ final bookPageProvider = FutureProvider.autoDispose
 /// The page of a book the stored copy already holds, or null where there is
 /// no copy of this one.
 Future<BookPage?> _storedBookPage(Ref ref, BookPageKey key) async {
-  final saved = ref.watch(savedChapterProvider(key.chapterId));
-  if (saved == null || saved.content != ChapterContent.reflowable) return null;
+  // Whether there is a stored book, and nothing else about the copy: the
+  // copy is written every time a scroll settles (where the reader is, and
+  // what the server has yet to be told), and a page taken apart again on
+  // every one of those is seconds of work for a page of megabytes.
+  final storedBook = ref.watch(
+    savedChapterProvider(
+      key.chapterId,
+    ).select((saved) => saved?.content == ChapterContent.reflowable),
+  );
+  if (!storedBook) return null;
   final file = File(
     '${(await ref.watch(chapterDirProvider(key.chapterId).future)).path}/'
     '${DownloadsService.pageFileName(key.page)}',
@@ -172,7 +180,11 @@ final bookPageFilesProvider = FutureProvider.autoDispose
       final face = page.face;
       final onDevice = <String, File>{};
       if (face != null &&
-          ref.watch(savedChapterProvider(key.chapterId)) != null) {
+          ref.watch(
+            savedChapterProvider(
+              key.chapterId,
+            ).select((saved) => saved != null),
+          )) {
         final dir = await ref.watch(chapterDirProvider(key.chapterId).future);
         for (final (src, name) in [
           (face.roman, BookFontFile.roman),
