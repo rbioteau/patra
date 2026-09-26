@@ -768,6 +768,67 @@ void main() {
     });
   });
 
+  group('the alignment', () {
+    // Justification is the book's, like the rest of its composition; the
+    // app's default stands in only where the book is silent (#130). It is a
+    // default in the reader's layer, on the root alone: every declaration a
+    // book makes outranks a layered one that is not `!important`, and one set
+    // on the root reaches an element only by inheritance, which any
+    // declaration of the book's on that element or above it outranks too.
+    List<String> declarations(String document, String property) => [
+      for (final rule in RegExp(r'([^{}\n]+)\{([^}]*)\}').allMatches(
+        RegExp(
+          r'@layer patra \{.*?\n\}',
+          dotAll: true,
+        ).firstMatch(document)!.group(0)!.replaceFirst('@layer patra {', ''),
+      ))
+        for (final declaration in rule.group(2)!.split(';'))
+          if (declaration.trim().startsWith('$property:'))
+            '${rule.group(1)!.trim()} { ${declaration.trim()} }',
+    ];
+
+    test('justifies and hyphenates where the language is known', () {
+      final document = _rewrite('<p>a</p>', language: 'fr');
+      expect(declarations(document, 'text-align'), [
+        'html { text-align: justify }',
+      ]);
+      expect(declarations(document, 'hyphens'), ['html { hyphens: auto }']);
+      // WebKit — the engine iOS embeds — reads the property only prefixed.
+      expect(declarations(document, '-webkit-hyphens'), [
+        'html { -webkit-hyphens: auto }',
+      ]);
+    });
+
+    test('leaves the page ragged right where the language is not known', () {
+      // Without a dictionary, justifying opens the rivers #119 measured; and
+      // an engine told no language hyphenates nothing on its own.
+      for (final language in [null, '', 'fr" onload="alert(1)']) {
+        final document = _rewrite('<p>a</p>', language: language);
+        expect(declarations(document, 'text-align'), isEmpty);
+        expect(declarations(document, 'hyphens'), isEmpty);
+        expect(declarations(document, '-webkit-hyphens'), isEmpty);
+      }
+    });
+
+    test('is outranked by an alignment the book declares', () {
+      for (final align in ['left', 'start', 'justify']) {
+        final document = _rewrite(
+          '<style>p { text-align: $align }</style>'
+          '<p style="text-align: $align">a</p>',
+        );
+        expect(document, contains('p { text-align: $align }'));
+        expect(document, contains('style="text-align: $align"'));
+        // A default, never an override, and nowhere but on the root.
+        for (final property in ['text-align', 'hyphens', '-webkit-hyphens']) {
+          for (final declaration in declarations(document, property)) {
+            expect(declaration, startsWith('html {'));
+            expect(declaration, isNot(contains('!important')));
+          }
+        }
+      }
+    });
+  });
+
   group('every block is named', () {
     const page =
         '<h1>Title</h1><p>One</p><blockquote><p>Two</p></blockquote>'

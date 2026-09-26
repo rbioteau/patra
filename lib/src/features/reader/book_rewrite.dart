@@ -30,6 +30,9 @@
 /// - **The book's language** on the document where it is known, and none
 ///   where it is not — an engine given none declines to hyphenate, which is
 ///   the behaviour wanted and needs nothing built.
+/// - **Justified and hyphenated where the book is silent** and its language
+///   is known (#130), as a default in the same layer that any alignment the
+///   book declares outranks; where the language is not known, ragged right.
 /// - **A stable name per block**, `data-patra-block`, for a reading position
 ///   to be anchored to.
 ///
@@ -90,7 +93,8 @@ String rewriteBookPage(
       // tall — measured on a device (#128).
       '<meta name="viewport" '
       'content="width=device-width, initial-scale=1, minimum-scale=1">\n'
-      '<style>\n${_faces(setting, faceFiles)}${_overrides(setting)}\n</style>\n'
+      '<style>\n${_faces(setting, faceFiles)}'
+      '${_overrides(setting, justify: lang != null)}\n</style>\n'
       '</head>\n'
       '<body>\n${_Rewrite(html, localFile).run()}\n</body>\n'
       '</html>\n';
@@ -145,7 +149,16 @@ String _faces(BookSetting setting, FaceFiles? files) {
 /// makes. The size is set on the root alone — imposing it on every element
 /// would flatten a heading to the size of the words under it — so a size the
 /// book fixes is read as a share of it instead (see [_shareOfTheRoot]).
-String _overrides(BookSetting setting) {
+///
+/// Where [justify], the page is justified and hyphenated — the app's default
+/// for a book that declares no alignment of its own, and only for one whose
+/// language is known: without a dictionary the engine hyphenates nothing, and
+/// a narrow column justified with no way to break a word opens rivers (#119).
+/// It is set on the root as a default rather than an override, so it reaches
+/// an element only by inheritance, which any `text-align` or `hyphens` the
+/// book declares — on that element or on any above it — outranks: a book
+/// that asks for ragged right gets ragged right.
+String _overrides(BookSetting setting, {required bool justify}) {
   final family = _imposedFamily(setting.face);
   return '@layer $_layer {\n'
       // The reader's canvas, and room at the foot for the page counter: a
@@ -155,6 +168,9 @@ String _overrides(BookSetting setting) {
       'color: ${_hex(patraText)}; '
       'padding: ${_number(gutter)}px ${_number(gutter)}px '
       '${_number(4 * gutter)}px; }\n'
+      '${justify ? '  html { text-align: justify; hyphens: auto; '
+                // WebKit, which iOS embeds, reads it only prefixed.
+                '-webkit-hyphens: auto; }\n' : ''}'
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '
       'line-height: ${_number(setting.lineHeight)} !important; }\n'

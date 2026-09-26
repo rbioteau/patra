@@ -336,6 +336,13 @@ void main() {
       expect(find.text("The book's own"), findsOneWidget);
       expect(find.text('Serif'), findsOneWidget);
       expect(find.text('Sans serif'), findsOneWidget);
+      // How a book is justified and hyphenated is its own composition,
+      // deferred to it, and not a way it is set (#130): no row, no switch.
+      expect(find.byType(Switch), findsNothing);
+      expect(
+        find.textContaining(RegExp('justif|hyphen', caseSensitive: false)),
+        findsNothing,
+      );
     });
 
     testWidgets('the face is the third row, and the last', (tester) async {

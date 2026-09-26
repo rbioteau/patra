@@ -24,6 +24,7 @@ import 'book_markup.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
+
 /// A run of words inside a block, and how the book set it.
 class BookSpan {
   const BookSpan(this.text, {this.bold = false, this.italic = false});
@@ -211,7 +212,10 @@ class BookAnchor {
   }
 
   static const _mark = 'patra:';
-  static final _inBlock = RegExp('^$_mark' r'(\d+)@(\d+(?:\.\d+)?)$');
+  static final _inBlock = RegExp(
+    '^$_mark'
+    r'(\d+)@(\d+(?:\.\d+)?)$',
+  );
 
   /// What the server handed back, or null where it is not a place this app
   /// wrote — the web client's element ids among them, which name nothing in a
@@ -489,12 +493,14 @@ class _BookPageBodyState extends State<BookPageBody> {
           for (final span in block.spans) span.toSpan(base, widget.face),
         ],
       ),
-      // A page of a book is set **ragged right**, and deliberately: the
-      // engine honours a soft hyphen as a break but does not draw the hyphen
-      // at the break, so justification has no hyphenation to open a narrow
-      // column with and opens gaps instead — which reads as a rendering
-      // fault rather than as typography. See the reader's rules; the
-      // measurement is recorded there so this is not "fixed" back.
+      // In this renderer a page is set **ragged right**, and deliberately:
+      // Flutter honours a soft hyphen as a break but does not draw the hyphen
+      // at the break, so justification here has no hyphenation to open a
+      // narrow column with and opens gaps instead — which reads as a
+      // rendering fault rather than as typography. The web engine, which
+      // draws the hyphen, justifies where the book is silent (#130); this one
+      // still cannot. See the reader's rules; the measurement is recorded
+      // there so this is not "fixed" back.
       textAlign: TextAlign.start,
     );
     return switch (block.style) {

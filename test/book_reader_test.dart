@@ -283,6 +283,7 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
   Future<void> Function(Directory root)? saved,
   List<Volume>? held,
   bool offline = false,
+  Locale? locale,
 }) async {
   final dir = mockPathProvider();
   final root = Directory('${dir.path}/downloads')..createSync();
@@ -339,6 +340,7 @@ Future<(List<int> requested, List<_Post> posted)> _pumpBook(
         theme: patraTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        locale: locale,
         home: ReaderScreen(chapterId: 7, initialPage: initialPage),
       ),
     ),
@@ -1184,7 +1186,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('prose is set ragged right, and not justified', (tester) async {
+    testWidgets('in the app\'s own renderer, prose is set ragged right, and '
+        'not justified', (tester) async {
       await pumpWords(
         tester,
         '<h2>Book two</h2><p>One.</p>'
@@ -1196,12 +1199,16 @@ void main() {
           .map((text) => text.textAlign ?? TextAlign.start)
           .toList();
       expect(aligns, [
-        // Not one line of it justified. Measured on this engine: U+00AD is
-        // honoured as a break opportunity but the hyphen is not drawn at the
-        // break, so a narrow column has nothing to justify with and opens
+        // Not one line of it justified — in this renderer. The premise it
+        // was written on changed rather than its reasoning: the web engine,
+        // which draws the hyphen at a break, justifies and hyphenates where
+        // the book is silent and its language known (#130, pinned in
+        // `book_rewrite_test.dart`). Flutter still does not: measured, U+00AD
+        // is honoured as a break opportunity but the hyphen is not drawn at
+        // the break, so a narrow column has nothing to justify with and opens
         // gaps instead — which reads as a rendering fault rather than as
         // typography. The measurement is written down in the reader's rules,
-        // so this is not put back.
+        // so this is not put back here.
         TextAlign.start, // the title
         TextAlign.start, // the paragraph
         TextAlign.start, // the quotation
@@ -1711,6 +1718,50 @@ void main() {
       // Nothing addressed at the server: the page could send no header.
       expect(document, isNot(contains('kavita.test')));
       expect(document, isNot(contains('OEBPS/images')));
+    });
+
+    testWidgets('a book is justified and hyphenated in its own language, '
+        'not the interface\'s', (tester) async {
+      // An English book read by somebody whose app speaks French: the words
+      // are the book's, and so are the rules they are broken by (#130).
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        locale: const Locale('fr'),
+        server: _BookAdapter(
+          requested: <int>[],
+          posted: <_Post>[],
+          language: 'en',
+        ),
+      );
+      await settle(tester);
+
+      final document = engine.pageShowing(0)!.document!;
+      expect(document, contains('<html lang="en">'));
+      expect(document, contains('text-align: justify'));
+      expect(document, contains('hyphens: auto'));
+    });
+
+    testWidgets('a book in no known language is left ragged right', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        locale: const Locale('fr'),
+        server: _BookAdapter(
+          requested: <int>[],
+          posted: <_Post>[],
+          language: null,
+        ),
+      );
+      await settle(tester);
+
+      final document = engine.pageShowing(0)!.document!;
+      // Nothing inferred from the interface, and nothing to justify with.
+      expect(document, contains('<html>'));
+      expect(document, isNot(contains('text-align: justify')));
+      expect(document, isNot(contains('hyphens')));
     });
 
     testWidgets("a page's pictures are fetched by the app, and drawn from "
