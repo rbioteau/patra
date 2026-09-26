@@ -139,7 +139,7 @@ final bookPageProvider = FutureProvider.autoDispose
       final stored = await _storedBookPage(ref, key);
       if (stored != null) return stored;
       final html = await client.bookPage(key.chapterId, key.page);
-      return BookPage.fromHtml(html);
+      return BookPage.parse(html);
     });
 
 /// The page of a book the stored copy already holds, or null where there is
@@ -152,7 +152,7 @@ Future<BookPage?> _storedBookPage(Ref ref, BookPageKey key) async {
     '${DownloadsService.pageFileName(key.page)}',
   );
   if (!file.existsSync()) return null;
-  return BookPage.fromHtml(file.readAsStringSync());
+  return BookPage.read(file);
 }
 
 /// The files one page of a book names — its pictures, and the files of the

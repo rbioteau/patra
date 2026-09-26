@@ -1951,6 +1951,47 @@ void main() {
       expect(document, contains('src="data:image/png;base64,$_carried"'));
     });
 
+    // A copy saved before a copy was a directory carries its pictures inside
+    // its pages, and pages of several megabytes were measured on a device:
+    // taken apart on the thread the app draws on, three of them were an ANR.
+    // Past a size, a page is taken apart and rewritten in an isolate — and
+    // still opens, in either renderer, from the copy or from the server.
+    final heavy =
+        '<p>The spice must flow.</p>'
+        '<p title="${'A' * (BookPage.parsesInPlaceBelow * 2)}">.</p>';
+    Future<void> saveHeavy(Directory root) => saveChapterFixture(
+      root,
+      _profileId,
+      chapterId: 7,
+      seriesId: 3,
+      title: _title,
+      pages: 3,
+      format: MangaFormat.epub,
+      pageHtml: heavy,
+    );
+
+    testWidgets('a heavy saved page still opens, in the web engine', (
+      tester,
+    ) async {
+      await _pumpBook(tester, webEngine: true, offline: true, saved: saveHeavy);
+      await settle(tester);
+      expect(engine.pageShowing(0)!.document, contains('The spice must flow.'));
+    });
+
+    testWidgets('a heavy saved page still opens, drawn by the app', (
+      tester,
+    ) async {
+      await _pumpBook(tester, offline: true, saved: saveHeavy);
+      await settle(tester);
+      expect(find.text('The spice must flow.'), findsOneWidget);
+    });
+
+    testWidgets('a heavy page from the server still opens', (tester) async {
+      await _pumpBook(tester, webEngine: true, html: heavy);
+      await settle(tester);
+      expect(engine.pageShowing(0)!.document, contains('The spice must flow.'));
+    });
+
     testWidgets('goes nowhere but the page it was handed', (tester) async {
       await _pumpBook(tester, webEngine: true);
       await settle(tester);

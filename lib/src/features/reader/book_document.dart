@@ -17,6 +17,7 @@
 library;
 
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
@@ -115,6 +116,13 @@ String _fileName(String src) {
 /// Writes the document an engine is given for one page into [file], and
 /// answers it: the page through the rewrite pass, with every name it gives a
 /// file in [files] pointed at that file and every other one gone.
+///
+/// The pass runs in an isolate of its own, whatever the page's size: a page a
+/// copy saved with its pictures inside it is megabytes, and the pass reads
+/// every attribute value more than once — measured on a device, that held
+/// the thread the app draws on long enough for Android to kill it. A page is
+/// always written asynchronously anyway, so the isolate costs nothing a
+/// reader can wait on.
 Future<File> writeBookDocument(
   File file,
   String html, {
@@ -124,16 +132,16 @@ Future<File> writeBookDocument(
   FaceFiles? faceFiles,
 }) async {
   await file.parent.create(recursive: true);
-  return file.writeAsString(
-    rewriteBookPage(
+  final document = await Isolate.run(
+    () => rewriteBookPage(
       html,
       language: language,
       setting: setting,
       localFile: (src) => files[src],
       faceFiles: faceFiles,
     ),
-    flush: true,
   );
+  return file.writeAsString(document, flush: true);
 }
 
 /// The assets the app's faces ship in, as `pubspec.yaml` bundles them.

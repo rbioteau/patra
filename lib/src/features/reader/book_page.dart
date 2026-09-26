@@ -14,6 +14,9 @@
 /// both read to know which pictures a page holds.
 library;
 
+import 'dart:io';
+import 'dart:isolate';
+
 import 'package:flutter/material.dart';
 
 import 'book_face.dart';
@@ -100,6 +103,33 @@ class BookPage {
   /// face, out of the same `<style>`, and carried so the reader can record it
   /// against the work as evidence for the chain's detected rung (#118).
   final ReadingDirection? direction;
+
+  /// Takes [html] apart without holding the thread the app draws on.
+  ///
+  /// A page past [parsesInPlaceBelow] characters is taken apart in an isolate
+  /// of its own. Such pages are real: a copy saved before a copy was a
+  /// directory carries its pictures inside its pages as data URIs, and pages
+  /// of several megabytes were measured on a device, where three of them —
+  /// the page and the two either side — held the thread long enough in a
+  /// debug build for Android to kill the app. Below it the page is taken
+  /// apart where it is, since starting an isolate costs more than a page of
+  /// words does.
+  static Future<BookPage> parse(String html) => html.length < parsesInPlaceBelow
+      ? Future.value(BookPage.fromHtml(html))
+      : Isolate.run(() => BookPage.fromHtml(html));
+
+  /// [parse], of the page stored in [file] — read in the isolate too where
+  /// it is large enough to go there, rather than read here and copied over.
+  static Future<BookPage> read(File file) {
+    if (file.lengthSync() < parsesInPlaceBelow) {
+      return Future.value(BookPage.fromHtml(file.readAsStringSync()));
+    }
+    final path = file.path;
+    return Isolate.run(() => BookPage.fromHtml(File(path).readAsStringSync()));
+  }
+
+  /// The size past which a page is taken apart off the drawing thread.
+  static const parsesInPlaceBelow = 64 * 1024;
 
   factory BookPage.fromHtml(String html) => BookPage(
     parseBookPage(html),
