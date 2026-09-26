@@ -1,245 +1,22 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:patra/l10n/generated/app_localizations.dart';
-import 'package:patra/src/api/kavita_client.dart';
 import 'package:patra/src/api/models.dart';
-import 'package:patra/src/auth/session.dart';
-import 'package:patra/src/catalogue/catalogue_provider.dart';
-import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_markup.dart';
 import 'package:patra/src/features/reader/book_page.dart';
-import 'package:patra/src/features/reader/book_web_page.dart';
+import 'package:patra/src/features/reader/development/development_book_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
-import 'package:patra/src/theme.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
+import 'book_reader_harness.dart';
 import 'test_support.dart';
-
-/// How much of the book the server says there is.
-const _pages = 12;
-
-/// The title Kavita read out of the file, which is what the bar names.
-const _title = 'Dune Messiah';
-
-/// What the server hands back for a page: the HTML it laid out. No assertion
-/// here is about that HTML — it is the server's output, and what is asked of
-/// the app is which page it asked for and what it did with the answer.
-String _pageHtml(int page) =>
-    '<h1>Book two</h1>'
-    '<p>The spice must flow, &amp; the worm <b>follows</b>.</p>'
-    '<p><img src="OEBPS/images/worm$page.jpg"/></p>';
-
-/// What Kavita really writes for a page's pictures: a whole address of its
-/// own making — no scheme, its own guess at its host, its own key — rather
-/// than a path inside the book.
-const _addressedPicture =
-    '<p><img src="//kavita.test/api/book/7/book-resources'
-    '?apiKey=key&file=OEBPS/images/cover.jpg"/></p>';
-
-/// What the server says a book is made of: a part with two chapters under it,
-/// and a second part after them.
-///
-/// The nesting is the point — which chapter belongs to which part is the
-/// whole of what a contents is for, and a reader that flattened it would
-/// lose the one thing the server knows about the shape of the book.
-const _contents = [
-  {
-    'title': 'Part one',
-    'page': 0,
-    'children': [
-      {'title': 'The desert', 'page': 2, 'children': <Object>[]},
-      {'title': 'The worm', 'page': 5, 'children': <Object>[]},
-    ],
-  },
-  {'title': 'Part two', 'page': 8, 'children': <Object>[]},
-];
-
-/// A one-pixel PNG, base64: the smallest picture the decoder will take, which
-/// is what makes the picture in a stored page a picture rather than a fault.
-const _carried =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=';
-
-/// A Kavita holding one book, in a Book library.
-class _BookAdapter implements HttpClientAdapter {
-  _BookAdapter({
-    required this.requested,
-    required this.posted,
-    this.unavailable,
-    this.html,
-    this.progressPage = 0,
-    this.bookScrollId,
-    this.contents = _contents,
-    this.language = 'en',
-  });
-
-  /// Every page the reader asked the server for, in order.
-  final List<int> requested;
-
-  /// Every progress post: the page number, and the anchor sent with it.
-  final List<({int pageNum, String? anchor})> posted;
-
-  /// A page the server cannot produce.
-  final int? unavailable;
-
-  /// What every page is made of, where a test has a page of its own: the
-  /// server's HTML is not what any assertion here is about, but the address
-  /// a picture is named by is.
-  final String? html;
-
-  /// Where the server says the reader was: what `get-progress` answers.
-  ///
-  /// Moved by a progress post, because that is what a post is — so one test
-  /// can read a book, close it, and open it again through the same server,
-  /// which is the round trip rather than its two halves apart.
-  int progressPage;
-  String? bookScrollId;
-
-  /// What the server says the book is made of: a tree of parts and the
-  /// chapters under them, each with the page it begins on.
-  ///
-  /// Empty for a book the server listed nothing for, which is a book the
-  /// reader offers no contents for.
-  final List<Object>? contents;
-
-  /// The language the server says the book is written in — `ChapterDto`'s
-  /// BCP-47 code — or null for a book nobody recorded one for.
-  final String? language;
-
-  /// How many times the reader asked the server about the chapter itself,
-  /// which is the one call a language can cost (#125).
-  var chapterAsked = 0;
-
-  /// Every picture or font a page named that the app fetched from the book,
-  /// as it was asked for.
-  final resources = <RequestOptions>[];
-
-  @override
-  Future<ResponseBody> fetch(RequestOptions options, _, _) async {
-    switch (options.path) {
-      case '/api/Reader/progress':
-        final body = options.data as Map<String, dynamic>;
-        progressPage = body['pageNum'] as int;
-        bookScrollId = body['bookScrollId'] as String?;
-        posted.add((pageNum: progressPage, anchor: bookScrollId));
-        return _answer('{}', json: true);
-      case '/api/Reader/get-progress':
-        return _answer({
-          'volumeId': 4,
-          'chapterId': 7,
-          'seriesId': 3,
-          'libraryId': 1,
-          'pageNum': progressPage,
-          'bookScrollId': bookScrollId,
-        }, json: true);
-      case '/api/Reader/chapter-info':
-        // A book has no image pages for this endpoint to count, so it says
-        // none: how long the book is has to be asked of the book.
-        //
-        // **And it mislabels the library, on every server there is.**
-        // `GetChapterInfo` never assigns `LibraryType`, so what it sends is
-        // the enum's default — manga — for every chapter of every library:
-        // measured on all 53 epubs of the demo server's *Books* library and
-        // on its comics too, then read in Kavita's own source (#120). The
-        // fixture therefore states what the server really states, and the app
-        // reads the field nowhere.
-        return _answer({
-          'seriesId': 3,
-          'volumeId': 4,
-          'libraryId': 1,
-          'libraryType': LibraryType.manga.id,
-          'pages': 0,
-          'seriesName': 'Dune',
-          'title': 'Dune',
-          'seriesFormat': MangaFormat.epub.id,
-        }, json: true);
-      case '/api/Book/7/book-info':
-        return _answer({
-          'bookTitle': _title,
-          'seriesId': 3,
-          'volumeId': 4,
-          'libraryId': 1,
-          'pages': _pages,
-          'seriesName': 'Dune',
-          'seriesFormat': MangaFormat.epub.id,
-        }, json: true);
-      case '/api/Book/7/book-page':
-        final page = options.queryParameters['page'] as int;
-        requested.add(page);
-        if (page == unavailable) {
-          throw DioException(
-            requestOptions: options,
-            response: Response(requestOptions: options, statusCode: 500),
-            type: DioExceptionType.badResponse,
-          );
-        }
-        return _answer(html ?? _pageHtml(page));
-      case '/api/Chapter':
-        chapterAsked++;
-        return _answer({
-          'id': 7,
-          'minNumber': 1,
-          'pages': 0,
-          'format': MangaFormat.epub.id,
-          'language': ?language,
-        }, json: true);
-      case '/api/Book/7/chapters':
-        return _answer(contents ?? const <Object>[], json: true);
-    }
-    // Asked for by a whole address, which is what dio then calls its path.
-    if (options.uri.path == '/api/Book/7/book-resources') {
-      resources.add(options);
-      return ResponseBody.fromBytes(base64Decode(_carried), 200);
-    }
-    throw DioException(
-      requestOptions: options,
-      type: DioExceptionType.unknown,
-      error: 'nothing here answers ${options.path}',
-    );
-  }
-
-  @override
-  void close({bool force = false}) {}
-}
-
-ResponseBody _answer(Object body, {bool json = false}) =>
-    ResponseBody.fromString(
-      json ? jsonEncode(body) : body as String,
-      200,
-      headers: {
-        Headers.contentTypeHeader: [
-          if (json) Headers.jsonContentType else 'text/plain',
-        ],
-      },
-    );
-
-/// A progress post: the page number, and the anchor it carried.
-typedef _Post = ({int pageNum, String? anchor});
-
-/// What the reader posted, as page numbers alone.
-List<int> _postedPages(List<_Post> posted) => [
-  for (final post in posted) post.pageNum,
-];
-
-/// What the reader posted, as anchors alone.
-List<String?> _postedAnchors(List<_Post> posted) => [
-  for (final post in posted) post.anchor,
-];
-
-/// What the reader asked for, sorted: which of a page and a neighbour beside
-/// it is fetched first is an implementation detail, and nothing here is
-/// asserted about the order they are asked in.
-List<int> _asked(List<int> requested) => requested.toList()..sort();
 
 /// Whether the reader is waiting on a page, where the reader can see it: the
 /// spinner a page draws while it is being fetched.
@@ -258,245 +35,30 @@ bool _waiting(WidgetTester tester) {
   return false;
 }
 
-/// The reader on a book, and what it asked the server for.
-///
-/// [initialPage] is the page the route named, which is what the series screen
-/// passes and what a link does not; [progressPage] and [bookScrollId] are what
-/// the server says about where the reader was, which is what a book opens at.
-/// [server] is that server, where a test needs the same one twice — a book
-/// closed and opened again, which is the round trip.
-///
-/// [saved] seeds the device's store before the reader opens, for a copy that
-/// has already been saved for the train: it is handed the downloads root, and
-/// every fixture here goes through the service (`saveChapterFixture`).
-Future<(List<int> requested, List<_Post> posted)> _pumpBook(
-  WidgetTester tester, {
-  bool webEngine = false,
-  void Function(_BookAdapter server)? onServer,
-  int initialPage = 0,
-  int? unavailable,
-  String? html,
-  int progressPage = 0,
-  String? bookScrollId,
-  _BookAdapter? server,
-  List<Object>? contents,
-  Future<void> Function(Directory root)? saved,
-  List<Volume>? held,
-  bool offline = false,
-  Locale? locale,
-}) async {
-  final dir = mockPathProvider();
-  final root = Directory('${dir.path}/downloads')..createSync();
-  final downloads = DownloadsService(root: root, profileId: _profileId);
-  if (saved != null) await saved(root);
-  // What the device already holds of the series, where a test says it holds
-  // anything: what the series screen writes when it draws the series, which
-  // is the screen a book is normally opened from.
-  final catalogue = CatalogueStore(
-    root: Directory('${dir.path}/catalogue')..createSync(),
-    profileId: _profileId,
-  );
-  if (held != null) await catalogue.putVolumes(3, held);
-  final client = KavitaClient(
-    baseUrl: 'http://kavita.test',
-    token: 'token',
-    username: 'romain',
-    apiKey: 'key',
-  );
-  final adapter =
-      server ??
-      _BookAdapter(
-        requested: <int>[],
-        posted: <_Post>[],
-        unavailable: unavailable,
-        html: html,
-        progressPage: progressPage,
-        bookScrollId: bookScrollId,
-        contents: contents ?? _contents,
-      );
-  onServer?.call(adapter);
-  // No server at all, where a test says so: the train, with only the copy.
-  final HttpClientAdapter wire = offline ? UnreachableServer() : adapter;
-  client.httpClient.httpClientAdapter = wire;
-  client.bareHttpClient.httpClientAdapter = wire;
-
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        testKeychain(),
-        kavitaClientProvider.overrideWithValue(client),
-        downloadsServiceProvider.overrideWithValue(downloads),
-        catalogueStoreProvider.overrideWithValue(catalogue),
-        // Which reader is being asked about: the page the app draws, unless a
-        // test says the platform has an engine.
-        bookWebEngineProvider.overrideWithValue(webEngine),
-        // Somebody reading, whose catalogue that is: a device with nobody
-        // signed in holds nothing, whatever is on its disk.
-        initialAuthStateProvider.overrideWithValue(
-          AuthState(profiles: [_reader], activeId: _reader.id),
-        ),
-      ],
-      child: MaterialApp(
-        theme: patraTheme(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: locale,
-        home: ReaderScreen(chapterId: 7, initialPage: initialPage),
-      ),
-    ),
-  );
-  await tester.pump();
-  for (var i = 0; i < 4; i++) {
-    await tester.pump(const Duration(milliseconds: 100));
-  }
-  return (adapter.requested, adapter.posted);
-}
-
-/// Whose store the reader reads: the profile its downloads were saved under.
-const _profileId = 'https://kavita.test#1';
-
-/// Saves the book [server] holds the way the app does — through the
-/// downloader, into the store under [root] — for a copy that is exactly what
-/// saving this book makes of it, rather than a fixture's idea of one.
-Future<void> _saveThroughDownloader(
-  WidgetTester tester,
-  Directory root,
-  _BookAdapter server, {
-  String? language,
-}) async {
-  final client = KavitaClient(
-    baseUrl: 'http://kavita.test',
-    token: 'token',
-    username: 'romain',
-    apiKey: 'key',
-  );
-  client.httpClient.httpClientAdapter = server;
-  client.bareHttpClient.httpClientAdapter = server;
-  // Real requests and real files, which a test's clock does not move.
-  await tester.runAsync(
-    () => DownloadsService(root: root, profileId: _profileId).download(
-      client: client,
-      chapter: SavedChapter(
-        chapterId: 7,
-        seriesId: 3,
-        volumeId: 4,
-        libraryId: 1,
-        seriesName: 'Dune',
-        title: _title,
-        pages: 0,
-        bytes: 0,
-        format: MangaFormat.epub,
-        language: language,
-      ),
-      onProgress: (_, _) {},
-    ),
-  );
-}
-
-/// Who is reading: the profile [_profileId] names.
-final _reader = Profile(
-  baseUrl: 'http://kavita.test',
-  accountId: 1,
-  username: 'romain',
-  apiKey: 'key',
-  token: signedToken(1),
-);
-
-/// Where the page on screen is scrolled to, read out of the render tree
-/// rather than off anything the reader said about it.
-///
-/// Asked for inside the page itself, because a sheet open over the reader
-/// scrolls too.
-ScrollPosition _pagePosition(WidgetTester tester) => tester
-    .state<ScrollableState>(
-      find
-          .descendant(
-            of: find.byType(BookPageBody),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    )
-    .position;
-
-/// The style every run of words in [paragraphs] is set in.
-///
-/// A run, and not the `Text` that draws it: `Text` wraps the span it is
-/// given in one of its own carrying the app's default face, so what is being
-/// asked about here is the style on the words themselves.
-List<TextStyle> _runs(WidgetTester tester, Finder paragraphs) => [
-  for (final paragraph in tester.widgetList<RichText>(paragraphs))
-    ..._spanRuns(paragraph.text),
-];
-
-Iterable<TextStyle> _spanRuns(InlineSpan span) sync* {
-  if (span is! TextSpan) return;
-  if (span.text != null) {
-    if (span.style case final TextStyle style) yield style;
-  }
-  for (final child in span.children ?? const <InlineSpan>[]) {
-    yield* _spanRuns(child);
-  }
-}
-
-/// A page longer than the screen it is read on, which is the only case in
-/// which there is a place within a page to be asked about.
-///
-/// Words rather than a picture: a picture fetched from a server a test does
-/// not have is a picture with no height at all, and a page of nothing is not
-/// a page that scrolls.
-final String _longPage = [
-  for (var i = 0; i < 40; i++) '<p>Paragraph $i of a long page.</p>',
-].join();
-
-/// One of every kind of block a page is made of, which is what "the whole
-/// page is set in the chosen face" has to mean.
-const _everyBlock =
-    '<h2>Book two</h2>'
-    '<p>The spice must flow, and the worm <b>follows</b>.</p>'
-    '<blockquote>A beginning is a very delicate time.</blockquote>'
-    '<ul><li>First.</li><li>Second.</li></ul>';
-
-/// The reader's chrome: a tap in the middle of the screen.
-Future<void> _showChrome(WidgetTester tester) async {
-  final size = tester.getSize(find.byType(Scaffold));
-  await tester.tapAt(Offset(size.width / 2, size.height / 2));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 300));
-}
-
-/// One sideways drag, far enough to turn a page, and long enough for a
-/// request the server refuses to give up on (`serverRetry`).
-Future<void> _swipe(WidgetTester tester) async {
-  await tester.drag(find.byType(PageView), const Offset(-600, 0));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 400));
-  await tester.pump(const Duration(seconds: 1));
-}
-
 void main() {
   testWidgets('a book opens on its first page', (tester) async {
-    final (requested, posted) = await _pumpBook(tester);
+    final (requested, posted) = await pumpBook(tester);
 
-    expect(_asked(requested), [
+    expect(askedPages(requested), [
       0,
       1,
     ], reason: 'the page it opens on, and the one beside it');
-    expect(_postedPages(posted), [
+    expect(postedPages(posted), [
       0,
     ], reason: 'opening a book says where it was opened');
-    await _showChrome(tester);
+    await showBookChrome(tester);
     // Twelve, which is what the book says: `chapter-info` counted no pages
     // at all, so a reader that asked it instead would show nothing.
-    expect(find.text('1 / $_pages'), findsOneWidget);
+    expect(find.text('1 / $bookPages'), findsOneWidget);
   });
 
   testWidgets('a book opens where reading left off', (tester) async {
-    final (requested, posted) = await _pumpBook(tester, progressPage: 4);
+    final (requested, posted) = await pumpBook(tester, progressPage: 4);
 
-    expect(_asked(requested), [3, 4, 5]);
-    expect(_postedPages(posted), [4]);
-    await _showChrome(tester);
-    expect(find.text('5 / $_pages'), findsOneWidget);
+    expect(askedPages(requested), [3, 4, 5]);
+    expect(postedPages(posted), [4]);
+    await showBookChrome(tester);
+    expect(find.text('5 / $bookPages'), findsOneWidget);
   });
 
   testWidgets('a book opened from a link lands in the same place', (
@@ -506,153 +68,47 @@ void main() {
     // place within one. The series screen does name a page, and it is not the
     // one that counts — so the two ways in are made to disagree here, and
     // both have to land on the server's.
-    final (fromLink, linkPosted) = await _pumpBook(tester, progressPage: 4);
-    final (fromSeries, _) = await _pumpBook(
+    final (fromLink, linkPosted) = await pumpBook(tester, progressPage: 4);
+    final (fromSeries, _) = await pumpBook(
       tester,
       initialPage: 7,
       progressPage: 4,
     );
 
-    expect(_asked(fromLink), [3, 4, 5], reason: 'a link names no page at all');
-    expect(_asked(fromSeries), [
+    expect(askedPages(fromLink), [
+      3,
+      4,
+      5,
+    ], reason: 'a link names no page at all');
+    expect(askedPages(fromSeries), [
       3,
       4,
       5,
     ], reason: 'the page the route named is not the one a book opens at');
-    expect(_postedPages(linkPosted), [4]);
-  });
-
-  testWidgets('a book opens again where in the page it was left', (
-    tester,
-  ) async {
-    await _pumpBook(
-      tester,
-      progressPage: 4,
-      bookScrollId: '0.5000',
-      html: _longPage,
-    );
-
-    final position = _pagePosition(tester);
-    // Half way down a page longer than the screen, and not at the top of it:
-    // that is the whole of what an anchor is for, and a page number on its
-    // own is a page opened again at words already read.
-    expect(position.pixels, closeTo(position.maxScrollExtent / 2, 1));
-  });
-
-  testWidgets('a book closed and opened again is put back where it was', (
-    tester,
-  ) async {
-    // The round trip, rather than its two halves apart: the same server is
-    // asked to restore what the first reader posted to it, so an anchor
-    // written by one arithmetic and read back by another cannot pass.
-    final server = _BookAdapter(
-      requested: <int>[],
-      posted: <_Post>[],
-      html: _longPage,
-    );
-    await _pumpBook(tester, server: server);
-    await tester.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-    final left = _pagePosition(tester).pixels;
-    expect(left, greaterThan(0), reason: 'the reader did scroll the page');
-
-    await _pumpBook(tester, server: server);
-
-    final reopened = _pagePosition(tester);
-    expect(reopened.pixels, closeTo(left, 1));
-  });
-
-  testWidgets('a page the reader comes back to is where they left it', (
-    tester,
-  ) async {
-    await _pumpBook(tester, html: _longPage);
-    await tester.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-    final left = _pagePosition(tester).pixels;
-
-    await _swipe(tester);
-    // The page turned to is arrived at at its beginning.
-    expect(_pagePosition(tester).pixels, 0);
-
-    await tester.drag(find.byType(PageView), const Offset(600, 0));
-    await tester.pumpAndSettle();
-    // Coming back is not: the place in the page is kept per page, so the
-    // reader is put back down it rather than at its top.
-    expect(_pagePosition(tester).pixels, closeTo(left, 1));
-  });
-
-  testWidgets('reading a long page posts where in it the reader is', (
-    tester,
-  ) async {
-    final (_, posted) = await _pumpBook(tester, html: _longPage);
-
-    await tester.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-
-    final position = _pagePosition(tester);
-    expect(position.pixels, greaterThan(0), reason: 'the page did scroll');
-    // What was posted is where the page is, as a fraction of the room there
-    // was to scroll — a number of points would be a place in a page laid out
-    // at another size, and no anchor at all is a page reopened at its top.
-    expect(
-      double.parse(_postedAnchors(posted).last!),
-      closeTo(position.pixels / position.maxScrollExtent, .01),
-    );
-  });
-
-  testWidgets('a book with nothing recorded opens at the top of its page', (
-    tester,
-  ) async {
-    await _pumpBook(tester, progressPage: 4, html: _longPage);
-
-    expect(_pagePosition(tester).pixels, 0);
-  });
-
-  testWidgets('a marker another reader wrote is not a place', (tester) async {
-    // Kavita's own web client fills `bookScrollId` with the id of an element
-    // in the page, and there is no element in a page this app draws: a book
-    // whose place was last saved there opens at the top of its page rather
-    // than nowhere at all.
-    await _pumpBook(
-      tester,
-      progressPage: 4,
-      bookScrollId: 'body-h2-17',
-      html: _longPage,
-    );
-
-    expect(_pagePosition(tester).pixels, 0);
+    expect(postedPages(linkPosted), [4]);
   });
 
   testWidgets('a swipe turns the page, and the counter follows', (
     tester,
   ) async {
-    final (requested, posted) = await _pumpBook(tester);
+    final (requested, posted) = await pumpBook(tester);
 
-    await _swipe(tester);
+    await swipeBookPage(tester);
 
-    expect(_asked(requested), [0, 1, 2]);
-    expect(_postedPages(posted), [0, 1]);
-    await _showChrome(tester);
-    expect(find.text('2 / $_pages'), findsOneWidget);
+    expect(askedPages(requested), [0, 1, 2]);
+    expect(postedPages(posted), [0, 1]);
+    await showBookChrome(tester);
+    expect(find.text('2 / $bookPages'), findsOneWidget);
   });
 
   testWidgets('a page turned to is already in hand', (tester) async {
-    final (requested, _) = await _pumpBook(tester);
+    final (requested, _) = await pumpBook(tester);
 
     // The next page is fetched while the reader is at rest on this one, not
     // when it is turned to: `PageView.builder` mounts a page as late as it
     // can, so a page asked for only then is a page fetched under the
     // reader's finger.
-    expect(_asked(requested), [0, 1]);
+    expect(askedPages(requested), [0, 1]);
 
     // The turn itself, frame by frame. What is drawn while a page is coming
     // is a spinner over the whole screen, and that is the flicker: one frame
@@ -666,9 +122,9 @@ void main() {
   });
 
   testWidgets('a page turned back to is not asked for again', (tester) async {
-    final (requested, _) = await _pumpBook(tester);
+    final (requested, _) = await pumpBook(tester);
 
-    await _swipe(tester);
+    await swipeBookPage(tester);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(seconds: 1));
@@ -676,26 +132,23 @@ void main() {
     // Three pages, each asked for once. A page the pager unmounts is a page
     // an autoDispose provider forgets, and reading back used to re-fetch it —
     // and to draw the spinner again while it came.
-    expect(_asked(requested), [0, 1, 2]);
+    expect(askedPages(requested), [0, 1, 2]);
   });
 
   testWidgets('the sides of the screen turn the page', (tester) async {
-    final (requested, posted) = await _pumpBook(tester);
+    final (requested, posted) = await pumpBook(tester);
     final size = tester.getSize(find.byType(Scaffold));
     await tester.tapAt(Offset(size.width * .85, size.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_postedPages(posted), [
-      0,
-      1,
-    ], reason: 'the right-hand side reads on');
+    expect(postedPages(posted), [0, 1], reason: 'the right-hand side reads on');
     // The page it turned to is the page it asked the server for.
     expect(requested, contains(1));
 
     await tester.tapAt(Offset(size.width * .15, size.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_postedPages(posted), [
+    expect(postedPages(posted), [
       0,
       1,
       0,
@@ -703,31 +156,31 @@ void main() {
   });
 
   testWidgets('the last page reports the whole book', (tester) async {
-    final (_, posted) = await _pumpBook(
+    final (_, posted) = await pumpBook(
       tester,
-      initialPage: _pages - 1,
-      progressPage: _pages - 1,
+      initialPage: bookPages - 1,
+      progressPage: bookPages - 1,
     );
 
     // Kavita marks a chapter read at `pagesRead >= pages`, so the last page
     // is posted as the total rather than as its own number.
-    expect(_postedPages(posted), [_pages]);
+    expect(postedPages(posted), [bookPages]);
   });
 
   testWidgets('the bar names the book', (tester) async {
-    await _pumpBook(tester);
+    await pumpBook(tester);
 
-    await _showChrome(tester);
+    await showBookChrome(tester);
     // The title Kavita read out of the file, not the series it belongs to.
-    expect(find.text(_title), findsOneWidget);
+    expect(find.text(bookTitle), findsOneWidget);
     expect(find.text('Dune'), findsNothing);
   });
 
   testWidgets('the cog offers how the book is set, and nothing else', (
     tester,
   ) async {
-    await _pumpBook(tester);
-    await _showChrome(tester);
+    await pumpBook(tester);
+    await showBookChrome(tester);
     await tester.tap(find.byIcon(Icons.settings));
     await tester.pumpAndSettle();
 
@@ -742,147 +195,13 @@ void main() {
     expect(find.text('Page width'), findsNothing);
   });
 
-  testWidgets('a book set at another size keeps the place in the page', (
-    tester,
-  ) async {
-    await _pumpBook(tester, html: _longPage);
-    await tester.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-    final scrolled = _pagePosition(tester);
-    // Read as numbers, not held as a position: the page is about to be laid
-    // out again, and a position is a live thing that would answer with the
-    // new page.
-    final extent = scrolled.maxScrollExtent;
-    final read = scrolled.pixels / extent;
-    expect(read, greaterThan(0), reason: 'the reader did scroll the page');
-
-    await _showChrome(tester);
-    await tester.tap(find.byIcon(Icons.settings));
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
-    await tester.pumpAndSettle();
-
-    final after = _pagePosition(tester);
-    expect(
-      after.maxScrollExtent,
-      greaterThan(extent),
-      reason: 'the words are set larger, so there is more page to scroll',
-    );
-    // Where the reader is, and not where in the pixels they are: the page
-    // grew under them, and a page that sends them back to its top is a page
-    // that has made them read the words above again.
-    expect(after.pixels / after.maxScrollExtent, closeTo(read, .02));
-  });
-
   testWidgets('a page the server cannot produce says so', (tester) async {
-    await _pumpBook(tester, unavailable: 1);
+    await pumpBook(tester, unavailable: 1);
 
-    await _swipe(tester);
+    await swipeBookPage(tester);
 
     // Rather than an empty screen, which reads as a book with no words in it.
     expect(find.text('This page could not be loaded.'), findsOneWidget);
-  });
-
-  testWidgets('a picture the page refers to is drawn', (tester) async {
-    await _pumpBook(tester);
-
-    final pictures = tester.widgetList<Image>(find.byType(Image));
-    expect(pictures, hasLength(1));
-    final provider = pictures.single.image;
-    expect(provider, isA<CachedNetworkImageProvider>());
-    final cached = provider as CachedNetworkImageProvider;
-    // The file the page named, resolved against the server: a page's HTML
-    // points inside the book, which is not something the app can fetch.
-    expect(cached.url, contains('worm0.jpg'));
-    // And fetched with the session, which is the only way a book's pictures
-    // are served at all: `book-resources` takes no key in the query, so a
-    // request without the header is a picture that never arrives.
-    expect(cached.headers, containsPair('Authorization', isNotNull));
-    // Filed under the shared key, as every image in the app is: a URL of its
-    // own would keep one copy per profile that looked at the page.
-    expect(cached.cacheKey, imageCacheKey(cached.url));
-  });
-
-  testWidgets('a picture the page addresses for itself is drawn', (
-    tester,
-  ) async {
-    await _pumpBook(tester, html: _addressedPicture);
-
-    final pictures = tester.widgetList<Image>(find.byType(Image));
-    expect(pictures, hasLength(1));
-    final cached = pictures.single.image as CachedNetworkImageProvider;
-    // Asked for on the address this session was built with rather than the
-    // one the page carried: only the file it named survives. The server
-    // writes that address out of its own idea of where it lives, which a
-    // proxy is free to get wrong, and the page that carried it — a cover's,
-    // which has no words — is then drawn as nothing at all.
-    expect(
-      cached.url,
-      startsWith('http://kavita.test/api/Book/7/book-resources'),
-    );
-    expect(cached.url, contains('file=OEBPS%2Fimages%2Fcover.jpg'));
-    expect(cached.url, isNot(contains('%2F%2F')));
-    expect(cached.cacheKey, imageCacheKey(cached.url));
-  });
-
-  // A book saved for the train is read from the copy: the pages the server
-  // rendered the day it was saved are the only pages there are once there is
-  // no server, and they are the better answer even while there is one — the
-  // copy is what the reader asked for by saving it.
-  testWidgets('a saved book is read from the copy, and drawn whole', (
-    tester,
-  ) async {
-    final (requested, _) = await _pumpBook(
-      tester,
-      saved: (root) => saveChapterFixture(
-        root,
-        _profileId,
-        chapterId: 7,
-        title: 'Dune Messiah',
-        pages: 3,
-        format: MangaFormat.epub,
-        pageHtml:
-            '<p>The spice must flow.</p>'
-            '<p><img src="data:;base64,$_carried"/></p>',
-      ),
-    );
-
-    // Nothing was asked of the server for the page: the copy is the page.
-    expect(requested, isEmpty);
-    expect(find.text('The spice must flow.'), findsOneWidget);
-    // And the picture the copy carries is drawn from it, rather than fetched.
-    final pictures = tester.widgetList<Image>(find.byType(Image));
-    expect(pictures, hasLength(1));
-    expect(pictures.single.image, isA<MemoryImage>());
-  });
-
-  // A copy is a directory (#129): the page as the server wrote it, beside
-  // the pictures it names. With no server, a picture is the file beside it.
-  testWidgets('a saved book draws its pictures from the copy, with no server', (
-    tester,
-  ) async {
-    await _pumpBook(
-      tester,
-      offline: true,
-      saved: (root) => _saveThroughDownloader(
-        tester,
-        root,
-        _BookAdapter(requested: [], posted: []),
-      ),
-    );
-
-    expect(find.textContaining('The spice must flow'), findsOneWidget);
-    final pictures = tester.widgetList<Image>(find.byType(Image));
-    expect(pictures, hasLength(1));
-    final picture = pictures.single.image;
-    expect(picture, isA<FileImage>());
-    expect(
-      (picture as FileImage).file.readAsBytesSync(),
-      base64Decode(_carried),
-    );
   });
 
   group('the contents of a book', () {
@@ -899,8 +218,8 @@ void main() {
     testWidgets('the parts and their children are what is offered', (
       tester,
     ) async {
-      await _pumpBook(tester);
-      await _showChrome(tester);
+      await pumpBook(tester);
+      await showBookChrome(tester);
 
       await tester.tap(find.text('Contents'));
       await tester.pumpAndSettle();
@@ -924,8 +243,8 @@ void main() {
     testWidgets('choosing an entry moves the reader to its page', (
       tester,
     ) async {
-      final (requested, posted) = await _pumpBook(tester);
-      await _showChrome(tester);
+      final (requested, posted) = await pumpBook(tester);
+      await showBookChrome(tester);
 
       await choose(tester, 'The worm');
 
@@ -933,26 +252,26 @@ void main() {
       // the page asked for and the progress reported for it: a reader who
       // has chosen a chapter has read their way to where it begins.
       expect(requested.last, 5);
-      expect(_postedPages(posted).last, 5);
+      expect(postedPages(posted).last, 5);
     });
 
     testWidgets('choosing a part moves the reader to the page it begins on', (
       tester,
     ) async {
-      final (requested, posted) = await _pumpBook(tester);
-      await _showChrome(tester);
+      final (requested, posted) = await pumpBook(tester);
+      await showBookChrome(tester);
 
       await choose(tester, 'Part two');
 
       expect(requested.last, 8);
-      expect(_postedPages(posted).last, 8);
+      expect(postedPages(posted).last, 8);
     });
 
     testWidgets('a book the server listed nothing for offers none', (
       tester,
     ) async {
-      await _pumpBook(tester, contents: const []);
-      await _showChrome(tester);
+      await pumpBook(tester, contents: const []);
+      await showBookChrome(tester);
 
       // No control, and nothing anywhere saying there is no contents: the
       // absence is not itself a message.
@@ -1090,248 +409,6 @@ void main() {
     });
   });
 
-  group('where a page sits in the screen', () {
-    /// A phone's screen, and a page in it whose one picture is
-    /// [pictureHeight] tall — which is what a test can say about a picture it
-    /// cannot fetch.
-    Future<void> pumpPage(WidgetTester tester, double pictureHeight) async {
-      tester.view.physicalSize = const Size(800, 1600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: patraTheme(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Center(
-            child: SizedBox(
-              child: BookPageBody(
-                textSize: defaultBookTextSize,
-                lineHeight: defaultBookLineHeight,
-                face: (
-                  family: fontAtkinsonHyperlegibleNext,
-                  canSetItalic: false,
-                ),
-                page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
-                picture: (_) =>
-                    SizedBox(key: const Key('picture'), height: pictureHeight),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('content that fits is set in the middle of the page', (
-      tester,
-    ) async {
-      await pumpPage(tester, 300);
-
-      final page = tester.getRect(find.byType(BookPageBody));
-      final content = tester.getRect(find.byType(Column));
-      // The room the counter leaves is not the page's: the top of it is a
-      // gutter, the bottom four, and what fits is equidistant from the two.
-      expect(
-        content.top - page.top - gutter,
-        closeTo(page.bottom - 4 * gutter - content.bottom, 1),
-      );
-    });
-
-    testWidgets('a page taller than the screen still starts at the top', (
-      tester,
-    ) async {
-      await pumpPage(tester, 2000);
-
-      // Centring is not something that can be done to a page one has to
-      // scroll: it would begin off the top edge, with no way back to it.
-      final page = tester.getRect(find.byType(BookPageBody));
-      final content = tester.getRect(find.byType(Column));
-      expect(content.top - page.top, closeTo(gutter, 1));
-    });
-  });
-
-  group('how a page is set', () {
-    Future<void> pumpWords(
-      WidgetTester tester,
-      String html, {
-      BookType face = (
-        family: fontAtkinsonHyperlegibleNext,
-        canSetItalic: false,
-      ),
-    }) async {
-      tester.view.physicalSize = const Size(800, 1600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: patraTheme(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Center(
-            child: SizedBox(
-              width: 400,
-              height: 800,
-              child: BookPageBody(
-                textSize: defaultBookTextSize,
-                lineHeight: defaultBookLineHeight,
-                face: face,
-                page: BookPage.fromHtml(html),
-                picture: (_) => const SizedBox.shrink(),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('in the app\'s own renderer, prose is set ragged right, and '
-        'not justified', (tester) async {
-      await pumpWords(
-        tester,
-        '<h2>Book two</h2><p>One.</p>'
-        '<blockquote>Two.</blockquote><ul><li>Three.</li></ul>',
-      );
-
-      final aligns = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((text) => text.textAlign ?? TextAlign.start)
-          .toList();
-      expect(aligns, [
-        // Not one line of it justified — in this renderer. The premise it
-        // was written on changed rather than its reasoning: the web engine,
-        // which draws the hyphen at a break, justifies and hyphenates where
-        // the book is silent and its language known (#130, pinned in
-        // `book_rewrite_test.dart`). Flutter still does not: measured, U+00AD
-        // is honoured as a break opportunity but the hyphen is not drawn at
-        // the break, so a narrow column has nothing to justify with and opens
-        // gaps instead — which reads as a rendering fault rather than as
-        // typography. The measurement is written down in the reader's rules,
-        // so this is not put back here.
-        TextAlign.start, // the title
-        TextAlign.start, // the paragraph
-        TextAlign.start, // the quotation
-        TextAlign.start, // the bullet
-        TextAlign.start, // the item
-      ]);
-    });
-
-    testWidgets('a page is set in the face chosen, and the counter is not', (
-      tester,
-    ) async {
-      // Tall enough for the whole sheet to be on screen: a face is picked
-      // from a list of four, and a sheet that has to be scrolled to reach
-      // one is a sheet that hides half of what it offers.
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final (requested, _) = await _pumpBook(tester, html: _everyBlock);
-      await _showChrome(tester);
-      await tester.tap(find.byIcon(Icons.settings));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Serif'));
-      await tester.pumpAndSettle();
-      // Every block of words on the page is set in it — prose, headings,
-      // quotations and list items alike — because a book set in a serif with
-      // sans intertitres reads as an interface rather than as a book.
-      final set = _runs(
-        tester,
-        find.descendant(
-          of: find.byType(BookPageBody),
-          matching: find.byType(RichText),
-        ),
-      );
-      expect(set, isNotEmpty, reason: 'the page is made of words');
-      expect(set.map((style) => style.fontFamily), everyElement(fontLiterata));
-      expect(
-        set.where((style) => style.fontSize == defaultBookTextSize + 3),
-        isNotEmpty,
-        reason: 'the heading is set in it too, and not left in the sans',
-      );
-
-      // The counter is the app's own furniture and stays in the serif: the
-      // choice is a book's and nothing else's, and a page of a book has been
-      // a mixture by design since the counter was first drawn.
-      expect(
-        tester.widget<Text>(find.text('1 / $_pages')).style?.fontFamily,
-        fontLiterata,
-      );
-
-      // Nothing was asked of the server: a page set in another face is the
-      // page the reader is already holding, laid out again.
-      expect(_asked(requested), [0, 1]);
-    });
-
-    testWidgets('a page set in another face keeps the place in it', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await _pumpBook(tester, html: _longPage);
-      await tester.drag(
-        find.byType(SingleChildScrollView).first,
-        const Offset(0, -300),
-      );
-      await tester.pumpAndSettle();
-      final scrolled = _pagePosition(tester);
-      final read = scrolled.pixels / scrolled.maxScrollExtent;
-      expect(read, greaterThan(0), reason: 'the reader did scroll the page');
-
-      await _showChrome(tester);
-      await tester.tap(find.byIcon(Icons.settings));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Serif'));
-      await tester.pumpAndSettle();
-
-      // A face is a reflow like a size is: the words break somewhere else,
-      // so the page is longer or shorter and the reader must not be sent
-      // back to the top of it.
-      final after = _pagePosition(tester);
-      expect(
-        after.pixels / after.maxScrollExtent,
-        closeTo(read, .02),
-        reason: 'the reader is still where they were in the page',
-      );
-    });
-
-    testWidgets('emphasis is set in the italic the face ships', (tester) async {
-      Future<List<FontStyle?>> styles(BookType face) async {
-        await pumpWords(tester, '<p>The worm <i>follows</i>.</p>', face: face);
-        return [
-          for (final run in _runs(
-            tester,
-            find.descendant(
-              of: find.byType(BookPageBody),
-              matching: find.byType(RichText),
-            ),
-          ))
-            run.fontStyle,
-        ];
-      }
-
-      // The app's serif (Literata) ships an italic.
-      expect(
-        await styles(ReadingFace.serif.resolve()),
-        contains(FontStyle.italic),
-        reason: "Literata ships an italic, so a book's emphasis is set in it",
-      );
-      // The app's sans (Atkinson Hyperlegible Next) also ships an italic.
-      expect(
-        await styles(ReadingFace.sans.resolve()),
-        contains(FontStyle.italic),
-        reason: 'Atkinson Hyperlegible Next ships an italic',
-      );
-      // The default (book's own, falling back to app sans) has no italic.
-      expect(
-        await styles(ReadingFace.book.resolve()),
-        everyElement(FontStyle.normal),
-        reason: 'the fallback sans has no italic when the book has none',
-      );
-    });
-  });
-
   group('the direction a book declares', () {
     /// A page in the shape the server hands one over: the wrapper Kavita
     /// scopes a book into, the book's own CSS inlined at the top of it, and
@@ -1357,70 +434,20 @@ void main() {
         .position
         .axisDirection;
 
-    /// Where the rule down the side of a quotation is drawn, as the room it
-    /// leaves between itself and the words: a quotation in a book that reads
-    /// from the right is indented from the right.
-    ({double start, double end}) quotationInset(WidgetTester tester) {
-      final rule = find.ancestor(
-        of: find.textContaining('قال الرجل'),
-        matching: find.byType(Container),
-      );
-      final box = tester.getRect(rule.first);
-      final words = tester.getRect(
-        find.descendant(of: rule.first, matching: find.byType(RichText)).first,
-      );
-      return (start: words.left - box.left, end: box.right - words.right);
-    }
-
-    /// Which direction the page's own prose is laid out in, read off the
-    /// render tree: `TextAlign.start` is the right *form* and resolves
-    /// against this, so it is the whole of whether a book reads from the
-    /// right.
-    TextDirection prose(WidgetTester tester) => tester
-        .renderObjectList<RenderParagraph>(
-          find.descendant(
-            of: find.byType(BookPageBody),
-            matching: find.byType(RichText),
-          ),
-        )
-        .first
-        .textDirection;
-
     /// The direction the page itself is laid out in, which is what the pager
     /// turns on.
+    ///
+    /// Read where the pager is rather than inside a page, so it asks the
+    /// reader and not whichever renderer draws the page.
     TextDirection laidOut(WidgetTester tester) =>
-        Directionality.of(tester.element(find.byType(BookPageBody).first));
-
-    testWidgets('a book that declares itself is laid out that way', (
-      tester,
-    ) async {
-      await _pumpBook(tester, html: page('.book-content { direction: rtl; }'));
-
-      expect(laidOut(tester), TextDirection.rtl);
-      expect(
-        prose(tester),
-        TextDirection.rtl,
-        reason: 'the prose resolves `start` to the right',
-      );
-      expect(
-        pager(tester),
-        AxisDirection.left,
-        reason: 'the pages turn the way the words run, and only once',
-      );
-
-      // The rule down the side of a quotation is directional too, like the
-      // bullet of a list item: in a book that reads from the right it
-      // belongs on the right.
-      final inset = quotationInset(tester);
-      expect(inset.end, greaterThan(inset.start));
-    });
+        Directionality.of(tester.element(find.byType(PageView)));
 
     testWidgets('and its pages turn the way it reads', (tester) async {
       // Doing only the text half would produce a book that reads
       // right-to-left while its pages turn left-to-right — worse than
       // leaving it as it is. The pager is inside the book's own
       // `Directionality`, so it mirrors with the words.
-      final (requested, posted) = await _pumpBook(
+      final (requested, posted) = await pumpBook(
         tester,
         html: page('.book-content { direction: rtl; }'),
       );
@@ -1429,7 +456,7 @@ void main() {
       await tester.tapAt(Offset(size.width * .15, size.height / 2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(_postedPages(posted), [
+      expect(postedPages(posted), [
         0,
         1,
       ], reason: 'the left-hand side reads on in a book that reads that way');
@@ -1438,7 +465,7 @@ void main() {
       await tester.tapAt(Offset(size.width * .85, size.height / 2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(_postedPages(posted), [0, 1, 0]);
+      expect(postedPages(posted), [0, 1, 0]);
     });
 
     testWidgets('the library the server names cannot turn a book', (
@@ -1451,33 +478,17 @@ void main() {
       // reader into the chain let the manga convention answer for every book
       // on every server, not merely for one shelved oddly. Nothing is
       // measured of a book now, and nothing anywhere reads the type it names.
-      await _pumpBook(tester, html: page('.book-content { font-size: 1em; }'));
+      await pumpBook(tester, html: page('.book-content { font-size: 1em; }'));
 
       expect(laidOut(tester), TextDirection.ltr);
       expect(pager(tester), AxisDirection.right);
-    });
-
-    testWidgets('a book that declares nothing is laid out as it always was', (
-      tester,
-    ) async {
-      await _pumpBook(tester, html: page('.book-content { font-size: 1em; }'));
-
-      expect(laidOut(tester), TextDirection.ltr);
-      expect(prose(tester), TextDirection.ltr);
-      expect(pager(tester), AxisDirection.right);
-      final inset = quotationInset(tester);
-      expect(
-        inset.start,
-        greaterThan(inset.end),
-        reason: 'the rule stays on the left where the book reads that way',
-      );
     });
 
     testWidgets('an inert declaration is not a declaration', (tester) async {
       // `PrepareFinalHtml` keeps no `<html>`, so this rule applies to
       // nothing: a book saying the opposite of what the reader would read
       // out of a text search.
-      await _pumpBook(
+      await pumpBook(
         tester,
         html: page('.book-content html[dir=rtl] { direction: rtl; }'),
       );
@@ -1491,13 +502,13 @@ void main() {
       // A copy is the pages the server rendered (ADR-0009), stylesheet and
       // all, so the app is what reads the direction in both cases and a
       // reader on a train gets the same book. Nothing here asks the server.
-      final (requested, _) = await _pumpBook(
+      final (requested, _) = await pumpBook(
         tester,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           pageHtml: page('.book-content { direction: rtl; }'),
@@ -1506,18 +517,17 @@ void main() {
 
       expect(requested, isEmpty, reason: 'the copy is the page');
       expect(laidOut(tester), TextDirection.rtl);
-      expect(prose(tester), TextDirection.rtl);
     });
 
     testWidgets('the chrome and its numerals never turn with the book', (
       tester,
     ) async {
-      await _pumpBook(tester, html: page('.book-content { direction: rtl; }'));
-      await _showChrome(tester);
+      await pumpBook(tester, html: page('.book-content { direction: rtl; }'));
+      await showBookChrome(tester);
 
       // The counter is the app's own furniture and reads the app's own way,
       // whatever the book says.
-      final counter = find.text('1 / $_pages');
+      final counter = find.text('1 / $bookPages');
       expect(counter, findsOneWidget);
       expect(Directionality.of(tester.element(counter)), TextDirection.ltr);
     });
@@ -1535,16 +545,16 @@ void main() {
         id: 4,
         name: '1',
         minNumber: 1,
-        pages: _pages,
+        pages: bookPages,
         pagesRead: 0,
         chapters: [
           Chapter(
             id: 7,
-            title: _title,
-            titleName: _title,
+            title: bookTitle,
+            titleName: bookTitle,
             range: '1',
             minNumber: 1,
-            pages: _pages,
+            pages: bookPages,
             pagesRead: 0,
             isSpecial: false,
             format: MangaFormat.epub,
@@ -1554,18 +564,27 @@ void main() {
       ),
     ];
 
-    /// The language the page on screen is drawn knowing.
-    String? drawnIn(WidgetTester tester) =>
-        tester.widget<BookPageBody>(find.byType(BookPageBody).first).language;
+    /// The language the page on screen was handed.
+    ///
+    /// Read off the development renderer, which is what draws a page under a
+    /// test binding and draws nothing with the language: what is asked here
+    /// is what the reader obtained and what it cost, not what a page does
+    /// with it — the web engine's document is asked that in *the web engine*.
+    String? drawnIn(WidgetTester tester) => tester
+        .widget<DevelopmentBookPage>(find.byType(DevelopmentBookPage).first)
+        .language;
 
-    _BookAdapter server({String? language = 'en'}) =>
-        _BookAdapter(requested: <int>[], posted: <_Post>[], language: language);
+    BookAdapter server({String? language = 'en'}) => BookAdapter(
+      requested: <int>[],
+      posted: <BookPost>[],
+      language: language,
+    );
 
     testWidgets('opened from the series screen, it costs no request', (
       tester,
     ) async {
       final adapter = server(language: 'de');
-      await _pumpBook(
+      await pumpBook(
         tester,
         server: adapter,
         held: heldSeries(language: 'fr'),
@@ -1577,7 +596,7 @@ void main() {
 
     testWidgets('opened from a link, it is asked for', (tester) async {
       final adapter = server(language: 'fr-CA');
-      await _pumpBook(tester, server: adapter);
+      await pumpBook(tester, server: adapter);
 
       expect(drawnIn(tester), 'fr-CA');
       expect(adapter.chapterAsked, 1, reason: 'once, and only here');
@@ -1588,13 +607,13 @@ void main() {
       // asking again would be asking the same question for the same answer,
       // and nothing — the interface, the library, the profile — stands in.
       final adapter = server(language: null);
-      await _pumpBook(tester, server: adapter, held: heldSeries());
+      await pumpBook(tester, server: adapter, held: heldSeries());
 
       expect(drawnIn(tester), isNull);
       expect(adapter.chapterAsked, 0);
 
       final linked = server(language: null);
-      await _pumpBook(tester, server: linked);
+      await pumpBook(tester, server: linked);
       expect(drawnIn(tester), isNull);
       expect(linked.chapterAsked, 1);
     });
@@ -1603,15 +622,15 @@ void main() {
       tester,
     ) async {
       final adapter = server(language: 'en');
-      await _pumpBook(
+      await pumpBook(
         tester,
         server: adapter,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
           seriesId: 3,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           language: 'fr',
@@ -1630,15 +649,15 @@ void main() {
     testWidgets('a saved copy is read in its language with no server', (
       tester,
     ) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         offline: true,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
           seriesId: 3,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           language: 'fr',
@@ -1653,15 +672,15 @@ void main() {
     testWidgets('a copy saved before its language was recorded still opens', (
       tester,
     ) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         offline: true,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
           seriesId: 3,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           pageHtml: '<p>The spice must flow.</p>',
@@ -1697,7 +716,7 @@ void main() {
     testWidgets('draws the page it was handed, made inert, from a file', (
       tester,
     ) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         html:
@@ -1724,13 +743,13 @@ void main() {
         'not the interface\'s', (tester) async {
       // An English book read by somebody whose app speaks French: the words
       // are the book's, and so are the rules they are broken by (#130).
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         locale: const Locale('fr'),
-        server: _BookAdapter(
+        server: BookAdapter(
           requested: <int>[],
-          posted: <_Post>[],
+          posted: <BookPost>[],
           language: 'en',
         ),
       );
@@ -1745,13 +764,13 @@ void main() {
     testWidgets('a book in no known language is left ragged right', (
       tester,
     ) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         locale: const Locale('fr'),
-        server: _BookAdapter(
+        server: BookAdapter(
           requested: <int>[],
-          posted: <_Post>[],
+          posted: <BookPost>[],
           language: null,
         ),
       );
@@ -1766,11 +785,11 @@ void main() {
 
     testWidgets("a page's pictures are fetched by the app, and drawn from "
         'the file beside the page', (tester) async {
-      late _BookAdapter server;
-      await _pumpBook(
+      late BookAdapter server;
+      await pumpBook(
         tester,
         webEngine: true,
-        html: '<p>a</p><img src="OEBPS/images/worm.jpg"/>$_addressedPicture',
+        html: '<p>a</p><img src="OEBPS/images/worm.jpg"/>$addressedPicture',
         onServer: (it) => server = it,
       );
       await settle(tester);
@@ -1802,12 +821,12 @@ void main() {
         // Inside the directory the page is read from, which is all an engine
         // on iOS is allowed to read.
         expect(file.path, startsWith(directory));
-        expect(file.readAsBytesSync(), base64Decode(_carried));
+        expect(file.readAsBytesSync(), base64Decode(carriedPng));
       }
     });
 
     testWidgets("the reader's settings reach the document", (tester) async {
-      await _pumpBook(tester, webEngine: true);
+      await pumpBook(tester, webEngine: true);
       await settle(tester);
       final document = engine.pageShowing(0)!.document!;
       expect(document, contains('@layer patra'));
@@ -1815,13 +834,13 @@ void main() {
     });
 
     testWidgets('progress is posted as it always was', (tester) async {
-      final (_, posted) = await _pumpBook(
+      final (_, posted) = await pumpBook(
         tester,
         webEngine: true,
         progressPage: 2,
       );
       await settle(tester);
-      expect(_postedPages(posted), [2]);
+      expect(postedPages(posted), [2]);
 
       // Where in the page the reader came to rest, as the app's own bridge
       // tells it: the same call, the same field.
@@ -1833,7 +852,7 @@ void main() {
     testWidgets('a book opens again on the words it was left at', (
       tester,
     ) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         progressPage: 2,
@@ -1849,7 +868,7 @@ void main() {
         'meant', (tester) async {
       // Written before there were blocks, and already on servers: a share
       // of the page as a whole, which is what it meant then.
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         progressPage: 2,
@@ -1860,7 +879,7 @@ void main() {
     });
 
     testWidgets('a book with nothing recorded is put nowhere', (tester) async {
-      await _pumpBook(tester, webEngine: true, progressPage: 2);
+      await pumpBook(tester, webEngine: true, progressPage: 2);
       await settle(tester);
       expect(engine.pageShowing(2)!.placedAt, isNull);
     });
@@ -1887,7 +906,7 @@ void main() {
     ]) {
       testWidgets('changing the $what mid-page keeps the reader on the same '
           'words', (tester) async {
-        await _pumpBook(tester, webEngine: true, progressPage: 2);
+        await pumpBook(tester, webEngine: true, progressPage: 2);
         await settle(tester);
         final first = engine.pageShowing(2)!;
         first.tell('{"block":7,"at":0.6}');
@@ -1908,16 +927,16 @@ void main() {
     testWidgets('a saved copy keeps the place, after the server has it too', (
       tester,
     ) async {
-      final (_, posted) = await _pumpBook(
+      final (_, posted) = await pumpBook(
         tester,
         webEngine: true,
         progressPage: 1,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
           seriesId: 3,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           pageHtml: '<p>La spice doit couler.</p>',
@@ -1944,16 +963,16 @@ void main() {
         'the page again', (tester) async {
       // The copy is written every time a scroll settles; a page taken apart
       // again on every one is seconds of work for a page of megabytes.
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         progressPage: 1,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
           seriesId: 3,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           pageHtml: '<p>La spice doit couler.</p>',
@@ -1986,22 +1005,25 @@ void main() {
 
     testWidgets('a saved copy opens with no server on the words it was left '
         'at', (tester) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         offline: true,
         saved: (root) async {
           final copy = await saveChapterFixture(
             root,
-            _profileId,
+            bookProfileId,
             chapterId: 7,
             seriesId: 3,
-            title: _title,
+            title: bookTitle,
             pages: 3,
             format: MangaFormat.epub,
             pageHtml: '<p>La spice doit couler.</p>',
           );
-          await DownloadsService(root: root, profileId: _profileId).writeMeta(
+          await DownloadsService(
+            root: root,
+            profileId: bookProfileId,
+          ).writeMeta(
             copy.copyWith(
               place: const PendingProgress(
                 pageNum: 2,
@@ -2016,27 +1038,27 @@ void main() {
     });
 
     testWidgets('the sides of the screen still turn the page', (tester) async {
-      final (_, posted) = await _pumpBook(tester, webEngine: true);
+      final (_, posted) = await pumpBook(tester, webEngine: true);
       await settle(tester);
       final size = tester.getSize(find.byType(Scaffold));
       await tester.tapAt(Offset(size.width - 10, size.height / 2));
       await settle(tester);
-      expect(_postedPages(posted), [0, 1]);
+      expect(postedPages(posted), [0, 1]);
       expect(engine.pageShowing(1), isNotNull);
     });
 
     testWidgets('a swipe still turns the page', (tester) async {
-      final (_, posted) = await _pumpBook(tester, webEngine: true);
+      final (_, posted) = await pumpBook(tester, webEngine: true);
       await settle(tester);
-      await _swipe(tester);
+      await swipeBookPage(tester);
       await settle(tester);
-      expect(_postedPages(posted), [0, 1]);
+      expect(postedPages(posted), [0, 1]);
     });
 
     testWidgets('a book declared right to left still turns from the right', (
       tester,
     ) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         html: '<style>.book-content { direction: rtl }</style><p>a</p>',
@@ -2063,9 +1085,9 @@ void main() {
           '</style>'
           '<p>La spice doit couler.</p>'
           '<p><img src="OEBPS/images/worm.jpg"/></p>'
-          '$_addressedPicture';
-      _BookAdapter server() =>
-          _BookAdapter(requested: [], posted: [], html: html, language: 'fr');
+          '$addressedPicture';
+      BookAdapter server() =>
+          BookAdapter(requested: [], posted: [], html: html, language: 'fr');
 
       /// The document the engine was handed, with the directory it was
       /// written in named the same way whichever run wrote it.
@@ -2077,17 +1099,17 @@ void main() {
         );
       }
 
-      await _pumpBook(tester, webEngine: true, server: server());
+      await pumpBook(tester, webEngine: true, server: server());
       await settle(tester);
       final streamed = handed();
 
       engine.pages.clear();
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         offline: true,
         saved: (root) =>
-            _saveThroughDownloader(tester, root, server(), language: 'fr'),
+            saveThroughDownloader(tester, root, server(), language: 'fr'),
       );
       await settle(tester);
       final stored = handed();
@@ -2106,7 +1128,7 @@ void main() {
       for (final file in files) {
         expect(
           File.fromUri(Uri.parse(file)).readAsBytesSync(),
-          base64Decode(_carried),
+          base64Decode(carriedPng),
         );
       }
     });
@@ -2116,45 +1138,46 @@ void main() {
     // is migrated, and nothing is fetched again.
     testWidgets('a copy saved before it was a directory still opens, its '
         'pictures carried', (tester) async {
-      await _pumpBook(
+      await pumpBook(
         tester,
         webEngine: true,
         offline: true,
         saved: (root) => saveChapterFixture(
           root,
-          _profileId,
+          bookProfileId,
           chapterId: 7,
           seriesId: 3,
-          title: _title,
+          title: bookTitle,
           pages: 3,
           format: MangaFormat.epub,
           language: 'fr',
           pageHtml:
               '<p>La spice doit couler.</p>'
-              '<img src="data:image/png;base64,$_carried"/>',
+              '<img src="data:image/png;base64,$carriedPng"/>',
         ),
       );
       await settle(tester);
       final document = engine.pageShowing(0)!.document!;
       expect(document, contains('<html lang="fr">'));
       expect(document, contains('La spice doit couler.'));
-      expect(document, contains('src="data:image/png;base64,$_carried"'));
+      expect(document, contains('src="data:image/png;base64,$carriedPng"'));
     });
 
     // A copy saved before a copy was a directory carries its pictures inside
     // its pages, and pages of several megabytes were measured on a device:
     // taken apart on the thread the app draws on, three of them were an ANR.
     // Past a size, a page is taken apart and rewritten in an isolate — and
-    // still opens, in either renderer, from the copy or from the server.
+    // still opens, from the copy or from the server. The development
+    // renderer's own case is in `development_book_page_test.dart`.
     final heavy =
         '<p>The spice must flow.</p>'
         '<p title="${'A' * (BookPage.parsesInPlaceBelow * 2)}">.</p>';
     Future<void> saveHeavy(Directory root) => saveChapterFixture(
       root,
-      _profileId,
+      bookProfileId,
       chapterId: 7,
       seriesId: 3,
-      title: _title,
+      title: bookTitle,
       pages: 3,
       format: MangaFormat.epub,
       pageHtml: heavy,
@@ -2163,27 +1186,19 @@ void main() {
     testWidgets('a heavy saved page still opens, in the web engine', (
       tester,
     ) async {
-      await _pumpBook(tester, webEngine: true, offline: true, saved: saveHeavy);
+      await pumpBook(tester, webEngine: true, offline: true, saved: saveHeavy);
       await settle(tester);
       expect(engine.pageShowing(0)!.document, contains('The spice must flow.'));
     });
 
-    testWidgets('a heavy saved page still opens, drawn by the app', (
-      tester,
-    ) async {
-      await _pumpBook(tester, offline: true, saved: saveHeavy);
-      await settle(tester);
-      expect(find.text('The spice must flow.'), findsOneWidget);
-    });
-
     testWidgets('a heavy page from the server still opens', (tester) async {
-      await _pumpBook(tester, webEngine: true, html: heavy);
+      await pumpBook(tester, webEngine: true, html: heavy);
       await settle(tester);
       expect(engine.pageShowing(0)!.document, contains('The spice must flow.'));
     });
 
     testWidgets('goes nowhere but the page it was handed', (tester) async {
-      await _pumpBook(tester, webEngine: true);
+      await pumpBook(tester, webEngine: true);
       await settle(tester);
       final page = engine.pageShowing(0)!;
       final own = Uri.file(page.file!).toString();

@@ -735,8 +735,8 @@ void main() {
 
     test('sets a page shorter than the screen in the middle of it', () {
       // A page is a page, not a flow: a cover hung off the top edge is a
-      // picture pinned to the ceiling — the rule the app's own renderer
-      // keeps (`BookPageBody`), which the engine has to be told.
+      // picture pinned to the ceiling — the rule the development renderer
+      // keeps (`DevelopmentBookPage`), which the engine has to be told.
       final css = overrides(
         _rewrite('<p><img src="OEBPS/images/worm.jpg"></p>'),
       );

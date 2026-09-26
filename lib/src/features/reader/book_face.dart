@@ -5,8 +5,9 @@
 /// container of its own, and rewrites every `@font-face` source to
 /// `book-resources` — so a page says, in the book's own words, which face its
 /// words are set in and where that face's files are. Nothing else of the
-/// book's CSS is honoured: this app draws the page itself (ADR-0010), and the
-/// face is the one thing it takes from the book's design.
+/// book's CSS is honoured where the app draws the page itself — the
+/// development renderer, since the web engine composes it (ADR-0013) — and
+/// the face is the one thing that renderer takes from the book's design.
 ///
 /// The server's own client does the same thing by doing nothing — its font
 /// choice resolves to CSS `inherit`, which leaves the book's stylesheet to win

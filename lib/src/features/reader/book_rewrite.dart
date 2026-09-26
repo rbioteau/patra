@@ -173,8 +173,9 @@ String _overrides(BookSetting setting, {required bool justify}) {
       'padding: ${_number(gutter)}px ${_number(gutter)}px '
       '${_number(4 * gutter)}px; }\n'
       // A page is a page, not a flow: one shorter than the screen — a cover,
-      // a part's title — is set in the middle of it, as the app's own
-      // renderer sets it (`BookPageBody`), and one taller scrolls as ever.
+      // a part's title — is set in the middle of it, as the development
+      // renderer sets it (`DevelopmentBookPage`), and one taller scrolls as
+      // ever.
       // The body is the grid's one item and stays a block inside, so nothing
       // of the book's own layout changes.
       '  html { display: grid; align-content: center; min-height: 100vh; '

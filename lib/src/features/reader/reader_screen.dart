@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +29,7 @@ import 'book_markup.dart';
 import 'book_page.dart';
 import 'book_rewrite.dart';
 import 'book_web_page.dart';
+import 'development/development_book_page.dart';
 import 'magnify_gesture.dart';
 import 'page_loading.dart';
 import 'page_rail.dart';
@@ -1020,7 +1022,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             pages: chapter.pages,
             page: _page,
             anchorFor: _anchorFor,
-            picture: _bookPicture,
             onPageChanged: (page) => _onPageChanged(page, chapter),
             onScrolled: (page, at) => _onBookScrolled(page, at, chapter),
           ),
@@ -1087,69 +1088,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _goTo(page, chapter);
     _showChromeAndBars(false);
   }
-
-  /// What a picture a book's page refers to is drawn with.
-  ///
-  /// A page names its pictures the way the file does — a path inside the
-  /// book — and the server is what turns that name into bytes. Where the page
-  /// carries a whole address instead, Kavita wrote it (`//host/api/book/…
-  /// ?apiKey=…&file=cover.jpg`) out of its own idea of where it lives, so
-  /// only the file in it is kept and the request is made on the address this
-  /// session was built with (`KavitaClient.bookPictureUrl`). A page whose
-  /// only block is a picture that cannot be had is drawn as nothing at all.
-  Widget _bookPicture(String src) {
-    // A page that came from a stored copy carries its pictures with it: the
-    // bytes are in the name itself, since there is no server left to fetch
-    // one from (ADR-0009). Decoded once and kept, because `Image.memory` is
-    // its own cache key: a new list on every build is a new picture for the
-    // decoder, and reading a saved book rebuilds its page often.
-    final carried = _carried.putIfAbsent(src, () => carriedPictureBytes(src));
-    // A copy that is a directory keeps it beside its pages (#129).
-    final dir = ref.read(savedChapterProvider(widget.chapterId)) == null
-        ? null
-        : ref.read(chapterDirProvider(widget.chapterId)).value;
-    final copied = dir == null
-        ? null
-        : _copied.putIfAbsent(src, () {
-            final file = bookPictureFile(dir, src);
-            return file.existsSync() ? file : null;
-          });
-    if (copied != null) {
-      return Image.file(copied, width: double.infinity, fit: BoxFit.fitWidth);
-    }
-    if (carried != null) {
-      return Image.memory(
-        carried,
-        // The width of the column of words it sits in, and its own height
-        // from that: a picture in a page of a book is as wide as the page's
-        // text.
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
-      );
-    }
-    final client = _client;
-    if (client == null) return const SizedBox.shrink();
-    final url = client.bookPictureUrl(widget.chapterId, src);
-    return Image(
-      image: CachedNetworkImageProvider(
-        url,
-        // Without a key of its own the URL files this picture under the
-        // profile that fetched it (`imageCacheKey`).
-        cacheKey: imageCacheKey(url),
-        headers: client.imageHeaders,
-      ),
-      width: double.infinity,
-      fit: BoxFit.fitWidth,
-    );
-  }
-
-  /// The bytes of the pictures the pages being read carry, by the name the
-  /// page gave them. See [_bookPicture]. Dies with the chapter.
-  final Map<String, Uint8List?> _carried = {};
-
-  /// The files beside a saved copy's pages its pictures are kept in, by the
-  /// name the page gave them. See [_bookPicture]. Dies with the chapter.
-  final Map<String, File?> _copied = {};
 
   /// What the cog's sheet asked for, whichever chapter it was opened on.
   void _onSettingsOutcome(
@@ -1834,7 +1772,6 @@ class _BookView extends StatefulWidget {
     required this.pages,
     required this.page,
     required this.anchorFor,
-    required this.picture,
     required this.onPageChanged,
     required this.onScrolled,
   });
@@ -1851,11 +1788,6 @@ class _BookView extends StatefulWidget {
   /// Asked for as a page is built rather than held here, because the place a
   /// reader is in a page changes under the view.
   final BookAnchor? Function(int page) anchorFor;
-
-  /// What a picture a page refers to is drawn with. Passed in rather than
-  /// read from a provider, because a page is built by the pager's item
-  /// builder — which a lazy list runs *during layout*.
-  final Widget Function(String src) picture;
 
   final ValueChanged<int> onPageChanged;
 
@@ -1925,7 +1857,6 @@ class _BookViewState extends State<_BookView> {
         chapterId: widget.chapterId,
         language: widget.language,
         page: page,
-        picture: widget.picture,
         anchor: widget.anchorFor(page),
         onScroll: (at) => widget.onScrolled(page, at),
       ),
@@ -1952,7 +1883,6 @@ class _BookPage extends ConsumerWidget {
     required this.chapterId,
     required this.language,
     required this.page,
-    required this.picture,
     required this.anchor,
     required this.onScroll,
   });
@@ -1960,7 +1890,6 @@ class _BookPage extends ConsumerWidget {
   final int chapterId;
   final String? language;
   final int page;
-  final Widget Function(String src) picture;
 
   /// Where in the page the reader was, or null for a page that opens at its
   /// top: a page turned to is arrived at at its beginning.
@@ -1986,7 +1915,6 @@ class _BookPage extends ConsumerWidget {
         pageIndex: page,
         language: language,
         page: value,
-        picture: picture,
         textSize: textSize,
         lineHeight: lineHeight,
         readingFace: readingFace,
@@ -2013,7 +1941,6 @@ class _ResolvedBookPage extends ConsumerWidget {
     required this.pageIndex,
     required this.language,
     required this.page,
-    required this.picture,
     required this.textSize,
     required this.lineHeight,
     required this.readingFace,
@@ -2027,7 +1954,6 @@ class _ResolvedBookPage extends ConsumerWidget {
   final int pageIndex;
   final String? language;
   final BookPage page;
-  final Widget Function(String src) picture;
   final double textSize;
   final double lineHeight;
   final ReadingFace readingFace;
@@ -2058,8 +1984,8 @@ class _ResolvedBookPage extends ConsumerWidget {
       if (!cache.knows(key)) unawaited(cache.loadFont(key));
     }
 
-    // The platform's engine where there is one (ADR-0013); the page drawn by
-    // the app where there is none, which is Linux and a test binding.
+    // The platform's engine where there is one (ADR-0013), which is every
+    // platform the app ships to.
     if (ref.watch(bookWebEngineProvider)) {
       // What the engine can draw is not only what the parser reads as a
       // block — a picture set as a background is a page too — so only an
@@ -2079,10 +2005,17 @@ class _ResolvedBookPage extends ConsumerWidget {
       );
     }
 
-    return BookPageBody(
+    // Where there is none — Linux, and a test binding — the page is drawn by
+    // the development renderer, which is a tool for looking at a book
+    // without a phone and not what a reader sees (#131). A release build
+    // never reaches it: `kReleaseMode` is a constant, so the branch and the
+    // renderer are compiled away, and a release with no engine says the page
+    // cannot be shown rather than drawing one nobody tests as shipped.
+    if (kReleaseMode) return const BookPageUnavailable();
+    return DevelopmentBookPage(
       page: page,
       language: language,
-      picture: picture,
+      picture: (src) => DevelopmentBookPicture(chapterId: chapterId, src: src),
       textSize: textSize,
       lineHeight: lineHeight,
       face: resolvedFace,

@@ -11,8 +11,9 @@
 ///
 /// The engine is the platform's, reached through the official plugin: there
 /// is none on Linux, and none under a test binding, which is why the reader
-/// asks [bookWebEngineProvider] before it draws one and draws the page itself
-/// where the answer is no.
+/// asks [bookWebEngineProvider] before it draws one. Where the answer is no,
+/// a development build draws the page with the development renderer
+/// (`development/`, #131) and a release says the page cannot be shown.
 library;
 
 import 'dart:async';
@@ -34,8 +35,9 @@ import 'book_rewrite.dart';
 /// platforms the app ships to do, and Linux and a test binding do not.
 ///
 /// A provider rather than a test at the call site so a test can say which
-/// reader it is asking about — an engine, once registered, cannot be
-/// unregistered.
+/// renderer it is asking about — an engine, once registered, cannot be
+/// unregistered. No is not a second way of shipping a book: it is the
+/// development renderer, and only outside a release (#131).
 final bookWebEngineProvider = Provider<bool>(
   (ref) => WebViewPlatform.instance != null,
 );
