@@ -776,6 +776,20 @@ class KavitaClient {
   String chapterCoverUrl(int chapterId) =>
       '$baseUrl/api/Image/chapter-cover?chapterId=$chapterId&apiKey=$apiKey';
 
+  /// The bytes of the cover [chapterCoverUrl] names, for a copy to keep: a
+  /// saved book has no page picture to stand in for one (#129).
+  Future<List<int>> chapterCoverBytes(
+    int chapterId, {
+    CancelToken? cancelToken,
+  }) async {
+    final res = await _dio.getUri<List<int>>(
+      Uri.parse(chapterCoverUrl(chapterId)),
+      options: Options(responseType: ResponseType.bytes),
+      cancelToken: cancelToken,
+    );
+    return res.data!;
+  }
+
   /// Single source of truth for the reader-image query, so the URL used by
   /// image widgets and the one used by downloads cannot drift apart.
   ///

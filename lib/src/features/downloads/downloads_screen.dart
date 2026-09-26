@@ -129,9 +129,7 @@ class _SavedSection extends ConsumerWidget {
     final ids = ref.watch(savedChapterIdsProvider);
     return _section(
       heading: AppLocalizations.of(context).downloadsSavedSection,
-      rows: [
-        for (final id in ids) _SavedRow(key: ValueKey(id), chapterId: id),
-      ],
+      rows: [for (final id in ids) _SavedRow(key: ValueKey(id), chapterId: id)],
     );
   }
 }
@@ -482,7 +480,8 @@ class _SavedRow extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              // The first stored page doubles as the thumbnail: no server needed.
+              // The first stored page doubles as the thumbnail — or a book's
+              // cover, kept with it: no server needed.
               SizedBox(
                 width: tablet ? rowCoverWidthTablet : rowCoverWidth,
                 height: tablet ? rowCoverHeightTablet : rowCoverHeight,
@@ -692,12 +691,16 @@ class _LocalThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A book is stored as the pages the server laid its words out into, so
-    // its first stored page is a page of HTML and not a picture to show.
-    if (chapter.content == ChapterContent.reflowable) return _noPicture;
     final directory = dir;
     if (directory == null) return const ColoredBox(color: patraSurface);
-    final file = File('${directory.path}/${DownloadsService.pageFileName(0)}');
+    // A book is stored as the pages the server laid its words out into, so
+    // its first stored page is a page of HTML and not a picture to show: the
+    // copy keeps the chapter's cover beside it instead (#129). A copy saved
+    // before it did, or whose cover the server refused, has none.
+    final file = File(
+      '${directory.path}/'
+      '${chapter.content == ChapterContent.reflowable ? DownloadsService.coverFileName : DownloadsService.pageFileName(0)}',
+    );
     if (!file.existsSync()) return _noPicture;
     return Image.file(file, fit: BoxFit.cover, cacheWidth: 138);
   }

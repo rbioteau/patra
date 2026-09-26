@@ -90,6 +90,10 @@ const _lea = 'https://kavita.example#2';
 /// is not a picture any decoder would take and is all a stored page needs.
 const _picture = [7, 8, 9];
 
+/// What the server draws a book's chapter with: the cover the series screen
+/// shows on its row.
+const _cover = [4, 5, 6, 7];
+
 /// One book, in the chapter the server hangs it on.
 const _bookId = 7;
 
@@ -131,7 +135,18 @@ String _bookWithFontPageHtml(int page) =>
 /// `book-page` hands one over at a time, and `book-resources` serves what a
 /// page named.
 class _BookAdapter implements HttpClientAdapter {
-  _BookAdapter({this.failOnPage, this.refusePictures = false, this.pages = 3});
+  _BookAdapter({
+    this.failOnPage,
+    this.refusePictures = false,
+    this.refuseCover = false,
+    this.pages = 3,
+  });
+
+  /// A server that hands over the book but not the chapter's cover.
+  final bool refuseCover;
+
+  /// How many times the app asked for the chapter's cover.
+  var coversAsked = 0;
 
   /// A page the server cannot produce.
   final int? failOnPage;
@@ -181,6 +196,12 @@ class _BookAdapter implements HttpClientAdapter {
           Headers.contentTypeHeader: ['text/html'],
         },
       );
+    }
+    if (path == '/api/Image/chapter-cover') {
+      expect(options.uri.queryParameters['chapterId'], '$_bookId');
+      coversAsked++;
+      if (refuseCover) return ResponseBody.fromBytes(const [], 404);
+      return ResponseBody.fromBytes(_cover, 200);
     }
     if (path == '/api/Book/$_bookId/book-resources') {
       final file = options.uri.queryParameters['file'] as String;
@@ -756,9 +777,63 @@ void main() {
         final pages = [
           for (var page = 0; page < 3; page++) utf8.encode(_bookPageHtml(page)),
         ].fold<int>(0, (sum, page) => sum + page.length);
-        expect(saved.bytes, pages + 2 * _picture.length);
+        expect(saved.bytes, pages + 2 * _picture.length + _cover.length);
       },
     );
+
+    // A book's first page is words, so the row in the Downloads tab has no
+    // page to draw as its thumbnail the way a chapter of pictures does: the
+    // copy keeps the cover the series screen shows, and needs no server for it.
+    test('the copy keeps the cover the chapter is drawn with', () async {
+      final adapter = _BookAdapter();
+      await service.download(
+        client: _client(adapter),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      final dir = await service.chapterDir(_bookId);
+      expect(
+        File('${dir.path}/${DownloadsService.coverFileName}').readAsBytesSync(),
+        _cover,
+      );
+      expect(adapter.coversAsked, 1);
+    });
+
+    test('a cover the server refuses costs the copy nothing else', () async {
+      final saved = await service.download(
+        client: _client(_BookAdapter(refuseCover: true)),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      expect(saved.pages, 3);
+      final dir = await service.chapterDir(_bookId);
+      expect(
+        File('${dir.path}/${DownloadsService.coverFileName}').existsSync(),
+        isFalse,
+      );
+      expect((await service.scan()).keys, [_bookId]);
+    });
+
+    test('a copy stored again keeps its cover', () async {
+      await service.download(
+        client: _client(_BookAdapter()),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+      await service.download(
+        client: _client(_BookAdapter(pages: 2)),
+        chapter: _book,
+        onProgress: (_, _) {},
+      );
+
+      final dir = await service.chapterDir(_bookId);
+      expect(
+        File('${dir.path}/${DownloadsService.coverFileName}').readAsBytesSync(),
+        _cover,
+      );
+    });
 
     test('saving a book is no more requests than it was', () async {
       // A copy that is a directory is the same fetches written differently:
@@ -771,6 +846,7 @@ void main() {
       );
       expect(adapter.requestedPages..sort(), [0, 1, 2]);
       expect(adapter.requested, hasLength(2));
+      expect(adapter.coversAsked, 1);
     });
 
     test('removing a copy removes its pictures with it', () async {
@@ -850,7 +926,7 @@ void main() {
       final pages = [
         for (var page = 0; page < 3; page++) utf8.encode(_bookPageHtml(page)),
       ].fold<int>(0, (sum, page) => sum + page.length);
-      expect(saved.bytes, pages + 2 * _picture.length);
+      expect(saved.bytes, pages + 2 * _picture.length + _cover.length);
     });
 
     test('a copy read back knows it is a book', () async {

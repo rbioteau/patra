@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -10,6 +11,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/app.dart';
 import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
+import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/profiles/profile_picker_screen.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/session_scope.dart';
@@ -226,6 +228,50 @@ void main() {
     expect(find.text('The spice must flow.'), findsOneWidget);
     await tester.tapAt(tester.getCenter(find.byType(ReaderScreen)));
     await _pumpUntil(tester, find.text('1 / 3'));
+  });
+
+  testWidgets('a saved book is listed with the cover it was saved with', (
+    tester,
+  ) async {
+    // A book's first page is words, so the copy keeps the chapter's cover
+    // beside its pages (#129) — and the row draws it with no server.
+    final root = _room(tester);
+    await saveChapterFixture(
+      root,
+      _romain.id,
+      chapterId: 42,
+      seriesName: 'Dune',
+      title: 'Dune Messiah',
+      pages: 3,
+      format: MangaFormat.epub,
+      pageHtml: '<p>The spice must flow.</p>',
+    );
+    final dir = await DownloadsService(
+      root: root,
+      profileId: _romain.id,
+    ).chapterDir(42);
+    File('${dir.path}/${DownloadsService.coverFileName}').writeAsBytesSync(
+      base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=',
+      ),
+    );
+
+    await tester.pumpWidget(_app(root, _UnreachableAdapter()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('romain'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Downloads'));
+    await tester.pumpAndSettle();
+
+    // Decoded at the size the row draws it, like any thumbnail there.
+    final cover =
+        (tester.widget<Image>(find.byType(Image)).image as ResizeImage)
+            .imageProvider;
+    expect(cover, isA<FileImage>());
+    expect(
+      (cover as FileImage).file.path,
+      endsWith('/42/${DownloadsService.coverFileName}'),
+    );
   });
 
   testWidgets('the home screen stops asking rather than shimmering forever', (

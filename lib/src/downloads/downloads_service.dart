@@ -445,6 +445,11 @@ class DownloadsService {
 
   /// The page [pageFileName] wrote, or null for anything else in the directory
   /// — `meta.json`, most of all.
+  /// What a copy of a book keeps the chapter's cover as: the picture the
+  /// Downloads tab draws its row with, since a book's first page is words
+  /// and not a thumbnail. Extension-less like a page — the decoder sniffs it.
+  static const coverFileName = 'cover';
+
   static int? pageOfFileName(String name) =>
       name.startsWith('page_') ? int.tryParse(name.substring(5)) : null;
 
@@ -756,6 +761,22 @@ class DownloadsService {
             completed++;
             await onProgress(completed, pages);
           });
+          // The cover the chapter is drawn with, which a book's pages do
+          // not give the row it is listed in. Refused, the row keeps its
+          // stand-in and the copy is still a copy.
+          final cover = File('${dir.path}/$coverFileName');
+          try {
+            await _writePage(
+              cover,
+              await client.chapterCoverBytes(
+                chapter.chapterId,
+                cancelToken: cancelToken,
+              ),
+            );
+          } on DioException catch (error) {
+            if (error.type == DioExceptionType.cancel) rethrow;
+          }
+          if (cover.existsSync()) bytes += cover.lengthSync();
           // What the pages name is counted once, whichever attempt fetched
           // it: a retry reuses what an earlier one left beside the pages.
           bytes += _filesSize(
@@ -887,8 +908,9 @@ class DownloadsService {
   /// not pages of it any more, and a reader that found them would call the
   /// copy longer than it is.
   ///
-  /// The one exception is the book's own face, which a copy carries under the
-  /// frozen names [BookFontFile.roman] and [BookFontFile.italic]. That name
+  /// The exceptions are a book's cover ([coverFileName]) and its own face,
+  /// which a copy carries under the frozen names [BookFontFile.roman] and
+  /// [BookFontFile.italic]. That name
   /// lives in the reader's module so the two cannot disagree about it — the
   /// download code does not know what a font file is, only that these two
   /// names are not pages and must survive promotion.
@@ -912,7 +934,9 @@ class DownloadsService {
       final name = entity.path.split(Platform.pathSeparator).last;
       final page = pageOfFileName(name);
       if (page == null || page >= pages) {
-        if (!BookFontFile.isCarried(name)) entity.deleteSync();
+        if (!BookFontFile.isCarried(name) && name != coverFileName) {
+          entity.deleteSync();
+        }
       }
     }
     await _deleteQuietly(staging);
