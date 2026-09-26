@@ -426,6 +426,27 @@ void main() {
     });
   });
 
+  group('the viewport', () {
+    // Content wider than the screen — a long line of code, a wide table —
+    // lets an engine grow the layout viewport past the screen so it can zoom
+    // out to show it, and then what is on screen is a window somewhere
+    // inside that viewport: measured on a device at four screens tall, with
+    // the screen at the bottom of it, which put a reading position three
+    // screens behind the words the reader was on (#128).
+    test('is never larger than the screen', () {
+      final document = _rewrite('<pre>${'x' * 400}</pre>');
+      final viewport = RegExp(r'<meta name="viewport" content="([^"]*)"')
+          .firstMatch(document)!
+          .group(1)!
+          .split(',')
+          .map((part) => part.trim())
+          .toList();
+      expect(viewport, contains('width=device-width'));
+      expect(viewport, contains('initial-scale=1'));
+      expect(viewport, contains('minimum-scale=1'));
+    });
+  });
+
   group("the reader's three settings", () {
     String overrides(String document) => RegExp(
       r'@layer patra \{.*?\n\}',

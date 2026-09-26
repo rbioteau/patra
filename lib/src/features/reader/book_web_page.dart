@@ -205,6 +205,16 @@ class _BookWebPageState extends State<BookWebPage> {
 /// is at its top rather than in its first block. A place written in that old
 /// form is put back as a share of the height too: it is what it meant.
 ///
+/// Every one of those is measured against the **visual** viewport — what is
+/// on screen — and not the layout viewport a page is laid out in. The two
+/// are one where the page is no wider than the screen, which the rewrite's
+/// viewport now insists on; measured on a device before it did, a page with
+/// a line of code twenty screens wide had a layout viewport four screens
+/// tall with the screen at the bottom of it, and a place told from its top
+/// was three screens behind the reader. And the screen can move inside the
+/// layout viewport without the layout viewport moving, which only the
+/// visual viewport's own scroll says.
+///
 /// The page is put there again once its faces have loaded, since a face is a
 /// file of its own and the words move when it arrives — unless the reader has
 /// scrolled in the meantime, in which case the page is theirs. A scroll the
@@ -223,9 +233,15 @@ String bookBridgeScript(BookAnchor? anchor) {
   var mark = '$bookBlockMark';
   var moved = false;
   var placedAt = 0;
-  function room() { return Math.max(0, page.scrollHeight - window.innerHeight); }
-  function go(y) {
-    var to = Math.max(0, Math.min(y, room()));
+  var seen = window.visualViewport;
+  // Where the screen's top edge is inside the layout viewport, and how tall
+  // what is on screen is: the visual viewport, which is what the reader sees.
+  function edge() { return seen ? seen.offsetTop : 0; }
+  function shown() { return seen ? seen.height : window.innerHeight; }
+  function room() { return Math.max(0, page.scrollHeight - shown()); }
+  function go(line) {
+    var most = Math.max(0, page.scrollHeight - window.innerHeight);
+    var to = Math.max(0, Math.min(line - edge(), most));
     if (Math.abs(to - window.scrollY) < 1) return;
     placedAt = Date.now();
     window.scrollTo({ top: to, behavior: 'instant' });
@@ -239,26 +255,27 @@ String bookBridgeScript(BookAnchor? anchor) {
     go(window.scrollY + box.top + anchor.at * box.height);
   }
   function here() {
-    if (window.scrollY <= 0) return { at: 0 };
+    var line = edge();
+    if (window.scrollY + line <= 0) return { at: 0 };
     var blocks = document.querySelectorAll('[' + mark + ']');
     var held = null, heldBox = null, next = null;
     for (var i = 0; i < blocks.length; i++) {
       var box = blocks[i].getBoundingClientRect();
       if (box.height <= 0 || !isFinite(Number(blocks[i].getAttribute(mark)))) continue;
-      if (box.top <= 0 && box.bottom > 0) { held = blocks[i]; heldBox = box; }
-      else if (box.top > 0 && next === null) next = blocks[i];
+      if (box.top <= line && box.bottom > line) { held = blocks[i]; heldBox = box; }
+      else if (box.top > line && next === null) next = blocks[i];
     }
     if (held) {
-      return { block: Number(held.getAttribute(mark)), at: -heldBox.top / heldBox.height };
+      return { block: Number(held.getAttribute(mark)), at: (line - heldBox.top) / heldBox.height };
     }
     if (next) return { block: Number(next.getAttribute(mark)), at: 0 };
     var r = room();
-    return { at: r > 0 ? window.scrollY / r : 0 };
+    return { at: r > 0 ? (window.scrollY + line) / r : 0 };
   }
   place();
   if (document.fonts) document.fonts.ready.then(place);
   var settling = null;
-  window.addEventListener('scroll', function () {
+  function scrolled() {
     // A scroll this script made is not the reader reading: the place it
     // lands on is the place already held, and is not told back.
     if (Date.now() - placedAt < 300) return;
@@ -267,7 +284,11 @@ String bookBridgeScript(BookAnchor? anchor) {
     settling = setTimeout(function () {
       $bookBridge.postMessage(JSON.stringify(here()));
     }, 150);
-  }, { passive: true });
+  }
+  window.addEventListener('scroll', scrolled, { passive: true });
+  // The screen can move inside the layout viewport without the layout
+  // viewport moving, and then only the visual viewport says so.
+  if (seen) seen.addEventListener('scroll', scrolled, { passive: true });
 })();''';
 }
 

@@ -84,7 +84,12 @@ String rewriteBookPage(
       '<head>\n'
       '<meta http-equiv="Content-Security-Policy" content="$_policy">\n'
       '<meta charset="utf-8">\n'
-      '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+      // Never larger than the screen: content wider than it would otherwise
+      // let the engine grow the layout viewport to zoom out on it, and leave
+      // what is on screen a window somewhere inside a viewport four screens
+      // tall — measured on a device (#128).
+      '<meta name="viewport" '
+      'content="width=device-width, initial-scale=1, minimum-scale=1">\n'
       '<style>\n${_faces(setting, faceFiles)}${_overrides(setting)}\n</style>\n'
       '</head>\n'
       '<body>\n${_Rewrite(html, localFile).run()}\n</body>\n'
