@@ -158,11 +158,26 @@ String _overrides(BookSetting setting) {
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '
       'line-height: ${_number(setting.lineHeight)} !important; }\n'
-      '${family == null ? '' : '  *, *::before, *::after, *::first-letter, '
-                '*::first-line, *::marker { '
+      '${family == null ? '' : '  ${_prose.join(', ')} { '
                 'font-family: "$family" !important; }\n'}'
       '}';
 }
+
+/// Everything a reading face is imposed on: every element and what it
+/// generates, but **code** — a face chosen for prose would take away the fixed
+/// width a listing's columns are aligned by, so code and whatever a
+/// highlighter wraps inside it keep the book's own face, or the engine's
+/// monospace where the book names none.
+const String _code = ':is(pre, code, kbd, samp, tt)';
+const String _notCode = ':not($_code, $_code *)';
+const List<String> _prose = [
+  _notCode,
+  '$_notCode::before',
+  '$_notCode::after',
+  '$_notCode::first-letter',
+  '$_notCode::first-line',
+  '$_notCode::marker',
+];
 
 const String _layer = 'patra';
 

@@ -476,6 +476,39 @@ void main() {
       expect(sans, contains('line-height: 1.2 !important'));
     });
 
+    test('the face chosen is not imposed on code', () {
+      // A reading face is for prose. Code set in it loses the fixed width its
+      // columns are aligned by — so code, and whatever a highlighter wraps
+      // inside it, keeps the book's own face or the engine's monospace.
+      final css = overrides(_rewrite('<pre><code><span>a</span></code></pre>'));
+      final rule = RegExp(
+        r'([^{}]*)\{ font-family: "' + fontLiterata + r'" !important; \}',
+      ).firstMatch(css)!;
+      const code = ':is(pre, code, kbd, samp, tt)';
+      // A selector list, split where a comma separates two selectors rather
+      // than where it separates the arguments of one.
+      final selectors = <String>[];
+      var depth = 0, from = 0;
+      final list = rule.group(1)!;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] == '(') depth++;
+        if (list[i] == ')') depth--;
+        if (list[i] == ',' && depth == 0) {
+          selectors.add(list.substring(from, i).trim());
+          from = i + 1;
+        }
+      }
+      selectors.add(list.substring(from).trim());
+      expect(selectors, hasLength(6));
+      for (final selector in selectors) {
+        expect(
+          selector,
+          startsWith(':not($code, $code *)'),
+          reason: '$selector reaches code',
+        );
+      }
+    });
+
     test("the book's own face imposes no face at all", () {
       final css = overrides(
         _rewrite(
