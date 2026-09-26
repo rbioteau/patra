@@ -804,8 +804,25 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     final record = _records[chapterId];
     final saved = record?.saved;
     if (record == null || saved == null) return;
-    if (saved.pagesRead == pagesRead && saved.pending == pending) return;
-    final updated = saved.copyWith(pagesRead: pagesRead, pending: pending);
+    // Where the reader is, kept apart from what is left to send: the server
+    // taking the one must not take the other (see [SavedChapter.place]). A
+    // count with no place beside it is the server's, mirrored; where it is
+    // not the page the copy's place is on, somebody has read on elsewhere
+    // or marked the chapter by hand, and the place is let go rather than
+    // opened at over what the server says.
+    final place = pending ?? saved.place;
+    final keepsPlace = place != null && place.pageNum == pagesRead;
+    if (saved.pagesRead == pagesRead &&
+        saved.pending == pending &&
+        (keepsPlace ? saved.place == place : saved.place == null)) {
+      return;
+    }
+    final updated = saved.copyWith(
+      pagesRead: pagesRead,
+      pending: pending,
+      place: place,
+      clearPlace: !keepsPlace,
+    );
     await _writeSavedCopy(record, updated);
   }
 

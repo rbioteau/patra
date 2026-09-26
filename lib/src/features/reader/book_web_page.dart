@@ -6,7 +6,8 @@
 /// app's own bridge and for nothing else — the page's own scripts are gone
 /// before it gets here, and its policy runs none — because the room there is
 /// to scroll is wrapped by no API at any layer, and a place in a page is a
-/// fraction of it (`BookAnchor`).
+/// block the rewrite named and a fraction down it (`BookAnchor`, #128), which
+/// only a script inside the page can measure.
 ///
 /// The engine is the platform's, reached through the official plugin: there
 /// is none on Linux, and none under a test binding, which is why the reader
@@ -15,6 +16,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -159,31 +161,16 @@ class _BookWebPageState extends State<BookWebPage> {
   /// Run by the host rather than carried by the page, which is why the
   /// page's policy, which runs no script of its own, does not govern it.
   Future<void> _bridge() async {
-    final fraction = (_here ?? BookAnchor.top).fraction;
     try {
-      await _controller.runJavaScript('''
-(function () {
-  var page = document.scrollingElement || document.documentElement;
-  function room() { return Math.max(0, page.scrollHeight - window.innerHeight); }
-  if ($fraction > 0) window.scrollTo(0, $fraction * room());
-  var settling = null;
-  window.addEventListener('scroll', function () {
-    clearTimeout(settling);
-    settling = setTimeout(function () {
-      var r = room();
-      $bookBridge.postMessage(String(r > 0 ? window.scrollY / r : 0));
-    }, 150);
-  }, { passive: true });
-})();''');
+      await _controller.runJavaScript(bookBridgeScript(_here));
     } on Object {
       // A page gone before its script ran is a page nobody is reading.
     }
   }
 
   void _heard(JavaScriptMessage message) {
-    final fraction = double.tryParse(message.message);
-    if (fraction == null || !fraction.isFinite) return;
-    final here = BookAnchor(fraction.clamp(0.0, 1.0));
+    final here = bookAnchorHeard(message.message);
+    if (here == null) return;
     _here = here;
     widget.onScroll?.call(here);
   }
@@ -202,5 +189,95 @@ class _BookWebPageState extends State<BookWebPage> {
         ),
       },
     );
+  }
+}
+
+/// The app's own script for a page opened at [anchor]: it puts the page
+/// there, and tells [bookBridge] where the reader comes to rest (#128).
+///
+/// A place is a block the rewrite named and a fraction down it, so the page
+/// is put back on the same words whatever size they are set at today. The
+/// block is the innermost one the top of the screen is in — blocks nest, and
+/// the last of them in document order to hold that line is the deepest — or,
+/// where that line falls between two, the next one down, at its top. A page
+/// with no named block at all is told as a share of its height, the form a
+/// place took before there were blocks, and a page scrolled to its very top
+/// is at its top rather than in its first block. A place written in that old
+/// form is put back as a share of the height too: it is what it meant.
+///
+/// The page is put there again once its faces have loaded, since a face is a
+/// file of its own and the words move when it arrives — unless the reader has
+/// scrolled in the meantime, in which case the page is theirs. A scroll the
+/// script makes itself is instant, whatever the book's own `scroll-behavior`
+/// says, and is never told back: only the reader's own scrolling is a place
+/// they have come to.
+@visibleForTesting
+String bookBridgeScript(BookAnchor? anchor) {
+  final told = anchor == null || anchor.isTop
+      ? 'null'
+      : jsonEncode(anchor.toJson());
+  return '''
+(function () {
+  var anchor = $told;
+  var page = document.scrollingElement || document.documentElement;
+  var mark = '$bookBlockMark';
+  var moved = false;
+  var placedAt = 0;
+  function room() { return Math.max(0, page.scrollHeight - window.innerHeight); }
+  function go(y) {
+    var to = Math.max(0, Math.min(y, room()));
+    if (Math.abs(to - window.scrollY) < 1) return;
+    placedAt = Date.now();
+    window.scrollTo({ top: to, behavior: 'instant' });
+  }
+  function place() {
+    if (!anchor || moved) return;
+    if (anchor.block === undefined) { go(anchor.at * room()); return; }
+    var block = document.querySelector('[' + mark + '="' + anchor.block + '"]');
+    if (!block) return;
+    var box = block.getBoundingClientRect();
+    go(window.scrollY + box.top + anchor.at * box.height);
+  }
+  function here() {
+    if (window.scrollY <= 0) return { at: 0 };
+    var blocks = document.querySelectorAll('[' + mark + ']');
+    var held = null, heldBox = null, next = null;
+    for (var i = 0; i < blocks.length; i++) {
+      var box = blocks[i].getBoundingClientRect();
+      if (box.height <= 0 || !isFinite(Number(blocks[i].getAttribute(mark)))) continue;
+      if (box.top <= 0 && box.bottom > 0) { held = blocks[i]; heldBox = box; }
+      else if (box.top > 0 && next === null) next = blocks[i];
+    }
+    if (held) {
+      return { block: Number(held.getAttribute(mark)), at: -heldBox.top / heldBox.height };
+    }
+    if (next) return { block: Number(next.getAttribute(mark)), at: 0 };
+    var r = room();
+    return { at: r > 0 ? window.scrollY / r : 0 };
+  }
+  place();
+  if (document.fonts) document.fonts.ready.then(place);
+  var settling = null;
+  window.addEventListener('scroll', function () {
+    // A scroll this script made is not the reader reading: the place it
+    // lands on is the place already held, and is not told back.
+    if (Date.now() - placedAt < 300) return;
+    moved = true;
+    clearTimeout(settling);
+    settling = setTimeout(function () {
+      $bookBridge.postMessage(JSON.stringify(here()));
+    }, 150);
+  }, { passive: true });
+})();''';
+}
+
+/// Where the reader has come to rest, as [bookBridgeScript] tells it, or null
+/// for a message that is not a place.
+@visibleForTesting
+BookAnchor? bookAnchorHeard(String message) {
+  try {
+    return BookAnchor.fromJson(jsonDecode(message));
+  } on FormatException {
+    return null;
   }
 }

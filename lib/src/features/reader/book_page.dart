@@ -125,43 +125,112 @@ const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
 /// A page of a book can be longer than the screen, so where a reader is is a
 /// page *and* a place within it — and the progress call Kavita's own web
 /// client uses has always carried a marker for that place, `bookScrollId`, a
-/// string the reader defines and the server hands back. That client fills it
-/// with the id of an element in the page; there is no element in a page this
-/// app draws (ADR-0010), so what travels is how far down the page the reader
-/// is.
+/// string the reader defines and the server hands back. The server stores it
+/// and reads nothing into it, so the form is this app's to choose.
 ///
-/// A fraction of the room there is to scroll, and not a number of points,
-/// because a fraction survives being read somewhere else: a text size (#75),
-/// a rotation and a differently sized window all move the words, and an
-/// offset saved at one size opens at another place entirely at another.
+/// **A block and a fraction down it** (#128): which of the blocks the rewrite
+/// pass named (`data-patra-block`, `book_rewrite.dart`) the top of the screen
+/// is in, and how far through that block. Neither is a number of points, and
+/// that is the whole of the argument: a text size (#75), a face, a rotation
+/// and a differently sized window all move the words, and the paragraph a
+/// reader is in is the one thing none of them can move. A fraction of the
+/// whole page, which is what came before, is only nearly so — a page whose
+/// words grow by a fifth does not grow by a fifth at every point of it,
+/// because its pictures do not.
+///
+/// **A bare fraction is still read, as the fraction of the page it always
+/// was**: it is already on servers and already in copies, and a reader who
+/// had a place before this change keeps one. It is also what the page the app
+/// draws itself still writes (`BookPageBody`), since that renderer is kept
+/// for development and has no blocks to name. This is the rule a renamed
+/// reading direction follows (`_legacyNames`): an old value is a value, not
+/// an error.
 @immutable
 class BookAnchor {
-  const BookAnchor(this.fraction);
+  /// A place down the page as a whole: the form written before there were
+  /// blocks to name, and the form a page with none still takes.
+  const BookAnchor(this.fraction) : block = null;
+
+  /// A place [fraction] of the way through the block the rewrite named
+  /// [block].
+  const BookAnchor.inBlock(int this.block, this.fraction);
 
   /// The top of a page: where every page with no marker opens, and where a
   /// reader arrives on a page they have just turned to.
   static const top = BookAnchor(0);
 
-  /// 0 at the top of the page, 1 at the end of it.
+  /// The block the place is in, as the rewrite numbered it, or null for a
+  /// place down the page as a whole.
+  final int? block;
+
+  /// 0 at the top of the block — or of the page, with no [block] — and 1 at
+  /// the end of it.
   final double fraction;
 
+  /// Whether this is the top of the page, which is a page with nowhere to be
+  /// put.
+  bool get isTop => block == null && fraction == 0;
+
   /// What the server is asked to remember.
-  String get id => fraction.toStringAsFixed(4);
+  ///
+  /// Written so that nothing could read it as the bare fraction it replaces,
+  /// nor as the id of an element Kavita's own web client writes there.
+  String get id {
+    final at = fraction.toStringAsFixed(4);
+    return block == null ? at : '$_mark$block@$at';
+  }
+
+  static const _mark = 'patra:';
+  static final _inBlock = RegExp('^$_mark' r'(\d+)@(\d+(?:\.\d+)?)$');
 
   /// What the server handed back, or null where it is not a place this app
   /// wrote — the web client's element ids among them, which name nothing in a
   /// page drawn here.
   static BookAnchor? from(String? id) {
     if (id == null) return null;
+    if (_inBlock.firstMatch(id) case final match?) {
+      final block = int.tryParse(match.group(1)!);
+      final fraction = double.tryParse(match.group(2)!);
+      if (block == null || fraction == null) return null;
+      return BookAnchor.inBlock(block, fraction.clamp(0.0, 1.0));
+    }
     final fraction = double.tryParse(id);
     if (fraction == null || !fraction.isFinite) return null;
     return BookAnchor(fraction.clamp(0.0, 1.0));
+  }
+
+  /// What the app's own script in a page is told and tells back
+  /// (`bookBridgeScript`): the same two numbers as [id], as JSON, since a
+  /// script reads JSON and should not have to read this app's string.
+  Map<String, Object> toJson() => {'block': ?block, 'at': fraction};
+
+  /// What the page's script told, or null for anything that is not a place.
+  static BookAnchor? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final at = json['at'];
+    if (at is! num || !at.isFinite) return null;
+    final fraction = at.toDouble().clamp(0.0, 1.0);
+    return switch (json['block']) {
+      null => BookAnchor(fraction),
+      final int block when block >= 0 => BookAnchor.inBlock(block, fraction),
+      _ => null,
+    };
   }
 
   /// Where in a page [offset] is, of the [extent] there is to scroll.
   factory BookAnchor.at(double offset, double extent) => extent <= 0
       ? BookAnchor.top
       : BookAnchor((offset / extent).clamp(0.0, 1.0));
+
+  @override
+  bool operator ==(Object other) =>
+      other is BookAnchor && other.block == block && other.fraction == fraction;
+
+  @override
+  int get hashCode => Object.hash(block, fraction);
+
+  @override
+  String toString() => 'BookAnchor($id)';
 }
 
 /// One page of a book, read top to bottom and set at the size whoever is
@@ -267,8 +336,10 @@ class _BookPageBodyState extends State<BookPageBody> {
   /// Puts the page where [anchor] is, once the words have been laid out.
   void _place(BookAnchor? anchor) {
     // Offsets are not a number until the page has been laid out, and a page
-    // that opens at its top has nowhere to be put.
-    if (anchor == null || anchor.fraction == 0) {
+    // that opens at its top has nowhere to be put. Nor has a place in a
+    // block: this renderer draws no block the rewrite named, and is kept for
+    // development alone (#128), so a place the engine wrote opens at the top.
+    if (anchor == null || anchor.isTop || anchor.block != null) {
       _placed = true;
       return;
     }

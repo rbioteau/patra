@@ -74,6 +74,7 @@ class SavedChapter {
     this.pagesRead = 0,
     this.format = MangaFormat.unknown,
     this.pending,
+    this.place,
     this.serverPages,
     this.language,
   });
@@ -114,6 +115,19 @@ class SavedChapter {
   /// a book, the place within it — recorded while the server could not be
   /// reached. Null where the two are in step.
   final PendingProgress? pending;
+
+  /// Where the reader last was in this copy — the page, and for a book the
+  /// place within it — whether or not the server has been told (#128).
+  ///
+  /// [pending] is cleared the moment the server takes it, which is right for
+  /// what is left to send and wrong for where to open: a book read online and
+  /// then opened on a train has no server to ask, and a copy that forgot its
+  /// place with the post would open it at words already read. So the copy
+  /// keeps its own record, written with every [pending] and never cleared,
+  /// and that is what a book opened with no server opens at — the same place
+  /// a streamed page would be opened at by the server. Null for a copy nobody
+  /// has read yet, and for every copy made before it was recorded.
+  final PendingProgress? place;
 
   /// What the server last said this chapter is made of, where that is not
   /// what the copy holds. Null where the two agree.
@@ -156,6 +170,8 @@ class SavedChapter {
     int? bytes,
     PendingProgress? pending,
     bool clearPending = false,
+    PendingProgress? place,
+    bool clearPlace = false,
     int? serverPages,
     bool clearServerPages = false,
   }) => SavedChapter(
@@ -170,11 +186,12 @@ class SavedChapter {
     pagesRead: pagesRead ?? this.pagesRead,
     format: format,
     language: language,
-    // Two fields that are *cleared* rather than set, which is why they do
+    // Three fields that are *cleared* rather than set, which is why they do
     // not follow the keep-what-is-there rule: what the server has taken, and
     // what it has come back into step about, are off the copy rather than
     // overwritten with another value.
     pending: clearPending ? null : pending ?? this.pending,
+    place: clearPlace ? null : place ?? this.place,
     serverPages: clearServerPages ? null : serverPages ?? this.serverPages,
   );
 
@@ -196,6 +213,7 @@ class SavedChapter {
     'format': format.id,
     'language': ?language,
     'pending': pending?.toJson(),
+    'place': ?place?.toJson(),
     'serverPages': serverPages,
   };
 
@@ -217,6 +235,7 @@ class SavedChapter {
       format: MangaFormat.fromId(json['format'] as int?),
       language: Chapter.languageFrom(json['language'] as String?),
       pending: PendingProgress.fromJson(json['pending']),
+      place: PendingProgress.fromJson(json['place']),
       serverPages: json['serverPages'] as int?,
     );
   }
@@ -755,6 +774,10 @@ class DownloadsService {
       // copy is the outbox, and a refresh that emptied it would throw away a
       // page — and a place within it — that were never posted.
       pending: chapter.pending,
+      // Where the reader was survives too, but only in the pagination it was
+      // written in: a copy stored again at another count of pages has other
+      // pages, and a place on one of the old ones is a place on nothing.
+      place: pages == chapter.pages ? chapter.place : null,
       format: chapter.format,
       language: chapter.language,
     );

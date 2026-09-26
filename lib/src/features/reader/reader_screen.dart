@@ -617,12 +617,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _savedChapter = saved;
     _serverIsPreparing = info.value?.seriesFormat == MangaFormat.pdf;
 
+    // A saved book is not opened off the copy while the server is still
+    // being asked, unless the device already knows it cannot answer: a book
+    // opens where the server says (#72), once, so opening it off the copy
+    // first would spend that once on the copy and post the copy's page back
+    // over the server's — the reader's own place, wiped by reading on
+    // another device. Offline the first failure settles it — a retry keeps
+    // the error it follows — and the copy's place is what opens (#128).
+    final askingServer =
+        info.isLoading &&
+        !info.hasValue &&
+        !info.hasError &&
+        saved?.content == ChapterContent.reflowable &&
+        !ref.watch(offlineProvider);
+
     // Offline, the stored metadata is enough to read a saved chapter — and
     // what it is made of is part of it, or a saved book would open in the
     // reader for pages that are pictures and show nothing.
     final chapter =
         info.value ??
-        (saved == null
+        (saved == null || askingServer
             ? null
             : ChapterInfo(
                 seriesId: saved.seriesId,
@@ -633,6 +647,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 title: saved.title,
                 seriesFormat: saved.format,
                 language: saved.language,
+                // Where the copy was left, which is what the server would
+                // have said: a book opened on a train opens on the words it
+                // was closed at, as a streamed one does (#128).
+                progress: switch (saved.place ?? saved.pending) {
+                  final place? => ChapterProgress(
+                    pageNum: place.pageNum,
+                    bookScrollId: place.bookScrollId,
+                  ),
+                  null => null,
+                },
               ));
 
     // A saved copy keeps the pagination it was made with (ADR-0009), so what

@@ -266,8 +266,9 @@ const Set<String> _blocks = {
   'th',
 };
 
-/// The mark the app puts on a block, which a book is not allowed to forge.
-const String _blockMark = 'data-patra-block';
+/// The mark the app puts on a block, which a book is not allowed to forge:
+/// what a reading position names (#128, `bookBridgeScript`).
+const String bookBlockMark = 'data-patra-block';
 
 final RegExp _writtenName = RegExp(r'^</?([^\s/>]+)');
 final RegExp _validName = RegExp(r'^[A-Za-z][A-Za-z0-9:_.-]*$');
@@ -380,7 +381,7 @@ class _Rewrite {
       final written = _attributeValue(local, attribute, value);
       if (written != null) kept.write(' $name="$written"');
     }
-    if (_blocks.contains(local)) kept.write(' $_blockMark="${_block++}"');
+    if (_blocks.contains(local)) kept.write(' $bookBlockMark="${_block++}"');
     kept.write(selfClosing && tag.endsWith('/>') ? '/>' : '>');
     return kept.toString();
   }

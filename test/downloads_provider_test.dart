@@ -840,6 +840,51 @@ void main() {
     expect((await _savedMeta(root, 12))['pending'], isNull);
   });
 
+  test('the copy keeps where its reader is after the server has it', () async {
+    await container.read(downloadsProvider.future);
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    const here = PendingProgress(pageNum: 2, bookScrollId: 'patra:4@0.5000');
+
+    await container
+        .read(downloadsProvider.notifier)
+        .recordProgress(12, 2, pending: here);
+    await container.read(downloadsProvider.notifier).syncPendingProgress();
+
+    // Nothing left to send — and the place is still the copy's, which is
+    // what a book opened on a train opens at (#128).
+    expect(container.read(savedChapterProvider(12))?.pending, isNull);
+    expect(container.read(savedChapterProvider(12))?.place, here);
+    expect((await _savedMeta(root, 12))['place'], {
+      'pageNum': 2,
+      'bookScrollId': 'patra:4@0.5000',
+    });
+    expect(
+      (await DownloadsService(
+        root: root,
+        profileId: _profileId,
+      ).scan())[12]?.place,
+      here,
+    );
+  });
+
+  test("the server's own count keeps a place it agrees with, and lets go of "
+      'one it does not', () async {
+    await container.read(downloadsProvider.future);
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    const here = PendingProgress(pageNum: 2, bookScrollId: 'patra:4@0.5000');
+    final notifier = container.read(downloadsProvider.notifier);
+    await notifier.recordProgress(12, 2, pending: here);
+
+    // The series screen mirroring what the server counts: the same page.
+    await notifier.recordProgress(12, 2);
+    expect(container.read(savedChapterProvider(12))?.place, here);
+
+    // Read on elsewhere, or marked by hand: the place is somebody else's.
+    await notifier.recordProgress(12, 3);
+    expect(container.read(savedChapterProvider(12))?.place, isNull);
+    expect((await _savedMeta(root, 12))['place'], isNull);
+  });
+
   test(
     'a server coming back is what sends what the copies are holding',
     () async {

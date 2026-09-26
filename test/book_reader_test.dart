@@ -19,6 +19,7 @@ import 'package:patra/src/features/reader/book_markup.dart';
 import 'package:patra/src/features/reader/book_page.dart';
 import 'package:patra/src/features/reader/book_web_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
+import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
 import 'package:patra/src/theme.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
@@ -1743,9 +1744,150 @@ void main() {
 
       // Where in the page the reader came to rest, as the app's own bridge
       // tells it: the same call, the same field.
-      engine.pageShowing(2)!.tell('0.25');
+      engine.pageShowing(2)!.tell('{"block":3,"at":0.25}');
       await settle(tester);
-      expect(posted.last, (pageNum: 2, anchor: '0.2500'));
+      expect(posted.last, (pageNum: 2, anchor: 'patra:3@0.2500'));
+    });
+
+    testWidgets('a book opens again on the words it was left at', (
+      tester,
+    ) async {
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        progressPage: 2,
+        bookScrollId: 'patra:12@0.4000',
+      );
+      await settle(tester);
+      // The page is put at the block the reader was in, however the words
+      // are laid out today — not at a share of the page's height.
+      expect(engine.pageShowing(2)!.placedAt, {'block': 12, 'at': .4});
+    });
+
+    testWidgets('a place stored as a bare fraction still opens near where it '
+        'meant', (tester) async {
+      // Written before there were blocks, and already on servers: a share
+      // of the page as a whole, which is what it meant then.
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        progressPage: 2,
+        bookScrollId: '0.5000',
+      );
+      await settle(tester);
+      expect(engine.pageShowing(2)!.placedAt, {'at': .5});
+    });
+
+    testWidgets('a book with nothing recorded is put nowhere', (tester) async {
+      await _pumpBook(tester, webEngine: true, progressPage: 2);
+      await settle(tester);
+      expect(engine.pageShowing(2)!.placedAt, isNull);
+    });
+
+    for (final (what, change) in <(String, void Function(ProviderContainer))>[
+      ('text size', (it) => it.read(bookTextSizeProvider.notifier).preview(30)),
+      (
+        'line spacing',
+        (it) => it.read(bookLineHeightProvider.notifier).preview(2),
+      ),
+      (
+        'reading face',
+        (it) {
+          final face = it.read(bookReadingFaceProvider);
+          it
+              .read(bookReadingFaceProvider.notifier)
+              .set(
+                face == ReadingFace.serif
+                    ? ReadingFace.sans
+                    : ReadingFace.serif,
+              );
+        },
+      ),
+    ]) {
+      testWidgets('changing the $what mid-page keeps the reader on the same '
+          'words', (tester) async {
+        await _pumpBook(tester, webEngine: true, progressPage: 2);
+        await settle(tester);
+        final first = engine.pageShowing(2)!;
+        first.tell('{"block":7,"at":0.6}');
+        await settle(tester);
+
+        change(
+          ProviderScope.containerOf(tester.element(find.byType(ReaderScreen))),
+        );
+        await settle(tester);
+
+        final again = engine.pageShowing(2)!;
+        final loads = identical(first, again) ? again.loads - 1 : again.loads;
+        expect(loads, greaterThan(0), reason: 'the page is set again');
+        expect(again.placedAt, {'block': 7, 'at': .6});
+      });
+    }
+
+    testWidgets('a saved copy keeps the place, after the server has it too', (
+      tester,
+    ) async {
+      final (_, posted) = await _pumpBook(
+        tester,
+        webEngine: true,
+        progressPage: 1,
+        saved: (root) => saveChapterFixture(
+          root,
+          _profileId,
+          chapterId: 7,
+          seriesId: 3,
+          title: _title,
+          pages: 3,
+          format: MangaFormat.epub,
+          pageHtml: '<p>La spice doit couler.</p>',
+        ),
+      );
+      await settle(tester);
+      engine.pageShowing(1)!.tell('{"block":4,"at":0.5}');
+      await settle(tester);
+      expect(posted.last, (pageNum: 1, anchor: 'patra:4@0.5000'));
+
+      final saved = ProviderScope.containerOf(
+        tester.element(find.byType(ReaderScreen)),
+      ).read(savedChapterProvider(7))!;
+      // The server took it, so there is nothing left to send — and the copy
+      // still knows where its reader is, for the train.
+      expect(saved.pending, isNull);
+      expect(
+        saved.place,
+        const PendingProgress(pageNum: 1, bookScrollId: 'patra:4@0.5000'),
+      );
+    });
+
+    testWidgets('a saved copy opens with no server on the words it was left '
+        'at', (tester) async {
+      await _pumpBook(
+        tester,
+        webEngine: true,
+        offline: true,
+        saved: (root) async {
+          final copy = await saveChapterFixture(
+            root,
+            _profileId,
+            chapterId: 7,
+            seriesId: 3,
+            title: _title,
+            pages: 3,
+            format: MangaFormat.epub,
+            pageHtml: '<p>La spice doit couler.</p>',
+          );
+          await DownloadsService(root: root, profileId: _profileId).writeMeta(
+            copy.copyWith(
+              place: const PendingProgress(
+                pageNum: 2,
+                bookScrollId: 'patra:9@0.2500',
+              ),
+            ),
+          );
+        },
+      );
+      await settle(tester);
+      expect(engine.pageShowing(2)!.placedAt, {'block': 9, 'at': .25});
     });
 
     testWidgets('the sides of the screen still turn the page', (tester) async {
@@ -1896,12 +2038,27 @@ class _FakeWebPage extends PlatformWebViewController {
   @override
   Future<void> loadFile(String absoluteFilePath) async {
     file = absoluteFilePath;
+    loads++;
     document = File(absoluteFilePath).readAsStringSync();
     _navigation?.onPageFinished?.call(Uri.file(absoluteFilePath).toString());
   }
 
+  /// How many times a document has been loaded into this page.
+  var loads = 0;
+
+  /// The app's own scripts, in the order they were run.
+  final scripts = <String>[];
+
+  /// Where the latest script put the page: the place it was told, as the
+  /// bridge reads it, or null for a page left at its top.
+  Object? get placedAt {
+    final told = RegExp(r'var anchor = (.*?);\n').firstMatch(scripts.last);
+    return jsonDecode(told!.group(1)!);
+  }
+
   @override
-  Future<void> runJavaScript(String javaScript) async {}
+  Future<void> runJavaScript(String javaScript) async =>
+      scripts.add(javaScript);
 }
 
 class _FakeNavigation extends PlatformNavigationDelegate {
