@@ -172,6 +172,13 @@ String _overrides(BookSetting setting, {required bool justify}) {
       'color: ${_hex(patraText)}; '
       'padding: ${_number(gutter)}px ${_number(gutter)}px '
       '${_number(4 * gutter)}px; }\n'
+      // A page is a page, not a flow: one shorter than the screen — a cover,
+      // a part's title — is set in the middle of it, as the app's own
+      // renderer sets it (`BookPageBody`), and one taller scrolls as ever.
+      // The body is the grid's one item and stays a block inside, so nothing
+      // of the book's own layout changes.
+      '  html { display: grid; align-content: center; min-height: 100vh; '
+      'box-sizing: border-box; }\n'
       '${justify ? _justified : ''}'
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '

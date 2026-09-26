@@ -733,6 +733,25 @@ void main() {
       expect(canvas, isNot(contains('!important')));
     });
 
+    test('sets a page shorter than the screen in the middle of it', () {
+      // A page is a page, not a flow: a cover hung off the top edge is a
+      // picture pinned to the ceiling — the rule the app's own renderer
+      // keeps (`BookPageBody`), which the engine has to be told.
+      final css = overrides(
+        _rewrite('<p><img src="OEBPS/images/worm.jpg"></p>'),
+      );
+      final page = RegExp(r'html \{[^}]*align-content[^}]*\}')
+          .firstMatch(css)!
+          .group(0)!;
+      expect(page, contains('display: grid'));
+      expect(page, contains('align-content: center'));
+      // The screen's height, room for the counter included: never taller, or
+      // a page that fits would scroll.
+      expect(page, contains('min-height: 100vh'));
+      expect(page, contains('box-sizing: border-box'));
+      expect(page, isNot(contains('!important')));
+    });
+
     test("does not outrank a book's own colours", () {
       final document = _rewrite(
         '<style>p { color: #333; background: white }</style><p>a</p>',
