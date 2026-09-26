@@ -789,24 +789,54 @@ void main() {
 
     test('justifies and hyphenates where the language is known', () {
       final document = _rewrite('<p>a</p>', language: 'fr');
-      expect(declarations(document, 'text-align'), [
-        'html { text-align: justify }',
-      ]);
-      expect(declarations(document, 'hyphens'), ['html { hyphens: auto }']);
+      expect(
+        declarations(document, 'text-align'),
+        contains('html { text-align: justify }'),
+      );
+      expect(
+        declarations(document, 'hyphens'),
+        contains('html { hyphens: auto }'),
+      );
       // WebKit — the engine iOS embeds — reads the property only prefixed.
-      expect(declarations(document, '-webkit-hyphens'), [
-        'html { -webkit-hyphens: auto }',
-      ]);
+      expect(
+        declarations(document, '-webkit-hyphens'),
+        contains('html { -webkit-hyphens: auto }'),
+      );
     });
 
     test('leaves the page ragged right where the language is not known', () {
       // Without a dictionary, justifying opens the rivers #119 measured; and
       // an engine told no language hyphenates nothing on its own.
-      for (final language in [null, '', 'fr" onload="alert(1)']) {
+      // `und`, `mul` and `zxx` are tags that say the language is not known,
+      // is several, or is none: no dictionary answers any of them.
+      for (final language in [
+        null,
+        '',
+        'fr" onload="alert(1)',
+        'und',
+        'MUL',
+        'zxx',
+      ]) {
         final document = _rewrite('<p>a</p>', language: language);
         expect(declarations(document, 'text-align'), isEmpty);
         expect(declarations(document, 'hyphens'), isEmpty);
         expect(declarations(document, '-webkit-hyphens'), isEmpty);
+      }
+    });
+
+    test('leaves code unbroken and unstretched', () {
+      // A hyphen drawn inside an identifier is a character the listing does
+      // not have, and a stretched line of code is columns out of line.
+      final document = _rewrite('<pre><code>a</code></pre>', language: 'en');
+      for (final (property, value) in [
+        ('text-align', 'start'),
+        ('hyphens', 'manual'),
+        ('-webkit-hyphens', 'manual'),
+      ]) {
+        expect(
+          declarations(document, property),
+          contains(':is(pre, code, kbd, samp, tt) { $property: $value }'),
+        );
       }
     });
 
@@ -821,7 +851,10 @@ void main() {
         // A default, never an override, and nowhere but on the root.
         for (final property in ['text-align', 'hyphens', '-webkit-hyphens']) {
           for (final declaration in declarations(document, property)) {
-            expect(declaration, startsWith('html {'));
+            expect(
+              declaration,
+              anyOf(startsWith('html {'), startsWith(':is(pre, code')),
+            );
             expect(declaration, isNot(contains('!important')));
           }
         }

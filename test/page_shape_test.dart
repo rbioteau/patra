@@ -97,10 +97,8 @@ Future<void> _settle() =>
 
 /// The chapter asked about, and the shelf it is on: the pair the chain is a
 /// family of, written out once so a test names a series rather than a record.
-ChapterDirectionKey _of(int seriesId, {int libraryId = 1}) => (
-  seriesId: seriesId,
-  libraryId: libraryId,
-);
+ChapterDirectionKey _of(int seriesId, {int libraryId = 1}) =>
+    (seriesId: seriesId, libraryId: libraryId);
 
 /// A container that has measured [chapters] and holds [shelves] in its
 /// catalogue — which is where the app is the moment a chapter's `chapter-info`
@@ -320,8 +318,7 @@ void main() {
       }
     });
 
-    test('the type is the shelf\u2019s, never the one the chapter states',
-        () async {
+    test('the type is the shelf\u2019s, never the one the chapter states', () async {
       // #120, and the whole of it: `chapter-info` declares a library type and
       // Kavita has never populated it, so what a chapter says is the enum's
       // default \u2014 manga \u2014 for every library there is. Nothing here
@@ -332,7 +329,9 @@ void main() {
         [
           _chapter(pages: [_page, _page, _page]),
         ],
-        shelves: const [Library(id: 1, name: 'Comics', type: LibraryType.comic)],
+        shelves: const [
+          Library(id: 1, name: 'Comics', type: LibraryType.comic),
+        ],
       );
       expect(
         comics.read(detectedDirectionProvider(_of(3))),
@@ -349,20 +348,16 @@ void main() {
       );
     });
 
-    test('a shelf the device has not learned yet is no witness at all',
-        () async {
+    test('a shelf the device has not learned yet is no witness at all', () async {
       // The rung stands down rather than guessing: manga is the one type that
       // carries a direction, so falling back to it would be falling back to
       // right-to-left for every work whose shelf has not arrived. Nothing is
       // fetched to find out \u2014 opening a chapter is not the moment to fill
       // a household's catalogue \u2014 so the answer is simply nothing, and
       // the chain reaches the built-in left-to-right that nobody chose.
-      final container = await _reading(
-        [
-          _chapter(pages: [_page, _page, _page]),
-        ],
-        shelves: const [],
-      );
+      final container = await _reading([
+        _chapter(pages: [_page, _page, _page]),
+      ], shelves: const []);
       expect(container.read(detectedDirectionProvider(_of(3))), isNull);
 
       final resolved = container.read(chapterDirectionProvider(_of(3)));
@@ -370,50 +365,48 @@ void main() {
       expect(resolved.source, ReadingDirectionSource.builtIn);
     });
 
-    test('the list arriving is what a rung that stood down was waiting for',
-        () async {
-      // A device that has never stored a library list — a first launch, and a
-      // link that opens a chapter before Home has asked for one. The rung
-      // stands down, and then the list lands: it has to answer again.
-      //
-      // The listener is the assertion as much as the reads are. The rung is
-      // kept for the session, so a stale "the device knows no such library"
-      // is not merely held until the reader closes — nothing would ever drop
-      // it, and a manga library would go on reading left to right until the
-      // app was restarted. What corrects it is the store saying its library
-      // list moved (`librariesRevisionProvider`), and this holds the rung
-      // open across that the way an open reader does.
-      final container = await _reading(
-        [
+    test(
+      'the list arriving is what a rung that stood down was waiting for',
+      () async {
+        // A device that has never stored a library list — a first launch, and a
+        // link that opens a chapter before Home has asked for one. The rung
+        // stands down, and then the list lands: it has to answer again.
+        //
+        // The listener is the assertion as much as the reads are. The rung is
+        // kept for the session, so a stale "the device knows no such library"
+        // is not merely held until the reader closes — nothing would ever drop
+        // it, and a manga library would go on reading left to right until the
+        // app was restarted. What corrects it is the store saying its library
+        // list moved (`librariesRevisionProvider`), and this holds the rung
+        // open across that the way an open reader does.
+        final container = await _reading([
           _chapter(pages: [_page, _page, _page]),
-        ],
-        shelves: const [],
-      );
-      final open = container.listen(
-        detectedDirectionProvider(_of(3)),
-        (_, _) {},
-      );
-      addTearDown(open.close);
-      // Settled first, or the device's own read of the spine lands *after*
-      // the write and re-answers the rung by itself — which would pass this
-      // test with nothing watching the list at all.
-      await _settle();
-      expect(container.read(detectedDirectionProvider(_of(3))), isNull);
+        ], shelves: const []);
+        final open = container.listen(
+          detectedDirectionProvider(_of(3)),
+          (_, _) {},
+        );
+        addTearDown(open.close);
+        // Settled first, or the device's own read of the spine lands *after*
+        // the write and re-answers the rung by itself — which would pass this
+        // test with nothing watching the list at all.
+        await _settle();
+        expect(container.read(detectedDirectionProvider(_of(3))), isNull);
 
-      await container.read(catalogueStoreProvider).putLibraries(const [
-        _mangaShelf,
-      ]);
-      await _settle();
+        await container.read(catalogueStoreProvider).putLibraries(const [
+          _mangaShelf,
+        ]);
+        await _settle();
 
-      expect(
-        container.read(detectedDirectionProvider(_of(3))),
-        ReadingDirection.rightToLeft,
-        reason: 'the shelf arrived, and the rung has a witness again',
-      );
-    });
+        expect(
+          container.read(detectedDirectionProvider(_of(3))),
+          ReadingDirection.rightToLeft,
+          reason: 'the shelf arrived, and the rung has a witness again',
+        );
+      },
+    );
 
-    test('a shelf the device holds, but not this one, is no witness either',
-        () async {
+    test('a shelf the device holds, but not this one, is no witness either', () async {
       // The same refusal by the other road: the list arrived and this library
       // is not in it, which is what a profile losing access to a library looks
       // like from here.
@@ -434,7 +427,9 @@ void main() {
         [
           _chapter(pages: [_panel, _panel, _panel]),
         ],
-        shelves: const [Library(id: 1, name: 'Comics', type: LibraryType.comic)],
+        shelves: const [
+          Library(id: 1, name: 'Comics', type: LibraryType.comic),
+        ],
       );
       expect(
         container.read(detectedDirectionProvider(_of(3))),
@@ -445,12 +440,9 @@ void main() {
     test('a vertical work needs no shelf to be vertical', () async {
       // And so the one half of the guess that survives a library list nobody
       // has loaded: the pages were measured, and they answer on their own.
-      final container = await _reading(
-        [
-          _chapter(pages: [_panel, _panel, _panel]),
-        ],
-        shelves: const [],
-      );
+      final container = await _reading([
+        _chapter(pages: [_panel, _panel, _panel]),
+      ], shelves: const []);
       expect(
         container.read(detectedDirectionProvider(_of(3))),
         ReadingDirection.verticalScroll,
@@ -499,9 +491,7 @@ void main() {
       // nothing is measured of it at all and what it declared is the only
       // evidence there is.
       final container = await _reading(
-        [
-          _chapter(format: MangaFormat.epub),
-        ],
+        [_chapter(format: MangaFormat.epub)],
         shelves: const [Library(id: 1, name: 'Books', type: LibraryType.book)],
         declared: {3: ReadingDirection.rightToLeft},
       );
@@ -547,47 +537,47 @@ void main() {
       expect(container.read(detectedDirectionProvider(_of(9))), isNull);
     });
 
-    test('a book in a manga library is not turned by the shelf it is on',
-        () async {
-      // The regression #118 shipped with and the reason this guard exists.
-      // A book has no page dimensions for `chapter-info` to report, so a
-      // shape recorded for one says `isVertical: false` about a work nothing
-      // was measured of — and the library type beside it then speaks. But the
-      // type witnesses a convention about how *scans* are bound, and an epub
-      // shelved in a manga library is not bound at all: every book on that
-      // shelf opened right-to-left with nothing in it saying so.
-      final container = await _reading([
-        _chapter(format: MangaFormat.epub),
-      ]);
+    test(
+      'a book in a manga library is not turned by the shelf it is on',
+      () async {
+        // The regression #118 shipped with and the reason this guard exists.
+        // A book has no page dimensions for `chapter-info` to report, so a
+        // shape recorded for one says `isVertical: false` about a work nothing
+        // was measured of — and the library type beside it then speaks. But the
+        // type witnesses a convention about how *scans* are bound, and an epub
+        // shelved in a manga library is not bound at all: every book on that
+        // shelf opened right-to-left with nothing in it saying so.
+        final container = await _reading([_chapter(format: MangaFormat.epub)]);
 
-      expect(container.read(detectedDirectionProvider(_of(3))), isNull);
-      expect(
-        container.read(pageShapesProvider)[3],
-        isNull,
-        reason: 'a book measures nothing, so nothing is recorded for it',
-      );
-    });
-
-    test('a book that declares itself is turned, whatever shelf it is on',
-        () async {
-      // The other half: the guard refuses a *measurement*, never the book's
-      // own word.
-      for (final type in [LibraryType.book, LibraryType.manga]) {
-        final container = await _reading(
-          [
-            _chapter(format: MangaFormat.epub),
-          ],
-          shelves: [Library(id: 1, name: 'Shelf', type: type)],
-          declared: {3: ReadingDirection.rightToLeft},
-        );
-
+        expect(container.read(detectedDirectionProvider(_of(3))), isNull);
         expect(
-          container.read(detectedDirectionProvider(_of(3))),
-          ReadingDirection.rightToLeft,
-          reason: '$type',
+          container.read(pageShapesProvider)[3],
+          isNull,
+          reason: 'a book measures nothing, so nothing is recorded for it',
         );
-      }
-    });
+      },
+    );
+
+    test(
+      'a book that declares itself is turned, whatever shelf it is on',
+      () async {
+        // The other half: the guard refuses a *measurement*, never the book's
+        // own word.
+        for (final type in [LibraryType.book, LibraryType.manga]) {
+          final container = await _reading(
+            [_chapter(format: MangaFormat.epub)],
+            shelves: [Library(id: 1, name: 'Shelf', type: type)],
+            declared: {3: ReadingDirection.rightToLeft},
+          );
+
+          expect(
+            container.read(detectedDirectionProvider(_of(3))),
+            ReadingDirection.rightToLeft,
+            reason: '$type',
+          );
+        }
+      },
+    );
 
     test('a series holding both scans and words keeps what its scans '
         'measured', () async {
@@ -622,9 +612,7 @@ void main() {
       // detected rung, so a series or a library somebody has set stands above
       // it. A guess must never beat a choice (ADR-0007).
       final container = await _reading(
-        [
-          _chapter(format: MangaFormat.epub),
-        ],
+        [_chapter(format: MangaFormat.epub)],
         shelves: const [Library(id: 1, name: 'Books', type: LibraryType.book)],
         declared: {3: ReadingDirection.rightToLeft},
       );
@@ -649,9 +637,7 @@ void main() {
 
     test("a library's own direction outranks what the book declared", () async {
       final container = await _reading(
-        [
-          _chapter(format: MangaFormat.epub),
-        ],
+        [_chapter(format: MangaFormat.epub)],
         shelves: const [Library(id: 1, name: 'Books', type: LibraryType.book)],
         declared: {3: ReadingDirection.rightToLeft},
       );

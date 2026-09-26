@@ -978,7 +978,8 @@ void main() {
         .report(AppLifecycleState.paused);
     await _waitFor(
       () =>
-          container.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
+          container.read(downloadsProvider).value?.pausedByApp.contains(12) ??
+          false,
     );
 
     final state = container.read(downloadsProvider).value!;
@@ -1006,7 +1007,8 @@ void main() {
     final running = await beginRunning(mine, holdPages: {1, 2});
     mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
     await _waitFor(
-      () => mine.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
+      () =>
+          mine.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
     );
     running.gate.complete();
     await running.saving;
@@ -1039,7 +1041,8 @@ void main() {
     expect(
       stopped.interrupted,
       isEmpty,
-      reason: 'the cancelled request is how a pause takes effect, not a '
+      reason:
+          'the cancelled request is how a pause takes effect, not a '
           'failure of its own',
     );
     running.gate.complete();
@@ -1154,7 +1157,11 @@ void main() {
 
     expect(state.saved, contains(12));
     expect(state.pausedByApp, isEmpty, reason: 'it is on the device, not here');
-    expect(state.awaitingResume, isEmpty, reason: 'so nothing is asked about it');
+    expect(
+      state.awaitingResume,
+      isEmpty,
+      reason: 'so nothing is asked about it',
+    );
     await pumpEventQueue();
     expect(adapter.requestedPages, isEmpty);
   });
@@ -1166,7 +1173,8 @@ void main() {
         .report(AppLifecycleState.paused);
     await _waitFor(
       () =>
-          container.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
+          container.read(downloadsProvider).value?.pausedByApp.contains(12) ??
+          false,
     );
     running.gate.complete();
     await running.saving;
@@ -1205,7 +1213,8 @@ void main() {
         .report(AppLifecycleState.paused);
     await _waitFor(
       () =>
-          container.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
+          container.read(downloadsProvider).value?.pausedByApp.contains(12) ??
+          false,
     );
     running.gate.complete();
     await running.saving;
@@ -1255,7 +1264,9 @@ void main() {
       // lives in is thrown away as soon as somebody else enters.
       await mine.read(authProvider.notifier).switchProfile();
       await _waitFor(
-        () => mine.read(downloadsProvider).value?.pausedByApp.contains(12) ?? false,
+        () =>
+            mine.read(downloadsProvider).value?.pausedByApp.contains(12) ??
+            false,
       );
       gate.complete();
       await saving;

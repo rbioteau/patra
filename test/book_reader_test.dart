@@ -1761,7 +1761,7 @@ void main() {
       // Nothing inferred from the interface, and nothing to justify with.
       expect(document, contains('<html>'));
       expect(document, isNot(contains('text-align: justify')));
-      expect(document, isNot(contains('hyphens')));
+      expect(document, isNot(contains('hyphens: auto')));
     });
 
     testWidgets("a page's pictures are fetched by the app, and drawn from "

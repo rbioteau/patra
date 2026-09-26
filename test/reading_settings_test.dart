@@ -84,7 +84,8 @@ void main() {
         expect(
           entry,
           isNotNull,
-          reason: '${resolved.family} is offered but not bundled, so it would be '
+          reason:
+              '${resolved.family} is offered but not bundled, so it would be '
               'drawn in the default face with nothing saying so',
         );
         expect(entry!.assets, isNotEmpty);
@@ -105,7 +106,8 @@ void main() {
         expect(
           files.length,
           entry.italic ? 2 : 1,
-          reason: '${resolved.family} ships one file per family, plus its '
+          reason:
+              '${resolved.family} ships one file per family, plus its '
               'italic where it has one',
         );
       }
@@ -141,37 +143,40 @@ void main() {
       );
     });
 
-    test('resolve uses the book family when it has one, carrying its italic', () {
-      const bookFamily = 'CustomBookFont';
-      final book = ReadingFace.book.resolve(
-        bookFamily: bookFamily,
-        bookItalic: true,
-      );
-      expect(
-        book.family,
-        bookFamily,
-        reason: 'the book\'s own face uses the family the book shipped',
-      );
-      expect(
-        book.canSetItalic,
-        isTrue,
-        reason: 'the book\'s italic is carried through when the book has one',
-      );
+    test(
+      'resolve uses the book family when it has one, carrying its italic',
+      () {
+        const bookFamily = 'CustomBookFont';
+        final book = ReadingFace.book.resolve(
+          bookFamily: bookFamily,
+          bookItalic: true,
+        );
+        expect(
+          book.family,
+          bookFamily,
+          reason: 'the book\'s own face uses the family the book shipped',
+        );
+        expect(
+          book.canSetItalic,
+          isTrue,
+          reason: 'the book\'s italic is carried through when the book has one',
+        );
 
-      final bookNoItalic = ReadingFace.book.resolve(
-        bookFamily: bookFamily,
-        bookItalic: false,
-      );
-      expect(
-        bookNoItalic.family,
-        bookFamily,
-        reason: 'the book\'s own face still uses the book family',
-      );
-      expect(
-        bookNoItalic.canSetItalic,
-        isFalse,
-        reason: 'without a book italic, emphasis falls back to the roman',
-      );
-    });
+        final bookNoItalic = ReadingFace.book.resolve(
+          bookFamily: bookFamily,
+          bookItalic: false,
+        );
+        expect(
+          bookNoItalic.family,
+          bookFamily,
+          reason: 'the book\'s own face still uses the book family',
+        );
+        expect(
+          bookNoItalic.canSetItalic,
+          isFalse,
+          reason: 'without a book italic, emphasis falls back to the roman',
+        );
+      },
+    );
   });
 }

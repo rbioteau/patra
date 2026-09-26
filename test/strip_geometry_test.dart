@@ -128,7 +128,9 @@ Future<ScrollController> _pump(
   final controller = ScrollController();
   addTearDown(controller.dispose);
   return tester
-      .pumpWidget(_strip(controller, width, widthFactor: widthFactor, images: images))
+      .pumpWidget(
+        _strip(controller, width, widthFactor: widthFactor, images: images),
+      )
       .then((_) => tester.pump())
       .then((_) => controller);
 }
@@ -293,7 +295,10 @@ void main() {
       await tester.pump();
 
       // The page it named, painted where it was painted before.
-      expect(_topOf(tester, anchor.page), moreOrLessEquals(before, epsilon: 0.5));
+      expect(
+        _topOf(tester, anchor.page),
+        moreOrLessEquals(before, epsilon: 0.5),
+      );
       // And the point in it that was named is at the top of the screen.
       final rect = tester.getRect(find.byKey(ValueKey(anchor.page)));
       expect(
@@ -339,37 +344,38 @@ void main() {
     const factors = [0.5, 0.7, 1.0];
 
     for (final factor in factors) {
-      testWidgets('at $factor every page is as wide and as tall as the factor says', (
-        tester,
-      ) async {
-        final controller = await _pump(tester, widthFactor: factor);
-        final geometry = _geometry(_screenWidth, widthFactor: factor);
+      testWidgets(
+        'at $factor every page is as wide and as tall as the factor says',
+        (tester) async {
+          final controller = await _pump(tester, widthFactor: factor);
+          final geometry = _geometry(_screenWidth, widthFactor: factor);
 
-        for (final page in [0, 1]) {
-          final size = tester.getSize(find.byKey(ValueKey(page)));
-          expect(
-            size.width,
-            moreOrLessEquals(geometry.width, epsilon: 0.5),
-            reason: 'page $page',
-          );
-          expect(
-            size.height,
-            moreOrLessEquals(_heightAt(page) * factor, epsilon: 0.5),
-            reason: 'page $page',
-          );
-        }
+          for (final page in [0, 1]) {
+            final size = tester.getSize(find.byKey(ValueKey(page)));
+            expect(
+              size.width,
+              moreOrLessEquals(geometry.width, epsilon: 0.5),
+              reason: 'page $page',
+            );
+            expect(
+              size.height,
+              moreOrLessEquals(_heightAt(page) * factor, epsilon: 0.5),
+              reason: 'page $page',
+            );
+          }
 
-        // The three pages whose dimensions differ: reached by seeking, since
-        // a lazy sliver only builds what is near the viewport.
-        for (final page in [7, 100, 150]) {
-          await _seek(tester, controller, geometry, page);
-          expect(
-            tester.getSize(find.byKey(ValueKey(page))).height,
-            moreOrLessEquals(_heightAt(page) * factor, epsilon: 0.5),
-            reason: 'page $page',
-          );
-        }
-      });
+          // The three pages whose dimensions differ: reached by seeking, since
+          // a lazy sliver only builds what is near the viewport.
+          for (final page in [7, 100, 150]) {
+            await _seek(tester, controller, geometry, page);
+            expect(
+              tester.getSize(find.byKey(ValueKey(page))).height,
+              moreOrLessEquals(_heightAt(page) * factor, epsilon: 0.5),
+              reason: 'page $page',
+            );
+          }
+        },
+      );
 
       testWidgets('at $factor the tops and the whole strip are exact', (
         tester,
@@ -402,7 +408,9 @@ void main() {
         );
       });
 
-      testWidgets('at $factor a seek lands on the page it asked for', (tester) async {
+      testWidgets('at $factor a seek lands on the page it asked for', (
+        tester,
+      ) async {
         final controller = await _pump(tester, widthFactor: factor);
         final geometry = _geometry(_screenWidth, widthFactor: factor);
 
@@ -417,7 +425,9 @@ void main() {
         }
       });
 
-      testWidgets('at $factor the strip sits centred on the canvas', (tester) async {
+      testWidgets('at $factor the strip sits centred on the canvas', (
+        tester,
+      ) async {
         await _pump(tester, widthFactor: factor);
         final geometry = _geometry(_screenWidth, widthFactor: factor);
         final rect = _rectOf(tester, 0);

@@ -38,9 +38,8 @@ Future<void> _pumpLogin(
         home: Builder(
           builder: (context) => MediaQuery(
             // What the platform reports while the keyboard is up.
-            data: MediaQuery.of(
-              context,
-            ).copyWith(viewInsets: EdgeInsets.only(bottom: keyboard)),
+            data: MediaQuery.of(context)
+                .copyWith(viewInsets: EdgeInsets.only(bottom: keyboard)),
             child: LoginScreen(profileId: profileId),
           ),
         ),
@@ -88,8 +87,10 @@ void main() {
   ) async {
     await _pumpLogin(tester);
 
-    expect(_field(tester, 'SERVER ADDRESS').textInputAction,
-        TextInputAction.next);
+    expect(
+      _field(tester, 'SERVER ADDRESS').textInputAction,
+      TextInputAction.next,
+    );
     expect(_field(tester, 'USERNAME').textInputAction, TextInputAction.next);
     // The last field submits, so the button never has to be found under a
     // keyboard.

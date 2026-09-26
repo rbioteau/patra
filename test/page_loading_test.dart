@@ -18,10 +18,7 @@ class _Arrives extends ImageProvider<_Arrives> {
       SynchronousFuture<_Arrives>(this);
 
   @override
-  ImageStreamCompleter loadImage(
-    _Arrives key,
-    ImageDecoderCallback decode,
-  ) =>
+  ImageStreamCompleter loadImage(_Arrives key, ImageDecoderCallback decode) =>
       OneFrameImageStreamCompleter(_drawn());
 
   static Future<ImageInfo> _drawn() async {
@@ -47,29 +44,27 @@ class _NeverArrives extends ImageProvider<_NeverArrives> {
   ImageStreamCompleter loadImage(
     _NeverArrives key,
     ImageDecoderCallback decode,
-  ) =>
-      OneFrameImageStreamCompleter(Completer<ImageInfo>().future);
+  ) => OneFrameImageStreamCompleter(Completer<ImageInfo>().future);
 }
 
 Future<void> pumpPicture(
   WidgetTester tester, {
   required ImageProvider<Object> image,
-}) =>
-    tester.pumpWidget(
-      MaterialApp(
-        theme: patraTheme(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: PageImage(
-            image: image,
-            fit: BoxFit.contain,
-            alignment: Alignment.center,
-            explain: false,
-          ),
-        ),
+}) => tester.pumpWidget(
+  MaterialApp(
+    theme: patraTheme(),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Scaffold(
+      body: PageImage(
+        image: image,
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
+        explain: false,
       ),
-    );
+    ),
+  ),
+);
 
 void main() {
   Future<void> pump(WidgetTester tester, {required bool explain}) =>

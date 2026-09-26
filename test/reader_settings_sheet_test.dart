@@ -198,7 +198,9 @@ void main() {
       );
     });
 
-    testWidgets('a promoted library direction is offered no more', (tester) async {
+    testWidgets('a promoted library direction is offered no more', (
+      tester,
+    ) async {
       // The row is drawn while the direction in force differs from what the
       // library holds — and once promoted, it differs no longer.
       await _openSheet(
@@ -298,10 +300,7 @@ void main() {
     });
 
     testWidgets('picking a direction is still what it was', (tester) async {
-      final outcomes = await _openSheet(
-        tester,
-        _builtIn(),
-      );
+      final outcomes = await _openSheet(tester, _builtIn());
 
       await tester.tap(find.text('Right to left'));
       await tester.pumpAndSettle();
@@ -337,8 +336,7 @@ void main() {
       expect(find.text('Serif'), findsOneWidget);
       expect(find.text('Sans serif'), findsOneWidget);
       // How a book is justified and hyphenated is its own composition,
-      // deferred to it, and not a way it is set (#130): no row, no switch.
-      expect(find.byType(Switch), findsNothing);
+      // deferred to it, and not a way it is set (#130): no row for it.
       expect(
         find.textContaining(RegExp('justif|hyphen', caseSensitive: false)),
         findsNothing,

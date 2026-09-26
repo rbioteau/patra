@@ -109,13 +109,17 @@ const String _policy =
     'media-src file: data:';
 
 /// A BCP-47 tag in the shape one has, or null: the language is written into
-/// an attribute, so a value that is not one is not written at all.
+/// an attribute, so a value that is not one is not written at all. Nor is a
+/// tag that names no language — `und`etermined, `mul`tiple, `zxx` for none —
+/// since no dictionary answers it and a page justified in it opens rivers.
 String? _language(String? language) {
   final tag = language?.trim();
   if (tag == null) return null;
-  return RegExp(r'^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$').hasMatch(tag)
-      ? tag
-      : null;
+  if (!RegExp(r'^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$').hasMatch(tag)) {
+    return null;
+  }
+  final primary = tag.split('-').first.toLowerCase();
+  return const {'und', 'mul', 'zxx'}.contains(primary) ? null : tag;
 }
 
 /// The family the reader chose to impose, or null where the choice was the
@@ -168,9 +172,7 @@ String _overrides(BookSetting setting, {required bool justify}) {
       'color: ${_hex(patraText)}; '
       'padding: ${_number(gutter)}px ${_number(gutter)}px '
       '${_number(4 * gutter)}px; }\n'
-      '${justify ? '  html { text-align: justify; hyphens: auto; '
-                // WebKit, which iOS embeds, reads it only prefixed.
-                '-webkit-hyphens: auto; }\n' : ''}'
+      '${justify ? _justified : ''}'
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '
       'line-height: ${_number(setting.lineHeight)} !important; }\n'
@@ -194,6 +196,16 @@ const List<String> _prose = [
   '$_notCode::first-line',
   '$_notCode::marker',
 ];
+
+/// The page justified and hyphenated, and code neither: a hyphen drawn
+/// inside an identifier is a character the listing does not have, and a
+/// stretched line of code is columns out of line. WebKit, which iOS embeds,
+/// reads hyphenation prefixed.
+const String _justified =
+    '  html { text-align: justify; hyphens: auto; '
+    '-webkit-hyphens: auto; }\n'
+    '  $_code { text-align: start; hyphens: manual; '
+    '-webkit-hyphens: manual; }\n';
 
 const String _layer = 'patra';
 

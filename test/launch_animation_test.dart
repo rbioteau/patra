@@ -63,7 +63,9 @@ void main() {
   setUp(() => _Home.taps = 0);
 
   group('the launch animation on screen', () {
-    testWidgets('the app is mounted and laid out underneath it', (tester) async {
+    testWidgets('the app is mounted and laid out underneath it', (
+      tester,
+    ) async {
       await tester.pumpWidget(_app());
       await tester.pump();
 
@@ -74,7 +76,9 @@ void main() {
       expect(find.text('home'), findsOneWidget);
     });
 
-    testWidgets('it fades out on its own and leaves the app bare', (tester) async {
+    testWidgets('it fades out on its own and leaves the app bare', (
+      tester,
+    ) async {
       await tester.pumpWidget(_app());
       await tester.pump();
 
@@ -94,7 +98,9 @@ void main() {
       expect(_Home.taps, 0);
     });
 
-    testWidgets('a tap sends it home rather than cutting it out', (tester) async {
+    testWidgets('a tap sends it home rather than cutting it out', (
+      tester,
+    ) async {
       await tester.pumpWidget(_app());
       await tester.pump(const Duration(milliseconds: 600));
 
@@ -106,7 +112,6 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(_splash(), findsNothing);
-
     });
 
     testWidgets('less motion means no launch animation at all', (tester) async {
@@ -136,10 +141,8 @@ void main() {
         MaterialApp(
           home: ValueListenableBuilder<bool>(
             valueListenable: ready,
-            builder: (_, isReady, _) => PatraLaunch(
-              ready: isReady,
-              child: const SizedBox.expand(),
-            ),
+            builder: (_, isReady, _) =>
+                PatraLaunch(ready: isReady, child: const SizedBox.expand()),
           ),
         ),
       );

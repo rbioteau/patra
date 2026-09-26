@@ -144,7 +144,8 @@ void main() {
     });
 
     test('a page with empty <style> returns null', () {
-      const html = '<html><head><style></style></head><body><p>Hello</p></body></html>';
+      const html =
+          '<html><head><style></style></head><body><p>Hello</p></body></html>';
 
       final face = parseBookFace(html);
 
@@ -152,7 +153,8 @@ void main() {
     });
 
     test('a page with style but no @font-face returns null', () {
-      const html = '<html><head><style>body { color: red; }</style></head><body><p>Hello</p></body></html>';
+      const html =
+          '<html><head><style>body { color: red; }</style></head><body><p>Hello</p></body></html>';
 
       final face = parseBookFace(html);
 
@@ -272,7 +274,9 @@ void main() {
       // `body p{direction:rtl}` scoped twice over. Every paragraph of the
       // page is the page's prose, which is what the reading is about.
       expect(
-        parseBookDirection(page('.book-content .book-content p { direction: rtl; }')),
+        parseBookDirection(
+          page('.book-content .book-content p { direction: rtl; }'),
+        ),
         ReadingDirection.rightToLeft,
       );
     });
@@ -284,32 +288,43 @@ void main() {
       // at all — while the class it asked for is on the wrapper itself.
       expect(
         parseBookDirection(
-          page('.book-content .book-content.rtl { direction: rtl; }', wrapper: 'book-content rtl'),
+          page(
+            '.book-content .book-content.rtl { direction: rtl; }',
+            wrapper: 'book-content rtl',
+          ),
         ),
         ReadingDirection.rightToLeft,
       );
     });
 
-    test('an inert rule on a class the wrapper does not carry is not a reading', () {
-      // The same rule with nothing to corroborate it: a class used on one
-      // element of an otherwise left-to-right book — a single quotation in
-      // Arabic — must not turn the book.
-      expect(
-        parseBookDirection(page('.book-content .rtl { direction: rtl; }')),
-        isNull,
-      );
-    });
+    test(
+      'an inert rule on a class the wrapper does not carry is not a reading',
+      () {
+        // The same rule with nothing to corroborate it: a class used on one
+        // element of an otherwise left-to-right book — a single quotation in
+        // Arabic — must not turn the book.
+        expect(
+          parseBookDirection(page('.book-content .rtl { direction: rtl; }')),
+          isNull,
+        );
+      },
+    );
 
-    test('a declaration is not a match: an inert html[dir=rtl] rule says nothing', () {
-      // `PrepareFinalHtml` keeps no `<html>` and no attribute but `src` and
-      // `href`, so this rule applies to nothing — and reading "is
-      // `direction:rtl` anywhere in the stylesheet" is exactly what would
-      // over-trigger on it.
-      expect(
-        parseBookDirection(page('.book-content html[dir=rtl] { direction: rtl; }')),
-        isNull,
-      );
-    });
+    test(
+      'a declaration is not a match: an inert html[dir=rtl] rule says nothing',
+      () {
+        // `PrepareFinalHtml` keeps no `<html>` and no attribute but `src` and
+        // `href`, so this rule applies to nothing — and reading "is
+        // `direction:rtl` anywhere in the stylesheet" is exactly what would
+        // over-trigger on it.
+        expect(
+          parseBookDirection(
+            page('.book-content html[dir=rtl] { direction: rtl; }'),
+          ),
+          isNull,
+        );
+      },
+    );
 
     test('a direction on one run of words is not a direction for the book', () {
       expect(
@@ -340,7 +355,9 @@ void main() {
       );
       expect(
         parseBookDirection(
-          page('@supports (direction: rtl) { .book-content { direction: rtl; } }'),
+          page(
+            '@supports (direction: rtl) { .book-content { direction: rtl; } }',
+          ),
         ),
         isNull,
       );
@@ -359,7 +376,10 @@ void main() {
     });
 
     test('a page with no stylesheet says nothing', () {
-      expect(parseBookDirection('<div class="book-content"><p>Hello</p></div>'), isNull);
+      expect(
+        parseBookDirection('<div class="book-content"><p>Hello</p></div>'),
+        isNull,
+      );
     });
 
     test('a declared left-to-right is not read, because it cannot be told from silence', () {
@@ -378,7 +398,10 @@ void main() {
       // broken selector match the page again.
       expect(
         parseBookDirection(
-          page('.book-content { font-family: "Amiri"; }', wrapper: 'book-content rtl'),
+          page(
+            '.book-content { font-family: "Amiri"; }',
+            wrapper: 'book-content rtl',
+          ),
         ),
         isNull,
       );

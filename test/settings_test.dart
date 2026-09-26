@@ -93,9 +93,8 @@ Future<void> _pumpSettings(
         // which shape to draw would silently take the wrong branch.
         home: Builder(
           builder: (context) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(textScale)),
             child: const SettingsScreen(),
           ),
         ),
@@ -177,7 +176,10 @@ void main() {
   ) async {
     await _pumpSettings(
       tester,
-      profiles: [_profile(), _profile(accountId: 2, username: 'other')],
+      profiles: [
+        _profile(),
+        _profile(accountId: 2, username: 'other'),
+      ],
     );
 
     final forget = find.text('Forget this profile');
@@ -199,7 +201,10 @@ void main() {
   testWidgets('one heading covers the profiles', (tester) async {
     await _pumpSettings(
       tester,
-      profiles: [_profile(), _profile(accountId: 2, username: 'other')],
+      profiles: [
+        _profile(),
+        _profile(accountId: 2, username: 'other'),
+      ],
     );
 
     expect(find.text('PROFILES'), findsOneWidget);

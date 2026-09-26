@@ -324,8 +324,9 @@ void main() {
     expect(find.byType(PatraWordmark), findsOneWidget);
   });
 
-  testWidgets('wordmark is drawn from outlines and labelled for semantics',
-      (tester) async {
+  testWidgets('wordmark is drawn from outlines and labelled for semantics', (
+    tester,
+  ) async {
     await _pump(tester, [_profile()]);
 
     // The wordmark is a PatraSignature which uses CustomPaint — not a Text.

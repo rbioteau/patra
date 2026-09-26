@@ -662,7 +662,8 @@ void main() {
     expect(
       asked,
       isNot(contains('/api/Library/libraries')),
-      reason: 'opening a chapter fills no catalogue: the type is read off '
+      reason:
+          'opening a chapter fills no catalogue: the type is read off '
           'the spine the device already holds',
     );
 

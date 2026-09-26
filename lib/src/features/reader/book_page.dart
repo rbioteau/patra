@@ -24,7 +24,6 @@ import 'book_markup.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../settings/reading_settings.dart';
 import '../../theme.dart';
-
 /// A run of words inside a block, and how the book set it.
 class BookSpan {
   const BookSpan(this.text, {this.bold = false, this.italic = false});
@@ -212,10 +211,7 @@ class BookAnchor {
   }
 
   static const _mark = 'patra:';
-  static final _inBlock = RegExp(
-    '^$_mark'
-    r'(\d+)@(\d+(?:\.\d+)?)$',
-  );
+  static final _inBlock = RegExp('^$_mark' r'(\d+)@(\d+(?:\.\d+)?)$');
 
   /// What the server handed back, or null where it is not a place this app
   /// wrote — the web client's element ids among them, which name nothing in a

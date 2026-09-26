@@ -170,10 +170,7 @@ Future<_Harness> _pump(
   addTearDown(tester.view.reset);
   final scroll = ScrollController();
   addTearDown(scroll.dispose);
-  final width = StripWidthController(
-    scroll: scroll,
-    widthFactor: widthFactor,
-  );
+  final width = StripWidthController(scroll: scroll, widthFactor: widthFactor);
   addTearDown(width.dispose);
   await tester.pumpWidget(
     Directionality(
@@ -358,7 +355,10 @@ void main() {
         // the page the arithmetic says should be there.
         final after = _under(tester, y);
         expect(after.page, before.page);
-        expect(after.fraction, moreOrLessEquals(before.fraction, epsilon: 0.01));
+        expect(
+          after.fraction,
+          moreOrLessEquals(before.fraction, epsilon: 0.01),
+        );
         expect(tester.takeException(), isNull);
       },
     );
@@ -392,7 +392,9 @@ void main() {
   });
 
   group('a pinch that starts on a moving strip', () {
-    testWidgets('engages, and the scroll it interrupts is dropped', (tester) async {
+    testWidgets('engages, and the scroll it interrupts is dropped', (
+      tester,
+    ) async {
       final harness = await _pump(tester);
       await _seek(tester, harness, 100);
 
@@ -532,7 +534,10 @@ void main() {
         await tester.pump();
 
         // The width is untouched by a finger leaving.
-        expect(harness.width.widthFactor, moreOrLessEquals(pinched, epsilon: 0.001));
+        expect(
+          harness.width.widthFactor,
+          moreOrLessEquals(pinched, epsilon: 0.001),
+        );
 
         // And the one that is left scrolls, from where it is.
         final before = harness.scroll.offset;
@@ -556,7 +561,10 @@ void main() {
         final after = harness.scroll.offset;
         await _swipe(tester, const Offset(200, 400), -96);
         expect((harness.scroll.offset - after).abs(), greaterThan(20));
-        expect(harness.width.widthFactor, moreOrLessEquals(settled, epsilon: 0.001));
+        expect(
+          harness.width.widthFactor,
+          moreOrLessEquals(settled, epsilon: 0.001),
+        );
         expect(tester.takeException(), isNull);
       });
     }
@@ -675,7 +683,15 @@ void main() {
       );
 
       // And the two that are left still pinch.
-      await _pinch(tester, a: b, b: c, centreX: 200, y: y + 149, from: 298, to: 240);
+      await _pinch(
+        tester,
+        a: b,
+        b: c,
+        centreX: 200,
+        y: y + 149,
+        from: 298,
+        to: 240,
+      );
       expect(harness.width.widthFactor, lessThan(pinched));
       expect(tester.takeException(), isNull);
     });
@@ -704,7 +720,8 @@ void main() {
       expect(
         harness.width.geometry.widthFactor,
         lessThan(1.0),
-        reason: 'the geometry the strip is about to be drawn from is the new one',
+        reason:
+            'the geometry the strip is about to be drawn from is the new one',
       );
       final corrected = harness.scroll.offset;
       expect(
@@ -749,42 +766,43 @@ void main() {
   });
 
   group('the width a chapter opens at', () {
-    testWidgets('moves the strip, and the place goes with it in the same turn', (
-      tester,
-    ) async {
-      final harness = await _pump(tester);
-      await _seek(tester, harness, 100);
-      final before = _under(tester, 1);
-      expect(before.page, 100, reason: 'the reader is on page 100');
+    testWidgets(
+      'moves the strip, and the place goes with it in the same turn',
+      (tester) async {
+        final harness = await _pump(tester);
+        await _seek(tester, harness, 100);
+        final before = _under(tester, 1);
+        expect(before.page, 100, reason: 'the reader is on page 100');
 
-      // The preference moved — the width slider, or a chapter reopened at the
-      // width that was chosen — and the strip is narrower in the same breath,
-      // with the page the reader is on still at the top of the screen.
-      harness.width.openingWidthFactor = 0.5;
-      expect(harness.width.widthFactor, 0.5);
-      final corrected = harness.scroll.offset;
+        // The preference moved — the width slider, or a chapter reopened at the
+        // width that was chosen — and the strip is narrower in the same breath,
+        // with the page the reader is on still at the top of the screen.
+        harness.width.openingWidthFactor = 0.5;
+        expect(harness.width.widthFactor, 0.5);
+        final corrected = harness.scroll.offset;
 
-      // Nothing left to correct in the frame that draws it: a correction that
-      // waited for the frame after painted one frame at the old offset, which
-      // for the slider is a jump on every one of its dozens of steps.
-      await tester.pump();
-      expect(
-        harness.scroll.offset,
-        moreOrLessEquals(corrected, epsilon: 0.01),
-        reason: 'the offset moved with the width, and not a frame later',
-      );
-      final painted = _painted(tester)
-          .where((page) => page.page == before.page)
-          .singleOrNull;
-      expect(painted, isNotNull, reason: 'the page it was on is still drawn');
-      expect(painted!.top, moreOrLessEquals(0, epsilon: 0.5));
-      expect(
-        _rectOf(tester, before.page).width,
-        moreOrLessEquals(_screenWidth / 2, epsilon: 0.5),
-        reason: 'and it is drawn at the width that was asked for',
-      );
-      expect(tester.takeException(), isNull);
-    });
+        // Nothing left to correct in the frame that draws it: a correction that
+        // waited for the frame after painted one frame at the old offset, which
+        // for the slider is a jump on every one of its dozens of steps.
+        await tester.pump();
+        expect(
+          harness.scroll.offset,
+          moreOrLessEquals(corrected, epsilon: 0.01),
+          reason: 'the offset moved with the width, and not a frame later',
+        );
+        final painted = _painted(tester)
+            .where((page) => page.page == before.page)
+            .singleOrNull;
+        expect(painted, isNotNull, reason: 'the page it was on is still drawn');
+        expect(painted!.top, moreOrLessEquals(0, epsilon: 0.5));
+        expect(
+          _rectOf(tester, before.page).width,
+          moreOrLessEquals(_screenWidth / 2, epsilon: 0.5),
+          reason: 'and it is drawn at the width that was asked for',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('narrowing at the end of the chapter keeps the last page', (
       tester,
@@ -930,7 +948,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('and back again, as many times as it is turned', (tester) async {
+    testWidgets('and back again, as many times as it is turned', (
+      tester,
+    ) async {
       final harness = await _pump(tester, widthFactor: 0.5);
       await _seek(tester, harness, 100, fraction: 0.25);
       final before = _under(tester, 0);
@@ -1053,7 +1073,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the first page clamps too, and says by how much', (tester) async {
+    testWidgets('the first page clamps too, and says by how much', (
+      tester,
+    ) async {
       // The other end: the fingers are 270pt down the screen, and there is
       // nothing above the first page to put under them.
       final harness = await _pump(tester);
@@ -1076,7 +1098,9 @@ void main() {
   group('a chapter the server said nothing about', () {
     // No dimensions: every page shares the default ratio, so this is a strip
     // with nothing to be wrong about but its own total.
-    testWidgets('lays out, and its last page is still reachable', (tester) async {
+    testWidgets('lays out, and its last page is still reachable', (
+      tester,
+    ) async {
       final harness = await _pump(
         tester,
         // Every page shares the ratio the server's own default gives an
@@ -1117,7 +1141,9 @@ void main() {
   });
 
   group('a chapter of one page', () {
-    testWidgets('is a strip of one page, and not a shorter one', (tester) async {
+    testWidgets('is a strip of one page, and not a shorter one', (
+      tester,
+    ) async {
       final harness = await _pump(tester, pages: 1);
       expect(harness.width.geometry.pages, 1);
       // Shorter than the screen at this width, so there is nothing to scroll

@@ -458,52 +458,55 @@ void main() {
       );
     });
 
-    test('a series map of the wrong shape costs a series, not the row', () async {
-      // Read before `runApp`, so the safe direction is the least there is to
-      // lose: one series goes back to following the default, and everything
-      // else this profile chose is untouched.
-      final store = await preferencesStore(
-        keychain: MemoryKeychain({
-          'profilePreferences':
-              '{"${_romain.id}": {"magnify": true,'
-              ' "seriesDirections": {"3": 7, "4": "webtoon",'
-              ' "five": "rightToLeft", "6": "sideways"},'
-              ' "libraryDirections": {"1": 7, "2": "webtoon",'
-              ' "three": "rightToLeft"}}}',
-        }),
-      );
+    test(
+      'a series map of the wrong shape costs a series, not the row',
+      () async {
+        // Read before `runApp`, so the safe direction is the least there is to
+        // lose: one series goes back to following the default, and everything
+        // else this profile chose is untouched.
+        final store = await preferencesStore(
+          keychain: MemoryKeychain({
+            'profilePreferences':
+                '{"${_romain.id}": {"magnify": true,'
+                ' "seriesDirections": {"3": 7, "4": "webtoon",'
+                ' "five": "rightToLeft", "6": "sideways"},'
+                ' "libraryDirections": {"1": 7, "2": "webtoon",'
+                ' "three": "rightToLeft"}}}',
+          }),
+        );
 
-      expect(
-        store.seriesDirectionFor(_romain.id, 3),
-        isNull,
-        reason: 'a direction that is not a name is no direction',
-      );
-      expect(
-        store.seriesDirectionFor(_romain.id, 4),
-        ReadingDirection.verticalScroll,
-        reason: 'the legacy name is still read, like everywhere else',
-      );
-      expect(store.seriesDirectionFor(_romain.id, 5), isNull);
-      expect(store.seriesDirectionFor(_romain.id, 6), isNull);
-      expect(store.of(_romain.id).magnify, isTrue);
-      // The library map is the same shape, read by the same parser (#65).
-      expect(store.libraryDirectionFor(_romain.id, 1), isNull);
-      expect(
-        store.libraryDirectionFor(_romain.id, 2),
-        ReadingDirection.verticalScroll,
-      );
-      expect(store.libraryDirectionFor(_romain.id, 3), isNull);
+        expect(
+          store.seriesDirectionFor(_romain.id, 3),
+          isNull,
+          reason: 'a direction that is not a name is no direction',
+        );
+        expect(
+          store.seriesDirectionFor(_romain.id, 4),
+          ReadingDirection.verticalScroll,
+          reason: 'the legacy name is still read, like everywhere else',
+        );
+        expect(store.seriesDirectionFor(_romain.id, 5), isNull);
+        expect(store.seriesDirectionFor(_romain.id, 6), isNull);
+        expect(store.of(_romain.id).magnify, isTrue);
+        // The library map is the same shape, read by the same parser (#65).
+        expect(store.libraryDirectionFor(_romain.id, 1), isNull);
+        expect(
+          store.libraryDirectionFor(_romain.id, 2),
+          ReadingDirection.verticalScroll,
+        );
+        expect(store.libraryDirectionFor(_romain.id, 3), isNull);
 
-      final nonsense = await preferencesStore(
-        keychain: MemoryKeychain({
-          'profilePreferences':
-              '{"${_romain.id}": {"magnify": true,'
-              ' "seriesDirections": "nonsense"}}',
-        }),
-      );
-      expect(nonsense.seriesDirectionFor(_romain.id, 3), isNull);
-      expect(nonsense.of(_romain.id).magnify, isTrue);
-    });
+        final nonsense = await preferencesStore(
+          keychain: MemoryKeychain({
+            'profilePreferences':
+                '{"${_romain.id}": {"magnify": true,'
+                ' "seriesDirections": "nonsense"}}',
+          }),
+        );
+        expect(nonsense.seriesDirectionFor(_romain.id, 3), isNull);
+        expect(nonsense.of(_romain.id).magnify, isTrue);
+      },
+    );
 
     test('the last profile forgotten leaves nothing in the keychain', () async {
       final keychain = MemoryKeychain();
@@ -635,41 +638,41 @@ void main() {
       expect(store.bookLineHeightFor(_lea.id), defaultBookLineHeight);
     });
 
-    test('a face follows the person across a handover, not the device', () async {
-      // A handover builds the app on a container of its own, but the store is
-      // the device's — so what follows the person has to be read out of it
-      // again rather than held by the container that chose it.
-      final store = await preferencesStore();
-      await store.setBookReadingFace(_romain.id, ReadingFace.serif);
-      await store.setBookReadingFace(
-        _lea.id,
-        ReadingFace.sans,
-      );
+    test(
+      'a face follows the person across a handover, not the device',
+      () async {
+        // A handover builds the app on a container of its own, but the store is
+        // the device's — so what follows the person has to be read out of it
+        // again rather than held by the container that chose it.
+        final store = await preferencesStore();
+        await store.setBookReadingFace(_romain.id, ReadingFace.serif);
+        await store.setBookReadingFace(_lea.id, ReadingFace.sans);
 
-      final container = ProviderContainer(
-        overrides: [
-          testKeychain(),
-          profilePreferencesStoreProvider.overrideWithValue(store),
-          initialAuthStateProvider.overrideWithValue(
-            AuthState(profiles: [_romain, _lea], activeId: _romain.id),
-          ),
-          signInProvider.overrideWithValue(_signInAs(_lea)),
-        ],
-      );
-      addTearDown(container.dispose);
-      expect(
-        container.read(bookReadingFaceProvider),
-        ReadingFace.serif,
-        reason: 'the face is his, and the tablet is not what chose it',
-      );
+        final container = ProviderContainer(
+          overrides: [
+            testKeychain(),
+            profilePreferencesStoreProvider.overrideWithValue(store),
+            initialAuthStateProvider.overrideWithValue(
+              AuthState(profiles: [_romain, _lea], activeId: _romain.id),
+            ),
+            signInProvider.overrideWithValue(_signInAs(_lea)),
+          ],
+        );
+        addTearDown(container.dispose);
+        expect(
+          container.read(bookReadingFaceProvider),
+          ReadingFace.serif,
+          reason: 'the face is his, and the tablet is not what chose it',
+        );
 
-      await container.read(authProvider.notifier).resume(_lea);
-      expect(
-        container.read(bookReadingFaceProvider),
-        ReadingFace.sans,
-        reason: 'the next reader’s books are set in the face they chose',
-      );
-    });
+        await container.read(authProvider.notifier).resume(_lea);
+        expect(
+          container.read(bookReadingFaceProvider),
+          ReadingFace.sans,
+          reason: 'the next reader’s books are set in the face they chose',
+        );
+      },
+    );
 
     test('are not recomputed because a token moved', () async {
       // `Profile` has no `==`, so a JWT renewal makes a new session instance
@@ -681,11 +684,7 @@ void main() {
       // care for the same reason.
       final store = _CountingStore();
       final his = _container(store: store, active: _romain);
-      his.listen(
-        seriesDirectionsProvider,
-        (_, _) {},
-        fireImmediately: true,
-      );
+      his.listen(seriesDirectionsProvider, (_, _) {}, fireImmediately: true);
       expect(store.reads, 1);
 
       await his.read(authProvider.notifier).updateToken('a-fresh-jwt');
