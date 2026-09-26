@@ -137,7 +137,8 @@ Future<BookFont> _loadBookFont({
     // Try to load from the chapter copy first.
     final dir = await ref.read(chapterDirProvider(chapterId).future);
     final hasRoman = await File('${dir.path}/${BookFontFile.roman}').exists();
-    final hasItalicFile = await File('${dir.path}/${BookFontFile.italic}').exists();
+    final hasItalicFile = await File('${dir.path}/${BookFontFile.italic}')
+        .exists();
 
     Uint8List? romanBytes;
     Uint8List? italicBytes;
@@ -145,24 +146,30 @@ Future<BookFont> _loadBookFont({
     if (hasRoman || hasItalicFile) {
       // Load from local copy.
       if (hasRoman) {
-        romanBytes = await File('${dir.path}/${BookFontFile.roman}').readAsBytes();
+        romanBytes = await File('${dir.path}/${BookFontFile.roman}')
+            .readAsBytes();
       }
       if (hasItalicFile) {
-        italicBytes = await File('${dir.path}/${BookFontFile.italic}').readAsBytes();
+        italicBytes = await File('${dir.path}/${BookFontFile.italic}')
+            .readAsBytes();
       }
     } else if (face.roman != null || face.italic != null) {
       // Fall back to the server.
       final client = ref.read(kavitaClientProvider);
       if (face.roman != null) {
         try {
-          romanBytes = Uint8List.fromList(await client.bookPictureBytes(chapterId, face.roman!));
+          romanBytes = Uint8List.fromList(
+            await client.bookPictureBytes(chapterId, face.roman!),
+          );
         } catch (_) {
           // Ignore — we'll try italic and if both fail, the book gets no face.
         }
       }
       if (face.italic != null) {
         try {
-          italicBytes = Uint8List.fromList(await client.bookPictureBytes(chapterId, face.italic!));
+          italicBytes = Uint8List.fromList(
+            await client.bookPictureBytes(chapterId, face.italic!),
+          );
         } catch (_) {
           // Ignore.
         }
@@ -232,7 +239,11 @@ class BookFontsCache extends Notifier<Map<BookFontsKey, BookFont>> {
     }
 
     // Not yet resolved — load asynchronously using the notifier's own ref.
-    final font = await _loadBookFont(ref: ref, chapterId: key.chapterId, face: face);
+    final font = await _loadBookFont(
+      ref: ref,
+      chapterId: key.chapterId,
+      face: face,
+    );
     state = {...state, key: font};
     return font;
   }
@@ -282,7 +293,8 @@ BookFace? parseBookFace(String html) {
       // A face declares a `@font-face` per weight, and a page is set in one
       // weight of the roman and one of the italic: the bold and the light are
       // not what the book's words are in, so they are not read as its roman.
-      final weight = _declaration('font-weight').firstMatch(body)?.group(1) ?? '';
+      final weight =
+          _declaration('font-weight').firstMatch(body)?.group(1) ?? '';
       if (!italic && !_isRoman(weight)) continue;
       final family = families.first;
       final was = sources[family] ?? (roman: null, italic: null);
@@ -513,7 +525,9 @@ bool _speaksForThePage(String selector) =>
 String? _fontSource(String value) {
   final urls = _url
       .allMatches(value)
-      .map((match) => (match.group(1) ?? match.group(2) ?? match.group(3)!).trim())
+      .map(
+        (match) => (match.group(1) ?? match.group(2) ?? match.group(3)!).trim(),
+      )
       .where((url) => url.isNotEmpty)
       .where((url) => !url.startsWith('data:'))
       .toList();

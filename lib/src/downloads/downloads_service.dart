@@ -907,15 +907,27 @@ class DownloadsService {
       if (face.roman != null) {
         await carried.putIfAbsent(
           'font:roman:${face.roman}',
-          () => _carryFont(client, chapterId, face.roman!, BookFontFile.roman,
-              chapterDir, cancelToken),
+          () => _carryFont(
+            client,
+            chapterId,
+            face.roman!,
+            BookFontFile.roman,
+            chapterDir,
+            cancelToken,
+          ),
         );
       }
       if (face.italic != null) {
         await carried.putIfAbsent(
           'font:italic:${face.italic}',
-          () => _carryFont(client, chapterId, face.italic!, BookFontFile.italic,
-              chapterDir, cancelToken),
+          () => _carryFont(
+            client,
+            chapterId,
+            face.italic!,
+            BookFontFile.italic,
+            chapterDir,
+            cancelToken,
+          ),
         );
       }
     }
@@ -989,6 +1001,7 @@ class DownloadsService {
       return null;
     }
   }
+
   /// Drops only the resumable bytes of an attempt. A refresh may have a saved
   /// copy beside its staging directory; cancellation never spends that copy.
   Future<void> discardPartial(int chapterId) async {

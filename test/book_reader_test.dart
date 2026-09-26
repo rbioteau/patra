@@ -410,7 +410,8 @@ final String _longPage = [
 
 /// One of every kind of block a page is made of, which is what "the whole
 /// page is set in the chosen face" has to mean.
-const _everyBlock = '<h2>Book two</h2>'
+const _everyBlock =
+    '<h2>Book two</h2>'
     '<p>The spice must flow, and the worm <b>follows</b>.</p>'
     '<blockquote>A beginning is a very delicate time.</blockquote>'
     '<ul><li>First.</li><li>Second.</li></ul>';
@@ -1074,7 +1075,10 @@ void main() {
               child: BookPageBody(
                 textSize: defaultBookTextSize,
                 lineHeight: defaultBookLineHeight,
-                face: (family: fontAtkinsonHyperlegibleNext, canSetItalic: false),
+                face: (
+                  family: fontAtkinsonHyperlegibleNext,
+                  canSetItalic: false,
+                ),
                 page: BookPage.fromHtml('<p><img src="cover.jpg"/></p>'),
                 picture: (_) =>
                     SizedBox(key: const Key('picture'), height: pictureHeight),
@@ -1118,7 +1122,10 @@ void main() {
     Future<void> pumpWords(
       WidgetTester tester,
       String html, {
-      BookType face = (family: fontAtkinsonHyperlegibleNext, canSetItalic: false),
+      BookType face = (
+        family: fontAtkinsonHyperlegibleNext,
+        canSetItalic: false,
+      ),
     }) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1;
@@ -1253,11 +1260,7 @@ void main() {
 
     testWidgets('emphasis is set in the italic the face ships', (tester) async {
       Future<List<FontStyle?>> styles(BookType face) async {
-        await pumpWords(
-          tester,
-          '<p>The worm <i>follows</i>.</p>',
-          face: face,
-        );
+        await pumpWords(tester, '<p>The worm <i>follows</i>.</p>', face: face);
         return [
           for (final run in _runs(
             tester,
@@ -1269,6 +1272,7 @@ void main() {
             run.fontStyle,
         ];
       }
+
       // The app's serif (Literata) ships an italic.
       expect(
         await styles(ReadingFace.serif.resolve()),
@@ -1305,10 +1309,12 @@ void main() {
     /// words would show it.
     AxisDirection pager(WidgetTester tester) => tester
         .state<ScrollableState>(
-          find.descendant(
-            of: find.byType(PageView),
-            matching: find.byType(Scrollable),
-          ).first,
+          find
+              .descendant(
+                of: find.byType(PageView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
         )
         .position
         .axisDirection;
@@ -1344,17 +1350,13 @@ void main() {
 
     /// The direction the page itself is laid out in, which is what the pager
     /// turns on.
-    TextDirection laidOut(WidgetTester tester) => Directionality.of(
-      tester.element(find.byType(BookPageBody).first),
-    );
+    TextDirection laidOut(WidgetTester tester) =>
+        Directionality.of(tester.element(find.byType(BookPageBody).first));
 
     testWidgets('a book that declares itself is laid out that way', (
       tester,
     ) async {
-      await _pumpBook(
-        tester,
-        html: page('.book-content { direction: rtl; }'),
-      );
+      await _pumpBook(tester, html: page('.book-content { direction: rtl; }'));
 
       expect(laidOut(tester), TextDirection.rtl);
       expect(
@@ -1472,10 +1474,7 @@ void main() {
     testWidgets('the chrome and its numerals never turn with the book', (
       tester,
     ) async {
-      await _pumpBook(
-        tester,
-        html: page('.book-content { direction: rtl; }'),
-      );
+      await _pumpBook(tester, html: page('.book-content { direction: rtl; }'));
       await _showChrome(tester);
 
       // The counter is the app's own furniture and reads the app's own way,

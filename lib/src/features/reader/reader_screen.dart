@@ -150,9 +150,8 @@ Future<BookPage?> _storedBookPage(Ref ref, BookPageKey key) async {
   // what the server has yet to be told), and a page taken apart again on
   // every one of those is seconds of work for a page of megabytes.
   final storedBook = ref.watch(
-    savedChapterProvider(
-      key.chapterId,
-    ).select((saved) => saved?.content == ChapterContent.reflowable),
+    savedChapterProvider(key.chapterId)
+        .select((saved) => saved?.content == ChapterContent.reflowable),
   );
   if (!storedBook) return null;
   final file = File(
@@ -181,9 +180,8 @@ final bookPageFilesProvider = FutureProvider.autoDispose
       final onDevice = <String, File>{};
       if (face != null &&
           ref.watch(
-            savedChapterProvider(
-              key.chapterId,
-            ).select((saved) => saved != null),
+            savedChapterProvider(key.chapterId)
+                .select((saved) => saved != null),
           )) {
         final dir = await ref.watch(chapterDirProvider(key.chapterId).future);
         for (final (src, name) in [
@@ -2304,9 +2302,9 @@ class _SettingsCog extends StatelessWidget {
           // A book's sheet has nothing to report: what it changes, it
           // writes to the person reading as it is being changed.
           _BookSettings(:final bookFamily) => showBookSettingsSheet(
-              context,
-              bookFamily: bookFamily,
-            ).then((_) => null),
+            context,
+            bookFamily: bookFamily,
+          ).then((_) => null),
         };
         // The sheet outlives the chrome it was opened from, so what it
         // reports may arrive with the cog already out of the tree.
