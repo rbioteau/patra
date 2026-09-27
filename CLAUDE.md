@@ -67,7 +67,7 @@ These are resident because a session can break any of them while working in a di
 - **Never hardcode "chapter" or "volume" in a screen** — go through `LibraryTypeNaming`, and never hardcode a color or a radius either; every token is in `lib/src/theme.dart`.
 - **Kavita's sentinel numbers reach neither a label nor a stored name.** A pseudo-volume's `-100000`/`+100000` and a placeholder chapter's `-100000` are bookkeeping, not numbers: a volume with no chapter breakdown is named after the volume, and what a copy is *called* on the device is a label too, so a copy saved from a placeholder chapter is named after its volume and not `-100000` — a row in the Downloads tab reading `-100000` names nothing a reader recognises. A copy already stored that way is drawn by `SavedChapter.resolvedTitle`. → `lib/src/api/CLAUDE.md`
 
-The app ships a single dark theme (`themeMode: ThemeMode.dark`): the reader canvas is pure black and the whole chrome is built around it.
+The app ships a single dark theme (`themeMode: ThemeMode.dark`): the reader canvas for **pictures** is pure black (`patraReaderCanvas`) and the whole chrome is built around it. **A book is the exception**: it is read on the app's own night blue (`patraBookCanvas`, which is `patraBg`) — its page, the view behind it and the scrims under its chrome — because a scan reads best on black while ivory words set by the app were the one screen of it not on its own ground.
 
 
 ## Architecture

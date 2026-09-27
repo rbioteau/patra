@@ -169,10 +169,10 @@ String _faces(BookSetting setting, FaceFiles? files) {
 String _overrides(BookSetting setting, {required bool justify}) {
   final family = _imposedFamily(setting.face);
   return '@layer $_layer {\n'
-      // The reader's canvas, and room at the foot for the page counter: a
+      // The book's canvas, and room at the foot for the page counter: a
       // default, not an override, so a book that sets its own colours or its
       // own margins is set in them.
-      '  html { background-color: ${_hex(patraReaderCanvas)}; '
+      '  html { background-color: ${_hex(patraBookCanvas)}; '
       'color: ${_hex(patraText)}; '
       'padding: ${_number(gutter)}px ${_number(gutter)}px '
       '${_number(4 * gutter)}px; }\n'

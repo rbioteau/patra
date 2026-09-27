@@ -33,9 +33,15 @@ const _serif = fontLiterata;
 /// lift out of the same colour rather than a cut to a different one.
 const patraBg = Color(0xFF111722);
 
-/// What a page is read on: pure black, the reader's own ground, and what a
-/// page of a book with no colours of its own is set on in the web engine.
+/// What a page of pictures is read on: pure black, the reader's own ground.
 const patraReaderCanvas = Color(0xFF000000);
+
+/// What a book is read on: the app's own night blue, and not the pictures'
+/// black. A scan is a picture and reads best on black; a book is ivory words
+/// set by the app, and on pure black they were the one screen of the app not
+/// on its own ground. It is what a page with no colours of its own is set on
+/// in the web engine, the ground behind it, and the scrim under its chrome.
+const patraBookCanvas = patraBg;
 
 /// Cards, sheets, tiles — a surface raised off the page.
 const patraSurface = Color(0xFF1C293E);

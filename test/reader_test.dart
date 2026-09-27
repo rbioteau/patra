@@ -384,6 +384,16 @@ void main() {
     },
   );
 
+  testWidgets('a chapter of pictures is read on pure black', (tester) async {
+    // Pictures keep the reader's canvas: a page of a scan is read on black,
+    // where a book is set on the app's night blue (`patraBookCanvas`).
+    await _pumpReader(tester, initialPage: 0);
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      patraReaderCanvas,
+    );
+  });
+
   testWidgets('the strip asks the decoder for the width it draws at', (
     tester,
   ) async {

@@ -93,7 +93,7 @@ class BookWebPage extends StatefulWidget {
 class _BookWebPageState extends State<BookWebPage> {
   late final WebViewController _controller = WebViewController()
     ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    ..setBackgroundColor(patraReaderCanvas)
+    ..setBackgroundColor(patraBookCanvas)
     ..addJavaScriptChannel(bookBridge, onMessageReceived: _heard)
     ..setNavigationDelegate(
       NavigationDelegate(

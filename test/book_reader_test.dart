@@ -13,6 +13,7 @@ import 'package:patra/src/features/reader/book_web_page.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/settings/reading_settings.dart';
+import 'package:patra/src/theme.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
 import 'book_reader_harness.dart';
@@ -749,6 +750,43 @@ void main() {
       expect(document, isNot(contains('OEBPS/images')));
     });
 
+    testWidgets('a book is set on the book canvas, the app\'s own night blue', (
+      tester,
+    ) async {
+      // A book is words on the app's own ground, not a picture on black: the
+      // view, the screen behind it and the scrims under the chrome all agree,
+      // or a band of black shows wherever the page does not reach.
+      await pumpBook(tester, webEngine: true);
+      await settle(tester);
+
+      expect(engine.pageShowing(0)!.background, patraBookCanvas);
+      expect(
+        tester
+            .widget<Scaffold>(
+              find.descendant(
+                of: find.byType(ReaderScreen),
+                matching: find.byType(Scaffold),
+              ),
+            )
+            .backgroundColor,
+        patraBookCanvas,
+      );
+
+      await tester.tapAt(tester.getCenter(find.byType(ReaderScreen)));
+      await tester.pump(const Duration(milliseconds: 300));
+      final scrims = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .map((box) => box.decoration)
+          .whereType<BoxDecoration>()
+          .map((decoration) => decoration.gradient)
+          .whereType<LinearGradient>()
+          .expand((gradient) => gradient.colors)
+          .where((color) => color.a > 0)
+          .map((color) => color.withValues(alpha: 1))
+          .toSet();
+      expect(scrims, {patraBookCanvas});
+    });
+
     testWidgets('a book is justified and hyphenated in its own language, '
         'not the interface\'s', (tester) async {
       // An English book read by somebody whose app speaks French: the words
@@ -1277,8 +1315,11 @@ class _FakeWebPage extends PlatformWebViewController {
   Future<void> setJavaScriptMode(JavaScriptMode mode) async =>
       javaScript = mode;
 
+  /// What the view is painted with before and around the document.
+  Color? background;
+
   @override
-  Future<void> setBackgroundColor(Color color) async {}
+  Future<void> setBackgroundColor(Color color) async => background = color;
 
   @override
   Future<void> addJavaScriptChannel(JavaScriptChannelParams params) async {

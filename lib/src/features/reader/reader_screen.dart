@@ -687,7 +687,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      // A book is read on the app's own night blue and pictures on black —
+      // decided as soon as anything says which it is, so a saved book does
+      // not open on a flash of the pictures' ground.
+      backgroundColor:
+          (chapter?.content ?? saved?.content) == ChapterContent.reflowable
+          ? patraBookCanvas
+          : patraReaderCanvas,
       body: switch ((chapter, info)) {
         (null, AsyncError()) => const _ReaderError(),
         (null, _) => const Center(
@@ -1044,6 +1050,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             // reading.
             title: chapter.title,
             settings: _BookSettings(bookFamily: bookFamily),
+            canvas: patraBookCanvas,
           ),
           _BottomChrome(
             chapter: chapter,
@@ -1063,6 +1070,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             onContents: contents.isEmpty
                 ? null
                 : () => _showContents(chapter, contents),
+            canvas: patraBookCanvas,
           ),
         ],
       ],
@@ -2160,7 +2168,15 @@ final class _BookSettings extends _ReaderSettings {
 }
 
 class _TopChrome extends StatelessWidget {
-  const _TopChrome({required this.title, this.settings});
+  const _TopChrome({
+    required this.title,
+    this.settings,
+    this.canvas = patraReaderCanvas,
+  });
+
+  /// What the scrim under the bar fades from: the ground of what is being
+  /// read, so a book's chrome is not a band of black over its night blue.
+  final Color canvas;
 
   /// How far the bar reaches down the screen, in points — what the rail
   /// starts below (`page_rail.dart`), and the whole of the bar's geometry:
@@ -2190,7 +2206,7 @@ class _TopChrome extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Colors.black.withValues(alpha: .85), Colors.transparent],
+            colors: [canvas.withValues(alpha: .85), Colors.transparent],
           ),
         ),
         child: SafeArea(
@@ -2286,7 +2302,12 @@ class _BottomChrome extends StatelessWidget {
     required this.thumbProvider,
     required this.onSeek,
     this.onContents,
+    this.canvas = patraReaderCanvas,
   });
+
+  /// What the scrim under the counter is solid in: the ground of what is
+  /// being read, as the top bar's is.
+  final Color canvas;
 
   /// How far the chrome reaches up the screen, in points — roughly where
   /// the rail ends (`page_rail.dart`), which reads it from here rather than
@@ -2343,12 +2364,12 @@ class _BottomChrome extends StatelessWidget {
       right: 0,
       child: DecoratedBox(
         // Pages are often near-white, so the controls need a real scrim under
-        // them: solid black where they sit, fading out only above them.
-        decoration: const BoxDecoration(
+        // them: solid canvas where they sit, fading out only above them.
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [Colors.black, Colors.black, Colors.transparent],
+            colors: [canvas, canvas, canvas.withValues(alpha: 0)],
             stops: [0, .72, 1],
           ),
         ),

@@ -741,7 +741,9 @@ void main() {
       final canvas = RegExp(r'html \{[^}]*background-color[^}]*\}')
           .firstMatch(css)!
           .group(0)!;
-      expect(canvas, contains('background-color: #000000'));
+      // The book's own ground — the night blue the rest of the app is set
+      // on — and not the pictures' pure black.
+      expect(canvas, contains('background-color: #111722'));
       expect(canvas, contains('color: #f3eee3'));
       // A default and nothing more: the book's own colours are its design.
       expect(canvas, isNot(contains('!important')));
