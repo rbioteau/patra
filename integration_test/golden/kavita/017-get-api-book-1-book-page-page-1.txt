@@ -1,0 +1,5 @@
+<div class=" "><style>.book-content h1{font-size:1.6em;margin:0 0 1em;padding-bottom:0.3em;border-bottom:1px solid currentColor}.book-content p{margin:0;text-indent:1.5em}.book-content h1+p,.book-content figure+p{text-indent:0}.book-content figure{margin:1.2em 0;text-align:center}.book-content figure img{width:100%;height:auto}.book-content figcaption{font-style:italic;font-size:0.85em;margin-top:0.4em}</style>
+  <h1>The Night Shift</h1>
+  <p>The clockwork ran for six hours on a single winding, which meant that someone had to climb the ladder again at midnight. For most of her life that someone had been her grandmother, who claimed she slept better for the interruption.</p>
+  <p>Ilse did not sleep better for it. She lay awake for an hour afterwards, listening to the water, and wrote in the ledger that the river was <em>high and quiet</em>, which it almost always was.</p>
+</div>

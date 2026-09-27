@@ -24,6 +24,8 @@ On this dev machine the Flutter SDK lives in `~/development/flutter` (PATH set i
 - Push the **one** tag by name, never `--tags`: GitHub creates no event at all for a push carrying more than three tags, so a backlog of local tags ships nothing and says nothing.
 - Never use GitHub's own **re-run** to recover a half-failed release: it keeps its run number, which both stores reject as one they have already seen. `gh workflow run build.yml --ref v0.2.0` is the recovery hatch.
 
+**And one duty before the tag: run `./tool/device_golden.sh` with a phone plugged in**, and look at what it puts beside the reference. CI does not run it and cannot — nothing paints a book's page under a test binding, so no suite ever sees what the web engine draws (`integration_test/golden/README.md`).
+
 The whole of what CI then does — the tag's accepted shape, `github.run_number` as the build number, the signed and unsigned paths of both platform jobs, the Play internal track, and every signing secret — is in the **`.github/CLAUDE.md`**, which loads whenever the workflow itself is touched. Read it before touching `.github/workflows/build.yml`, signing, or store upload.
 
 ## Agent skills

@@ -1,0 +1,122 @@
+[
+  {
+    "key": "POST /api/Account/login",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "000-post-api-account-login.json"
+  },
+  {
+    "key": "GET /api/Device/client/devices",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "001-get-api-device-client-devices.json"
+  },
+  {
+    "key": "GET /api/Library/libraries",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "002-get-api-library-libraries.json"
+  },
+  {
+    "key": "POST /api/Series/on-deck?PageNumber=1&PageSize=20",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "003-post-api-series-on-deck-pagenumber-1-pagesize-20.json"
+  },
+  {
+    "key": "POST /api/Series/all-v2?PageNumber=1&PageSize=100",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "004-post-api-series-all-v2-pagenumber-1-pagesize-100.json"
+  },
+  {
+    "key": "GET /api/Health",
+    "status": 200,
+    "contentType": "text/plain; charset=utf-8",
+    "file": "005-get-api-health.txt"
+  },
+  {
+    "key": "GET /api/Plugin/version",
+    "status": 200,
+    "contentType": "text/plain; charset=utf-8",
+    "file": "006-get-api-plugin-version.txt"
+  },
+  {
+    "key": "GET /api/Image/series-cover?seriesId=1",
+    "status": 200,
+    "contentType": "image/png",
+    "file": "007-get-api-image-series-cover-seriesid-1.png"
+  },
+  {
+    "key": "GET /api/Series/1",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "008-get-api-series-1.json"
+  },
+  {
+    "key": "GET /api/Series/volumes?seriesId=1",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "009-get-api-series-volumes-seriesid-1.json"
+  },
+  {
+    "key": "GET /api/Series/metadata?seriesId=1",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "010-get-api-series-metadata-seriesid-1.json"
+  },
+  {
+    "key": "GET /api/Image/chapter-cover?chapterId=1",
+    "status": 200,
+    "contentType": "image/png",
+    "file": "011-get-api-image-chapter-cover-chapterid-1.png"
+  },
+  {
+    "key": "GET /api/Reader/chapter-info?chapterId=1&includeDimensions=true",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "012-get-api-reader-chapter-info-chapterid-1-includedimensions-true.json"
+  },
+  {
+    "key": "GET /api/Book/1/book-info",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "013-get-api-book-1-book-info.json"
+  },
+  {
+    "key": "GET /api/Reader/get-progress?chapterId=1",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "014-get-api-reader-get-progress-chapterid-1.json"
+  },
+  {
+    "key": "GET /api/Book/1/chapters",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "file": "015-get-api-book-1-chapters.json"
+  },
+  {
+    "key": "GET /api/Book/1/book-page?page=0",
+    "status": 200,
+    "contentType": "text/plain; charset=utf-8",
+    "file": "016-get-api-book-1-book-page-page-0.txt"
+  },
+  {
+    "key": "GET /api/Book/1/book-page?page=1",
+    "status": 200,
+    "contentType": "text/plain; charset=utf-8",
+    "file": "017-get-api-book-1-book-page-page-1.txt"
+  },
+  {
+    "key": "POST /api/Reader/progress",
+    "status": 200,
+    "contentType": null,
+    "file": "018-post-api-reader-progress.bin"
+  },
+  {
+    "key": "GET /api/Book/1/book-resources?file=images/plate.png",
+    "status": 200,
+    "contentType": "image/png",
+    "file": "019-get-api-book-1-book-resources-file-images-plate-png.png"
+  }
+]

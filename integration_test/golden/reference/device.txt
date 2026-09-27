@@ -1,0 +1,5 @@
+model: CPH2663
+android: 16 (API 36)
+screen: 1080x2414
+density: 480
+webview: com.google.android.webview, 153.0.8010.39
