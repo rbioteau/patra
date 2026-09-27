@@ -59,9 +59,9 @@ extension on BookSpan {
 /// The bottom is four times the top because the page counter sits there: a
 /// page allowed to end under it is a page whose last line cannot be read.
 const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
+  bookSideMargin,
   gutter,
-  gutter,
-  gutter,
+  bookSideMargin,
   4 * gutter,
 );
 

@@ -25,8 +25,9 @@
 /// - **The reader's three settings**, in a cascade layer declared before the
 ///   book, whose `!important` outranks every `!important` a book can make —
 ///   and the files the chosen face is set from, since an engine has none of
-///   the faces the app bundles. The same layer sets the page on the reader's
-///   canvas, as a default the book's own colours outrank.
+///   the faces the app bundles. The same layer imposes the reader's canvas,
+///   ink and side margins: a book's own colours assume a white page, and its
+///   margins a printed one.
 /// - **The book's language** on the document where it is known, and none
 ///   where it is not — an engine given none declines to hyphenate, which is
 ///   the behaviour wanted and needs nothing built.
@@ -169,13 +170,21 @@ String _faces(BookSetting setting, FaceFiles? files) {
 String _overrides(BookSetting setting, {required bool justify}) {
   final family = _imposedFamily(setting.face);
   return '@layer $_layer {\n'
-      // The book's canvas, and room at the foot for the page counter: a
-      // default, not an override, so a book that sets its own colours or its
-      // own margins is set in them.
-      '  html { background-color: ${_hex(patraBookCanvas)}; '
-      'color: ${_hex(patraText)}; '
-      'padding: ${_number(gutter)}px ${_number(gutter)}px '
-      '${_number(4 * gutter)}px; }\n'
+      // The book's canvas and its ink, imposed: a book set in black assumes
+      // a white page, and on the night blue it could not be read. So the ink
+      // is the app's on every element, and nothing but the canvas paints a
+      // ground behind it — an ivory word on a box the book made white would
+      // be as lost. A picture is not a ground and stays the book's.
+      '  html { background-color: ${_hex(patraBookCanvas)} !important; }\n'
+      '  *, *::before, *::after { color: ${_hex(patraText)} !important; }\n'
+      '  body, body * { background-color: transparent !important; }\n'
+      // The margins are the reader's too: a book's own, set for a printed
+      // page, stacked on these took a quarter of a phone's width. Room at
+      // the foot is for the page counter.
+      '  html { padding: ${_number(gutter)}px ${_number(bookSideMargin)}px '
+      '${_number(4 * gutter)}px !important; }\n'
+      '  body { margin-left: 0 !important; margin-right: 0 !important; '
+      'padding-left: 0 !important; padding-right: 0 !important; }\n'
       // A page is a page, not a flow: one shorter than the screen — a cover,
       // a part's title — is set in the middle of it, as the development
       // renderer sets it (`DevelopmentBookPage`), and one taller scrolls as
@@ -184,9 +193,14 @@ String _overrides(BookSetting setting, {required bool justify}) {
       // of the book's own layout changes. Its column is the screen's width
       // and no more: left `auto`, it grew to whatever the body held, and a
       // picture wider than the screen took the prose off its right edge
-      // (seen by the device golden, #132).
+      // (seen by the device golden, #132). Nor is it wider than a line can
+      // be read at: on a tablet the screen's width is a hundred and more
+      // characters a line, so the column stops at [_measure] and is centred.
+      // In `em`, the root's — the reader's text size — so a larger size
+      // widens it and a line keeps about the same number of words.
       '  html { display: grid; align-content: center; min-height: 100vh; '
-      'grid-template-columns: minmax(0, 1fr); box-sizing: border-box; }\n'
+      'grid-template-columns: minmax(0, ${_number(_measure)}em); '
+      'justify-content: center; box-sizing: border-box; }\n'
       '${justify ? _justified : ''}'
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '
@@ -223,6 +237,11 @@ const String _justified =
     '-webkit-hyphens: manual; }\n';
 
 const String _layer = 'patra';
+
+/// The widest a column of prose is set, in the reader's `em`: about seventy
+/// characters a line. A phone never reaches it, so there the margins are
+/// [bookSideMargin] alone; a tablet's are what is left either side.
+const double _measure = 36;
 
 String _hex(Color color) =>
     '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
@@ -640,12 +659,13 @@ String _rewriteCss(String css, LocalFile localFile) =>
     _shareOfTheRoot(_rewriteAddresses(css, localFile));
 
 /// A `style` attribute's declarations, rewritten as a stylesheet's are, and
-/// with the `!important` taken off the three the reader owns: an inline
+/// with the `!important` taken off what the reader owns: an inline
 /// `!important` outranks a stylesheet's, layer or not.
 String _rewriteInlineStyle(String css, LocalFile localFile) =>
     _shareOfTheRoot(_rewriteAddresses(css, localFile)).replaceAllMapped(
       RegExp(
-        r'(?<=(?:^|;)\s*)((?:font-size|font-family|font|line-height)'
+        r'(?<=(?:^|;)\s*)((?:font-size|font-family|font|line-height|color'
+        r'|background-color|background)'
         r'\s*:[^;]*?)\s*!\s*important',
         caseSensitive: false,
       ),

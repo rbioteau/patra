@@ -552,7 +552,7 @@ void main() {
       expect(document, contains('font-size: 2.5rem;'));
       expect(document, contains('line-height: 3;'));
       expect(document, contains('font-family: Comic;'));
-      expect(document, contains('color: red !important'));
+      expect(document, contains('color: red"'));
     });
 
     test('a comment is not a way round them', () {
@@ -736,17 +736,28 @@ void main() {
       dotAll: true,
     ).firstMatch(document)!.group(0)!;
 
-    test('is what a page with no colours of its own is set on', () {
+    test('is the night blue, in ivory, whatever the book says', () {
       final css = overrides(_rewrite('<p>a</p>'));
-      final canvas = RegExp(r'html \{[^}]*background-color[^}]*\}')
-          .firstMatch(css)!
-          .group(0)!;
       // The book's own ground — the night blue the rest of the app is set
       // on — and not the pictures' pure black.
-      expect(canvas, contains('background-color: #111722'));
-      expect(canvas, contains('color: #f3eee3'));
-      // A default and nothing more: the book's own colours are its design.
-      expect(canvas, isNot(contains('!important')));
+      expect(css, contains('html { background-color: #111722 !important; }'));
+      expect(
+        css,
+        contains('*, *::before, *::after { color: #f3eee3 !important; }'),
+      );
+      expect(
+        css,
+        contains('body, body * { background-color: transparent !important; }'),
+      );
+    });
+
+    test('keeps the sides of the page narrow', () {
+      // A book's own margins are set for a printed page, and stacked on the
+      // reader's they took a quarter of a phone's width.
+      final css = overrides(_rewrite('<p>a</p>'));
+      expect(css, contains('html { padding: 20px 12px 80px !important; }'));
+      expect(css, contains('margin-left: 0 !important'));
+      expect(css, contains('padding-right: 0 !important'));
     });
 
     test('sets a page shorter than the screen in the middle of it', () {
@@ -778,14 +789,40 @@ void main() {
       final page = RegExp(r'html \{[^}]*align-content[^}]*\}')
           .firstMatch(css)!
           .group(0)!;
-      expect(page, contains('grid-template-columns: minmax(0, 1fr)'));
+      expect(page, contains('grid-template-columns: minmax(0, 36em)'));
     });
 
-    test("does not outrank a book's own colours", () {
+    test('stops a line at a readable length, and centres the column', () {
+      // A tablet's width is over a hundred characters a line. The column
+      // stops at 36em of the reader's own size — a phone never reaches it —
+      // and what is left becomes the margins either side.
+      final css = overrides(_rewrite('<p>a</p>'));
+      final page = RegExp(r'html \{[^}]*align-content[^}]*\}')
+          .firstMatch(css)!
+          .group(0)!;
+      expect(page, contains('minmax(0, 36em)'));
+      expect(page, contains('justify-content: center'));
+    });
+
+    test(
+      "leaves a book's colours in its stylesheet, for the layer to outrank",
+      () {
+        // A book set in black assumes a white page: the layer's `!important`
+        // outranks it without the pass having to rewrite what the book said.
+        final document = _rewrite(
+          '<style>p { color: #000; background: white }</style><p>a</p>',
+        );
+        expect(document, contains('p { color: #000; background: white }'));
+      },
+    );
+
+    test('an inline colour cannot outrank the ink', () {
       final document = _rewrite(
-        '<style>p { color: #333; background: white }</style><p>a</p>',
+        '<p style="color: black !important; background-color: #fff'
+        ' !IMPORTANT">a</p>',
       );
-      expect(document, contains('p { color: #333; background: white }'));
+      expect(document, contains('color: black;'));
+      expect(document, contains('background-color: #fff"'));
     });
   });
 

@@ -93,6 +93,11 @@ const radiusPill = 999.0;
 /// Spacing
 const gutter = 20.0;
 
+/// The room at either side of a book's page. Narrower than [gutter]: a
+/// phone's column of prose is short of words as it is, and the edge of the
+/// screen is margin enough.
+const bookSideMargin = 12.0;
+
 /// The wider gutter of the two screens that stand in front of the app — the
 /// picker and the sign-in form. Both hold a single column on an otherwise
 /// empty screen, and both are the handoff's login screen at heart, so the
