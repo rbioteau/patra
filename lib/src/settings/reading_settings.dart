@@ -18,6 +18,12 @@ enum ReadingDirection {
   bool get isVerticalScroll => this == ReadingDirection.verticalScroll;
   bool get isRightToLeft => this == ReadingDirection.rightToLeft;
 
+  /// What this direction turns a book in: a book's pages are the server's and
+  /// are turned, so a strip to scroll through is not something it has, and
+  /// vertical scrolling reads as the left to right a book opens in.
+  ReadingDirection get forBook =>
+      isVerticalScroll ? ReadingDirection.leftToRight : this;
+
   /// Full phrases only — never "LTR"/"RTL" in UI copy.
   String label(AppLocalizations l10n) => switch (this) {
     ReadingDirection.leftToRight => l10n.readingDirectionLtr,

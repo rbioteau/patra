@@ -952,15 +952,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // The same chain a chapter of pictures is resolved through: the series'
     // own choice, then the library's, then what the work itself suggests —
     // which for a book is what the book declared of itself (#118).
-    final rtl = ref
-        .watch(
-          chapterDirectionProvider((
-            seriesId: chapter.seriesId,
-            libraryId: chapter.libraryId,
-          )),
-        )
-        .direction
-        .isRightToLeft;
+    final resolved = ref.watch(
+      chapterDirectionProvider((
+        seriesId: chapter.seriesId,
+        libraryId: chapter.libraryId,
+      )),
+    );
+    final direction = resolved.direction.forBook;
+    final rtl = direction.isRightToLeft;
+    final libraryName = ref.watch(libraryNameProvider(chapter.libraryId));
     // What the book is made of, as only the server can say: it read the
     // file's own navigation, and no client can reconstruct the shape of a
     // book from the pages it was laid out into. Watched here rather than by
@@ -1049,7 +1049,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             // series' name, and the file's own title is on the page it is
             // reading.
             title: chapter.title,
-            settings: _BookSettings(bookFamily: bookFamily),
+            settings: _BookSettings(
+              bookFamily: bookFamily,
+              direction: resolved,
+              libraryName: libraryName,
+              // What a promotion writes is what the book really turns in,
+              // never a vertical scroll it cannot do.
+              onOutcome: (outcome) =>
+                  _onSettingsOutcome(outcome, chapter, direction),
+            ),
             canvas: patraBookCanvas,
           ),
           _BottomChrome(
@@ -2128,16 +2136,13 @@ class _TapZones extends StatelessWidget {
 /// There are two sheets, and which one a chapter gets is decided by what the
 /// chapter is made of. A chapter of pictures has a direction to choose, a
 /// library to promote it to and a width to open at; a book has the size of
-/// its words and the room between its lines, and nothing else (#75) — so the
-/// two are one cog and two answers rather than two cogs.
+/// its words, the room between its lines and its face — and, since #121, the
+/// same direction rows under them, in the two directions a book can turn —
+/// so the two are one cog and two sheets rather than two cogs. Both answer
+/// the same way: what they change about the work comes back, and the reader,
+/// which has the series and the library in hand, writes it.
 sealed class _ReaderSettings {
-  const _ReaderSettings();
-}
-
-/// The sheet for a chapter of pictures: the direction in force, the library a
-/// promotion would be written against, and what to do with the answer.
-final class _PictureSettings extends _ReaderSettings {
-  const _PictureSettings({
+  const _ReaderSettings({
     required this.direction,
     required this.libraryName,
     required this.onOutcome,
@@ -2150,16 +2155,28 @@ final class _PictureSettings extends _ReaderSettings {
   final String libraryName;
 
   /// What the sheet came back with, once it has closed. Not everything a
-  /// chapter's sheet changes comes back this way — the width is written
-  /// straight through, the way a book's two settings are.
+  /// sheet changes comes back this way — the width and how a book is set are
+  /// written straight through to the person reading.
   final ValueChanged<ReaderSettingsOutcome> onOutcome;
 }
 
-/// The sheet for a book, which offers how the book is set and nothing about
-/// pictures. It has nothing to report: both of its settings are written
-/// straight through to the person reading.
+/// The sheet for a chapter of pictures.
+final class _PictureSettings extends _ReaderSettings {
+  const _PictureSettings({
+    required super.direction,
+    required super.libraryName,
+    required super.onOutcome,
+  });
+}
+
+/// The sheet for a book: how it is set, and the direction it turns in.
 final class _BookSettings extends _ReaderSettings {
-  const _BookSettings({this.bookFamily});
+  const _BookSettings({
+    required super.direction,
+    required super.libraryName,
+    required super.onOutcome,
+    this.bookFamily,
+  });
 
   /// The family the book's own face was registered under, or null where the
   /// book has none. This is passed to [showBookSettingsSheet] so the sheet's
@@ -2269,22 +2286,22 @@ class _SettingsCog extends StatelessWidget {
               direction: direction,
               libraryName: libraryName,
             ),
-          // A book's sheet has nothing to report: what it changes, it
-          // writes to the person reading as it is being changed.
-          _BookSettings(:final bookFamily) => showBookSettingsSheet(
-            context,
-            bookFamily: bookFamily,
-          ).then((_) => null),
+          _BookSettings(
+            :final direction,
+            :final libraryName,
+            :final bookFamily,
+          ) =>
+            showBookSettingsSheet(
+              context,
+              direction: direction,
+              libraryName: libraryName,
+              bookFamily: bookFamily,
+            ),
         };
         // The sheet outlives the chrome it was opened from, so what it
         // reports may arrive with the cog already out of the tree.
         if (outcome == null || !context.mounted) return;
-        switch (settings) {
-          case _PictureSettings(:final onOutcome):
-            onOutcome(outcome);
-          case _BookSettings():
-            return;
-        }
+        settings.onOutcome(outcome);
       },
       child: const Icon(Icons.settings, size: 21, color: Colors.white),
     );

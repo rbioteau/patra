@@ -674,6 +674,12 @@ abstract class AppLocalizations {
   /// **'{direction} — detected from the work'**
   String directionSourceDetected(String direction);
 
+  /// In the reader's sheet, for a book: the reading direction in force is what the book declared of itself in its own stylesheet. Not a detection, and not anybody's choice here — the book said so.
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} — as the book declares'**
+  String directionSourceBook(String direction);
+
   /// In the reader's sheet: the reading direction in force is the one a chapter opens in having never been given another — nothing was chosen for this series or its library, and nothing was detected either. Worded neutrally, because it is nobody's choice.
   ///
   /// In en, this message translates to:

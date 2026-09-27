@@ -365,27 +365,185 @@ void main() {
       // something the sheet comes back with.
       expect(find.text('16 pt'), findsOneWidget);
       expect(find.text('155%'), findsOneWidget);
-      final checked = tester.getCenter(find.byIcon(Icons.check));
-      expect(checked.dy, tester.getCenter(find.text('Serif')).dy);
-      expect(
-        find.byIcon(Icons.check),
-        findsOneWidget,
-        reason: 'exactly one of the three is in force',
-      );
+      // Two checks on the sheet — a face and a direction — and the face's is
+      // the one above the direction's heading.
+      final heading = tester.getCenter(find.text('READING DIRECTION')).dy;
+      final faceChecks = tester
+          .widgetList(find.byIcon(Icons.check))
+          .map((icon) => tester.getCenter(find.byWidget(icon)).dy)
+          .where((dy) => dy < heading)
+          .toList();
+      expect(faceChecks, [
+        tester.getCenter(find.text('Serif')).dy,
+      ], reason: 'exactly one of the three is in force');
     });
     testWidgets('offers nothing that is a question about pictures', (
       tester,
     ) async {
       await _openBookSheet(tester);
 
-      // No direction, because nothing detects one and there are no pictures
-      // to turn; no strip width and no magnifying gesture, because a book is
-      // not laid out at a width and its pages have no size to magnify.
-      expect(find.text('READING DIRECTION'), findsNothing);
-      expect(find.text('Left to right'), findsNothing);
+      // No strip width and no magnifying gesture, because a book is not laid
+      // out at a width and its pages have no size to magnify.
       expect(find.text('Drag to magnify'), findsNothing);
       expect(find.text('Page width'), findsNothing);
       expect(find.byType(Slider), findsNWidgets(2));
+    });
+
+    testWidgets('offers the two directions a book can turn in (#121)', (
+      tester,
+    ) async {
+      await _openBookSheet(tester);
+
+      expect(find.text('READING DIRECTION'), findsOneWidget);
+      expect(find.text('Left to right'), findsOneWidget);
+      expect(find.text('Right to left'), findsOneWidget);
+      // A book's pages are the server's and are turned, so there is no strip
+      // to scroll through: a row that could be picked and did nothing would
+      // be worse than no row.
+      expect(find.text('Vertical'), findsNothing);
+    });
+
+    testWidgets('the direction comes last, under how the book is set', (
+      tester,
+    ) async {
+      // A book's direction is nearly always right and is there to be
+      // corrected; its type is what a reader reaches for.
+      await _openBookSheet(tester);
+
+      final face = tester.getCenter(find.text('Reading face'));
+      final direction = tester.getCenter(find.text('READING DIRECTION'));
+      expect(direction.dy, greaterThan(face.dy));
+    });
+
+    testWidgets('a declaration reads as what the book says', (tester) async {
+      // For a book the detected rung is no detection: it is what the book
+      // declared of itself in its own stylesheet (#118).
+      await _openBookSheet(
+        tester,
+        direction: ChapterDirection(
+          series: null,
+          library: null,
+          detected: ReadingDirection.rightToLeft,
+        ),
+      );
+
+      expect(find.text('Right to left — as the book declares'), findsOneWidget);
+      expect(find.textContaining('detected from the work'), findsNothing);
+    });
+
+    testWidgets('picking a direction reports it and closes the sheet', (
+      tester,
+    ) async {
+      final outcomes = await _openBookSheet(tester);
+
+      await tester.tap(find.text('Right to left'));
+      await tester.pumpAndSettle();
+
+      expect(outcomes, hasLength(1));
+      expect(
+        (outcomes.single as DirectionPicked).direction,
+        ReadingDirection.rightToLeft,
+      );
+      expect(find.text('Text size'), findsNothing, reason: 'one-shot');
+    });
+
+    testWidgets('the row back lands on what the book declares', (tester) async {
+      final outcomes = await _openBookSheet(
+        tester,
+        direction: ChapterDirection(
+          series: ReadingDirection.leftToRight,
+          library: null,
+          detected: ReadingDirection.rightToLeft,
+        ),
+      );
+
+      expect(
+        find.text('Left to right — chosen for this series'),
+        findsOneWidget,
+      );
+      final back = find.widgetWithText(ListTile, 'Follow the default');
+      expect(
+        find.descendant(of: back, matching: find.text('Right to left')),
+        findsOneWidget,
+      );
+      await tester.tap(back);
+      await tester.pumpAndSettle();
+      expect(outcomes.single, isA<SeriesDirectionCleared>());
+    });
+
+    testWidgets('a direction can be made the library\'s, as for pictures', (
+      tester,
+    ) async {
+      final outcomes = await _openBookSheet(
+        tester,
+        direction: ChapterDirection(
+          series: ReadingDirection.rightToLeft,
+          library: null,
+          detected: null,
+        ),
+        libraryName: 'Books',
+      );
+
+      await tester.tap(find.text('Make this the default for Books'));
+      await tester.pumpAndSettle();
+      expect(outcomes.single, isA<DirectionPromotedToLibrary>());
+    });
+
+    testWidgets('a promotion that would change nothing a book turns in is '
+        'not offered', (tester) async {
+      // A series scrolled as a strip on a shelf read left to right: the book
+      // turns left to right either way, so writing it to the shelf would
+      // close the sheet having done nothing.
+      await _openBookSheet(
+        tester,
+        direction: ChapterDirection(
+          series: ReadingDirection.verticalScroll,
+          library: ReadingDirection.leftToRight,
+          detected: null,
+        ),
+      );
+
+      expect(find.textContaining('Make this the default for'), findsNothing);
+    });
+
+    testWidgets('a vertical direction inherited from a shelf reads as the '
+        'left to right a book opens in', (tester) async {
+      // A library read as a strip turns none of its books into one: the
+      // reader collapses it, so the sheet names what the book really does.
+      final outcomes = await _openBookSheet(
+        tester,
+        direction: ChapterDirection(
+          series: null,
+          library: ReadingDirection.verticalScroll,
+          detected: null,
+        ),
+        libraryName: 'Mixed',
+      );
+
+      expect(
+        find.text('Left to right — the default for Mixed'),
+        findsOneWidget,
+      );
+      final row = find.widgetWithText(ListTile, 'Left to right').first;
+      expect(
+        find.descendant(of: row, matching: find.byIcon(Icons.check)),
+        findsOneWidget,
+      );
+      // And the way back from the shelf names where the book lands in the
+      // same terms.
+      final back = find.widgetWithText(
+        ListTile,
+        'Follow the default for Mixed',
+      );
+      expect(
+        find.descendant(of: back, matching: find.text('Left to right')),
+        findsOneWidget,
+      );
+      // And tapping it drops the shelf's own, which is the way back from a
+      // shelf of scans that turned the books beside them.
+      await tester.tap(back);
+      await tester.pumpAndSettle();
+      expect(outcomes.single, isA<LibraryDirectionCleared>());
     });
 
     testWidgets('what the sliders are left at is what a book is set at', (
@@ -476,8 +634,14 @@ Future<List<ReaderSettingsOutcome>> _openSheet(
   return outcomes;
 }
 
-/// Opens the sheet a book's cog opens, over a cog of its own.
-Future<void> _openBookSheet(WidgetTester tester) async {
+/// Opens the sheet a book's cog opens, over a cog of its own, and reports
+/// what it came back with — as [_openSheet] does.
+Future<List<ReaderSettingsOutcome>> _openBookSheet(
+  WidgetTester tester, {
+  ChapterDirection? direction,
+  String libraryName = 'Books',
+}) async {
+  final outcomes = <ReaderSettingsOutcome>[];
   tester.view.physicalSize = const Size(1200, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -496,7 +660,20 @@ Future<void> _openBookSheet(WidgetTester tester) async {
           body: Builder(
             builder: (cog) => IconButton(
               icon: const Icon(Icons.settings),
-              onPressed: () => showBookSettingsSheet(cog),
+              onPressed: () async {
+                final outcome = await showBookSettingsSheet(
+                  cog,
+                  direction:
+                      direction ??
+                      ChapterDirection(
+                        series: null,
+                        library: null,
+                        detected: null,
+                      ),
+                  libraryName: libraryName,
+                );
+                if (outcome != null) outcomes.add(outcome);
+              },
             ),
           ),
         ),
@@ -505,4 +682,5 @@ Future<void> _openBookSheet(WidgetTester tester) async {
   );
   await tester.tap(find.byIcon(Icons.settings));
   await tester.pumpAndSettle();
+  return outcomes;
 }

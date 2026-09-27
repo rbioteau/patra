@@ -94,50 +94,12 @@ Future<ReaderSettingsOutcome?> showReaderSettingsSheet(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _SheetLabel(l10n.readingDirection),
-              // Where the direction in force came from. Only the reader's sheet
-              // carries it, because only the reader's sheet has a series in
-              // hand — and a checked row on its own reads as "I chose this",
-              // which a guess is not.
-              _ProvenanceLine(direction: direction, libraryLabel: libraryLabel),
-              _DirectionRows(
-                current: direction.direction,
-                onPicked: (option) =>
-                    Navigator.of(sheetContext).pop(DirectionPicked(option)),
+              _DirectionSection(
+                direction: direction,
+                libraryLabel: libraryLabel,
+                forBook: false,
+                onOutcome: (outcome) => Navigator.of(sheetContext).pop(outcome),
               ),
-              // The actions below are one-shot, like picking a direction:
-              // each is a single thing done to the choice in force, and none
-              // is a switch that has to be turned back off. So all of them
-              // close the sheet, where the magnifying switch and the width
-              // slider stay open. They come as two pairs — what can be
-              // promoted, then what can be dropped — and the library's row
-              // leads each pair, since it is the rung they are about.
-              if (direction.canPromoteToLibrary)
-                _ActionRow(
-                  icon: Icons.grid_view_outlined,
-                  label: l10n.promoteLibraryDirection(libraryLabel),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(const DirectionPromotedToLibrary()),
-                ),
-              if (direction.hasLibraryDirection)
-                _ActionRow(
-                  icon: Icons.restart_alt,
-                  label: l10n.followDefaultDirectionForLibrary(libraryLabel),
-                  landing: direction.withoutLibrary.label(l10n),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(const LibraryDirectionCleared()),
-                ),
-              if (direction.hasSeriesDirection)
-                _ActionRow(
-                  icon: Icons.restart_alt,
-                  label: l10n.followDefaultDirection,
-                  landing: direction.withoutSeries.label(l10n),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(const SeriesDirectionCleared()),
-                ),
               const Divider(height: 24, indent: gutter, endIndent: gutter),
               _MagnifyRow(direction: direction.direction),
               const Divider(height: 24, indent: gutter, endIndent: gutter),
@@ -155,20 +117,130 @@ Future<ReaderSettingsOutcome?> showReaderSettingsSheet(
   return outcome;
 }
 
-/// Where the direction in force came from: this series' own, this library's,
-/// detected from the work, or the built-in left-to-right.
-class _ProvenanceLine extends StatelessWidget {
-  const _ProvenanceLine({required this.direction, required this.libraryLabel});
+/// The reading direction, in either sheet: where the one in force came
+/// from, the directions to pick from, and the one-shot actions on the rungs.
+///
+/// One widget for both sheets because the chain is one chain (ADR-0007): a
+/// book resolves its direction through the same rungs a chapter of pictures
+/// does (#118), and a way to write them that was worded twice would drift.
+/// What differs for a book is said by [forBook] and nowhere else — it turns
+/// in two directions, not three, and its detected rung is what it declared.
+///
+/// Every row here is one-shot and answers through [onOutcome]: the sheet has
+/// no series or library id to write against, and the reader has both.
+class _DirectionSection extends StatelessWidget {
+  const _DirectionSection({
+    required this.direction,
+    required this.libraryLabel,
+    required this.forBook,
+    required this.onOutcome,
+  });
 
   final ChapterDirection direction;
 
   /// The library's name, as the rows word it.
   final String libraryLabel;
 
+  /// Whether what is being read is a book (#121). A book's pages are turned,
+  /// never scrolled as a strip, so it is offered two directions, and every
+  /// direction the sheet names is the one the book really turns in
+  /// ([ReadingDirection.forBook]) — a series or a shelf set to vertical
+  /// scrolling reads as the left to right the reader opens a book in.
+  final bool forBook;
+
+  final ValueChanged<ReaderSettingsOutcome> onOutcome;
+
+  ReadingDirection _shown(ReadingDirection value) =>
+      forBook ? value.forBook : value;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final label = direction.direction.label(l10n);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SheetLabel(l10n.readingDirection),
+        // Where the direction in force came from: a checked row on its own
+        // reads as "I chose this", which a guess or a declaration is not.
+        _ProvenanceLine(
+          direction: direction,
+          libraryLabel: libraryLabel,
+          forBook: forBook,
+        ),
+        _DirectionRows(
+          // What a book can turn in is what `forBook` makes of every
+          // direction, so the two cannot drift apart.
+          options: {
+            for (final option in ReadingDirection.values) _shown(option),
+          }.toList(),
+          current: _shown(direction.direction),
+          onPicked: (option) => onOutcome(DirectionPicked(option)),
+        ),
+        // The actions below are one-shot, like picking a direction: each is a
+        // single thing done to the choice in force, and none is a switch that
+        // has to be turned back off. So all of them close the sheet, where the
+        // sliders and switches stay open. They come as two pairs — what can be
+        // promoted, then what can be dropped — and the library's row leads
+        // each pair, since it is the rung they are about.
+        // For a book, only where the shelf would turn it differently: a
+        // series scrolled as a strip on a shelf read left to right turns a
+        // book left to right either way, and a promotion that changes nothing
+        // would close the sheet having done nothing.
+        if (forBook
+            ? direction.library?.forBook != _shown(direction.direction)
+            : direction.canPromoteToLibrary)
+          _ActionRow(
+            icon: Icons.grid_view_outlined,
+            label: l10n.promoteLibraryDirection(libraryLabel),
+            onTap: () => onOutcome(const DirectionPromotedToLibrary()),
+          ),
+        if (direction.hasLibraryDirection)
+          _ActionRow(
+            icon: Icons.restart_alt,
+            label: l10n.followDefaultDirectionForLibrary(libraryLabel),
+            landing: _shown(direction.withoutLibrary).label(l10n),
+            onTap: () => onOutcome(const LibraryDirectionCleared()),
+          ),
+        if (direction.hasSeriesDirection)
+          _ActionRow(
+            icon: Icons.restart_alt,
+            label: l10n.followDefaultDirection,
+            // For a book this may land on what the book declares, which is
+            // the right answer: the default for a book is the book's word.
+            landing: _shown(direction.withoutSeries).label(l10n),
+            onTap: () => onOutcome(const SeriesDirectionCleared()),
+          ),
+      ],
+    );
+  }
+}
+
+/// Where the direction in force came from: this series' own, this library's,
+/// detected from the work — or, for a book, declared by it — or the built-in
+/// left-to-right.
+class _ProvenanceLine extends StatelessWidget {
+  const _ProvenanceLine({
+    required this.direction,
+    required this.libraryLabel,
+    required this.forBook,
+  });
+
+  final ChapterDirection direction;
+
+  /// The library's name, as the rows word it.
+  final String libraryLabel;
+
+  /// Whether the detected rung is a book's declaration rather than a
+  /// measurement: for a book it is what the book said of itself (#118), and
+  /// "detected" undersold it.
+  final bool forBook;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // The one in force, named as what is being read really turns in it.
+    final shown = forBook ? direction.direction.forBook : direction.direction;
+    final label = shown.label(l10n);
     return Padding(
       padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 8),
       child: Text(switch (direction.source) {
@@ -177,7 +249,10 @@ class _ProvenanceLine extends StatelessWidget {
           label,
           libraryLabel,
         ),
-        ReadingDirectionSource.detected => l10n.directionSourceDetected(label),
+        ReadingDirectionSource.detected =>
+          forBook
+              ? l10n.directionSourceBook(label)
+              : l10n.directionSourceDetected(label),
         ReadingDirectionSource.builtIn => l10n.directionSourceBuiltIn(label),
       }, style: PatraText.metadata(color: patraTextMuted)),
     );
@@ -238,14 +313,20 @@ class _ActionRow extends StatelessWidget {
   );
 }
 
-/// The three directions, as rows.
+/// The directions, as rows: all three for a chapter of pictures, the two a
+/// book can turn in for a book.
 ///
 /// It used to be shared with Settings' own picker, so the two could not drift
 /// into wording the choice differently (#58). Settings has no reading section
-/// now, so it is the reader's alone and private to its sheet.
+/// now, so it is the reader's alone, and both of its sheets draw it.
 class _DirectionRows extends StatelessWidget {
-  const _DirectionRows({required this.current, required this.onPicked});
+  const _DirectionRows({
+    required this.options,
+    required this.current,
+    required this.onPicked,
+  });
 
+  final List<ReadingDirection> options;
   final ReadingDirection current;
   final ValueChanged<ReadingDirection> onPicked;
 
@@ -255,7 +336,7 @@ class _DirectionRows extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final option in ReadingDirection.values)
+        for (final option in options)
           ListTile(
             leading: DirectionIcon(
               option,
@@ -388,48 +469,67 @@ class _WidthFactorRow extends ConsumerWidget {
   }
 }
 
-/// The reader's settings **for a book**, and the only ones: how the words are
-/// set, and nothing about pictures.
+/// The reader's settings **for a book**: how the words are set, the direction
+/// the book turns in, and nothing about pictures.
 ///
-/// Which way pages turn is a question about pictures. With no page sizes
-/// there is nothing for a detected direction to measure, nothing to pair into
-/// a spread, no strip to lay out at a width of its own, and no page for a
-/// magnifying gesture to carry — so the sheet a book's cog opens offers none
-/// of them (#75). What is left is the type: how large the words are, how much
-/// room there is between the lines, and the face they are set in (#92). All
-/// three are one choice for **every** book, and all three belong to the
-/// person reading rather than to the work, because what is being chosen is
-/// how somebody reads.
+/// With no page sizes there is nothing to pair into a spread, no strip to lay
+/// out at a width of its own, and no page for a magnifying gesture to carry —
+/// so the sheet a book's cog opens offers none of them (#75). What is left is
+/// the type: how large the words are, how much room there is between the
+/// lines, and the face they are set in (#92). All three are one choice for
+/// **every** book, and all three belong to the person reading rather than to
+/// the work, because what is being chosen is how somebody reads.
 ///
-/// Nothing comes back from it: all three are written straight through to the
-/// profile the way the width is, and the sheet stays open over the page it is
-/// changing.
-Future<void> showBookSettingsSheet(
+/// All three are written straight through to the profile the way the width
+/// is, and the sheet stays open over the page it is changing.
+///
+/// **Under them, the direction** (#121) — the one thing here about the work
+/// rather than the person, and so the one thing that comes back: the chain a
+/// book turns through has a series' rung and a library's, both choices, and
+/// without a row a direction a book inherited from a shelf of scans, or read
+/// wrongly off its own stylesheet, had no way back. It is last because it is
+/// nearly always right and is there to be corrected, and it is one-shot like
+/// the picture sheet's: picking one closes the sheet with an answer.
+Future<ReaderSettingsOutcome?> showBookSettingsSheet(
   BuildContext context, {
+  required ChapterDirection direction,
+  required String libraryName,
   String? bookFamily,
-}) =>
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: patraSurface,
-      // Everything the sheet draws is read off [sheetContext], the context of
-      // the sheet's own route — never off [context], which belongs to the cog
-      // that opened it and leaves the tree when the chrome does.
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _BookTextSizeRow(),
-              Divider(height: 24, indent: gutter, endIndent: gutter),
-              _BookLineSpacingRow(),
-              Divider(height: 24, indent: gutter, endIndent: gutter),
-              _BookReadingFaceRow(bookFamily: bookFamily),
-              SizedBox(height: 8),
-            ],
-          ),
+}) => showModalBottomSheet<ReaderSettingsOutcome>(
+  context: context,
+  backgroundColor: patraSurface,
+  // Everything the sheet draws is read off [sheetContext], the context of
+  // the sheet's own route — never off [context], which belongs to the cog
+  // that opened it and leaves the tree when the chrome does.
+  builder: (sheetContext) {
+    final l10n = AppLocalizations.of(sheetContext);
+    final libraryLabel = libraryName.isNotEmpty
+        ? libraryName
+        : l10n.thisLibrary;
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _BookTextSizeRow(),
+            const Divider(height: 24, indent: gutter, endIndent: gutter),
+            const _BookLineSpacingRow(),
+            const Divider(height: 24, indent: gutter, endIndent: gutter),
+            _BookReadingFaceRow(bookFamily: bookFamily),
+            const Divider(height: 24, indent: gutter, endIndent: gutter),
+            _DirectionSection(
+              direction: direction,
+              libraryLabel: libraryLabel,
+              forBook: true,
+              onOutcome: (outcome) => Navigator.of(sheetContext).pop(outcome),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
+  },
+);
 
 /// One number a person picks with a slider, in a sheet that stays open.
 ///

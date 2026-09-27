@@ -96,6 +96,7 @@
   "readingDirectionVerticalScroll": "Vertical",
   "directionSourceSeries": "{direction} — choisi pour cette série",
   "directionSourceDetected": "{direction} — détecté d'après l'œuvre",
+  "directionSourceBook": "{direction} — déclaré par le livre",
   "directionSourceBuiltIn": "{direction} — le réglage par défaut",
   "directionSourceLibrary": "{direction} — le réglage par défaut de {library}",
   "promoteLibraryDirection": "En faire le réglage par défaut de {library}",

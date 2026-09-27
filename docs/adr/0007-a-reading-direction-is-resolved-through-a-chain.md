@@ -465,3 +465,20 @@ what the catalogue is asked with.
 Nothing else about the chain moves: a guess is still asked last but one, and a
 series' or a library's own direction still outranks it.
 
+## Amendment — 2026-09-27 (#121)
+
+The sharp edge left above is closed: **a book's cog writes and drops the two
+rungs that are choices**, as the picture sheet's does. The sheet a book opens
+keeps its three rows about the person reading — size, spacing, face — and puts
+the direction under them, the one row about the work, which is why it is the
+one that comes back as an answer (`ReaderSettingsOutcome`) for the reader to
+write against the series or the library, and never a preference of the
+person's.
+
+What a book is offered follows from its collapse to left-to-right: **two
+directions**, not three, and every direction the sheet names is the one the
+book really turns in (`ReadingDirection.forBook`) — so a promotion that would
+change nothing a book turns in is not offered. The detected rung is worded as
+what the book **declares**, since for a book it is no detection. Nothing about
+the order of the rungs moves: a choice still outranks the declaration, and
+dropping one lands on it.

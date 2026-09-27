@@ -177,7 +177,7 @@ void main() {
     expect(find.text('Dune'), findsNothing);
   });
 
-  testWidgets('the cog offers how the book is set, and nothing else', (
+  testWidgets('the cog offers how the book is set, then its direction', (
     tester,
   ) async {
     await pumpBook(tester);
@@ -185,13 +185,12 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings));
     await tester.pumpAndSettle();
 
-    // How a book is set is a question about words, and the only one there
-    // is: which way pages turn is a question about pictures. The face is
-    // the third of the three, and the last.
+    // How a book is set is a question about words; under it, the direction
+    // it turns in (#121). Nothing about pictures: no strip, no magnifying.
     expect(find.text('Text size'), findsOneWidget);
     expect(find.text('Line spacing'), findsOneWidget);
     expect(find.text('Reading face'), findsOneWidget);
-    expect(find.text('READING DIRECTION'), findsNothing);
+    expect(find.text('READING DIRECTION'), findsOneWidget);
     expect(find.text('Drag to magnify'), findsNothing);
     expect(find.text('Page width'), findsNothing);
   });
@@ -518,6 +517,42 @@ void main() {
 
       expect(requested, isEmpty, reason: 'the copy is the page');
       expect(laidOut(tester), TextDirection.rtl);
+    });
+
+    testWidgets('a reader can turn a book, and the way back is what it '
+        'declared (#121)', (tester) async {
+      // The cog is the one place a direction is chosen, and a book had no row
+      // there: a book read wrongly off its stylesheet, or turned by a shelf
+      // of scans, stayed that way. A choice outranks the declaration (ADR-
+      // 0007), and dropping it lands on the declaration again.
+      await pumpBook(tester, html: page('.book-content { direction: rtl; }'));
+      expect(laidOut(tester), TextDirection.rtl);
+
+      Future<void> fromTheCog(String row) async {
+        await showBookChrome(tester);
+        await tester.tap(find.byIcon(Icons.settings));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text(row),
+          100,
+          scrollable: find
+              .descendant(
+                of: find.byType(BottomSheet),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.tap(find.text(row));
+        await tester.pumpAndSettle();
+      }
+
+      await fromTheCog('Left to right');
+      expect(laidOut(tester), TextDirection.ltr);
+      expect(pager(tester), AxisDirection.right);
+
+      await fromTheCog('Follow the default');
+      expect(laidOut(tester), TextDirection.rtl);
+      expect(pager(tester), AxisDirection.left);
     });
 
     testWidgets('the chrome and its numerals never turn with the book', (

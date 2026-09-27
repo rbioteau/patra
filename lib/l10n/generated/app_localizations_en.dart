@@ -385,6 +385,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String directionSourceBook(String direction) {
+    return '$direction — as the book declares';
+  }
+
+  @override
   String directionSourceBuiltIn(String direction) {
     return '$direction — the default';
   }
