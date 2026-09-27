@@ -96,7 +96,11 @@ String rewriteBookPage(
       '<style>\n${_faces(setting, faceFiles)}'
       '${_overrides(setting, justify: lang != null)}\n</style>\n'
       '</head>\n'
-      '<body>\n${_Rewrite(html, localFile).run()}\n</body>\n'
+      // The container Kavita's own reader puts a page in, and so the one the
+      // book's stylesheet is scoped under: every rule of it arrives as
+      // `.book-content …`, and without it none matched (#132).
+      '<body class="book-content">\n'
+      '${_Rewrite(html, localFile).run()}\n</body>\n'
       '</html>\n';
 }
 
@@ -177,9 +181,12 @@ String _overrides(BookSetting setting, {required bool justify}) {
       // renderer sets it (`DevelopmentBookPage`), and one taller scrolls as
       // ever.
       // The body is the grid's one item and stays a block inside, so nothing
-      // of the book's own layout changes.
+      // of the book's own layout changes. Its column is the screen's width
+      // and no more: left `auto`, it grew to whatever the body held, and a
+      // picture wider than the screen took the prose off its right edge
+      // (seen by the device golden, #132).
       '  html { display: grid; align-content: center; min-height: 100vh; '
-      'box-sizing: border-box; }\n'
+      'grid-template-columns: minmax(0, 1fr); box-sizing: border-box; }\n'
       '${justify ? _justified : ''}'
       '  html { font-size: ${_number(setting.textSize)}px !important; }\n'
       '  *, *::before, *::after { '

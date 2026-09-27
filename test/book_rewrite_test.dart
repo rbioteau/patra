@@ -645,6 +645,20 @@ void main() {
       );
     });
 
+    test('and still finds the page it was written for', () {
+      // Kavita scopes a book's whole stylesheet under `.book-content` — the
+      // container its own reader puts a page in — so a document with no such
+      // container matches none of it: every figure at the engine's default
+      // margins and every picture at its own size, seen on a device by the
+      // golden (#132). The body is that container.
+      final document = _rewrite(
+        '<div class=" "><style>.book-content figure img{width:100%}</style>'
+        '<figure><img src="OEBPS/plate.png"></figure></div>',
+      );
+      expect(document, contains('<body class="book-content">'));
+      expect(document, contains('.book-content figure img{width:100%}'));
+    });
+
     test('with an attribute that needed escaping still escaped', () {
       final document = _rewrite('<img alt=\'say "hi" &amp; &eacute;\'>');
       expect(document, contains('alt="say &quot;hi&quot; &amp; &eacute;"'));
@@ -750,6 +764,19 @@ void main() {
       expect(page, contains('min-height: 100vh'));
       expect(page, contains('box-sizing: border-box'));
       expect(page, isNot(contains('!important')));
+    });
+
+    test('never lets the one column grow wider than the screen', () {
+      // A grid's implicit column is `auto`, sized to what its one item — the
+      // body — holds, so a picture or a line wider than the screen widened
+      // the whole page past it: seen on a device, by the golden (#132), as
+      // prose running off the right edge. `minmax(0, 1fr)` is the screen's
+      // width and no more.
+      final css = overrides(_rewrite('<p>a</p>'));
+      final page = RegExp(r'html \{[^}]*align-content[^}]*\}')
+          .firstMatch(css)!
+          .group(0)!;
+      expect(page, contains('grid-template-columns: minmax(0, 1fr)'));
     });
 
     test("does not outrank a book's own colours", () {
@@ -969,7 +996,7 @@ void main() {
 
     test('nothing at all', () {
       final document = _rewrite('');
-      expect(document, contains('<body>'));
+      expect(document, contains('<body class="book-content">'));
     });
   });
 }
