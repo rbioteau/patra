@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../api/kavita_client.dart';
@@ -410,6 +411,10 @@ class DownloadsService {
   Future<void>? _queueWrites;
   var _protectAllPartials = false;
 
+  /// The removed copies whose files are still being deleted, by path, so a
+  /// sweep leaves them to the deletion already under way.
+  final _removals = <String, Future<void>>{};
+
   static const _queueVersion = 1;
   static const _queueFileName = 'queue.json';
 
@@ -643,6 +648,14 @@ class DownloadsService {
     for (final entity in root.listSync()) {
       if (entity is! Directory) continue;
       final name = entity.path.split(Platform.pathSeparator).last;
+      // A removed copy. It still holds its meta.json, so it has to be
+      // passed over before anything reads it as a copy, and one the process
+      // did not live to finish goes whatever the queue says: nobody asked to
+      // keep it.
+      if (name.startsWith(_removedPrefix)) {
+        if (!_removals.containsKey(entity.path)) _deleteInBackground(entity);
+        continue;
+      }
       final chapterId = int.tryParse(name);
       final saved = _readSavedChapter(entity);
       if (saved != null) {
@@ -1063,8 +1076,53 @@ class DownloadsService {
     }
   }
 
-  Future<void> remove(int chapterId) async =>
-      _deleteQuietly(await chapterDir(chapterId));
+  /// Takes a copy off the device. The copy is gone when this returns — its
+  /// directory renamed out of the chapter's place, which is one call however
+  /// many pages it holds — and its files are deleted afterwards, off the UI
+  /// thread. Deleting a few hundred pages in place was a synchronous call on
+  /// the main isolate, and froze the screen for as long as it took.
+  Future<void> remove(int chapterId) async {
+    final dir = await chapterDir(chapterId);
+    if (!dir.existsSync()) return;
+    final removed = Directory(
+      '${dir.parent.path}/$_removedPrefix$chapterId-'
+      '${DateTime.now().microsecondsSinceEpoch}',
+    );
+    try {
+      dir.renameSync(removed.path);
+    } on FileSystemException {
+      // Could not be moved aside: delete it where it stands instead.
+      await _deleteQuietly(dir);
+      return;
+    }
+    _deleteInBackground(removed);
+  }
+
+  /// Deletes [dir] with asynchronous file calls, which nothing waits for.
+  void _deleteInBackground(Directory dir) {
+    final path = dir.path;
+    _removals[path] = dir
+        .delete(recursive: true)
+        .then<void>(
+          (_) {},
+          onError: (_) {
+            // Left for the next scan to try again.
+          },
+        )
+        // A block, not an arrow: remove() hands back this very future, and
+        // whenComplete would wait on it forever.
+        .whenComplete(() {
+          _removals.remove(path);
+        });
+  }
+
+  /// Completes when every removed copy's files are gone.
+  @visibleForTesting
+  Future<void> removalsSettled() => Future.wait(_removals.values.toList());
+
+  /// What a removed copy's directory is renamed to start with, until its
+  /// files are gone. Never all digits, so nothing reads it as a chapter.
+  static const _removedPrefix = '.removed-';
 
   /// How much saved reading this profile holds, for the confirmation that
   /// stands in front of removing it: what is about to go has to be said
@@ -1082,6 +1140,8 @@ class DownloadsService {
     var bytes = 0;
     for (final entity in root.listSync()) {
       if (entity is! Directory) continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      if (name.startsWith(_removedPrefix)) continue;
       final meta = File('${entity.path}/meta.json');
       if (!meta.existsSync()) continue;
       try {

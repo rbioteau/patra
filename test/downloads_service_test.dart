@@ -590,6 +590,47 @@ void main() {
 
     expect((await service.chapterDir(42)).existsSync(), isFalse);
     expect(await service.scan(), isEmpty);
+    // Nothing of the copy is left behind once its deletion has run.
+    await service.removalsSettled();
+    final left = (await service.profileRoot())
+        .listSync()
+        .whereType<Directory>();
+    expect(left, isEmpty);
+  });
+
+  test('a chapter removed can be saved again straight away', () async {
+    await service.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_, _) {},
+    );
+
+    await service.remove(42);
+    await service.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_, _) {},
+    );
+
+    expect((await service.scan()).keys, [42]);
+  });
+
+  test('a removal the process did not finish is swept, not read', () async {
+    await service.download(
+      client: _client(_PageAdapter()),
+      chapter: _chapter,
+      onProgress: (_, _) {},
+    );
+    // What a process killed mid-removal leaves: the copy moved aside with
+    // its meta.json still in it.
+    final dir = await service.chapterDir(42);
+    final removed = Directory('${dir.parent.path}/.removed-42-1');
+    dir.renameSync(removed.path);
+
+    expect(await service.savedTotals(), (chapters: 0, bytes: 0));
+    expect(await service.scan(), isEmpty);
+    await service.removalsSettled();
+    expect(removed.existsSync(), isFalse);
   });
 
   test('discarding a cancelled download removes its resumable bytes', () async {
