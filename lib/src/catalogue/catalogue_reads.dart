@@ -149,8 +149,10 @@ final heldLibraryTypeProvider = Provider.autoDispose.family<LibraryType?, int>((
 
 /// Where the device looks a chapter up by its series, with nothing put on
 /// the wire: null where it holds no such chapter.
-typedef HeldChapter =
-    Future<Chapter?> Function({required int seriesId, required int chapterId});
+typedef HeldChapter = Future<Chapter?> Function({
+  required int seriesId,
+  required int chapterId,
+});
 
 /// A chapter as this session's catalogue holds it, off the stored volumes of
 /// its series — the reader's question for a book's language (#125), which

@@ -99,9 +99,10 @@ enum ReadingFace {
   /// the row that chose it.
   BookType resolve({String? bookFamily, bool bookItalic = false}) =>
       switch (this) {
-        ReadingFace.book => bookFamily == null
-            ? (family: fontAtkinsonHyperlegibleNext, canSetItalic: false)
-            : (family: bookFamily, canSetItalic: bookItalic),
+        ReadingFace.book =>
+          bookFamily == null
+              ? (family: fontAtkinsonHyperlegibleNext, canSetItalic: false)
+              : (family: bookFamily, canSetItalic: bookItalic),
         ReadingFace.serif => (family: fontLiterata, canSetItalic: true),
         ReadingFace.sans => (
           family: fontAtkinsonHyperlegibleNext,

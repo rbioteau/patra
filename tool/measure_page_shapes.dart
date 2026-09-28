@@ -171,7 +171,9 @@ void _report(List<_Row> rows) {
   rows.sort((a, b) => a.median.compareTo(b.median));
 
   final buffer = StringBuffer()
-    ..writeln('| Library | Series | Pages | Spreads | Median h/w | Mean h/w | Min | Max | >= $_verticalAt |')
+    ..writeln(
+      '| Library | Series | Pages | Spreads | Median h/w | Mean h/w | Min | Max | >= $_verticalAt |',
+    )
     ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (final row in rows) {
     final cells = [
@@ -200,10 +202,10 @@ void _report(List<_Row> rows) {
     stdout.writeln(
       paged.isEmpty
           ? 'Every series measured here is vertical: this library holds nothing that '
-              'turns, so it says nothing about how tall a page can get before it stops being one.'
+                'turns, so it says nothing about how tall a page can get before it stops being one.'
           : 'Every series measured here is paged: this library holds nothing that '
-              'scrolls, so it corroborates the paged population and says nothing about '
-              'where the threshold goes.',
+                'scrolls, so it corroborates the paged population and says nothing about '
+                'where the threshold goes.',
     );
     return;
   }
@@ -295,35 +297,32 @@ class _Api {
   ];
 
   Future<List<Series>> seriesForLibrary(int libraryId) async => [
-    for (final series
-        in await post(
-              '/api/Series/all-v2',
-              {
-                'statements': [
-                  {
-                    'comparison': FilterComparison.contains,
-                    'field': SeriesFilterField.libraries,
-                    'value': '$libraryId',
-                  },
-                ],
-                'combination': FilterCombination.and,
-                'limitTo': 0,
-                'sortOptions': {
-                  'sortField': SeriesSortField.sortName,
-                  'isAscending': true,
-                },
-              },
-              {'PageNumber': '1', 'PageSize': '500'},
-            ) as List<dynamic>)
+    for (final series in await post(
+      '/api/Series/all-v2',
+      {
+        'statements': [
+          {
+            'comparison': FilterComparison.contains,
+            'field': SeriesFilterField.libraries,
+            'value': '$libraryId',
+          },
+        ],
+        'combination': FilterCombination.and,
+        'limitTo': 0,
+        'sortOptions': {
+          'sortField': SeriesSortField.sortName,
+          'isAscending': true,
+        },
+      },
+      {'PageNumber': '1', 'PageSize': '500'},
+    ) as List<dynamic>)
       Series.fromJson(series as Map<String, dynamic>),
   ];
 
   Future<List<Volume>> volumes(int seriesId) async => [
-    for (final volume
-        in await get(
-              '/api/Series/volumes',
-              {'seriesId': '$seriesId'},
-            ) as List<dynamic>)
+    for (final volume in await get('/api/Series/volumes', {
+      'seriesId': '$seriesId',
+    }) as List<dynamic>)
       Volume.fromJson(volume as Map<String, dynamic>),
   ];
 

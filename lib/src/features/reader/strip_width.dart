@@ -50,10 +50,8 @@ class StripWidthController extends ChangeNotifier {
   /// The range is [StripGeometry]'s to hold — a preference and a pinch both
   /// move this number and must not clamp it differently — so every clamp of
   /// it asks the same question.
-  static double clampWidthFactor(double value) => value.clamp(
-    StripGeometry.minWidthFactor,
-    StripGeometry.maxWidthFactor,
-  );
+  static double clampWidthFactor(double value) =>
+      value.clamp(StripGeometry.minWidthFactor, StripGeometry.maxWidthFactor);
 
   final ScrollController _scroll;
 
@@ -571,9 +569,8 @@ class StripWidthGestures extends StatelessWidget {
         // behaviour written from scratch would quietly leave the strip without
         // the platform's physics — and with them without the fling a
         // one-finger drag ends in.
-        behavior: ScrollConfiguration.of(
-          context,
-        ).copyWith(dragDevices: const <PointerDeviceKind>{}),
+        behavior: ScrollConfiguration.of(context)
+            .copyWith(dragDevices: const <PointerDeviceKind>{}),
         child: child,
       ),
     );

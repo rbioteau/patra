@@ -39,9 +39,6 @@ class PatraWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PatraSignature(
-      size: size,
-      dotScale: dotScale,
-    );
+    return PatraSignature(size: size, dotScale: dotScale);
   }
 }

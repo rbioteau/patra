@@ -16,11 +16,7 @@ bool _registered = false;
 /// to be declared in `pubspec.yaml`. One that ships without being named here
 /// fails `test/about_version_test.dart`, which reads what ships rather than
 /// asking this list what it meant.
-const _families = [
-  'SpaceGrotesk',
-  'Literata',
-  'AtkinsonHyperlegibleNext',
-];
+const _families = ['SpaceGrotesk', 'Literata', 'AtkinsonHyperlegibleNext'];
 
 /// Puts every bundled face's OFL notice where Flutter's own license page looks
 /// for them.

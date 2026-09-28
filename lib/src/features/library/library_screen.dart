@@ -213,46 +213,46 @@ class LibraryScreen extends ConsumerWidget {
         // The strip a cold start draws, above this screen's own body.
         child: DownloadsResumeStrip(
           child: libraries.when(
-          loading: () => const _LibraryGridSkeleton(),
-          error: (error, _) => _ErrorState(
-            onRetry: () => ref.invalidate(catalogue.libraries.invalidatable),
-          ),
-          data: (items) {
-            if (items.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(gutter),
-                  child: Text(
-                    l10n.homeEmpty,
-                    textAlign: TextAlign.center,
-                    style: PatraText.body(color: patraTextMuted),
+            loading: () => const _LibraryGridSkeleton(),
+            error: (error, _) => _ErrorState(
+              onRetry: () => ref.invalidate(catalogue.libraries.invalidatable),
+            ),
+            data: (items) {
+              if (items.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(gutter),
+                    child: Text(
+                      l10n.homeEmpty,
+                      textAlign: TextAlign.center,
+                      style: PatraText.body(color: patraTextMuted),
+                    ),
                   ),
-                ),
+                );
+              }
+              // Non-null here: the list has arrived with something in it, which
+              // is the whole of what makes a current library exist.
+              final current = ref.watch(currentLibraryProvider)!;
+              return Column(
+                children: [
+                  _LibraryPills(
+                    libraries: items,
+                    selectedId: current,
+                    onSelected: (id) =>
+                        ref.read(selectedLibraryProvider.notifier).select(id),
+                  ),
+                  Expanded(
+                    child: _SeriesGrid(
+                      libraryId: current,
+                      libraryName: items
+                          .firstWhere((library) => library.id == current)
+                          .name,
+                    ),
+                  ),
+                ],
               );
-            }
-            // Non-null here: the list has arrived with something in it, which
-            // is the whole of what makes a current library exist.
-            final current = ref.watch(currentLibraryProvider)!;
-            return Column(
-              children: [
-                _LibraryPills(
-                  libraries: items,
-                  selectedId: current,
-                  onSelected: (id) =>
-                      ref.read(selectedLibraryProvider.notifier).select(id),
-                ),
-                Expanded(
-                  child: _SeriesGrid(
-                    libraryId: current,
-                    libraryName: items
-                        .firstWhere((library) => library.id == current)
-                        .name,
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+            },
+          ),
         ),
       ),
     );

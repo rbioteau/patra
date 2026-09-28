@@ -48,8 +48,7 @@ Future<bool?> _show(
   context: context,
   backgroundColor: patraSurface,
   isScrollControlled: true,
-  builder: (sheetContext) =>
-      _LockSheet(profile: profile, choosing: choosing),
+  builder: (sheetContext) => _LockSheet(profile: profile, choosing: choosing),
 );
 
 class _LockSheet extends ConsumerStatefulWidget {
@@ -346,11 +345,7 @@ class _PadKey extends StatelessWidget {
         onPressed();
       },
       borderRadius: BorderRadius.circular(radiusPill),
-      child: Container(
-        height: 54,
-        alignment: Alignment.center,
-        child: child,
-      ),
+      child: Container(height: 54, alignment: Alignment.center, child: child),
     );
     final labelled = tooltip == null
         ? key

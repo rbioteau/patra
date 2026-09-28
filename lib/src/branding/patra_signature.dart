@@ -74,8 +74,7 @@ void paintSignatureRaw(
   required double opacity,
 }) {
   // Draw the word in patraText.
-  final wordPaint = Paint()
-    ..color = patraText.withValues(alpha: opacity);
+  final wordPaint = Paint()..color = patraText.withValues(alpha: opacity);
   canvas.drawPath(PatraLogoPaths.wordmark, wordPaint);
 
   // Draw the period in patraAccent.
@@ -83,8 +82,7 @@ void paintSignatureRaw(
     canvas.save();
     canvas.translate(_dotCentre.dx, _dotCentre.dy);
     canvas.scale(dotScale);
-    final dotPaint = Paint()
-      ..color = patraAccent.withValues(alpha: opacity);
+    final dotPaint = Paint()..color = patraAccent.withValues(alpha: opacity);
     canvas.drawCircle(Offset.zero, _dotRadius, dotPaint);
     canvas.restore();
   }

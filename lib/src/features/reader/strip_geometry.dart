@@ -33,9 +33,7 @@ class StripGeometry {
 
   /// A strip with nothing in it: what the reader holds before the first
   /// layout, which is the only place the width is known.
-  StripGeometry.empty()
-    : screenWidth = 0,
-      widthFactor = 1.0;
+  StripGeometry.empty() : screenWidth = 0, widthFactor = 1.0;
 
   /// How narrow and how wide the strip is ever laid out.
   ///
@@ -213,6 +211,5 @@ class _StripChildDelegate extends SliverChildBuilderDelegate {
     int lastIndex,
     double leadingScrollOffset,
     double trailingScrollOffset,
-  ) =>
-      geometry.total;
+  ) => geometry.total;
 }

@@ -270,11 +270,14 @@ class _PageRailState extends State<PageRail> {
           // stays inside the reachable region.
           final labelTop = dragging
               ? (_dragY < PageRail._fingerClearance + PageRail._labelHeight
-                    ? _dragY + PageRail._fingerClearance
-                    : _dragY -
-                          PageRail._fingerClearance -
-                          PageRail._labelHeight)
-                    .clamp(0.0, math.max(0.0, trackHeight - PageRail._labelHeight))
+                        ? _dragY + PageRail._fingerClearance
+                        : _dragY -
+                              PageRail._fingerClearance -
+                              PageRail._labelHeight)
+                    .clamp(
+                      0.0,
+                      math.max(0.0, trackHeight - PageRail._labelHeight),
+                    )
                     .toDouble()
               : 0.0;
           return Listener(

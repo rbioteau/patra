@@ -140,9 +140,8 @@ class _PageImageState extends State<PageImage> {
       alignment: widget.alignment,
       // The old picture, held until the new one has decoded.
       gaplessPlayback: true,
-      errorBuilder: (_, _, _) => const Center(
-        child: Icon(Icons.broken_image, color: Colors.white24),
-      ),
+      errorBuilder: (_, _, _) =>
+          const Center(child: Icon(Icons.broken_image, color: Colors.white24)),
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         if (frame != null || wasSynchronouslyLoaded) _painted = true;
         return _painted ? child : PageLoading(explain: widget.explain);

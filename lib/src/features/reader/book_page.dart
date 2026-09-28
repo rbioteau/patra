@@ -187,7 +187,10 @@ class BookAnchor {
   }
 
   static const _mark = 'patra:';
-  static final _inBlock = RegExp('^$_mark' r'(\d+)@(\d+(?:\.\d+)?)$');
+  static final _inBlock = RegExp(
+    '^$_mark'
+    r'(\d+)@(\d+(?:\.\d+)?)$',
+  );
 
   /// What the server handed back, or null where it is not a place this app
   /// wrote — the web client's element ids among them, which name nothing in a
