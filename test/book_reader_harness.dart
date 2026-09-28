@@ -434,4 +434,22 @@ Future<void> settleBookFiles(WidgetTester tester) async {
     );
     await tester.pump(const Duration(milliseconds: 50));
   }
+  // And on a slow machine — a CI runner's first test to touch the disk —
+  // those two hundred milliseconds are not enough for the page to be drawn,
+  // so it is waited for, for as long as real I/O could reasonably take. A
+  // page that is never drawn (one the server refused) costs the wait and
+  // nothing else.
+  for (var i = 0; i < 100 && find.byType(BookWebPage).evaluate().isEmpty; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  // And once it is, the writes after it — the face's files — are let land.
+  for (var i = 0; i < 10; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }
