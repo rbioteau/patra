@@ -1,0 +1,100 @@
+/* Shared styles for Patra's preview cards. Patra is a Flutter app: these are
+   static renditions drawn from the tokens in styles.css, at the measurements
+   of the widgets named in guidelines/components.md. */
+html, body { margin: 0; background: var(--patra-bg); color: var(--patra-text); font-family: var(--patra-font-sans); }
+.pt-screen { padding: 16px var(--patra-gutter); box-sizing: border-box; }
+.pt-icon { font-family: 'Material Icons'; font-weight: normal; font-style: normal; line-height: 1; display: inline-block; -webkit-font-smoothing: antialiased; }
+.pt-icon-round { font-family: 'Material Icons Round'; }
+.pt-caption { font: 400 11px var(--patra-font-sans); color: var(--patra-text-muted); }
+
+/* Foundations */
+.pt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.pt-swatch { border: 1px solid var(--patra-border); border-radius: var(--patra-radius-card); overflow: hidden; background: var(--patra-surface); }
+.pt-swatch__chip { height: 56px; }
+.pt-swatch__body { padding: 8px 10px; }
+.pt-swatch__name { font: 600 12px var(--patra-font-sans); }
+.pt-swatch__value { font: 400 11px var(--patra-font-sans); color: var(--patra-text-muted); font-variant-numeric: tabular-nums; }
+.pt-section { font: 500 12px var(--patra-font-sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--patra-text-muted); margin: 18px 0 10px; }
+.pt-section:first-child { margin-top: 0; }
+.pt-type-row { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.pt-scale-row { display: flex; align-items: center; gap: 14px; padding: 6px 0; }
+.pt-scale-row__label { width: 190px; font: 400 12px var(--patra-font-sans); }
+.pt-bar { height: 14px; background: var(--patra-accent); border-radius: 2px; }
+.pt-radius-box { width: 64px; height: 64px; background: var(--patra-surface-hi); border: 1px solid var(--patra-border); }
+
+/* Covers: 2:3, drawn as the app's placeholder (the series' initial on a dark tone). */
+.pt-cover { position: relative; aspect-ratio: 2 / 3; border-radius: var(--patra-radius-thumb); overflow: hidden; background: #2a2433; display: grid; place-items: center; color: rgba(243, 238, 227, 0.55); font-family: var(--patra-font-serif); font-weight: 600; flex: none; }
+.pt-cover--hero { width: 124px; border-radius: var(--patra-radius-cover); font-size: 44px; }
+.pt-cover--row { width: 46px; font-size: 18px; }
+.pt-cover__spine { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: rgba(0, 0, 0, 0.35); }
+.pt-cover__bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.45); }
+.pt-cover__bar > i { display: block; height: 100%; background: var(--patra-accent); }
+
+/* Buttons */
+.pt-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; font: 600 14px var(--patra-font-sans); border-radius: var(--patra-radius-cover); padding: 0 16px; border: 0; }
+.pt-btn--filled { background: var(--patra-accent); color: var(--patra-on-accent); height: 48px; }
+.pt-btn--hero { height: 44px; padding: 0 12px; width: 100%; max-width: 280px; }
+.pt-btn--outlined { background: transparent; color: var(--patra-text); border: 1px solid var(--patra-border); height: 44px; }
+.pt-btn--text { background: transparent; color: var(--patra-accent); height: 40px; padding: 0 12px; }
+.pt-btn .pt-icon { font-size: 20px; }
+
+/* Download pill: a word in the state's colour, no box. */
+.pt-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: var(--patra-radius-pill); font: 600 11.5px var(--patra-font-sans); }
+.pt-pill .pt-icon { font-size: 14px; }
+.pt-ring { position: relative; width: 24px; height: 24px; display: grid; place-items: center; }
+.pt-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.pt-ring .pt-icon { font-size: 12px; }
+.pt-saved { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgba(142, 172, 216, 0.14); color: var(--patra-offline); flex: none; }
+.pt-saved .pt-icon { font-size: 16px; }
+
+/* Rows */
+.pt-row { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.pt-row__body { flex: 1; min-width: 0; }
+.pt-row__title { font: 600 13.5px var(--patra-font-sans); color: var(--patra-text); }
+.pt-row__meta { font: 400 11px var(--patra-font-sans); color: var(--patra-text-muted); margin-top: 3px; }
+.pt-row__track { margin-top: 7px; max-width: 180px; height: 2px; border-radius: 1px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.pt-row__track > i { display: block; height: 100%; background: var(--patra-accent); }
+.pt-row__rail { position: absolute; left: calc(-1 * var(--patra-gutter)); top: 0; bottom: 0; width: 2px; background: var(--patra-accent); }
+.pt-row--now { background: rgba(215, 185, 118, 0.06); margin: 0 calc(-1 * var(--patra-gutter)); padding-left: var(--patra-gutter); padding-right: var(--patra-gutter); }
+
+/* Section label */
+.pt-label { display: flex; align-items: center; font: 500 12px var(--patra-font-sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--patra-text-muted); }
+.pt-label > span { flex: 1; }
+
+/* Batch card */
+.pt-batch { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--patra-radius-card); background: var(--patra-surface); border: 1px solid rgba(255, 255, 255, 0.08); position: relative; overflow: hidden; }
+.pt-batch__glyph { width: 32px; height: 32px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.08); display: grid; place-items: center; color: var(--patra-text); flex: none; }
+.pt-batch__glyph .pt-icon { font-size: 16px; }
+.pt-batch__title { font: 600 13px var(--patra-font-sans); color: var(--patra-text); }
+.pt-batch__sub { font: 400 11px var(--patra-font-sans); color: var(--patra-text-muted); margin-top: 2px; }
+.pt-batch--lit { border-color: rgba(142, 172, 216, 0.45); background: rgba(142, 172, 216, 0.07); }
+.pt-batch--done { border-color: rgba(142, 172, 216, 0.45); background: rgba(142, 172, 216, 0.10); }
+.pt-batch--lit .pt-batch__glyph, .pt-batch--done .pt-batch__glyph { border-color: rgba(142, 172, 216, 0.45); color: var(--patra-offline); }
+.pt-batch--lit .pt-batch__title, .pt-batch--done .pt-batch__title { color: var(--patra-offline); }
+.pt-batch__bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, 0.06); }
+.pt-batch__bar > i { display: block; height: 100%; background: var(--patra-offline); }
+
+/* Hero */
+.pt-hero { display: flex; gap: 16px; align-items: flex-start; }
+.pt-hero__words { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 186px; }
+.pt-hero__title { font: 600 21px/1.25 var(--patra-font-serif); color: var(--patra-text); margin: 0; }
+.pt-hero__meta { font: 400 12px var(--patra-font-sans); color: var(--patra-text-muted); margin-top: 6px; }
+.pt-hero__spacer { flex: 1; min-height: 14px; }
+
+/* Setting switch row */
+.pt-setting { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; min-height: 44px; }
+.pt-setting__icon { width: 22px; text-align: center; padding-top: 2px; }
+.pt-setting__icon .pt-icon { font-size: 18px; }
+.pt-setting__title { font: 400 14px var(--patra-font-sans); color: var(--patra-text); }
+.pt-setting__sub { font: 400 11px var(--patra-font-sans); color: var(--patra-text-muted); margin-top: 2px; }
+.pt-switch { width: 52px; height: 32px; border-radius: 16px; box-sizing: border-box; position: relative; flex: none; margin-left: 8px; }
+.pt-switch::after { content: ''; position: absolute; top: 50%; border-radius: 50%; transform: translateY(-50%); }
+.pt-switch--on { background: var(--patra-accent); }
+.pt-switch--on::after { right: 4px; width: 24px; height: 24px; background: var(--patra-on-accent); }
+.pt-switch--off { background: var(--patra-surface-hi); border: 2px solid var(--patra-outline); }
+.pt-switch--off::after { left: 6px; width: 16px; height: 16px; background: var(--patra-outline); }
+
+/* Screens */
+.pt-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
+.pt-shot img { width: 100%; border-radius: var(--patra-radius-card); border: 1px solid var(--patra-border); display: block; }
+.pt-shot figcaption { margin-top: 6px; font: 400 11px var(--patra-font-sans); color: var(--patra-text-muted); }
