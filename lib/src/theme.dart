@@ -130,6 +130,10 @@ const controlMaxWidth = 280.0;
 /// A progress track drawn on its own, away from a cover.
 const radiusTrack = 2.0;
 
+/// The storage meter in Settings: a thicker bar than a progress track, so a
+/// rounder end.
+const radiusMeter = 4.0;
+
 /// The rail a read row wears on its leading edge. The widget that draws it —
 /// and the line that carries the word beside it — is `ReadRail` /
 /// `PageCountLine` in `widgets/read_mark.dart`, one mark for the two screens
@@ -374,6 +378,26 @@ ThemeData patraTheme() {
       thumbColor: patraAccent,
       trackHeight: 3,
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+    ),
+    // On is the accent with a dark thumb, off an empty track ringed in the
+    // outline — the brand kit's switch, drawn by Material's own.
+    switchTheme: SwitchThemeData(
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? patraAccent
+            : Colors.transparent,
+      ),
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? patraOnAccent
+            : patraOutline,
+      ),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? Colors.transparent
+            : patraOutline,
+      ),
+      trackOutlineWidth: const WidgetStatePropertyAll(2),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: patraSurfaceHi,

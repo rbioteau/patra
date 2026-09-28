@@ -259,9 +259,6 @@ void main() {
     );
     // The button the title shares the column with is untouched.
     expect(find.text('Continue'), findsOneWidget);
-    // And with one chapter left there is no batch card under the hero: that
-    // is the row's own pill's job.
-    expect(find.text("Download what's next"), findsNothing);
   });
 
   testWidgets('a refused fetch stops the hero shimmering', (tester) async {

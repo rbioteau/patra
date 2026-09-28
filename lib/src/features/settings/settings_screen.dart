@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/client_identity.dart';
@@ -62,6 +63,25 @@ class SettingsScreen extends ConsumerWidget {
               ],
               const _OtherProfiles(),
 
+              // Right under the profiles: what the device holds is the one
+              // thing here a reader comes back to, and every value in it is
+              // local, so it reads the same offline.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  gutter,
+                  sectionGap,
+                  gutter,
+                  12,
+                ),
+                child: SectionLabel(l10n.storageSectionLabel),
+              ),
+              const _StorageRows(),
+
+              // There is no reading section here any more (#58): everything the
+              // reader's preferences can be is set from the reader's own sheet,
+              // which is where somebody notices they want them. What this held
+              // was a default for every series at once, which is precisely the
+              // wrong shape for a direction (ADR-0007).
               _Section(label: l10n.generalSectionLabel),
               _SettingRow(
                 icon: const Icon(Icons.language, size: 18, color: patraAccent),
@@ -71,14 +91,6 @@ class SettingsScreen extends ConsumerWidget {
                     : languageEndonym(locale),
                 onTap: () => _pickLanguage(context, ref, locale),
               ),
-
-              // There is no reading section here any more (#58): everything the
-              // reader's preferences can be is set from the reader's own sheet,
-              // which is where somebody notices they want them. What this held
-              // was a default for every series at once, which is precisely the
-              // wrong shape for a direction (ADR-0007).
-              _Section(label: l10n.storageSectionLabel),
-              const _StorageRows(),
 
               _Section(label: l10n.aboutSectionLabel),
               Padding(
@@ -599,6 +611,10 @@ class _UnderRow extends StatelessWidget {
   );
 }
 
+/// What a setting row says under its title: smaller than the title, and
+/// spaced to be read as a sentence rather than scanned as a value.
+final _captionStyle = PatraText.metadata(size: 12).copyWith(height: 1.45);
+
 /// A setting that is simply on or off, with a line saying what turning it on
 /// changes. The subtitle is not decoration here: this one takes the swipe that
 /// turns a page away, and a switch alone would not say so.
@@ -644,7 +660,7 @@ class _SwitchRow extends StatelessWidget {
                   children: [
                     Text(title, style: PatraText.body()),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: PatraText.metadata()),
+                    Text(subtitle, style: _captionStyle),
                   ],
                 ),
               ),
@@ -658,7 +674,13 @@ class _SwitchRow extends StatelessWidget {
   }
 }
 
-/// What the app is keeping on the device, and the one thing worth clearing.
+/// What the app is keeping on the device, said once as a meter, and the
+/// settings that decide what goes on it.
+///
+/// There was a batch size here, how many unread chapters one tap on a series
+/// saved. It went with the batch card: a series screen now selects any run
+/// by hand, and a number chosen once for every series was a setting nobody
+/// could see the reason for.
 class _StorageRows extends ConsumerWidget {
   const _StorageRows();
 
@@ -666,88 +688,49 @@ class _StorageRows extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final downloads = ref.watch(downloadsProvider).value;
-    final cacheSize = ref.watch(imageCacheSizeProvider);
+    final savedBytes = downloads?.totalBytes ?? 0;
+    final cacheBytes = ref.watch(imageCacheSizeProvider).value ?? 0;
     final cacheLimit = ref.watch(imageCacheLimitProvider);
-    final batchSize = ref.watch(batchDownloadSizeProvider);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Saved chapters: shown for context, managed in the Downloads tab.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
-          child: Row(
-            children: [
-              const SizedBox(
-                width: 22,
-                child: Icon(Icons.download_done, size: 18, color: patraOffline),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  l10n.downloadedChapters(downloads?.saved.length ?? 0),
-                  style: PatraText.body(),
+        _UsageCard(savedBytes: savedBytes, cacheBytes: cacheBytes),
+        const SizedBox(height: 6),
+        // Saved chapters are managed in the Downloads tab; this row is the
+        // way there. In the offline blue, like everything about downloads.
+        InkWell(
+          onTap: () => GoRouter.of(context).go('/downloads'),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 52),
+            padding: const EdgeInsets.symmetric(
+              horizontal: gutter,
+              vertical: 6,
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 22,
+                  child: Icon(
+                    Icons.download_done,
+                    size: 18,
+                    color: patraOffline,
+                  ),
                 ),
-              ),
-              Text(
-                formatBytes(l10n, downloads?.totalBytes ?? 0),
-                style: PatraText.metadata(),
-              ),
-            ],
-          ),
-        ),
-        // What one tap on a series saves for the road (#101). A person's,
-        // behind a device default of three — see `lib/src/settings/CLAUDE.md`
-        // — and under Storage rather than General because it is a choice
-        // about what goes on the disk. In the offline blue: it is about
-        // downloads, like the row above it.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                width: 22,
-                child: Icon(
-                  Icons.playlist_add_check,
-                  size: 18,
-                  color: patraOffline,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    l10n.downloadedChapters(downloads?.saved.length ?? 0),
+                    style: PatraText.body(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    InkWell(
-                      onTap: () => _pickBatchSize(context, ref, batchSize),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                l10n.batchDownloadSize,
-                                style: PatraText.body(),
-                              ),
-                            ),
-                            Text(
-                              l10n.batchDownloadSizeOption(batchSize.value),
-                              style: PatraText.metadata(color: patraAccent),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.chevron_right, size: 18),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Text(
-                      l10n.batchDownloadSizeCaption,
-                      style: PatraText.metadata(),
-                    ),
-                  ],
+                const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: patraTextMuted,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         // Whether a download away from Wi-Fi asks first (the question's own
@@ -765,78 +748,42 @@ class _StorageRows extends ConsumerWidget {
           onChanged: (allowed) =>
               ref.read(mobileDataDownloadsProvider.notifier).set(allowed),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        // Neither progress nor a download, so no colour.
+        _StorageRow(
+          icon: const Icon(
+            Icons.image_outlined,
+            size: 18,
+            color: patraTextMuted,
+          ),
+          title: l10n.imageCacheLabel,
+          caption: l10n.imageCacheCaption,
+          trailing: TextButton(
+            // Nothing to clear is not a control to press.
+            onPressed: cacheBytes == 0 ? null : () => _clearCache(context, ref),
+            style: TextButton.styleFrom(
+              foregroundColor: patraAccent,
+              minimumSize: const Size(0, minHitTarget),
+              textStyle: PatraText.rowTitle(size: 14),
+            ),
+            child: Text(l10n.clearCache),
+          ),
+        ),
+        // The budget the cache is swept down to. Not in the handoff, which
+        // drew the cache as something to clear; kept, because without it
+        // the cache grows until the OS takes it back.
+        _StorageRow(
+          icon: const Icon(Icons.data_usage, size: 18, color: patraTextMuted),
+          title: l10n.imageCacheLimit,
+          caption: l10n.imageCacheLimitCaption,
+          onTap: () => _pickLimit(context, ref, cacheLimit),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(
-                width: 22,
-                child: Icon(Icons.image_outlined, size: 18),
+              Text(
+                formatBytes(l10n, cacheLimit.bytes),
+                style: PatraText.body(color: patraAccent),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.imageCacheLabel,
-                            style: PatraText.body(),
-                          ),
-                        ),
-                        Text(
-                          formatBytes(l10n, cacheSize.value ?? 0),
-                          style: PatraText.metadata(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(l10n.imageCacheCaption, style: PatraText.metadata()),
-                    const SizedBox(height: 6),
-                    InkWell(
-                      onTap: () => _pickLimit(context, ref, cacheLimit),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                l10n.imageCacheLimit,
-                                style: PatraText.body(),
-                              ),
-                            ),
-                            Text(
-                              formatBytes(l10n, cacheLimit.bytes),
-                              style: PatraText.metadata(color: patraAccent),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.chevron_right, size: 18),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Text(
-                      l10n.imageCacheLimitCaption,
-                      style: PatraText.metadata(),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton(
-                      onPressed: () async {
-                        await ref.read(imageCacheStoreProvider).clear();
-                        ref.invalidate(imageCacheSizeProvider);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                      child: Text(l10n.clearCache),
-                    ),
-                  ],
-                ),
-              ),
+              const Icon(Icons.chevron_right, size: 20, color: patraTextMuted),
             ],
           ),
         ),
@@ -844,42 +791,14 @@ class _StorageRows extends ConsumerWidget {
     );
   }
 
-  /// The same sheet as the budget's, over the four sizes #101 names.
-  Future<void> _pickBatchSize(
-    BuildContext context,
-    WidgetRef ref,
-    BatchDownloadSize current,
-  ) async {
+  /// Empties the image cache — never the saved chapters, which are another
+  /// store altogether — and says so, the meter moving with it.
+  Future<void> _clearCache(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
-    final picked = await showModalBottomSheet<BatchDownloadSize>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: _SheetColumn(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(gutter, 18, gutter, 6),
-              child: SectionLabel(l10n.batchDownloadSize),
-            ),
-            for (final option in BatchDownloadSize.values)
-              ListTile(
-                title: Text(
-                  l10n.batchDownloadSizeOption(option.value),
-                  style: PatraText.body(
-                    color: option == current ? patraAccent : patraText,
-                  ),
-                ),
-                trailing: option == current
-                    ? const Icon(Icons.check, color: patraAccent, size: 18)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(option),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null) return;
-    await ref.read(batchDownloadSizeProvider.notifier).set(picked);
+    await ref.read(imageCacheStoreProvider).clear();
+    ref.invalidate(imageCacheSizeProvider);
+    messenger.showSnackBar(SnackBar(content: Text(l10n.imageCacheCleared)));
   }
 
   /// Picking a smaller budget has to bite right away, not on the next launch.
@@ -920,6 +839,152 @@ class _StorageRows extends ConsumerWidget {
     await ref.read(imageCacheLimitProvider.notifier).set(picked);
     await ref.read(imageCacheStoreProvider).trim(picked.bytes);
     ref.invalidate(imageCacheSizeProvider);
+  }
+}
+
+/// What the device holds, in one sentence and one bar: saved chapters in the
+/// offline blue from the left, the image cache in the outline grey after
+/// them, each as its share of the total.
+class _UsageCard extends StatelessWidget {
+  const _UsageCard({required this.savedBytes, required this.cacheBytes});
+
+  final int savedBytes;
+  final int cacheBytes;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final total = savedBytes + cacheBytes;
+
+    Widget legend(Color color, String text) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(radiusTrack),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(text, style: PatraText.metadata()),
+      ],
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: gutter),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: patraSurface,
+        border: Border.all(color: patraBorder),
+        borderRadius: BorderRadius.circular(radiusCard),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.storageOnDevice(formatBytes(l10n, total)),
+            style: PatraText.rowTitle(size: 15),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(radiusMeter),
+            child: Container(
+              height: 8,
+              color: patraTrack,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  double share(int bytes) =>
+                      total == 0 ? 0 : constraints.maxWidth * bytes / total;
+                  Widget segment(String key, int bytes, Color color) =>
+                      AnimatedContainer(
+                        key: ValueKey(key),
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                        width: share(bytes),
+                        decoration: BoxDecoration(color: color),
+                      );
+                  return Row(
+                    children: [
+                      segment('meter-saved', savedBytes, patraOffline),
+                      segment('meter-cache', cacheBytes, patraOutline),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            children: [
+              legend(
+                patraOffline,
+                l10n.storageSavedLegend(formatBytes(l10n, savedBytes)),
+              ),
+              legend(
+                patraOutline,
+                l10n.storageCacheLegend(formatBytes(l10n, cacheBytes)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A storage setting: its icon in the leading slot, aligned to the first
+/// line; a title and the sentence saying what it does; and on the trailing
+/// edge the value or the one thing to do.
+class _StorageRow extends StatelessWidget {
+  const _StorageRow({
+    required this.icon,
+    required this.title,
+    required this.caption,
+    required this.trailing,
+    this.onTap,
+  });
+
+  final Widget icon;
+  final String title;
+  final String caption;
+  final Widget trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: gutter, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Center(child: icon),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: PatraText.body()),
+                const SizedBox(height: 2),
+                Text(caption, style: _captionStyle),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ),
+    );
+    return onTap == null ? row : InkWell(onTap: onTap, child: row);
   }
 }
 

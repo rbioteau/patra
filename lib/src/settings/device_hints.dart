@@ -4,12 +4,9 @@ import '../keychain.dart';
 
 /// Whether this device has been told something, once.
 ///
-/// Two things are taught this way. The batch's size is a setting: the
-/// selection bar's "Next N" says what it will select and never why that many,
-/// and the one moment the question is asked is the first tap, so that is
-/// where the answer goes — a SnackBar naming the setting, with a way to it —
-/// and then never again. And a series' volumes are selected by a long-press:
-/// a line over the list says so until the gesture has been used once.
+/// What is taught this way is that a series' volumes are selected by a
+/// long-press: a line over the list says so until the gesture has been used
+/// once. The keychain row is named per hint, so another can join it.
 ///
 /// The flag is the **device's**, not a person's: it is the interface being
 /// discovered, not a choice being made, and a family tablet has one interface
@@ -40,11 +37,6 @@ class DeviceHint {
     }
   }
 }
-
-/// Derived from the device's keychain, holding nothing of its own.
-final batchSizeHintProvider = Provider<DeviceHint>(
-  (ref) => DeviceHint(ref.watch(keychainProvider), 'batchSizeHintShown'),
-);
 
 /// The series screen's "long-press to select" line.
 final selectionHintProvider = Provider<DeviceHint>(

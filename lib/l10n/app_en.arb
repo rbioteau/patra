@@ -713,28 +713,6 @@
       "count": {"type": "String"}
     }
   },
-  "batchDownloadSizeCaption": "How many unread chapters Next selects on a series, from where you are, across volumes.",
-  "@batchDownloadSizeCaption": {
-    "description": "Caption under the batch download size row in Settings › Storage"
-  },
-  "batchSizeHint": "Selected the next {count}. That number is yours to choose in Settings › Storage.",
-  "@batchSizeHint": {
-    "description": "SnackBar shown once per device, on the first tap of the selection bar's Next N, with an action leading to Settings; count is the batch size in force",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-  "batchDownloadSize": "Batch download size",
-  "@batchDownloadSize": {
-    "description": "Settings label for choosing how many unread chapters to include in a batch download"
-  },
-  "batchDownloadSizeOption": "{count} chapters",
-  "@batchDownloadSizeOption": {
-    "description": "Option in the batch download size picker; count is 3, 5, 10, or 20",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
 
   "inThisSeries": "In this series",
   "@inThisSeries": {
@@ -816,13 +794,6 @@
       "count": {"type": "int"}
     }
   },
-  "selectNext": "Next {count}",
-  "@selectNext": {
-    "description": "Selection bar action: selects the next N unread from the reading position, N being the batch download size chosen in Settings › Storage",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "selectAllUnread": "All unread",
   "@selectAllUnread": {
     "description": "Selection bar action: selects everything in the series not yet read"
@@ -872,5 +843,30 @@
   "pauseAction": "Pause",
   "@pauseAction": {
     "description": "Swipe action on a series row whose copy is downloading or waiting"
+  },
+  "storageOnDevice": "{size} on this device",
+  "@storageOnDevice": {
+    "description": "Title of the usage card at the top of Settings › Storage: saved chapters and the image cache added up",
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "storageSavedLegend": "Saved chapters · {size}",
+  "@storageSavedLegend": {
+    "description": "Legend of the usage meter's offline-blue segment",
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "storageCacheLegend": "Image cache · {size}",
+  "@storageCacheLegend": {
+    "description": "Legend of the usage meter's grey segment",
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "imageCacheCleared": "Image cache cleared",
+  "@imageCacheCleared": {
+    "description": "SnackBar after Clear cache in Settings › Storage"
   }
 }

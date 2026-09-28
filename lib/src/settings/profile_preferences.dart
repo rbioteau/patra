@@ -10,30 +10,6 @@ import '../keychain.dart';
 import 'locale_settings.dart';
 import 'reading_settings.dart';
 
-/// How many unread chapters to include in a batch download.
-enum BatchDownloadSize {
-  three(3),
-  five(5),
-  ten(10),
-  twenty(20);
-
-  const BatchDownloadSize(this.value);
-
-  final int value;
-
-  /// Three: light on the disk of somebody who has never chosen, and the
-  /// first tap on a series says the number is theirs to change.
-  static const defaultSize = BatchDownloadSize.three;
-
-  static BatchDownloadSize fromValue(int value) => switch (value) {
-    3 => BatchDownloadSize.three,
-    5 => BatchDownloadSize.five,
-    10 => BatchDownloadSize.ten,
-    20 => BatchDownloadSize.twenty,
-    _ => defaultSize,
-  };
-}
-
 /// Which settings follow the person and which stay with the device.
 /// person**: they are how somebody reads, and two people sharing a tablet
 /// each get their own.
@@ -75,7 +51,6 @@ class ProfilePreferences {
     this.bookLineHeight,
     this.bookReadingFace,
     this.language,
-    this.batchDownloadSize,
     this.seriesDirections = const {},
     this.libraryDirections = const {},
     this.seriesViews = const {},
@@ -103,10 +78,6 @@ class ProfilePreferences {
   /// The room between a book's lines, as a share of [bookTextSize]: the half
   /// of the same choice that decides whether dense text is readable.
   final double? bookLineHeight;
-
-  /// How many unread chapters to include in a batch download. Offered as
-  /// 3, 5, 10, or 20; default is 3.
-  final BatchDownloadSize? batchDownloadSize;
 
   /// device", which is a choice a person can make and come back to. It is not
   /// the same as never having chosen: that is null, and the device's default
@@ -152,7 +123,6 @@ class ProfilePreferences {
     double? bookLineHeight,
     ReadingFace? bookReadingFace,
     String? language,
-    BatchDownloadSize? batchDownloadSize,
     Map<int, ReadingDirection>? seriesDirections,
     Map<int, ReadingDirection>? libraryDirections,
     Map<int, SeriesView>? seriesViews,
@@ -163,7 +133,6 @@ class ProfilePreferences {
     bookLineHeight: bookLineHeight ?? this.bookLineHeight,
     bookReadingFace: bookReadingFace ?? this.bookReadingFace,
     language: language ?? this.language,
-    batchDownloadSize: batchDownloadSize ?? this.batchDownloadSize,
     seriesDirections: seriesDirections ?? this.seriesDirections,
     libraryDirections: libraryDirections ?? this.libraryDirections,
     seriesViews: seriesViews ?? this.seriesViews,
@@ -176,8 +145,6 @@ class ProfilePreferences {
     if (bookLineHeight != null) 'bookLineHeight': bookLineHeight,
     if (bookReadingFace != null) 'bookReadingFace': bookReadingFace!.name,
     if (language != null) 'language': language,
-    if (batchDownloadSize != null)
-      'batchDownloadSize': batchDownloadSize!.value,
     if (seriesDirections.isNotEmpty)
       'seriesDirections': _directionsJson(seriesDirections),
     if (libraryDirections.isNotEmpty)
@@ -201,7 +168,6 @@ class ProfilePreferences {
     final bookLineHeight = json['bookLineHeight'];
     final bookReadingFace = json['bookReadingFace'];
     final language = json['language'];
-    final batchDownloadSize = json['batchDownloadSize'];
     return ProfilePreferences(
       magnify: magnify is bool ? magnify : null,
       widthFactor: widthFactor is num ? widthFactor.toDouble() : null,
@@ -217,9 +183,6 @@ class ProfilePreferences {
           language is String &&
               (language.isEmpty || supportedLocale(language) != null)
           ? language
-          : null,
-      batchDownloadSize: batchDownloadSize is int
-          ? BatchDownloadSize.fromValue(batchDownloadSize)
           : null,
       seriesDirections: _directions(json['seriesDirections']),
       libraryDirections: _directions(json['libraryDirections']),
@@ -278,7 +241,6 @@ class ProfilePreferencesStore {
     this.deviceWidthFactor = 1.0,
     this.deviceBookTextSize = defaultBookTextSize,
     this.deviceBookLineHeight = defaultBookLineHeight,
-    this.deviceBatchDownloadSize = BatchDownloadSize.defaultSize,
     Locale? deviceLanguage,
     // A private field cannot be a named parameter, so the lint's suggestion
     // is not available here.
@@ -314,10 +276,6 @@ class ProfilePreferencesStore {
   /// device never held a text size, so there is no household choice to keep.
   final double deviceBookTextSize;
   final double deviceBookLineHeight;
-
-  /// How many unread chapters to include in a batch download for a profile
-  /// that has never chosen. Defaults to 3.
-  final BatchDownloadSize deviceBatchDownloadSize;
 
   /// The language of the **gate**, which is drawn before anybody has been
   /// chosen and so cannot ask a profile.
@@ -432,15 +390,6 @@ class ProfilePreferencesStore {
     return chosen == null ? deviceLanguage : supportedLocale(chosen);
   }
 
-  /// How many unread chapters to include in a batch download for [profileId],
-  /// falling through to the device's default where they have never said.
-  BatchDownloadSize batchDownloadSizeFor(String? profileId) =>
-      of(profileId).batchDownloadSize ?? deviceBatchDownloadSize;
-
-  /// [size] is the batch download size from now on, for [profileId] alone.
-  Future<void> setBatchDownloadSize(String profileId, BatchDownloadSize size) =>
-      _update(profileId, (was) => was.copyWith(batchDownloadSize: size));
-
   /// [seriesId] is read in [direction] from now on, for [profileId] alone.
   ///
   /// The profile's own default is deliberately left where it is: setting one
@@ -548,7 +497,6 @@ class ProfilePreferencesStore {
       bookLineHeight: was.bookLineHeight,
       bookReadingFace: was.bookReadingFace,
       language: locale?.languageCode ?? '',
-      batchDownloadSize: was.batchDownloadSize,
       seriesDirections: was.seriesDirections,
       libraryDirections: was.libraryDirections,
       seriesViews: was.seriesViews,
@@ -969,27 +917,4 @@ class BookReadingFaceNotifier extends Notifier<ReadingFace> {
 final bookReadingFaceProvider =
     NotifierProvider<BookReadingFaceNotifier, ReadingFace>(
       BookReadingFaceNotifier.new,
-    );
-
-/// How many unread chapters to include in a batch download, for whoever is
-/// reading. Offered as 3, 5, 10, or 20; default is 3.
-class BatchDownloadSizeNotifier extends Notifier<BatchDownloadSize> {
-  @override
-  BatchDownloadSize build() => ref
-      .read(profilePreferencesStoreProvider)
-      .batchDownloadSizeFor(ref.watch(readingProfileIdProvider));
-
-  Future<void> set(BatchDownloadSize size) async {
-    state = size;
-    final id = ref.read(sessionProvider)?.id;
-    if (id == null) return;
-    await ref
-        .read(profilePreferencesStoreProvider)
-        .setBatchDownloadSize(id, size);
-  }
-}
-
-final batchDownloadSizeProvider =
-    NotifierProvider<BatchDownloadSizeNotifier, BatchDownloadSize>(
-      BatchDownloadSizeNotifier.new,
     );

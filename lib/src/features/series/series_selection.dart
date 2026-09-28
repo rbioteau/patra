@@ -49,8 +49,8 @@ class SeriesSelectionNotifier extends Notifier<Set<int>?> {
         : {...current, chapterId};
   }
 
-  /// Selects exactly [chapterIds] — the "Next N" and "All unread" shortcuts,
-  /// which say what the selection *is* rather than what to add to it.
+  /// Selects exactly [chapterIds] — the "All unread" shortcut, which says
+  /// what the selection *is* rather than what to add to it.
   void replace(Iterable<int> chapterIds) => state = chapterIds.toSet();
 
   /// Leaves selection.

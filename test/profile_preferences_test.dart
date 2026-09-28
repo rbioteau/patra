@@ -302,14 +302,29 @@ void main() {
       expect(store.of(_romain.id).magnify, isTrue);
     });
 
-    test('changing language keeps the batch size and the views', () async {
+    test('changing language keeps the views', () async {
       final store = await preferencesStore();
-      await store.setBatchDownloadSize(_romain.id, BatchDownloadSize.ten);
       await store.setSeriesView(_romain.id, 3, SeriesView.grid);
       await store.setLanguage(_romain.id, const Locale('fr'));
 
-      expect(store.batchDownloadSizeFor(_romain.id), BatchDownloadSize.ten);
       expect(store.seriesViewFor(_romain.id, 3), SeriesView.grid);
+    });
+
+    test('a batch size stored by an older build costs nothing', () async {
+      // The setting is gone; a row still carrying it reads as everything
+      // else it holds, and the next write leaves it behind.
+      final keychain = MemoryKeychain({
+        'profilePreferences':
+            '{"${_romain.id}": {"magnify": true, "batchDownloadSize": 10}}',
+      });
+      final store = await preferencesStore(keychain: keychain);
+      expect(store.of(_romain.id).magnify, isTrue);
+
+      await store.setWidthFactor(_romain.id, 0.6);
+      expect(
+        keychain.values['profilePreferences'],
+        isNot(contains('batchDownloadSize')),
+      );
     });
 
     test('forgetting a profile takes its preferences with it', () async {

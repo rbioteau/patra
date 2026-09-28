@@ -187,24 +187,6 @@
   "sizeBytes": "{count} o",
   "sizeMegabytes": "{count} Mo",
   "sizeGigabytes": "{count} Go",
-  "batchDownloadSizeCaption": "Combien de chapitres non lus « suivants » sont sélectionnés sur une série, à partir d'où vous en êtes, d'un tome à l'autre.",
-  "batchSizeHint": "Les {count} suivants sont sélectionnés. Ce nombre se règle dans Réglages › Stockage.",
-  "@batchSizeHint": {
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-  "batchDownloadSize": "Taille du téléchargement par lot",
-  "@batchDownloadSize": {
-    "description": "Libellé dans les réglages pour choisir combien de chapitres non lus inclure dans un téléchargement par lot"
-  },
-  "batchDownloadSizeOption": "{count} chapitres",
-  "@batchDownloadSizeOption": {
-    "description": "Option dans le sélecteur de taille de lot ; count vaut 3, 5, 10 ou 20",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
 
   "inThisSeries": "Dans cette série",
   "sortSheetTitle": "Trier",
@@ -233,7 +215,6 @@
   "mobileDataSetting": "Télécharger sur données mobiles",
   "mobileDataSettingCaption": "Sans demander d'abord. Désactivé, l'app demande avant chaque téléchargement hors Wi-Fi.",
   "selectionCount": "{count, plural, =1{1 sélectionné} other{{count} sélectionnés}}",
-  "selectNext": "{count} suivants",
   "selectAllUnread": "Tous les non lus",
   "selectionEmpty": "Touchez pour en ajouter",
   "selectionToFetch": "{count, plural, =1{1 à télécharger} other{{count} à télécharger}}",
@@ -244,5 +225,9 @@
   "selectionHint": "Appui long pour en sélectionner plusieurs à enregistrer. Balayez vers la gauche pour un seul.",
   "seriesViewList": "Liste",
   "seriesViewGrid": "Grille",
-  "pauseAction": "Pause"
+  "pauseAction": "Pause",
+  "storageOnDevice": "{size} sur cet appareil",
+  "storageSavedLegend": "Chapitres enregistrés · {size}",
+  "storageCacheLegend": "Cache d'images · {size}",
+  "imageCacheCleared": "Cache d'images vidé"
 }

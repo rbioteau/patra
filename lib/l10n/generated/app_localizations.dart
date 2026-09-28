@@ -1148,30 +1148,6 @@ abstract class AppLocalizations {
   /// **'{count} GB'**
   String sizeGigabytes(String count);
 
-  /// Caption under the batch download size row in Settings › Storage
-  ///
-  /// In en, this message translates to:
-  /// **'How many unread chapters Next selects on a series, from where you are, across volumes.'**
-  String get batchDownloadSizeCaption;
-
-  /// SnackBar shown once per device, on the first tap of the selection bar's Next N, with an action leading to Settings; count is the batch size in force
-  ///
-  /// In en, this message translates to:
-  /// **'Selected the next {count}. That number is yours to choose in Settings › Storage.'**
-  String batchSizeHint(int count);
-
-  /// Settings label for choosing how many unread chapters to include in a batch download
-  ///
-  /// In en, this message translates to:
-  /// **'Batch download size'**
-  String get batchDownloadSize;
-
-  /// Option in the batch download size picker; count is 3, 5, 10, or 20
-  ///
-  /// In en, this message translates to:
-  /// **'{count} chapters'**
-  String batchDownloadSizeOption(int count);
-
   /// Header of the list under the series hero, over whatever that series turns out to hold — volumes, chapters, specials. Deliberately not the library's unit: the list heads its own sections, and a unit would name only one of the kinds of row under it. The sort control hangs off this row
   ///
   /// In en, this message translates to:
@@ -1304,12 +1280,6 @@ abstract class AppLocalizations {
   /// **'{count} selected'**
   String selectionCount(int count);
 
-  /// Selection bar action: selects the next N unread from the reading position, N being the batch download size chosen in Settings › Storage
-  ///
-  /// In en, this message translates to:
-  /// **'Next {count}'**
-  String selectNext(int count);
-
   /// Selection bar action: selects everything in the series not yet read
   ///
   /// In en, this message translates to:
@@ -1375,6 +1345,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pause'**
   String get pauseAction;
+
+  /// Title of the usage card at the top of Settings › Storage: saved chapters and the image cache added up
+  ///
+  /// In en, this message translates to:
+  /// **'{size} on this device'**
+  String storageOnDevice(String size);
+
+  /// Legend of the usage meter's offline-blue segment
+  ///
+  /// In en, this message translates to:
+  /// **'Saved chapters · {size}'**
+  String storageSavedLegend(String size);
+
+  /// Legend of the usage meter's grey segment
+  ///
+  /// In en, this message translates to:
+  /// **'Image cache · {size}'**
+  String storageCacheLegend(String size);
+
+  /// SnackBar after Clear cache in Settings › Storage
+  ///
+  /// In en, this message translates to:
+  /// **'Image cache cleared'**
+  String get imageCacheCleared;
 }
 
 class _AppLocalizationsDelegate

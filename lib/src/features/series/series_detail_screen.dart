@@ -899,17 +899,18 @@ class _SelectionHint extends StatelessWidget {
 }
 
 /// The app bar while the screen is selecting: how many, a way out, and the
-/// two selections a reader most often wants made for them.
+/// one selection a reader most often wants made for them — **All unread**,
+/// which *replaces* the selection rather than adding to it, since it says
+/// what the selection is.
 ///
-/// "Next N" is the batch the card over the list used to be — the next N
-/// unread from the reading position, across volumes, N being the reader's own
-/// choice in Settings › Storage — and "All unread" is everything left. Both
-/// **replace** the selection rather than add to it: they say what the
-/// selection is.
+/// There was a "Next N" beside it, N being a batch size chosen in Settings.
+/// It outlived the batch card it came from by one release: with a selection
+/// any run can be picked by hand, and a number chosen once in Settings for
+/// every series was a setting nobody could see the reason for.
 class _SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
   const _SelectionAppBar({required this.volumes});
 
-  /// Null while they are still on their way, which leaves the shortcuts off.
+  /// Null while they are still on their way, which leaves the shortcut off.
   final List<Volume>? volumes;
 
   @override
@@ -922,58 +923,11 @@ class _SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final count = ref.watch(
       seriesSelectionProvider.select((selected) => selected?.length ?? 0),
     );
-    final batch = ref.watch(batchDownloadSizeProvider).value;
-    final entries = volumes == null
-        ? const <ResumeEntry>[]
-        : orderedChapters(volumes!);
-    final next = volumes == null
-        ? const <ResumeEntry>[]
-        : nextUnreadChapters(volumes!, batch);
     final unread = [
-      for (final e in entries)
-        if (!e.chapter.isRead) e.chapter.id,
+      if (volumes case final volumes?)
+        for (final e in orderedChapters(volumes))
+          if (!e.chapter.isRead) e.chapter.id,
     ];
-
-    final actionStyle = PatraText.rowTitle(size: 14);
-    const actionPadding = 8.0;
-    final titleStyle = PatraText.rowTitle().copyWith(fontSize: 15);
-    final nextLabel = l10n.selectNext(batch);
-    final countLabel = l10n.selectionCount(count);
-
-    // Measured before they are drawn, like the tab bar's labels: French and a
-    // large system font can make the three wider than a phone. What gives
-    // first is the count, which the bar under the list says as well, then
-    // "All unread"; "Next N" is the one the bar is for.
-    double width(String text, TextStyle style) {
-      final painter = TextPainter(
-        text: TextSpan(text: text, style: style),
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-        maxLines: 1,
-      )..layout();
-      final measured = painter.width;
-      painter.dispose();
-      return measured;
-    }
-
-    final room = MediaQuery.sizeOf(context).width - kToolbarHeight - 4;
-    final nextWidth = width(nextLabel, actionStyle) + 2 * actionPadding;
-    final unreadWidth =
-        width(l10n.selectAllUnread, actionStyle) + 2 * actionPadding;
-    final showUnread = nextWidth + unreadWidth <= room;
-    final actionsWidth = nextWidth + (showUnread ? unreadWidth : 0);
-    final showCount = actionsWidth + width(countLabel, titleStyle) <= room;
-
-    Widget action(String label, VoidCallback? onPressed) => TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: patraOffline,
-        minimumSize: const Size(0, minHitTarget),
-        padding: const EdgeInsets.symmetric(horizontal: actionPadding),
-        textStyle: actionStyle,
-      ),
-      child: Text(label, maxLines: 1),
-    );
 
     return AppBar(
       backgroundColor: patraSurfaceHi,
@@ -983,54 +937,25 @@ class _SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
         onPressed: selection.clear,
       ),
       titleSpacing: 0,
-      title: showCount
-          ? Text(
-              countLabel,
-              style: titleStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            )
-          : null,
+      title: Text(
+        l10n.selectionCount(count),
+        style: PatraText.rowTitle().copyWith(fontSize: 15),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: [
-        action(
-          nextLabel,
-          next.isEmpty
-              ? null
-              : () {
-                  selection.replace([for (final e in next) e.chapter.id]);
-                  _hintOnce(context, ref, batch);
-                },
-        ),
-        if (showUnread)
-          action(
-            l10n.selectAllUnread,
-            unread.isEmpty ? null : () => selection.replace(unread),
+        TextButton(
+          onPressed: unread.isEmpty ? null : () => selection.replace(unread),
+          style: TextButton.styleFrom(
+            foregroundColor: patraOffline,
+            minimumSize: const Size(0, minHitTarget),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            textStyle: PatraText.rowTitle(size: 14),
           ),
+          child: Text(l10n.selectAllUnread, maxLines: 1),
+        ),
         const SizedBox(width: 4),
       ],
-    );
-  }
-
-  /// Once per device, on the first "Next N": the number is a setting, and
-  /// this is the one moment anybody wonders why it is what it is. Worded,
-  /// with the way to the setting as the action — see [DeviceHint].
-  Future<void> _hintOnce(BuildContext context, WidgetRef ref, int count) async {
-    final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    final router = GoRouter.maybeOf(context);
-    final store = ref.read(batchSizeHintProvider);
-    if (await store.wasShown()) return;
-    await store.markShown();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(l10n.batchSizeHint(count)),
-        // Longer than a passing sentence: there is a way out to take.
-        duration: const Duration(seconds: 6),
-        action: SnackBarAction(
-          label: l10n.navSettings,
-          onPressed: () => router?.go('/settings'),
-        ),
-      ),
     );
   }
 }
@@ -1223,7 +1148,7 @@ Future<bool> _confirm(
 
 /// The sheet the trigger opens: the three orders, each with the rule it
 /// follows, the one in force ticked and drawn in the accent — the app's own
-/// picker, the same one Settings offers a language and a batch size in.
+/// picker, the same one Settings offers a language and a cache budget in.
 Future<void> _pickSort(
   BuildContext context,
   ChapterSort current,

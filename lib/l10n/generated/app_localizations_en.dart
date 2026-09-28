@@ -689,23 +689,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get batchDownloadSizeCaption =>
-      'How many unread chapters Next selects on a series, from where you are, across volumes.';
-
-  @override
-  String batchSizeHint(int count) {
-    return 'Selected the next $count. That number is yours to choose in Settings › Storage.';
-  }
-
-  @override
-  String get batchDownloadSize => 'Batch download size';
-
-  @override
-  String batchDownloadSizeOption(int count) {
-    return '$count chapters';
-  }
-
-  @override
   String get inThisSeries => 'In this series';
 
   @override
@@ -781,11 +764,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String selectNext(int count) {
-    return 'Next $count';
-  }
-
-  @override
   String get selectAllUnread => 'All unread';
 
   @override
@@ -834,4 +812,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pauseAction => 'Pause';
+
+  @override
+  String storageOnDevice(String size) {
+    return '$size on this device';
+  }
+
+  @override
+  String storageSavedLegend(String size) {
+    return 'Saved chapters · $size';
+  }
+
+  @override
+  String storageCacheLegend(String size) {
+    return 'Image cache · $size';
+  }
+
+  @override
+  String get imageCacheCleared => 'Image cache cleared';
 }

@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patra/l10n/generated/app_localizations.dart';
@@ -662,7 +661,6 @@ void main() {
       expect(selection(tester), {104});
       // The bar over the list and the bar under it both count.
       expect(find.text('1 selected'), findsNWidgets(2));
-      expect(find.text('Next 3'), findsOneWidget);
       expect(find.text('All unread'), findsOneWidget);
       expect(find.text('1 to download'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
@@ -693,79 +691,17 @@ void main() {
       expect(find.byType(SeriesDetailScreen), findsOneWidget);
     });
 
-    testWidgets('Next N is the batch from the reading position', (
-      tester,
-    ) async {
+    testWidgets('All unread selects everything left', (tester) async {
       await _pump(tester, _underWay());
       await tester.longPress(find.text('Chapter 7'));
       await tester.pumpAndSettle();
 
       // Replaced, not added to: the shortcut says what the selection is.
-      await tester.tap(find.text('Next 3'));
-      await tester.pumpAndSettle();
-      expect(selection(tester), {103, 104, 105});
-
-      // The number is the reader's own setting.
-      container(tester)
-          .read(batchDownloadSizeProvider.notifier)
-          .set(BatchDownloadSize.five);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next 5'));
-      await tester.pumpAndSettle();
-      expect(selection(tester), {103, 104, 105, 106, 107});
-
       await tester.tap(find.text('All unread'));
       await tester.pumpAndSettle();
       expect(selection(tester), {103, 104, 105, 106, 107, 108});
-    });
-
-    testWidgets('the first Next N says the number is a setting, once', (
-      tester,
-    ) async {
-      // One device, two visits: the keychain is what remembers.
-      final keychain = MemoryKeychain();
-      await _pump(tester, _underWay(), keychain: keychain);
-      await tester.longPress(find.text('Chapter 4'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next 3'));
-      await tester.pump();
-      await tester.pump();
-
-      // Worded, with the way to the setting as the action.
-      expect(
-        find.text(
-          'Selected the next 3. That number is yours to choose in '
-          'Settings › Storage.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.widgetWithText(SnackBarAction, 'Settings'), findsOneWidget);
-      // Legible: the accent, not Material's darkened default.
-      expect(
-        tester
-            .renderObject<RenderParagraph>(find.text('Settings'))
-            .text
-            .style
-            ?.color,
-        patraAccent,
-      );
-      // Put the sentence away: `pumpWidget` below keeps the messenger, since
-      // the root widgets match, and a SnackBar still up would be mistaken
-      // for a second one. Dismissed by hand because the test binding does
-      // not run a SnackBar's own clock down.
-      tester
-          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
-          .hideCurrentSnackBar();
-      await tester.pumpAndSettle();
-
-      // The same device, another series: the hint has been given.
-      await _pump(tester, _untouched(), keychain: keychain);
-      await tester.longPress(find.text('Chapter 1'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next 3'));
-      await tester.pump();
-      await tester.pump();
-      expect(find.byType(SnackBar), findsNothing);
+      // The batch-size shortcut is gone with the setting behind it.
+      expect(find.textContaining('Next'), findsNothing);
     });
 
     testWidgets('Save queues only what is not here, and leaves selecting', (
@@ -780,9 +716,10 @@ void main() {
         saved: [103, 104],
         imageGate: gate.future,
       );
-      await tester.longPress(find.text('Chapter 4'));
+      await tester.longPress(find.text('Chapter 3'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Next 3'));
+      await tester.tap(find.text('Chapter 4'));
+      await tester.tap(find.text('Chapter 5'));
       await tester.pumpAndSettle();
       expect(find.text('1 to download'), findsOneWidget);
 
@@ -993,10 +930,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // What gives is what is said twice: the count stays in the bar under
-      // the list, and "Next N" — the shortcut the bar is for — stays on top.
-      expect(find.text('1 sélectionné'), findsWidgets);
-      expect(find.text('3 suivants'), findsOneWidget);
+      expect(find.text('1 sélectionné'), findsNWidgets(2));
+      expect(find.text('Tous les non lus'), findsOneWidget);
       expect(find.text('Enregistrer'), findsOneWidget);
     });
   });
