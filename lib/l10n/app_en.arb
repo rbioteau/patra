@@ -874,5 +874,12 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+  "mobileDataTitle": "You're on mobile data",
+  "@mobileDataTitle": {"description": "Title of the question asked before a download starts away from Wi-Fi."},
+  "mobileDataBody": "This download will use your data plan. Download anyway?",
+  "mobileDataDontAsk": "Don't ask again",
+  "mobileDataDownload": "Download",
+  "mobileDataSetting": "Download on mobile data",
+  "mobileDataSettingCaption": "Without asking first. When off, the app asks before each download away from Wi-Fi."
 }

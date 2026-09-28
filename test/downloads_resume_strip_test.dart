@@ -92,6 +92,7 @@ Future<ProviderContainer> _pump(
       downloadsServiceProvider.overrideWithValue(
         DownloadsService(root: root, profileId: _profileId),
       ),
+      testNetwork(),
     ],
   );
   addTearDown(container.dispose);

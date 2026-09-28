@@ -284,5 +284,11 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+  "mobileDataTitle": "Vous êtes sur les données mobiles",
+  "mobileDataBody": "Ce téléchargement utilisera votre forfait. Télécharger quand même ?",
+  "mobileDataDontAsk": "Ne plus demander",
+  "mobileDataDownload": "Télécharger",
+  "mobileDataSetting": "Télécharger sur données mobiles",
+  "mobileDataSettingCaption": "Sans demander d'abord. Désactivé, l'app demande avant chaque téléchargement hors Wi-Fi."
 }

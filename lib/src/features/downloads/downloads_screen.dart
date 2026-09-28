@@ -15,6 +15,7 @@ import '../../widgets/cover.dart';
 import '../../widgets/download_pill.dart';
 import '../../widgets/download_stop.dart';
 import '../../widgets/read_mark.dart';
+import '../../widgets/mobile_data_gate.dart';
 
 class DownloadsScreen extends ConsumerWidget {
   const DownloadsScreen({super.key});
@@ -655,7 +656,10 @@ class _RefreshCopy extends ConsumerWidget {
       );
     }
     return InkWell(
-      onTap: () => ref.read(downloadsProvider.notifier).refresh(chapter),
+      onTap: () async {
+        if (!await mayDownload(context, ref)) return;
+        await ref.read(downloadsProvider.notifier).refresh(chapter);
+      },
       borderRadius: BorderRadius.circular(radiusPill),
       child: Container(
         // Prototype metrics, like the pill on a chapter row: 30 tall, never

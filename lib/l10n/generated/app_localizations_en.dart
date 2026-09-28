@@ -809,4 +809,24 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get mobileDataTitle => 'You\'re on mobile data';
+
+  @override
+  String get mobileDataBody =>
+      'This download will use your data plan. Download anyway?';
+
+  @override
+  String get mobileDataDontAsk => 'Don\'t ask again';
+
+  @override
+  String get mobileDataDownload => 'Download';
+
+  @override
+  String get mobileDataSetting => 'Download on mobile data';
+
+  @override
+  String get mobileDataSettingCaption =>
+      'Without asking first. When off, the app asks before each download away from Wi-Fi.';
 }

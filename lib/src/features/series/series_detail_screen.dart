@@ -21,6 +21,7 @@ import '../../widgets/read_mark.dart';
 import '../../widgets/download_pill.dart';
 import '../../widgets/offline_indicator.dart';
 import '../../widgets/series_hero.dart';
+import '../../widgets/mobile_data_gate.dart';
 
 /// Progress the user has just set by hand, before the server has confirmed it.
 ///
@@ -434,9 +435,12 @@ class SeriesDetailScreen extends ConsumerWidget {
                   minimumSize: const Size(0, 36),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
-                onPressed: () => ref.read(downloadsProvider.notifier).saveBatch(
-                  [for (final c in unread) request(volume, c)],
-                ),
+                onPressed: () async {
+                  if (!await mayDownload(context, ref)) return;
+                  await ref.read(downloadsProvider.notifier).saveBatch([
+                    for (final c in unread) request(volume, c),
+                  ]);
+                },
                 child: Text(
                   l10n.batchDownloadVolume,
                   maxLines: 1,
@@ -962,9 +966,10 @@ class _BatchCard extends ConsumerWidget {
         child: InkWell(
           onTap: pending.isEmpty
               ? null
-              : () {
+              : () async {
+                  if (!await mayDownload(context, ref)) return;
                   onSave(pending);
-                  _hintOnce(context, ref, count);
+                  if (context.mounted) await _hintOnce(context, ref, count);
                 },
           child: Stack(
             children: [

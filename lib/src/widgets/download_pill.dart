@@ -6,6 +6,7 @@ import '../downloads/downloads_provider.dart';
 import '../downloads/downloads_service.dart';
 import '../theme.dart';
 import 'download_stop.dart';
+import 'mobile_data_gate.dart';
 
 /// Download control for one chapter: the word for what the copy is doing, and
 /// the one tap there is to make on it.
@@ -73,8 +74,10 @@ class DownloadPill extends ConsumerWidget {
         icon: stop.icon,
         color: stop.color,
         ring: record?.progress,
-        onTap: () =>
-            ref.read(downloadsProvider.notifier).retry(request.chapterId),
+        onTap: () async {
+          if (!await mayDownload(context, ref)) return;
+          await ref.read(downloadsProvider.notifier).retry(request.chapterId);
+        },
       );
     }
 
@@ -104,7 +107,10 @@ class DownloadPill extends ConsumerWidget {
       label: l10n.savePill,
       icon: Icons.save_alt,
       color: patraTextMuted,
-      onTap: () => ref.read(downloadsProvider.notifier).save(request),
+      onTap: () async {
+        if (!await mayDownload(context, ref)) return;
+        await ref.read(downloadsProvider.notifier).save(request);
+      },
     );
   }
 

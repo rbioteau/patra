@@ -1327,6 +1327,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 already saved} other{{count} already saved}}'**
   String batchAlreadySaved(int count);
+
+  /// Title of the question asked before a download starts away from Wi-Fi.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re on mobile data'**
+  String get mobileDataTitle;
+
+  /// No description provided for @mobileDataBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This download will use your data plan. Download anyway?'**
+  String get mobileDataBody;
+
+  /// No description provided for @mobileDataDontAsk.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t ask again'**
+  String get mobileDataDontAsk;
+
+  /// No description provided for @mobileDataDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get mobileDataDownload;
+
+  /// No description provided for @mobileDataSetting.
+  ///
+  /// In en, this message translates to:
+  /// **'Download on mobile data'**
+  String get mobileDataSetting;
+
+  /// No description provided for @mobileDataSettingCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Without asking first. When off, the app asks before each download away from Wi-Fi.'**
+  String get mobileDataSettingCaption;
 }
 
 class _AppLocalizationsDelegate

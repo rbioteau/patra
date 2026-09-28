@@ -179,6 +179,7 @@ Future<_Adapter> _pump(
   Locale locale = const Locale('en'),
   Future<void>? imageGate,
   MemoryKeychain? keychain,
+  bool mobileData = false,
 }) async {
   // Tall enough that every row is built: the list is lazy, and a row below
   // the fold is a row a finder cannot see.
@@ -220,6 +221,7 @@ Future<_Adapter> _pump(
         // The batch card's first-tap hint remembers itself on the device's
         // keychain; handed in so a test can be two visits to one device.
         testKeychain(keychain),
+        testNetwork(mobileData: mobileData),
       ],
       child: MaterialApp(
         theme: patraTheme(),
@@ -619,6 +621,52 @@ void main() {
       for (final id in records.keys) {
         unawaited(notifier.cancel(id));
       }
+      gate.complete();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('on mobile data, asks first and fetches nothing unless told', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      await _pump(
+        tester,
+        _underWay(),
+        saved: [103, 104],
+        imageGate: gate.future,
+        mobileData: true,
+      );
+      DownloadsState downloads() => ProviderScope.containerOf(
+        tester.element(find.byType(SeriesDetailScreen)),
+      ).read(downloadsProvider).value!;
+
+      await tester.tap(find.text("Download what's next"));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text("You're on mobile data"), findsOneWidget);
+
+      // Cancelled: the question goes, and nothing was asked of the server.
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text("You're on mobile data"), findsNothing);
+      expect(downloads().inFlight, isEmpty);
+
+      // Asked again, and agreed to: the one that was missing is queued.
+      await tester.tap(find.text("Download what's next"));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('Download'));
+      await tester.pump();
+      await tester.pump();
+      expect(downloads().inFlight.keys.toSet(), {105});
+
+      // Let go of the fetch, as the test below does.
+      unawaited(
+        ProviderScope.containerOf(
+          tester.element(find.byType(SeriesDetailScreen)),
+        ).read(downloadsProvider.notifier).cancel(105),
+      );
       gate.complete();
       await tester.pumpAndSettle();
     });

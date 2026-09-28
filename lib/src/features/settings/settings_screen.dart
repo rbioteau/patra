@@ -19,6 +19,7 @@ import '../../theme.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/profile_lock_sheet.dart';
 import '../downloads/resume_strip.dart';
+import '../../settings/mobile_data.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -748,6 +749,21 @@ class _StorageRows extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+        // Whether a download away from Wi-Fi asks first (the question's own
+        // "Don't ask again" turns this on, and this is the way back). The
+        // device's, not a person's — see `lib/src/settings/mobile_data.dart`.
+        _SwitchRow(
+          icon: const Icon(
+            Icons.signal_cellular_alt,
+            size: 18,
+            color: patraOffline,
+          ),
+          title: l10n.mobileDataSetting,
+          subtitle: l10n.mobileDataSettingCaption,
+          value: ref.watch(mobileDataDownloadsProvider).value ?? false,
+          onChanged: (allowed) =>
+              ref.read(mobileDataDownloadsProvider.notifier).set(allowed),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 12),

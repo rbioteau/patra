@@ -12,6 +12,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
+import 'package:patra/src/downloads/network_kind.dart';
 import 'package:patra/src/external_links.dart';
 import 'package:patra/src/keychain.dart';
 import 'package:patra/src/lock/biometrics.dart';
@@ -143,6 +144,13 @@ class MemoryKeychain implements Keychain {
 /// to seed a row or read one back.
 Override testKeychain([MemoryKeychain? keychain]) =>
     keychainProvider.overrideWithValue(keychain ?? MemoryKeychain());
+
+/// The network a download starts on. The platform is not there to ask under a
+/// test binding — the question is never answered, and a tap that starts a
+/// download waits on it for good — so a test that taps one says which network
+/// it is on: Wi-Fi unless it asks for mobile data.
+Override testNetwork({bool mobileData = false}) =>
+    onMobileDataProvider.overrideWithValue(() async => mobileData);
 
 /// A token Kavita could have signed for [accountId], which is what the app
 /// reads its own account id back out of (`accountIdFrom`, the `nameid`

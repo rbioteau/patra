@@ -811,4 +811,24 @@ class AppLocalizationsFr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get mobileDataTitle => 'Vous êtes sur les données mobiles';
+
+  @override
+  String get mobileDataBody =>
+      'Ce téléchargement utilisera votre forfait. Télécharger quand même ?';
+
+  @override
+  String get mobileDataDontAsk => 'Ne plus demander';
+
+  @override
+  String get mobileDataDownload => 'Télécharger';
+
+  @override
+  String get mobileDataSetting => 'Télécharger sur données mobiles';
+
+  @override
+  String get mobileDataSettingCaption =>
+      'Sans demander d\'abord. Désactivé, l\'app demande avant chaque téléchargement hors Wi-Fi.';
 }

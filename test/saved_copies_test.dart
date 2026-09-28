@@ -324,6 +324,7 @@ Future<ProviderContainer> _pump(
   final container = ProviderContainer(
     overrides: [
       testKeychain(),
+      testNetwork(),
       kavitaClientProvider.overrideWithValue(client),
       downloadsServiceProvider.overrideWithValue(
         DownloadsService(root: room, profileId: _profileId),

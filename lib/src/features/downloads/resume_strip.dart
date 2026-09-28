@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../downloads/downloads_provider.dart';
 import '../../theme.dart';
+import '../../widgets/mobile_data_gate.dart';
 
 /// The one question a cold start asks, as a strip under the app bar of the
 /// screen the reader is on — and the screen, under it.
@@ -46,7 +47,10 @@ class DownloadsResumeStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    children: [_Strip(), Expanded(child: child)],
+    children: [
+      _Strip(),
+      Expanded(child: child),
+    ],
   );
 }
 
@@ -101,7 +105,10 @@ class _Strip extends ConsumerWidget {
                 ),
               ),
               TextButton(
-                onPressed: downloads.resumeStopped,
+                onPressed: () async {
+                  if (!await mayDownload(context, ref)) return;
+                  await downloads.resumeStopped();
+                },
                 child: Text(
                   l10n.resumeDownload,
                   style: PatraText.body(color: patraOffline),
