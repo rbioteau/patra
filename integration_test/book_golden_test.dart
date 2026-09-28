@@ -37,6 +37,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:patra/main.dart' as app;
+import 'package:patra/src/features/settings/settings_screen.dart';
+import 'package:patra/src/features/reader/book_chrome.dart';
 import 'package:patra/src/features/reader/book_web_page.dart';
 import 'package:patra/src/settings/locale_settings.dart';
 
@@ -81,17 +83,22 @@ void main() {
 
     await _openTheBook(tester);
     await _waitForPage(tester);
+    await _hideChrome(tester);
     await _ask('capture?name=book-streamed');
     await _leaveReader(tester);
 
     // Saved, then the server taken away: the copy is the only page there is.
-    await tester.tap(find.byIcon(Icons.save_alt).first);
+    // Nothing at rest offers to save; the row's trailing swipe does.
+    await tester.drag(find.byType(Slidable).first, const Offset(-200, 0));
+    await _beat(tester, const Duration(milliseconds: 600));
+    await tester.tap(find.text('Save'));
     await _beat(tester);
     await _waitFor(tester, find.byIcon(Icons.check), 'a saved copy');
     await _ask('offline');
     try {
       await tester.tap(find.byType(Slidable).first);
       await _waitForPage(tester);
+      await _hideChrome(tester);
       await _ask('capture?name=book-offline');
     } finally {
       await _ask('online');
@@ -140,7 +147,19 @@ Future<void> _signIn(WidgetTester tester) async {
 }
 
 Future<void> _forceLocale(WidgetTester tester, Locale locale) async {
-  await _tabUntil(tester, 3, find.byIcon(Icons.language), 'the language row');
+  // Settings opens on Profiles and Storage: the language row is under them,
+  // and a list builds only what it shows.
+  await _tabUntil(tester, 3, find.byType(SettingsScreen), 'the settings');
+  await tester.scrollUntilVisible(
+    find.byIcon(Icons.language),
+    200,
+    scrollable: find
+        .descendant(
+          of: find.byType(SettingsScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
   await tester.tap(find.byIcon(Icons.language));
   final endonym = find.text(languageEndonym(locale));
   await _waitFor(tester, endonym, 'the language sheet');
@@ -165,9 +184,19 @@ Future<void> _waitForPage(WidgetTester tester) async {
   await _beat(tester, _composed);
 }
 
+/// A book opens with its chrome up; the page is photographed without it,
+/// with only the numeral at its foot.
+Future<void> _hideChrome(WidgetTester tester) async {
+  if (find.byType(BookTopBar).evaluate().isEmpty) return;
+  await tester.tapAt(tester.getCenter(find.byType(Scaffold).last));
+  await _beat(tester, const Duration(milliseconds: 600));
+}
+
 /// Brings the chrome up and closes the reader, back onto the series screen.
 Future<void> _leaveReader(WidgetTester tester) async {
-  await tester.tapAt(tester.getCenter(find.byType(Scaffold).last));
+  if (find.byType(BookTopBar).evaluate().isEmpty) {
+    await tester.tapAt(tester.getCenter(find.byType(Scaffold).last));
+  }
   final back = find.byIcon(Icons.arrow_back);
   await _waitFor(tester, back, 'the reader chrome');
   await tester.tap(back.first);

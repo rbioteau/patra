@@ -34,6 +34,7 @@ import 'package:patra/l10n/generated/app_localizations.dart';
 import 'package:patra/l10n/generated/app_localizations_en.dart';
 import 'package:patra/l10n/generated/app_localizations_fr.dart';
 import 'package:patra/main.dart' as app;
+import 'package:patra/src/features/settings/settings_screen.dart';
 import 'package:patra/src/settings/locale_settings.dart';
 import 'package:patra/src/widgets/profile_avatar.dart';
 
@@ -178,7 +179,18 @@ Future<void> _signIn(WidgetTester tester) async {
 /// which is the whole reason a language is listed under its own name.
 Future<void> _forceLocale(WidgetTester tester) async {
   await _tab(tester, 3); // Settings
-  await _waitFor(tester, find.byIcon(Icons.language), 'the language row');
+  // Under Profiles and Storage, so below the fold of a lazy list.
+  await _waitFor(tester, find.byType(SettingsScreen), 'the settings');
+  await tester.scrollUntilVisible(
+    find.byIcon(Icons.language),
+    200,
+    scrollable: find
+        .descendant(
+          of: find.byType(SettingsScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
   await tester.tap(find.byIcon(Icons.language));
   final endonym = find.text(languageEndonym(Locale(_locale)));
   await _waitFor(tester, endonym, 'the language sheet');
@@ -199,6 +211,12 @@ Future<void> _openFirstSeries(
       .first;
   await _waitFor(tester, cover, 'the library grid');
   await tester.tap(cover);
+  // A series of whole volumes opens as a grid of covers; the rows are what
+  // this recipe swipes.
+  await _waitFor(tester, find.byTooltip(l10n.seriesViewList), 'the series');
+  if (find.byType(Slidable).evaluate().isEmpty) {
+    await tester.tap(find.byTooltip(l10n.seriesViewList));
+  }
   await _waitFor(tester, find.byType(Slidable), 'the series screen');
 
   // The row's leading edge is progress, and the swipe is the app's own way of
@@ -208,12 +226,12 @@ Future<void> _openFirstSeries(
   await tester.tap(find.text(l10n.markRead));
   await _beat(tester);
 
-  // And one copy on the device, for the screen after this one. Found by icon,
-  // both to tap it and to wait for it: an unsaved row's pill is `save_alt`,
-  // and a saved one is a **check inside a circle** — the word "Saved" is only
-  // its tooltip, so the first version of this recipe waited for a text that is
-  // never drawn and waited forever.
-  await tester.tap(find.byIcon(Icons.save_alt).first);
+  // And one copy on the device, for the screen after this one: saved by the
+  // row's trailing swipe, and waited for by its badge's check — the word
+  // "Saved" is only a tooltip, so waiting for it would wait forever.
+  await tester.drag(find.byType(Slidable).first, const Offset(-200, 0));
+  await _waitFor(tester, find.text(l10n.savePill), 'the save pane');
+  await tester.tap(find.text(l10n.savePill));
   await _beat(tester);
   await _waitFor(tester, find.byIcon(Icons.check), 'a saved copy');
 }
