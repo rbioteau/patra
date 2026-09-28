@@ -17,7 +17,8 @@ import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/cover.dart';
 import 'package:patra/src/widgets/read_mark.dart';
-import 'package:patra/src/widgets/download_pill.dart';
+import 'package:patra/src/widgets/download_badge.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import 'test_support.dart';
 
@@ -624,10 +625,13 @@ void main() {
 
     testWidgets('the row offers to save the book', (tester) async {
       // A book is saved the way any other chapter is: what is stored is a
-      // copy of the pages the server rendered, and the pill asks for one.
+      // copy of the pages the server rendered, and the trailing swipe offers
+      // to make one. Nothing at rest does: a row with no copy wears nothing.
       await _pump(tester, book(0), type: LibraryType.book);
+      expect(find.text('Save'), findsNothing);
 
-      expect(find.byType(DownloadPill), findsOneWidget);
+      await tester.drag(find.text('Book 1'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
       expect(find.text('Save'), findsOneWidget);
     });
 
@@ -644,7 +648,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(rowOpacity(tester, 'Book 1'), 0.4);
-      expect(find.byType(DownloadPill), findsNothing);
+      await tester.drag(find.text('Book 1'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Save'), findsNothing);
     });
 
     testWidgets('offline there is nothing to swipe for', (tester) async {
@@ -816,33 +822,34 @@ void main() {
         moreOrLessEquals(before.left, epsilon: 0.5),
       );
       // And the row stops where the pane starts rather than running under it:
-      // the save pill is still whole, and still on the row's side of it.
+      // the cover's badge is still whole, and still on the row's side of it.
       expect(
-        tester.getRect(find.byType(DownloadPill)).right,
+        tester.getRect(find.byType(DownloadBadge)).right,
         lessThanOrEqualTo(tester.getRect(find.text('Remove')).left),
       );
     });
 
-    testWidgets('a copy that stopped is removed by the same pane, in one tap', (
+    testWidgets('a copy that stopped is offered again by the same pane', (
       tester,
     ) async {
-      // The pane acts on what is on the device, and a fetch that stopped on
-      // its way there is the same job for the same edge. What differs is the
-      // asking: there is no copy here yet, and a partial nobody has read is
-      // not the reader's library.
+      // The trailing edge is whatever there is to do with the copy in the
+      // state it is in, and for a fetch that stopped short that is to send
+      // it on from the pages it kept — not to throw them away.
       await _pump(tester, series(0), stoppedChapter: 101);
+      // Its cover says so at rest, with a ring where it stopped.
+      expect(find.byType(DownloadBadge), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(DownloadBadge),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
 
       await tester.drag(find.text('Chapter 1'), const Offset(-200, 0));
       await tester.pumpAndSettle();
-      expect(find.text('Remove'), findsOneWidget);
-
-      await tester.tap(find.text('Remove'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertDialog), findsNothing);
-      // Gone from the queue, so the row has nothing left to offer: the pill
-      // is back to what it says about a chapter nobody has asked for.
-      expect(find.text('Save'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Remove'), findsNothing);
     });
 
     testWidgets('an open pane is a drawer, not half a tablet row', (
@@ -1145,7 +1152,7 @@ void main() {
       // wrong than the gap it closed inside the row. The row starts and ends
       // one gutter from the screen edge, like every other screen.
       expect(rowCover(tester).left, gutter);
-      expect(tester.getRect(find.byType(DownloadPill)).right, 820 - gutter);
+      expect(tester.getRect(find.byType(Slidable)).right, 820);
     });
   });
 }

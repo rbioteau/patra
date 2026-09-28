@@ -9,7 +9,7 @@ import '../keychain.dart';
 /// under Settings › Storage, which is also the way back. The **device's**, not
 /// a person's: the plan a download spends is the SIM's in this device,
 /// whoever is reading on it. A row of the device's own in the keychain, like
-/// [BatchSizeHintStore]'s, read the first time a download or the setting
+/// [DeviceHint]'s, read the first time a download or the setting
 /// asks.
 class MobileDataDownloads extends AsyncNotifier<bool> {
   static const _key = 'downloadOnMobileData';

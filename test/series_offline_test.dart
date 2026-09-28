@@ -16,7 +16,6 @@ import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
 import 'package:patra/src/theme.dart';
 import 'package:patra/src/widgets/cover.dart';
-import 'package:patra/src/widgets/download_pill.dart';
 
 import 'test_support.dart';
 
@@ -246,9 +245,8 @@ void main() {
     // The hero says the same thing as the rows: the chapter it would resume
     // is one of them, and it is not here.
     expect(_resumeEnabled(tester), isFalse);
-    // Nor is anything offered that offline cannot be done: a chapter that is
-    // not already on the device cannot be fetched.
-    expect(find.byType(DownloadPill), findsNothing);
+    // And no cover says a copy is here, because none is.
+    expect(find.byTooltip('Saved'), findsNothing);
   });
 
   testWidgets('a saved chapter is openable and shows the saved copy\'s '
@@ -298,9 +296,9 @@ void main() {
       contains('chapterId=102'),
     );
     expect(_resumeEnabled(tester), isTrue);
-    // The pill stays for a copy that is already here, since removing one is
-    // local.
-    expect(find.byType(DownloadPill), findsOneWidget);
+    // Its cover still says the copy is here: the badge is a fact about the
+    // device, which needs no server to be true.
+    expect(find.byTooltip('Saved'), findsOneWidget);
   });
 
   testWidgets('where neither the fetch nor the catalogue can answer, the '

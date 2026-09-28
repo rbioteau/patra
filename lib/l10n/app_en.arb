@@ -713,56 +713,16 @@
       "count": {"type": "String"}
     }
   },
-  "batchDownload": "Download what's next",
-  "@batchDownload": {
-    "description": "Batch card title when there is something to fetch. No number: how many is a setting (batchDownloadSize), and the subtitle names the range instead"
-  },
-  "volumeRangeLabel": "Volumes {from} to {to}",
-  "@volumeRangeLabel": {
-    "description": "A run of whole volumes on the batch card, the unit said once; from and to are Kavita's volume numbers",
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "chapterRangeLabel": "Chapters {from} to {to}",
-  "@chapterRangeLabel": {
-    "description": "A run of numbered chapters on the batch card, in a manga or image library",
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "issueRangeLabel": "Issues #{from} to #{to}",
-  "@issueRangeLabel": {
-    "description": "A run of issues on the batch card, in a comic library",
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "bookRangeLabel": "Books {from} to {to}",
-  "@bookRangeLabel": {
-    "description": "A run of books on the batch card, in a book or light novel library",
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "batchDownloadSizeCaption": "How many unread chapters one tap on a series saves, from where you are, across volumes.",
+  "batchDownloadSizeCaption": "How many unread chapters Next selects on a series, from where you are, across volumes.",
   "@batchDownloadSizeCaption": {
     "description": "Caption under the batch download size row in Settings › Storage"
   },
-  "batchSizeHint": "Downloading the next {count}. That number is yours to choose in Settings › Storage.",
+  "batchSizeHint": "Selected the next {count}. That number is yours to choose in Settings › Storage.",
   "@batchSizeHint": {
-    "description": "SnackBar shown once per device, on the first tap of the batch card, with an action leading to Settings; count is the batch size in force",
+    "description": "SnackBar shown once per device, on the first tap of the selection bar's Next N, with an action leading to Settings; count is the batch size in force",
     "placeholders": {
       "count": {"type": "int"}
     }
-  },
-  "batchDownloadVolume": "Download remaining",
-  "@batchDownloadVolume": {
-    "description": "Button on a volume section header to enqueue all unread chapters in that volume"
   },
   "batchDownloadSize": "Batch download size",
   "@batchDownloadSize": {
@@ -842,44 +802,75 @@
   "@hideReadChapters": {
     "description": "Control on the Already read header that folds the finished chapters away again"
   },
-  "batchDownloading": "Downloading next {count}…",
-  "@batchDownloading": {
-    "description": "Batch card title while at least one of the next N unread chapters is being fetched; count is how many the batch covers",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-  "batchDownloadingProgress": "{done} of {count} saved",
-  "@batchDownloadingProgress": {
-    "description": "Batch card subtitle while it runs: how many of the batch are already on the device",
-    "placeholders": {
-      "done": {"type": "int"},
-      "count": {"type": "int"}
-    }
-  },
-  "batchAllSaved": "Next {count} saved",
-  "@batchAllSaved": {
-    "description": "Batch card title once every one of the next N unread chapters is on the device",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-  "batchReadyOffline": "Ready to read offline",
-  "@batchReadyOffline": {
-    "description": "Batch card subtitle once the whole batch is saved"
-  },
-  "batchAlreadySaved": "{count, plural, =1{1 already saved} other{{count} already saved}}",
-  "@batchAlreadySaved": {
-    "description": "Appended to the batch card subtitle when part of the batch is already on the device — which is what the card looks like after one of a saved batch has been finished and the window has moved on by one",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "mobileDataTitle": "You're on mobile data",
   "@mobileDataTitle": {"description": "Title of the question asked before a download starts away from Wi-Fi."},
   "mobileDataBody": "This download will use your data plan. Download anyway?",
   "mobileDataDontAsk": "Don't ask again",
   "mobileDataDownload": "Download",
   "mobileDataSetting": "Download on mobile data",
-  "mobileDataSettingCaption": "Without asking first. When off, the app asks before each download away from Wi-Fi."
+  "mobileDataSettingCaption": "Without asking first. When off, the app asks before each download away from Wi-Fi.",
+  "selectionCount": "{count} selected",
+  "@selectionCount": {
+    "description": "Title of the series screen's selection bar, and first line of the bar under the list while volumes are being selected for a download",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "selectNext": "Next {count}",
+  "@selectNext": {
+    "description": "Selection bar action: selects the next N unread from the reading position, N being the batch download size chosen in Settings › Storage",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "selectAllUnread": "All unread",
+  "@selectAllUnread": {
+    "description": "Selection bar action: selects everything in the series not yet read"
+  },
+  "selectionEmpty": "Tap to add more",
+  "@selectionEmpty": {
+    "description": "Second line of the selection bar at the foot of the series screen when nothing is selected. Worded without the library's unit, which a screen never hardcodes"
+  },
+  "selectionToFetch": "{count, plural, =1{1 to download} other{{count} to download}}",
+  "@selectionToFetch": {
+    "description": "Second line of the selection bar: how many of the selection a save would fetch. A count and never a size: a chapter's bytes are not known before it is fetched",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "selectionAllSaved": "All on this device",
+  "@selectionAllSaved": {
+    "description": "Second line of the selection bar when every selected entry is already saved"
+  },
+  "selectionOnItsWay": "Already downloading",
+  "@selectionOnItsWay": {
+    "description": "Second line of the selection bar when nothing selected is left to fetch but not all of it is saved yet"
+  },
+  "selectionOffline": "Offline — reconnect to save these",
+  "@selectionOffline": {
+    "description": "Second line of the selection bar while the server is unreachable and something selected is not on the device"
+  },
+  "removeSelectedConfirm": "{count, plural, =1{Remove 1 saved copy?} other{Remove {count} saved copies?}}",
+  "@removeSelectedConfirm": {
+    "description": "Confirmation before the selection bar takes saved copies off the device",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "selectionHint": "Long-press to select several to save. Swipe left for just one.",
+  "@selectionHint": {
+    "description": "One-time line over the series list, until the long-press or the swipe has been used once on this device"
+  },
+  "seriesViewList": "List",
+  "@seriesViewList": {
+    "description": "Tooltip of the series screen's list view button"
+  },
+  "seriesViewGrid": "Grid",
+  "@seriesViewGrid": {
+    "description": "Tooltip of the series screen's grid view button"
+  },
+  "pauseAction": "Pause",
+  "@pauseAction": {
+    "description": "Swipe action on a series row whose copy is downloading or waiting"
+  }
 }

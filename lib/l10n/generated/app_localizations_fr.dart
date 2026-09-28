@@ -691,39 +691,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get batchDownload => 'Télécharger la suite';
-
-  @override
-  String volumeRangeLabel(String from, String to) {
-    return 'Tomes $from à $to';
-  }
-
-  @override
-  String chapterRangeLabel(String from, String to) {
-    return 'Chapitres $from à $to';
-  }
-
-  @override
-  String issueRangeLabel(String from, String to) {
-    return 'Numéros #$from à #$to';
-  }
-
-  @override
-  String bookRangeLabel(String from, String to) {
-    return 'Livres $from à $to';
-  }
-
-  @override
   String get batchDownloadSizeCaption =>
-      'Combien de chapitres non lus un appui sur une série enregistre, à partir d\'où vous en êtes, d\'un tome à l\'autre.';
+      'Combien de chapitres non lus « suivants » sont sélectionnés sur une série, à partir d\'où vous en êtes, d\'un tome à l\'autre.';
 
   @override
   String batchSizeHint(int count) {
-    return 'Les $count prochains sont en cours. Ce nombre se règle dans Réglages › Stockage.';
+    return 'Les $count suivants sont sélectionnés. Ce nombre se règle dans Réglages › Stockage.';
   }
-
-  @override
-  String get batchDownloadVolume => 'Télécharger le reste';
 
   @override
   String get batchDownloadSize => 'Taille du téléchargement par lot';
@@ -784,35 +758,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get hideReadChapters => 'Masquer';
 
   @override
-  String batchDownloading(int count) {
-    return 'Téléchargement des $count prochains…';
-  }
-
-  @override
-  String batchDownloadingProgress(int done, int count) {
-    return '$done sur $count enregistrés';
-  }
-
-  @override
-  String batchAllSaved(int count) {
-    return 'Les $count prochains sont enregistrés';
-  }
-
-  @override
-  String get batchReadyOffline => 'Prêts à lire hors ligne';
-
-  @override
-  String batchAlreadySaved(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count déjà enregistrés',
-      one: '1 déjà enregistré',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get mobileDataTitle => 'Vous êtes sur les données mobiles';
 
   @override
@@ -831,4 +776,71 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get mobileDataSettingCaption =>
       'Sans demander d\'abord. Désactivé, l\'app demande avant chaque téléchargement hors Wi-Fi.';
+
+  @override
+  String selectionCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sélectionnés',
+      one: '1 sélectionné',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String selectNext(int count) {
+    return '$count suivants';
+  }
+
+  @override
+  String get selectAllUnread => 'Tous les non lus';
+
+  @override
+  String get selectionEmpty => 'Touchez pour en ajouter';
+
+  @override
+  String selectionToFetch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count à télécharger',
+      one: '1 à télécharger',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get selectionAllSaved => 'Tout est sur l\'appareil';
+
+  @override
+  String get selectionOnItsWay => 'Déjà en cours de téléchargement';
+
+  @override
+  String get selectionOffline =>
+      'Hors ligne — reconnectez-vous pour les enregistrer';
+
+  @override
+  String removeSelectedConfirm(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Supprimer $count copies enregistrées ?',
+      one: 'Supprimer 1 copie enregistrée ?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get selectionHint =>
+      'Appui long pour en sélectionner plusieurs à enregistrer. Balayez vers la gauche pour un seul.';
+
+  @override
+  String get seriesViewList => 'Liste';
+
+  @override
+  String get seriesViewGrid => 'Grille';
+
+  @override
+  String get pauseAction => 'Pause';
 }

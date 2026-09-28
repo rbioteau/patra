@@ -61,6 +61,10 @@ enum BatchDownloadSize {
 /// a device that was set before it held profiles keeps every setting it had,
 /// for everybody, until somebody chooses otherwise for themselves.
 
+/// How a series screen draws the volumes under its hero: one row each, or a
+/// grid of covers. The name is what is stored, so a value is never renamed.
+enum SeriesView { list, grid }
+
 /// What one profile has chosen for itself. A null field is a choice never
 /// made, and the device's own default stands in for it.
 class ProfilePreferences {
@@ -74,6 +78,7 @@ class ProfilePreferences {
     this.batchDownloadSize,
     this.seriesDirections = const {},
     this.libraryDirections = const {},
+    this.seriesViews = const {},
   });
 
   static const none = ProfilePreferences();
@@ -132,6 +137,14 @@ class ProfilePreferences {
   /// mirrors, for the same reasons and in the same row: a choice about works
   /// never sent to a server, gone with the profile that made it.
   final Map<int, ReadingDirection> libraryDirections;
+
+  /// Whether each series' volumes are drawn as rows or as a grid of covers,
+  /// keyed by series id. A choice about a work, made by a person — the shape
+  /// of [seriesDirections], for the same reasons — and a series nobody has
+  /// switched is absent, so it keeps following the default its own contents
+  /// decide rather than one frozen the day somebody looked at it.
+  final Map<int, SeriesView> seriesViews;
+
   ProfilePreferences copyWith({
     bool? magnify,
     double? widthFactor,
@@ -142,6 +155,7 @@ class ProfilePreferences {
     BatchDownloadSize? batchDownloadSize,
     Map<int, ReadingDirection>? seriesDirections,
     Map<int, ReadingDirection>? libraryDirections,
+    Map<int, SeriesView>? seriesViews,
   }) => ProfilePreferences(
     magnify: magnify ?? this.magnify,
     widthFactor: widthFactor ?? this.widthFactor,
@@ -152,6 +166,7 @@ class ProfilePreferences {
     batchDownloadSize: batchDownloadSize ?? this.batchDownloadSize,
     seriesDirections: seriesDirections ?? this.seriesDirections,
     libraryDirections: libraryDirections ?? this.libraryDirections,
+    seriesViews: seriesViews ?? this.seriesViews,
   );
 
   Map<String, dynamic> toJson() => {
@@ -167,6 +182,11 @@ class ProfilePreferences {
       'seriesDirections': _directionsJson(seriesDirections),
     if (libraryDirections.isNotEmpty)
       'libraryDirections': _directionsJson(libraryDirections),
+    if (seriesViews.isNotEmpty)
+      'seriesViews': {
+        for (final entry in seriesViews.entries)
+          '${entry.key}': entry.value.name,
+      },
   };
 
   /// Defensive like every other read from the keychain: this is loaded before
@@ -203,8 +223,21 @@ class ProfilePreferences {
           : null,
       seriesDirections: _directions(json['seriesDirections']),
       libraryDirections: _directions(json['libraryDirections']),
+      seriesViews: _views(json['seriesViews']),
     );
   }
+
+  /// Entry by entry, like the directions: a view this build does not know
+  /// costs its series the choice and nothing else.
+  static Map<int, SeriesView> _views(Object? json) => json is! Map
+      ? const {}
+      : {
+          for (final entry in json.entries)
+            if (int.tryParse('${entry.key}') case final int id)
+              if (SeriesView.values.asNameMap()[entry.value]
+                  case final SeriesView view)
+                id: view,
+        };
 
   /// One direction map as the wire carries it: the series' and the library's
   /// are the same shape, because the second was built to mirror the first.
@@ -468,6 +501,18 @@ class ProfilePreferencesStore {
         ),
       );
 
+  /// How [profileId] last chose to see [seriesId], if they ever switched it.
+  SeriesView? seriesViewFor(String? profileId, int seriesId) =>
+      of(profileId).seriesViews[seriesId];
+
+  /// [seriesId] is drawn as [view] from now on, for [profileId] alone.
+  Future<void> setSeriesView(String profileId, int seriesId, SeriesView view) =>
+      _update(
+        profileId,
+        (was) =>
+            was.copyWith(seriesViews: {...was.seriesViews, seriesId: view}),
+      );
+
   Future<void> setMagnify(String profileId, bool enabled) =>
       _update(profileId, (was) => was.copyWith(magnify: enabled));
 
@@ -503,8 +548,10 @@ class ProfilePreferencesStore {
       bookLineHeight: was.bookLineHeight,
       bookReadingFace: was.bookReadingFace,
       language: locale?.languageCode ?? '',
+      batchDownloadSize: was.batchDownloadSize,
       seriesDirections: was.seriesDirections,
       libraryDirections: was.libraryDirections,
+      seriesViews: was.seriesViews,
     ),
   );
 
@@ -709,6 +756,32 @@ class LibraryDirectionsNotifier extends DirectionMapNotifier {
 final libraryDirectionsProvider =
     NotifierProvider<LibraryDirectionsNotifier, Map<int, ReadingDirection>>(
       LibraryDirectionsNotifier.new,
+    );
+
+/// How each series is drawn, for whoever is reading: only the series somebody
+/// has switched, the rest following what their contents make the default.
+class SeriesViewsNotifier extends Notifier<Map<int, SeriesView>> {
+  @override
+  Map<int, SeriesView> build() => ref
+      .read(profilePreferencesStoreProvider)
+      .of(ref.watch(readingProfileIdProvider))
+      .seriesViews;
+
+  Future<void> set(int seriesId, SeriesView view) async {
+    state = {...state, seriesId: view};
+    final profileId = ref.read(sessionProvider)?.id;
+    // Nobody reading, nobody it could belong to: the screen keeps the view
+    // for as long as it is open, as a direction does.
+    if (profileId == null) return;
+    await ref
+        .read(profilePreferencesStoreProvider)
+        .setSeriesView(profileId, seriesId, view);
+  }
+}
+
+final seriesViewsProvider =
+    NotifierProvider<SeriesViewsNotifier, Map<int, SeriesView>>(
+      SeriesViewsNotifier.new,
     );
 
 /// Whether a one-finger drag magnifies the page instead of turning it.

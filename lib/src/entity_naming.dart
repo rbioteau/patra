@@ -40,24 +40,6 @@ extension LibraryTypeNaming on LibraryType {
         _ => l10n.chapterLabel(range),
       };
 
-  /// A run of numbered chapters, one word for both ends: "Chapters 3 to 5",
-  /// "Issues #3 to #5", "Books 3 to 5". Where "Chapter 3 – Chapter 5" said
-  /// the unit twice.
-  String numberedChapterRange(AppLocalizations l10n, String from, String to) =>
-      switch (this) {
-        LibraryType.comic ||
-        LibraryType.comicVine => l10n.issueRangeLabel(from, to),
-        LibraryType.book ||
-        LibraryType.lightNovel => l10n.bookRangeLabel(from, to),
-        _ => l10n.chapterRangeLabel(from, to),
-      };
-
-  /// A run of whole volumes, the same way: "Volumes 1 to 3", or books where
-  /// the library calls a volume a book.
-  String volumeRange(AppLocalizations l10n, String from, String to) => usesBooks
-      ? l10n.bookRangeLabel(from, to)
-      : l10n.volumeRangeLabel(from, to);
-
   /// The full name of one chapter, following Kavita's rules: a special is
   /// known only by its title, so is anything else carrying no number of its
   /// own, and where there is a number the title is *appended* to it rather

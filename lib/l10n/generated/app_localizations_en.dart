@@ -689,39 +689,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get batchDownload => 'Download what\'s next';
-
-  @override
-  String volumeRangeLabel(String from, String to) {
-    return 'Volumes $from to $to';
-  }
-
-  @override
-  String chapterRangeLabel(String from, String to) {
-    return 'Chapters $from to $to';
-  }
-
-  @override
-  String issueRangeLabel(String from, String to) {
-    return 'Issues #$from to #$to';
-  }
-
-  @override
-  String bookRangeLabel(String from, String to) {
-    return 'Books $from to $to';
-  }
-
-  @override
   String get batchDownloadSizeCaption =>
-      'How many unread chapters one tap on a series saves, from where you are, across volumes.';
+      'How many unread chapters Next selects on a series, from where you are, across volumes.';
 
   @override
   String batchSizeHint(int count) {
-    return 'Downloading the next $count. That number is yours to choose in Settings › Storage.';
+    return 'Selected the next $count. That number is yours to choose in Settings › Storage.';
   }
-
-  @override
-  String get batchDownloadVolume => 'Download remaining';
 
   @override
   String get batchDownloadSize => 'Batch download size';
@@ -782,35 +756,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hideReadChapters => 'Hide';
 
   @override
-  String batchDownloading(int count) {
-    return 'Downloading next $count…';
-  }
-
-  @override
-  String batchDownloadingProgress(int done, int count) {
-    return '$done of $count saved';
-  }
-
-  @override
-  String batchAllSaved(int count) {
-    return 'Next $count saved';
-  }
-
-  @override
-  String get batchReadyOffline => 'Ready to read offline';
-
-  @override
-  String batchAlreadySaved(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count already saved',
-      one: '1 already saved',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get mobileDataTitle => 'You\'re on mobile data';
 
   @override
@@ -829,4 +774,64 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mobileDataSettingCaption =>
       'Without asking first. When off, the app asks before each download away from Wi-Fi.';
+
+  @override
+  String selectionCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String selectNext(int count) {
+    return 'Next $count';
+  }
+
+  @override
+  String get selectAllUnread => 'All unread';
+
+  @override
+  String get selectionEmpty => 'Tap to add more';
+
+  @override
+  String selectionToFetch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count to download',
+      one: '1 to download',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get selectionAllSaved => 'All on this device';
+
+  @override
+  String get selectionOnItsWay => 'Already downloading';
+
+  @override
+  String get selectionOffline => 'Offline — reconnect to save these';
+
+  @override
+  String removeSelectedConfirm(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Remove $count saved copies?',
+      one: 'Remove 1 saved copy?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get selectionHint =>
+      'Long-press to select several to save. Swipe left for just one.';
+
+  @override
+  String get seriesViewList => 'List';
+
+  @override
+  String get seriesViewGrid => 'Grid';
+
+  @override
+  String get pauseAction => 'Pause';
 }

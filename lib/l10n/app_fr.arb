@@ -187,45 +187,12 @@
   "sizeBytes": "{count} o",
   "sizeMegabytes": "{count} Mo",
   "sizeGigabytes": "{count} Go",
-  "batchDownload": "Télécharger la suite",
-  "volumeRangeLabel": "Tomes {from} à {to}",
-  "@volumeRangeLabel": {
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "chapterRangeLabel": "Chapitres {from} à {to}",
-  "@chapterRangeLabel": {
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "issueRangeLabel": "Numéros #{from} à #{to}",
-  "@issueRangeLabel": {
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "bookRangeLabel": "Livres {from} à {to}",
-  "@bookRangeLabel": {
-    "placeholders": {
-      "from": {"type": "String"},
-      "to": {"type": "String"}
-    }
-  },
-  "batchDownloadSizeCaption": "Combien de chapitres non lus un appui sur une série enregistre, à partir d'où vous en êtes, d'un tome à l'autre.",
-  "batchSizeHint": "Les {count} prochains sont en cours. Ce nombre se règle dans Réglages › Stockage.",
+  "batchDownloadSizeCaption": "Combien de chapitres non lus « suivants » sont sélectionnés sur une série, à partir d'où vous en êtes, d'un tome à l'autre.",
+  "batchSizeHint": "Les {count} suivants sont sélectionnés. Ce nombre se règle dans Réglages › Stockage.",
   "@batchSizeHint": {
     "placeholders": {
       "count": {"type": "int"}
     }
-  },
-  "batchDownloadVolume": "Télécharger le reste",
-  "@batchDownloadVolume": {
-    "description": "Bouton sur l'en-tête d'une section de tome pour mettre en file d'attente tous les chapitres non lus de ce tome"
   },
   "batchDownloadSize": "Taille du téléchargement par lot",
   "@batchDownloadSize": {
@@ -259,36 +226,23 @@
   },
   "showReadChapters": "Afficher",
   "hideReadChapters": "Masquer",
-  "batchDownloading": "Téléchargement des {count} prochains…",
-  "@batchDownloading": {
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-  "batchDownloadingProgress": "{done} sur {count} enregistrés",
-  "@batchDownloadingProgress": {
-    "placeholders": {
-      "done": {"type": "int"},
-      "count": {"type": "int"}
-    }
-  },
-  "batchAllSaved": "Les {count} prochains sont enregistrés",
-  "@batchAllSaved": {
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-  "batchReadyOffline": "Prêts à lire hors ligne",
-  "batchAlreadySaved": "{count, plural, =1{1 déjà enregistré} other{{count} déjà enregistrés}}",
-  "@batchAlreadySaved": {
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "mobileDataTitle": "Vous êtes sur les données mobiles",
   "mobileDataBody": "Ce téléchargement utilisera votre forfait. Télécharger quand même ?",
   "mobileDataDontAsk": "Ne plus demander",
   "mobileDataDownload": "Télécharger",
   "mobileDataSetting": "Télécharger sur données mobiles",
-  "mobileDataSettingCaption": "Sans demander d'abord. Désactivé, l'app demande avant chaque téléchargement hors Wi-Fi."
+  "mobileDataSettingCaption": "Sans demander d'abord. Désactivé, l'app demande avant chaque téléchargement hors Wi-Fi.",
+  "selectionCount": "{count, plural, =1{1 sélectionné} other{{count} sélectionnés}}",
+  "selectNext": "{count} suivants",
+  "selectAllUnread": "Tous les non lus",
+  "selectionEmpty": "Touchez pour en ajouter",
+  "selectionToFetch": "{count, plural, =1{1 à télécharger} other{{count} à télécharger}}",
+  "selectionAllSaved": "Tout est sur l'appareil",
+  "selectionOnItsWay": "Déjà en cours de téléchargement",
+  "selectionOffline": "Hors ligne — reconnectez-vous pour les enregistrer",
+  "removeSelectedConfirm": "{count, plural, =1{Supprimer 1 copie enregistrée ?} other{Supprimer {count} copies enregistrées ?}}",
+  "selectionHint": "Appui long pour en sélectionner plusieurs à enregistrer. Balayez vers la gauche pour un seul.",
+  "seriesViewList": "Liste",
+  "seriesViewGrid": "Grille",
+  "pauseAction": "Pause"
 }

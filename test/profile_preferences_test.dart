@@ -266,6 +266,52 @@ void main() {
       );
     });
 
+    test('a series is shown the way its reader last chose', () async {
+      // List or grid is a choice about one work, made by one person — the
+      // same shape as a series' direction, kept in the same row.
+      final keychain = MemoryKeychain();
+      final store = await preferencesStore(keychain: keychain);
+      await store.setSeriesView(_romain.id, 3, SeriesView.grid);
+      await store.setSeriesView(_lea.id, 3, SeriesView.list);
+
+      expect(store.seriesViewFor(_romain.id, 3), SeriesView.grid);
+      expect(store.seriesViewFor(_lea.id, 3), SeriesView.list);
+      expect(
+        store.seriesViewFor(_romain.id, 9),
+        isNull,
+        reason: 'a series nobody switched follows its own default',
+      );
+
+      final reopened = await preferencesStore(
+        keychain: MemoryKeychain({...keychain.values}),
+      );
+      expect(reopened.seriesViewFor(_romain.id, 3), SeriesView.grid);
+      expect(reopened.seriesViewFor(_lea.id, 3), SeriesView.list);
+    });
+
+    test('a view of the wrong shape costs one series, not the row', () async {
+      final store = await preferencesStore(
+        keychain: MemoryKeychain({
+          'profilePreferences':
+              '{"${_romain.id}": {"magnify": true,'
+              ' "seriesViews": {"3": "grid", "4": "mosaic", "x": "list"}}}',
+        }),
+      );
+      expect(store.seriesViewFor(_romain.id, 3), SeriesView.grid);
+      expect(store.seriesViewFor(_romain.id, 4), isNull);
+      expect(store.of(_romain.id).magnify, isTrue);
+    });
+
+    test('changing language keeps the batch size and the views', () async {
+      final store = await preferencesStore();
+      await store.setBatchDownloadSize(_romain.id, BatchDownloadSize.ten);
+      await store.setSeriesView(_romain.id, 3, SeriesView.grid);
+      await store.setLanguage(_romain.id, const Locale('fr'));
+
+      expect(store.batchDownloadSizeFor(_romain.id), BatchDownloadSize.ten);
+      expect(store.seriesViewFor(_romain.id, 3), SeriesView.grid);
+    });
+
     test('forgetting a profile takes its preferences with it', () async {
       final keychain = MemoryKeychain();
       final store = await preferencesStore(keychain: keychain);

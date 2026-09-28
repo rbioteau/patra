@@ -58,6 +58,11 @@ const patraOnAccent = Color(0xFF241D10);
 /// Downloads / offline ONLY. Never for progress.
 const patraOffline = Color(0xFF8EACD8);
 
+/// The disc a download's state sits on where it is laid over a cover: the
+/// offline blue's own night, so the check or the ring on it reads as a
+/// download's on any artwork.
+final patraOfflineScrim = const Color(0xFF10243E).withValues(alpha: .85);
+
 const patraOnline = Color(0xFF3DDC84);
 const patraDanger = Color(0xFFFFB4AB);
 const patraText = Color(0xFFF3EEE3);
@@ -72,6 +77,16 @@ final patraTrack = patraText.withValues(alpha: .14);
 /// anything from black ink to bare white paper.
 final patraTextOnArt = patraText.withValues(alpha: .78);
 const patraBorder = Color(0xFF35445A);
+
+/// An unticked selection circle: a ring strong enough to read as something
+/// to tick, where [patraBorder] would read as a hairline.
+const patraOutline = Color(0xFF79879B);
+
+/// The same unticked circle laid over a cover rather than beside it: the
+/// page's ink on a faint shade, since an outline tuned for a flat panel
+/// disappears on artwork.
+final patraOnArtOutline = patraText.withValues(alpha: .8);
+final patraOnArtShade = Colors.black.withValues(alpha: .3);
 
 /// A control laid over a page, which is what the reader's chrome sits on.
 ///
@@ -220,7 +235,7 @@ ThemeData patraTheme() {
     surfaceContainerHighest: patraSurfaceHi,
     error: patraDanger,
     onError: const Color(0xFF690005),
-    outline: const Color(0xFF79879B),
+    outline: patraOutline,
     outlineVariant: patraBorder,
   );
 

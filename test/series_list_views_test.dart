@@ -13,18 +13,22 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/series/series_detail_screen.dart';
+import 'package:patra/src/features/series/series_selection.dart';
 import 'package:patra/src/settings/profile_preferences.dart';
 import 'package:patra/src/theme.dart';
+import 'package:patra/src/widgets/download_badge.dart';
 
 import 'test_support.dart';
 
-/// The list under the hero, in its three orders, and the batch card over it.
+/// The list under the hero, in its three orders and its two views, and the
+/// selection that saves several of its entries at once.
 ///
 /// The prototype's argument for the screen is that the thing to read is
 /// above the fold whatever the series' length: the chapter under way first,
 /// then what comes next, the finished ones folded away. The other two orders
-/// are the storyline as Kavita sections it, read from either end. The card
-/// is the row's save pill writ large, counting what is really left.
+/// are the storyline as Kavita sections it, read from either end. Saving is a
+/// gesture: a swipe for one entry, a long-press to select several and the
+/// bar under the list to save them.
 
 Map<String, dynamic> _chapter(
   int id,
@@ -143,7 +147,7 @@ class _Adapter implements HttpClientAdapter {
     );
     if (options.method == 'POST') return json(const <String, dynamic>{});
     if (options.path == '/api/Reader/image') {
-      final chapterId = int.parse(options.queryParameters['chapterId']!);
+      final chapterId = int.parse('${options.queryParameters['chapterId']}');
       if (!fetched.contains(chapterId)) fetched.add(chapterId);
       if (imageGate != null) await imageGate;
       return ResponseBody.fromBytes(const [0], 200);
@@ -180,10 +184,11 @@ Future<_Adapter> _pump(
   Future<void>? imageGate,
   MemoryKeychain? keychain,
   bool mobileData = false,
+  Size size = const Size(1100, 3600),
 }) async {
   // Tall enough that every row is built: the list is lazy, and a row below
   // the fold is a row a finder cannot see.
-  tester.view.physicalSize = const Size(1100, 3600);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
 
@@ -218,8 +223,8 @@ Future<_Adapter> _pump(
           DownloadsService(root: root, profileId: _profileId),
         ),
         testCatalogue(profileId: _profileId),
-        // The batch card's first-tap hint remembers itself on the device's
-        // keychain; handed in so a test can be two visits to one device.
+        // The one-time hints remember themselves on the device's keychain;
+        // handed in so a test can be two visits to one device.
         testKeychain(keychain),
         testNetwork(mobileData: mobileData),
       ],
@@ -400,34 +405,21 @@ void main() {
       expect(find.text('Chapter 1'), findsNothing);
     });
 
-    testWidgets('a volume header over read rows carries no action', (
+    testWidgets('a volume header names its volume and offers nothing', (
       tester,
     ) async {
+      // Saving several is the selection's job, in one place for both views;
+      // a header offering to fetch its volume's rest was a second way that
+      // only one of them had.
       await _pump(tester, _underWay());
-      // Volume 1 heads the chapter under way, volume 2 what follows: two
-      // headers, each offering the rest of its volume.
-      expect(find.text('Download remaining'), findsNWidgets(2));
+      expect(find.byType(OutlinedButton), findsNothing);
 
       await tester.tap(find.text('Show'));
       await tester.pumpAndSettle();
 
       // Unfolded, volume 1 heads its two read chapters as well — it says
-      // which volume they are, and offers nothing over what is done with.
+      // which volume they are.
       expect(find.text('Volume 1'), findsNWidgets(2));
-      expect(find.text('Download remaining'), findsNWidgets(2));
-    });
-
-    testWidgets('a volume whose rest is already saved offers nothing', (
-      tester,
-    ) async {
-      // Everything unread in volume 1 (chapter 3) is on the device; volume 2
-      // still has chapters to fetch.
-      await _pump(tester, _underWay(), saved: [103]);
-      expect(find.text('Download remaining'), findsOneWidget);
-      expect(
-        tester.getTopLeft(find.text('Download remaining')).dy,
-        greaterThan(tester.getTopLeft(find.text('Volume 2')).dy - 1),
-      );
     });
 
     testWidgets('an untouched series starts here', (tester) async {
@@ -462,8 +454,15 @@ void main() {
       expect(find.text('À SUIVRE'), findsOneWidget);
       expect(find.text('DÉJÀ LUS · 2'), findsOneWidget);
       expect(find.text('Afficher'), findsOneWidget);
-      expect(find.text('Télécharger la suite'), findsOneWidget);
-      expect(find.text('Chapitres 3 à 5'), findsOneWidget);
+      expect(
+        find.text(
+          'Appui long pour en sélectionner plusieurs à enregistrer. '
+          'Balayez vers la gauche pour un seul.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Liste'), findsOneWidget);
+      expect(find.byTooltip('Grille'), findsOneWidget);
 
       // And the orders speak it too, in the sheet the header row's one
       // control opens.
@@ -508,77 +507,309 @@ void main() {
     });
   });
 
-  group('the batch card', () {
-    testWidgets('counts what is really left, never the setting', (
+  group('the two views', () {
+    /// A volume with no chapter breakdown: the reading unit, drawn by the
+    /// volume's own cover.
+    Map<String, dynamic> whole(int id, String name, {int read = 0}) => {
+      'id': id,
+      'name': name,
+      'minNumber': num.parse(name),
+      'pages': 10,
+      'chapters': [
+        {
+          'id': 200 + id,
+          'range': '-100000',
+          'minNumber': -100000,
+          'pages': 10,
+          'pagesRead': read,
+        },
+      ],
+    };
+
+    Finder selectedSegment(IconData icon) => find.ancestor(
+      of: find.byIcon(icon),
+      matching: find.byWidgetPredicate(
+        (w) => w is Semantics && (w.properties.selected ?? false),
+      ),
+    );
+
+    testWidgets('chapters open as rows', (tester) async {
+      await _pump(tester, _underWay());
+      expect(selectedSegment(Icons.view_list), findsOneWidget);
+      expect(selectedSegment(Icons.grid_view), findsNothing);
+    });
+
+    testWidgets('whole volumes open as a grid of covers, with their badges', (
       tester,
     ) async {
-      // Six unread from the resume point, so the default three: 3 to 5. The
-      // title carries no number — that is a setting — and the line under it
-      // names the run a tap fetches, the unit said once.
-      await _pump(tester, _underWay());
-      expect(find.text("Download what's next"), findsOneWidget);
-      expect(find.text('Chapters 3 to 5'), findsOneWidget);
-    });
-
-    testWidgets('a run of whole volumes is named in volumes', (tester) async {
-      Map<String, dynamic> whole(int id, String name, {int read = 0}) => {
-        'id': id,
-        'name': name,
-        'minNumber': num.parse(name),
-        'pages': 10,
-        'chapters': [
-          {
-            'id': 200 + id,
-            'range': '-100000',
-            'minNumber': -100000,
-            'pages': 10,
-            'pagesRead': read,
-          },
+      await _pump(
+        tester,
+        [
+          whole(1, '1', read: 10),
+          whole(2, '2', read: 4),
+          whole(3, '3'),
+          whole(4, '4'),
         ],
-      };
-      await _pump(tester, [
-        whole(1, '1', read: 4),
-        whole(2, '2'),
-        whole(3, '3'),
-        whole(4, '4'),
-      ]);
-      expect(find.text('Volumes 1 to 3'), findsOneWidget);
+        saved: [203],
+      );
+      expect(selectedSegment(Icons.grid_view), findsOneWidget);
+      // Three covers across a phone: volume 3 and volume 4 share a row.
+      expect(
+        tester.getTopLeft(find.text('Volume 3')).dy,
+        tester.getTopLeft(find.text('Volume 4')).dy,
+      );
+      // The one on the device says so on its cover; the rest wear nothing.
+      expect(find.byTooltip('Saved'), findsOneWidget);
+      // The line teaching the swipe is the list's, which has one.
+      expect(find.textContaining('Long-press'), findsNothing);
     });
 
-    testWidgets('a run ending on a special names both ends', (tester) async {
-      // Chapter 7 and the special are all that is left: two kinds of thing,
-      // so no single word covers them.
-      await _pump(tester, [
-        _volume(11, '2', [
-          _chapter(106, '6', pagesRead: 10),
-          _chapter(107, '7'),
-        ]),
-        _specials([_chapter(108, '', isSpecial: true, title: 'Omake')]),
-      ]);
-      expect(find.text('Chapter 7 – Omake'), findsOneWidget);
+    testWidgets('the view chosen is the reader\'s, for this series', (
+      tester,
+    ) async {
+      await _pump(tester, _underWay());
+      await tester.tap(find.byTooltip('Grid'));
+      await tester.pumpAndSettle();
+
+      expect(selectedSegment(Icons.grid_view), findsOneWidget);
+      expect(
+        ProviderScope.containerOf(
+          tester.element(find.byType(SeriesDetailScreen)),
+        ).read(seriesViewsProvider),
+        {7: SeriesView.grid},
+      );
+      // The groups are the same in either view.
+      expect(find.text('READING NOW'), findsOneWidget);
+      expect(find.text('UP NEXT'), findsOneWidget);
+    });
+  });
+
+  group('the trailing swipe', () {
+    testWidgets('saves one, pauses it, and sends it on', (tester) async {
+      final gate = Completer<void>();
+      await _pump(tester, _underWay(), imageGate: gate.future);
+      ProviderContainer container() => ProviderScope.containerOf(
+        tester.element(find.byType(SeriesDetailScreen)),
+      );
+      Future<void> swipe() async {
+        // Let the pane the last action closed finish closing first. Pumped,
+        // not settled: a fetch held open is a fetch dio times out.
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.drag(find.text('Chapter 4'), const Offset(-200, 0));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+
+      await swipe();
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump();
+      expect(container().read(downloadsProvider).value!.inFlight.keys, [104]);
+      // Its cover carries the ring from here on.
+      expect(
+        find.descendant(
+          of: find.byType(DownloadBadge),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+
+      await swipe();
+      await tester.tap(find.text('Pause'));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        container().read(downloadMembershipProvider).paused,
+        contains(104),
+      );
+
+      await swipe();
+      expect(find.text('Resume'), findsOneWidget);
+
+      gate.complete();
+      await tester.pumpAndSettle();
     });
 
-    testWidgets('a short series says how many it has', (tester) async {
-      // Two unread, under a setting of three: the card says two.
-      await _pump(tester, [
-        _volume(10, '1', [
-          _chapter(101, '1', pagesRead: 10),
-          _chapter(102, '2'),
-          _chapter(103, '3'),
-        ]),
-      ]);
-      expect(find.text("Download what's next"), findsOneWidget);
-      expect(find.text('Chapters 2 to 3'), findsOneWidget);
+    testWidgets('a saved copy is removed, after asking', (tester) async {
+      await _pump(tester, _underWay(), saved: [104]);
+      await tester.drag(find.text('Chapter 4'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text('Remove').last);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Saved'), findsNothing);
+    });
+  });
+
+  group('selecting', () {
+    ProviderContainer container(WidgetTester tester) =>
+        ProviderScope.containerOf(
+          tester.element(find.byType(SeriesDetailScreen)),
+        );
+    Set<int>? selection(WidgetTester tester) =>
+        container(tester).read(seriesSelectionProvider);
+
+    testWidgets('a long-press enters it, a tap adds, the cross leaves', (
+      tester,
+    ) async {
+      await _pump(tester, _underWay());
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+
+      expect(selection(tester), {104});
+      // The bar over the list and the bar under it both count.
+      expect(find.text('1 selected'), findsNWidgets(2));
+      expect(find.text('Next 3'), findsOneWidget);
+      expect(find.text('All unread'), findsOneWidget);
+      expect(find.text('1 to download'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
+
+      // A tap is a toggle now, not a way into the reader.
+      await tester.tap(find.text('Chapter 5'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), {104, 105});
+      await tester.tap(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), {105});
+
+      await tester.tap(find.byTooltip('Cancel'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), isNull);
+      expect(find.text('Berserk'), findsWidgets);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
     });
 
-    testWidgets('one chapter left is the row\'s pill\'s job', (tester) async {
-      await _pump(tester, [
-        _volume(10, '1', [
-          _chapter(101, '1', pagesRead: 10),
-          _chapter(102, '2'),
-        ]),
-      ]);
-      expect(find.text("Download what's next"), findsNothing);
+    testWidgets('back leaves the selection before the screen', (tester) async {
+      await _pump(tester, _underWay());
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(selection(tester), isNull);
+      expect(find.byType(SeriesDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('Next N is the batch from the reading position', (
+      tester,
+    ) async {
+      await _pump(tester, _underWay());
+      await tester.longPress(find.text('Chapter 7'));
+      await tester.pumpAndSettle();
+
+      // Replaced, not added to: the shortcut says what the selection is.
+      await tester.tap(find.text('Next 3'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), {103, 104, 105});
+
+      // The number is the reader's own setting.
+      container(tester)
+          .read(batchDownloadSizeProvider.notifier)
+          .set(BatchDownloadSize.five);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next 5'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), {103, 104, 105, 106, 107});
+
+      await tester.tap(find.text('All unread'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), {103, 104, 105, 106, 107, 108});
+    });
+
+    testWidgets('the first Next N says the number is a setting, once', (
+      tester,
+    ) async {
+      // One device, two visits: the keychain is what remembers.
+      final keychain = MemoryKeychain();
+      await _pump(tester, _underWay(), keychain: keychain);
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next 3'));
+      await tester.pump();
+      await tester.pump();
+
+      // Worded, with the way to the setting as the action.
+      expect(
+        find.text(
+          'Selected the next 3. That number is yours to choose in '
+          'Settings › Storage.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(SnackBarAction, 'Settings'), findsOneWidget);
+      // Legible: the accent, not Material's darkened default.
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('Settings'))
+            .text
+            .style
+            ?.color,
+        patraAccent,
+      );
+      // Put the sentence away: `pumpWidget` below keeps the messenger, since
+      // the root widgets match, and a SnackBar still up would be mistaken
+      // for a second one. Dismissed by hand because the test binding does
+      // not run a SnackBar's own clock down.
+      tester
+          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+          .hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+
+      // The same device, another series: the hint has been given.
+      await _pump(tester, _untouched(), keychain: keychain);
+      await tester.longPress(find.text('Chapter 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next 3'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('Save queues only what is not here, and leaves selecting', (
+      tester,
+    ) async {
+      // Two of the three are already on the device, and the gate keeps the
+      // one that is not from finishing while the screen is looked at.
+      final gate = Completer<void>();
+      await _pump(
+        tester,
+        _underWay(),
+        saved: [103, 104],
+        imageGate: gate.future,
+      );
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next 3'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 to download'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pump();
+      await tester.pump();
+
+      final downloads = container(tester).read(downloadsProvider).value!;
+      expect(downloads.inFlight.keys.toSet(), {105});
+      expect(downloads.saved.keys.toSet(), {103, 104});
+      expect(selection(tester), isNull);
+      // The covers take the report over: two checks and one ring.
+      expect(find.byTooltip('Saved'), findsNWidgets(2));
+      expect(
+        find.descendant(
+          of: find.byType(DownloadBadge),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+
+      // Let go of the fetch, or its timeout outlives the test. Not awaited:
+      // a cancel resolves when its download has wound down, which takes the
+      // pumps below.
+      unawaited(container(tester).read(downloadsProvider.notifier).cancel(105));
+      gate.complete();
+      await tester.pumpAndSettle();
     });
 
     testWidgets('a copy is saved in the language its chapter is written in', (
@@ -596,15 +827,17 @@ void main() {
         ]),
       ], imageGate: gate.future);
 
-      await tester.tap(find.text("Download what's next"));
+      await tester.longPress(find.text('Chapter 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All unread'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pump();
       await tester.pump();
 
       // What is queued is what the copy is made from: the downloader writes
       // the request's language into the copy (`downloads_service_test`).
-      final records = ProviderScope.containerOf(
-        tester.element(find.byType(SeriesDetailScreen)),
-      ).read(downloadsProvider).value!.records;
+      final records = container(tester).read(downloadsProvider).value!.records;
       expect(records.keys.toSet(), {101, 102, 103});
       expect(records[101]!.request.language, 'fr');
       expect(records[102]!.request.language, 'fr');
@@ -613,11 +846,11 @@ void main() {
         isNull,
         reason: 'the server gave none',
       );
+      // Filed under the volume it belongs to.
+      expect(records[101]!.request.volumeId, 10);
 
       // Let go of the fetches, or their timeouts outlive the test.
-      final notifier = ProviderScope.containerOf(
-        tester.element(find.byType(SeriesDetailScreen)),
-      ).read(downloadsProvider.notifier);
+      final notifier = container(tester).read(downloadsProvider.notifier);
       for (final id in records.keys) {
         unawaited(notifier.cancel(id));
       }
@@ -636,236 +869,135 @@ void main() {
         imageGate: gate.future,
         mobileData: true,
       );
-      DownloadsState downloads() => ProviderScope.containerOf(
-        tester.element(find.byType(SeriesDetailScreen)),
-      ).read(downloadsProvider).value!;
+      await tester.longPress(find.text('Chapter 5'));
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.text("Download what's next"));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pump();
       await tester.pump();
       expect(find.text("You're on mobile data"), findsOneWidget);
 
-      // Cancelled: the question goes, and nothing was asked of the server.
+      // Cancelled: the question goes, nothing was asked of the server, and
+      // the selection is still there to be saved later.
       await tester.tap(find.text('Cancel'));
       await tester.pump();
       await tester.pump();
       expect(find.text("You're on mobile data"), findsNothing);
-      expect(downloads().inFlight, isEmpty);
+      expect(container(tester).read(downloadsProvider).value!.inFlight, {});
+      expect(selection(tester), {105});
 
-      // Asked again, and agreed to: the one that was missing is queued.
-      await tester.tap(find.text("Download what's next"));
+      // Asked again, and agreed to.
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pump();
       await tester.pump();
       await tester.tap(find.text('Download'));
       await tester.pump();
       await tester.pump();
-      expect(downloads().inFlight.keys.toSet(), {105});
-
-      // Let go of the fetch, as the test below does.
-      unawaited(
-        ProviderScope.containerOf(
-          tester.element(find.byType(SeriesDetailScreen)),
-        ).read(downloadsProvider.notifier).cancel(105),
+      expect(
+        container(tester).read(downloadsProvider).value!.inFlight.keys.toSet(),
+        {105},
       );
+
+      unawaited(container(tester).read(downloadsProvider.notifier).cancel(105));
       gate.complete();
       await tester.pumpAndSettle();
     });
 
-    testWidgets('saves only what is not here, and reports as it goes', (
-      tester,
-    ) async {
-      // Two of the three are already on the device, and the gate keeps the
-      // one that is not from finishing while the card is looked at.
-      final gate = Completer<void>();
-      await _pump(
-        tester,
-        _underWay(),
-        saved: [103, 104],
-        imageGate: gate.future,
-      );
-      expect(find.text("Download what's next"), findsOneWidget);
-      expect(find.text('Chapters 3 to 5 · 2 already saved'), findsOneWidget);
-
-      await tester.tap(find.text("Download what's next"));
-      // Pumped, not settled: settling runs the fake clock for minutes, and a
-      // page fetch held open that long is a fetch dio times out.
-      await tester.pump();
-      await tester.pump();
-
-      // The one that was missing is queued, and nothing that was here.
-      final downloads = ProviderScope.containerOf(
-        tester.element(find.byType(SeriesDetailScreen)),
-      ).read(downloadsProvider).value!;
-      expect(downloads.inFlight.keys.toSet(), {105});
-      expect(downloads.saved.keys.toSet(), {103, 104});
-
-      expect(find.text('Downloading next 3…'), findsOneWidget);
-      expect(find.text('2 of 3 saved'), findsOneWidget);
-      final bar = tester.widget<LinearProgressIndicator>(
-        find.descendant(
-          // The nearest Material is the card's own; the chapter under way
-          // has a bar of its own further down.
-          of: find
-              .ancestor(
-                of: find.text('Downloading next 3…'),
-                matching: find.byType(Material),
-              )
-              .first,
-          matching: find.byType(LinearProgressIndicator),
-        ),
-      );
-      // Downloads, in the offline blue, never the accent.
-      expect(bar.valueColor?.value, patraOffline);
-      // Two of three on the device and one at nought: the bar says so.
-      expect(bar.value, closeTo(2 / 3, 0.001));
-
-      // The setting moves to ten while the one is still on its way. What is
-      // running is still the three that were asked for, and the card says
-      // so — not "ten under way" for a queue holding one.
-      ProviderScope.containerOf(tester.element(find.byType(SeriesDetailScreen)))
-          .read(batchDownloadSizeProvider.notifier)
-          .set(BatchDownloadSize.ten);
-      await tester.pump();
-      expect(find.text('Downloading next 3…'), findsOneWidget);
-      expect(find.text('2 of 3 saved'), findsOneWidget);
-      expect(find.text('Downloading next 6…'), findsNothing);
-
-      // Let go of the fetch, or its timeout outlives the test. Not awaited:
-      // a cancel resolves when its download has wound down, which takes the
-      // pumps below.
-      unawaited(
-        ProviderScope.containerOf(
-          tester.element(find.byType(SeriesDetailScreen)),
-        ).read(downloadsProvider.notifier).cancel(105),
-      );
-      gate.complete();
-      await tester.pumpAndSettle();
-    });
-
-    testWidgets('the first tap says the number is a setting, once', (
-      tester,
-    ) async {
-      // One device, two visits: the keychain is what remembers.
-      final keychain = MemoryKeychain();
-      final first = Completer<void>();
-      await _pump(
-        tester,
-        _underWay(),
-        keychain: keychain,
-        imageGate: first.future,
-      );
-      await tester.tap(find.text("Download what's next"));
-      await tester.pump();
-      await tester.pump();
-
-      // Worded, with the way to the setting as the action.
-      expect(
-        find.text(
-          'Downloading the next 3. That number is yours to choose in '
-          'Settings › Storage.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.widgetWithText(SnackBarAction, 'Settings'), findsOneWidget);
-      // Legible: the accent, not Material's darkened default.
-      expect(
-        tester
-            .renderObject<RenderParagraph>(find.text('Settings'))
-            .text
-            .style
-            ?.color,
-        patraAccent,
-      );
-
-      unawaited(
-        ProviderScope.containerOf(
-          tester.element(find.byType(SeriesDetailScreen)),
-        ).read(downloadsProvider.notifier).cancel(103),
-      );
-      first.complete();
-      await tester.pumpAndSettle();
-      // Put the sentence away: `pumpWidget` below keeps the messenger, since
-      // the root widgets match, and a SnackBar still up would be mistaken
-      // for a second one. Dismissed by hand because the test binding does
-      // not run a SnackBar's own clock down.
-      tester
-          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
-          .hideCurrentSnackBar();
-      await tester.pumpAndSettle();
-      expect(find.byType(SnackBar), findsNothing);
-
-      // The same device, another series: the hint has been given.
-      final second = Completer<void>();
-      await _pump(
-        tester,
-        _untouched(),
-        keychain: keychain,
-        imageGate: second.future,
-      );
-      await tester.tap(find.text("Download what's next"));
-      await tester.pump();
-      await tester.pump();
-      expect(find.byType(SnackBar), findsNothing);
-
-      unawaited(
-        ProviderScope.containerOf(
-          tester.element(find.byType(SeriesDetailScreen)),
-        ).read(downloadsProvider.notifier).cancel(101),
-      );
-      second.complete();
-      await tester.pumpAndSettle();
-    });
-
-    testWidgets('once every one is here it says so', (tester) async {
-      await _pump(tester, _underWay(), saved: [103, 104, 105]);
-
-      expect(find.text('Next 3 saved'), findsOneWidget);
-      expect(find.text('Ready to read offline'), findsOneWidget);
-      expect(find.text("Download what's next"), findsNothing);
-    });
-
-    testWidgets('finishing one of a saved batch offers the newcomer', (
-      tester,
-    ) async {
-      await _pump(tester, _underWay(), saved: [103, 104, 105]);
-      expect(find.text('Next 3 saved'), findsOneWidget);
-
-      // Chapter 3 is marked read: the window is the next three *unread*, so
-      // it moves on by one and chapter 6 is the one not yet here.
-      await tester.drag(find.text('Chapter 3'), const Offset(400, 0));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Mark read'));
-      await tester.pumpAndSettle();
-
-      expect(find.text("Download what's next"), findsOneWidget);
-      expect(find.text('Chapters 4 to 6 · 2 already saved'), findsOneWidget);
-    });
-
-    testWidgets('offline it is drawn only when everything is here', (
-      tester,
-    ) async {
+    testWidgets('everything here is removed, after asking', (tester) async {
       await _pump(tester, _underWay(), saved: [103, 104]);
-      ProviderScope.containerOf(tester.element(find.byType(SeriesDetailScreen)))
-          .read(offlineProvider.notifier)
-          .set(true);
+      await tester.longPress(find.text('Chapter 3'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chapter 4'));
       await tester.pumpAndSettle();
 
-      // Offering a fetch that cannot be made is the screen disagreeing
-      // with itself.
-      expect(find.text("Download what's next"), findsNothing);
+      expect(find.text('All on this device'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove 2 saved copies?'), findsOneWidget);
+      await tester.tap(find.text('Remove').last);
+      await tester.pumpAndSettle();
+
+      expect(container(tester).read(downloadsProvider).value!.saved, isEmpty);
+      expect(selection(tester), isNull);
     });
 
-    testWidgets('and offline a saved batch still says it is ready', (
+    testWidgets('a mixed selection is one to save, never to remove', (
       tester,
     ) async {
-      await _pump(tester, _underWay(), saved: [103, 104, 105]);
-      ProviderScope.containerOf(tester.element(find.byType(SeriesDetailScreen)))
-          .read(offlineProvider.notifier)
-          .set(true);
+      // A long-press meant for saving must not be one tap from deleting.
+      await _pump(tester, _underWay(), saved: [103]);
+      await tester.longPress(find.text('Chapter 3'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chapter 4'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Next 3 saved'), findsOneWidget);
-      expect(find.text('Ready to read offline'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Remove'), findsNothing);
+    });
+
+    testWidgets('offline, nothing is offered for fetching', (tester) async {
+      await _pump(tester, _underWay(), saved: [103]);
+      container(tester).read(offlineProvider.notifier).set(true);
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Offline — reconnect to save these'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+    });
+
+    testWidgets('survives a switch between the two views', (tester) async {
+      await _pump(tester, _underWay());
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Grid'));
+      await tester.pumpAndSettle();
+      expect(selection(tester), {104});
+      expect(find.text('1 selected'), findsNWidgets(2));
+      // Each cover carries its mark, the selected one ticked.
+      expect(find.byType(SelectionMark), findsNWidgets(6));
+    });
+
+    testWidgets('the line teaching it goes once it is used, for good', (
+      tester,
+    ) async {
+      const hint =
+          'Long-press to select several to save. Swipe left for just one.';
+      final keychain = MemoryKeychain();
+      await _pump(tester, _underWay(), keychain: keychain);
+      expect(find.text(hint), findsOneWidget);
+
+      await tester.longPress(find.text('Chapter 4'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text(hint), findsNothing);
+
+      await _pump(tester, _underWay(), keychain: keychain);
+      expect(find.text(hint), findsNothing);
+    });
+
+    testWidgets('the bars hold together on a small phone in French', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _underWay(),
+        locale: const Locale('fr'),
+        // 320pt, the narrowest phone this app is drawn on.
+        size: const Size(640, 2400),
+      );
+      await tester.longPress(find.text('Chapitre 4'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // What gives is what is said twice: the count stays in the bar under
+      // the list, and "Next N" — the shortcut the bar is for — stays on top.
+      expect(find.text('1 sélectionné'), findsWidgets);
+      expect(find.text('3 suivants'), findsOneWidget);
+      expect(find.text('Enregistrer'), findsOneWidget);
     });
   });
 }

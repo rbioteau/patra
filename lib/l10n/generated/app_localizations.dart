@@ -1148,53 +1148,17 @@ abstract class AppLocalizations {
   /// **'{count} GB'**
   String sizeGigabytes(String count);
 
-  /// Batch card title when there is something to fetch. No number: how many is a setting (batchDownloadSize), and the subtitle names the range instead
-  ///
-  /// In en, this message translates to:
-  /// **'Download what\'s next'**
-  String get batchDownload;
-
-  /// A run of whole volumes on the batch card, the unit said once; from and to are Kavita's volume numbers
-  ///
-  /// In en, this message translates to:
-  /// **'Volumes {from} to {to}'**
-  String volumeRangeLabel(String from, String to);
-
-  /// A run of numbered chapters on the batch card, in a manga or image library
-  ///
-  /// In en, this message translates to:
-  /// **'Chapters {from} to {to}'**
-  String chapterRangeLabel(String from, String to);
-
-  /// A run of issues on the batch card, in a comic library
-  ///
-  /// In en, this message translates to:
-  /// **'Issues #{from} to #{to}'**
-  String issueRangeLabel(String from, String to);
-
-  /// A run of books on the batch card, in a book or light novel library
-  ///
-  /// In en, this message translates to:
-  /// **'Books {from} to {to}'**
-  String bookRangeLabel(String from, String to);
-
   /// Caption under the batch download size row in Settings › Storage
   ///
   /// In en, this message translates to:
-  /// **'How many unread chapters one tap on a series saves, from where you are, across volumes.'**
+  /// **'How many unread chapters Next selects on a series, from where you are, across volumes.'**
   String get batchDownloadSizeCaption;
 
-  /// SnackBar shown once per device, on the first tap of the batch card, with an action leading to Settings; count is the batch size in force
+  /// SnackBar shown once per device, on the first tap of the selection bar's Next N, with an action leading to Settings; count is the batch size in force
   ///
   /// In en, this message translates to:
-  /// **'Downloading the next {count}. That number is yours to choose in Settings › Storage.'**
+  /// **'Selected the next {count}. That number is yours to choose in Settings › Storage.'**
   String batchSizeHint(int count);
-
-  /// Button on a volume section header to enqueue all unread chapters in that volume
-  ///
-  /// In en, this message translates to:
-  /// **'Download remaining'**
-  String get batchDownloadVolume;
 
   /// Settings label for choosing how many unread chapters to include in a batch download
   ///
@@ -1298,36 +1262,6 @@ abstract class AppLocalizations {
   /// **'Hide'**
   String get hideReadChapters;
 
-  /// Batch card title while at least one of the next N unread chapters is being fetched; count is how many the batch covers
-  ///
-  /// In en, this message translates to:
-  /// **'Downloading next {count}…'**
-  String batchDownloading(int count);
-
-  /// Batch card subtitle while it runs: how many of the batch are already on the device
-  ///
-  /// In en, this message translates to:
-  /// **'{done} of {count} saved'**
-  String batchDownloadingProgress(int done, int count);
-
-  /// Batch card title once every one of the next N unread chapters is on the device
-  ///
-  /// In en, this message translates to:
-  /// **'Next {count} saved'**
-  String batchAllSaved(int count);
-
-  /// Batch card subtitle once the whole batch is saved
-  ///
-  /// In en, this message translates to:
-  /// **'Ready to read offline'**
-  String get batchReadyOffline;
-
-  /// Appended to the batch card subtitle when part of the batch is already on the device — which is what the card looks like after one of a saved batch has been finished and the window has moved on by one
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 already saved} other{{count} already saved}}'**
-  String batchAlreadySaved(int count);
-
   /// Title of the question asked before a download starts away from Wi-Fi.
   ///
   /// In en, this message translates to:
@@ -1363,6 +1297,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Without asking first. When off, the app asks before each download away from Wi-Fi.'**
   String get mobileDataSettingCaption;
+
+  /// Title of the series screen's selection bar, and first line of the bar under the list while volumes are being selected for a download
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String selectionCount(int count);
+
+  /// Selection bar action: selects the next N unread from the reading position, N being the batch download size chosen in Settings › Storage
+  ///
+  /// In en, this message translates to:
+  /// **'Next {count}'**
+  String selectNext(int count);
+
+  /// Selection bar action: selects everything in the series not yet read
+  ///
+  /// In en, this message translates to:
+  /// **'All unread'**
+  String get selectAllUnread;
+
+  /// Second line of the selection bar at the foot of the series screen when nothing is selected. Worded without the library's unit, which a screen never hardcodes
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to add more'**
+  String get selectionEmpty;
+
+  /// Second line of the selection bar: how many of the selection a save would fetch. A count and never a size: a chapter's bytes are not known before it is fetched
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 to download} other{{count} to download}}'**
+  String selectionToFetch(int count);
+
+  /// Second line of the selection bar when every selected entry is already saved
+  ///
+  /// In en, this message translates to:
+  /// **'All on this device'**
+  String get selectionAllSaved;
+
+  /// Second line of the selection bar when nothing selected is left to fetch but not all of it is saved yet
+  ///
+  /// In en, this message translates to:
+  /// **'Already downloading'**
+  String get selectionOnItsWay;
+
+  /// Second line of the selection bar while the server is unreachable and something selected is not on the device
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — reconnect to save these'**
+  String get selectionOffline;
+
+  /// Confirmation before the selection bar takes saved copies off the device
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Remove 1 saved copy?} other{Remove {count} saved copies?}}'**
+  String removeSelectedConfirm(int count);
+
+  /// One-time line over the series list, until the long-press or the swipe has been used once on this device
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press to select several to save. Swipe left for just one.'**
+  String get selectionHint;
+
+  /// Tooltip of the series screen's list view button
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get seriesViewList;
+
+  /// Tooltip of the series screen's grid view button
+  ///
+  /// In en, this message translates to:
+  /// **'Grid'**
+  String get seriesViewGrid;
+
+  /// Swipe action on a series row whose copy is downloading or waiting
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get pauseAction;
 }
 
 class _AppLocalizationsDelegate
