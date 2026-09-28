@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../api/models.dart';
 import '../../theme.dart';
-import '../../widgets/chrome_pill.dart';
 
 /// How far one step of the hierarchy is set in from the step above it.
 const double _contentsIndent = 16;
@@ -107,35 +106,4 @@ class _EntryRow extends StatelessWidget {
     trailing: Text('${entry.page + 1}', style: PatraText.metadata()),
     onTap: () => Navigator.of(context).pop(entry.page),
   );
-}
-
-/// The reader's way into a book's contents: one control in the bottom chrome,
-/// beside the page counter.
-///
-/// Worded rather than drawn, because the handoff's rule is that what a
-/// control costs is said and never only pictured — and a list glyph alone is
-/// a table of contents to one reader and a menu to another.
-class BookContentsButton extends StatelessWidget {
-  const BookContentsButton({super.key, required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return ChromePill(
-      onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.list, size: 18, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            l10n.bookContents,
-            style: PatraText.metadata(color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
 }

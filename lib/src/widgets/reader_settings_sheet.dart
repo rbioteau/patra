@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../features/reader/book_layout.dart';
 import '../features/reader/reading_direction.dart';
 import '../features/reader/strip_geometry.dart';
 import '../settings/profile_preferences.dart';
@@ -498,47 +499,558 @@ Future<ReaderSettingsOutcome?> showBookSettingsSheet(
 }) => showModalBottomSheet<ReaderSettingsOutcome>(
   context: context,
   backgroundColor: patraSurface,
+  // Lighter than a sheet's usual scrim: the page behind reflows with every
+  // change made here, and is the preview of it.
+  barrierColor: patraLightScrim,
+  isScrollControlled: true,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(radiusCard)),
+  ),
   // Everything the sheet draws is read off [sheetContext], the context of
-  // the sheet's own route — never off [context], which belongs to the cog
-  // that opened it and leaves the tree when the chrome does.
+  // the sheet's own route — never off [context], which belongs to the
+  // button that opened it and leaves the tree when the chrome does.
   builder: (sheetContext) {
     final l10n = AppLocalizations.of(sheetContext);
-    final libraryLabel = libraryName.isNotEmpty
-        ? libraryName
-        : l10n.thisLibrary;
     return SafeArea(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _BookTextSizeRow(),
-            const Divider(height: 24, indent: gutter, endIndent: gutter),
-            const _BookLineSpacingRow(),
-            const Divider(height: 24, indent: gutter, endIndent: gutter),
-            _BookReadingFaceRow(bookFamily: bookFamily),
-            const Divider(height: 24, indent: gutter, endIndent: gutter),
-            _DirectionSection(
-              direction: direction,
-              libraryLabel: libraryLabel,
-              forBook: true,
-              onOutcome: (outcome) => Navigator.of(sheetContext).pop(outcome),
-            ),
-            const SizedBox(height: 8),
-          ],
+      child: ConstrainedBox(
+        // Never over the whole page: what the sheet changes is behind it.
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * .75,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 10, bottom: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Center(child: SheetHandle()),
+              _BookSection(
+                first: true,
+                label: l10n.bookTextSize,
+                caption: l10n.bookTextSizeExplained,
+                child: const BookTextSizeControl(),
+              ),
+              _BookSection(
+                label: l10n.bookLineSpacing,
+                caption: l10n.bookLineSpacingExplained,
+                child: const BookSpacingControl(),
+              ),
+              _BookSection(
+                label: l10n.bookReadingFace,
+                // The rows run the whole width, so the section only heads
+                // them.
+                inset: false,
+                child: BookFaceRows(bookFamily: bookFamily),
+              ),
+              BookDirectionSection(
+                direction: direction,
+                libraryName: libraryName,
+                onOutcome: (outcome) => Navigator.of(sheetContext).pop(outcome),
+              ),
+            ],
+          ),
         ),
       ),
     );
   },
 );
 
+/// The rows under how a book is set: the direction it turns in (#121), the
+/// one thing in a book's settings about the work rather than the person, and
+/// so the one that comes back as an answer rather than being written.
+class BookDirectionSection extends StatelessWidget {
+  const BookDirectionSection({
+    super.key,
+    required this.direction,
+    required this.libraryName,
+    required this.onOutcome,
+  });
+
+  final ChapterDirection direction;
+  final String libraryName;
+  final ValueChanged<ReaderSettingsOutcome> onOutcome;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return _DirectionSection(
+      direction: direction,
+      libraryLabel: libraryName.isNotEmpty ? libraryName : l10n.thisLibrary,
+      forBook: true,
+      onOutcome: onOutcome,
+    );
+  }
+}
+
+/// The grip at the top of a sheet: 32 by 4, in the outline.
+class SheetHandle extends StatelessWidget {
+  const SheetHandle({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 32,
+    height: 4,
+    decoration: BoxDecoration(
+      color: patraOutline.withValues(alpha: .6),
+      borderRadius: BorderRadius.circular(radiusTrack),
+    ),
+  );
+}
+
+/// One of a book's three settings in the phone's sheet: its heading, the
+/// control, and the sentence saying what it changes.
+class _BookSection extends StatelessWidget {
+  const _BookSection({
+    required this.label,
+    required this.child,
+    this.caption,
+    this.inset = true,
+    this.first = false,
+  });
+
+  /// The first section sits under the handle; the others keep 24 from the
+  /// one above.
+  final bool first;
+
+  final String label;
+  final Widget child;
+  final String? caption;
+
+  /// Whether the control sits at the gutter, like the heading, or runs the
+  /// sheet's width as rows do.
+  final bool inset;
+
+  @override
+  Widget build(BuildContext context) {
+    final caption = this.caption;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? 14 : 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 10),
+            child: SectionLabel(label),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: inset ? gutter : 0),
+            child: child,
+          ),
+          if (caption != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
+              child: Text(caption, style: _captionStyle),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+final _captionStyle = PatraText.metadata(size: 12).copyWith(height: 1.45);
+
+/// How large a book's words are, stepped by a smaller and a larger button
+/// either side of the size itself.
+///
+/// Buttons rather than the slider this was: a size is changed a step at a
+/// time while the page reflows behind, and a step is what a tap is. The
+/// range is the setting's own (`reading_settings.dart`). On a tablet the
+/// [compact] panel steps two points a tap and names the setting under the
+/// size, the panel having no captions.
+class BookTextSizeControl extends ConsumerWidget {
+  const BookTextSizeControl({super.key, this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final size = ref.watch(bookTextSizeProvider);
+    final notifier = ref.read(bookTextSizeProvider.notifier);
+    final step = compact ? 2 : 1;
+    void change(int delta) =>
+        notifier.set(steppedTextSize(size, delta, step: step));
+    final value = l10n.textSizePoints(size.round());
+
+    return Row(
+      children: [
+        _StepButton(
+          label: compact ? 'A' : 'A−',
+          size: compact ? 13 : 14,
+          tooltip: l10n.textSmaller,
+          onTap: size > minBookTextSize ? () => change(-1) : null,
+        ),
+        SizedBox(width: compact ? 8 : 12),
+        Expanded(
+          child: Semantics(
+            label: '${l10n.bookTextSize}, $value',
+            hint: l10n.bookTextSizeExplained,
+            excludeSemantics: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(value, style: PatraText.rowTitle(size: compact ? 15 : 16)),
+                if (compact)
+                  Text(l10n.bookTextSize, style: PatraText.metadata()),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(width: compact ? 8 : 12),
+        _StepButton(
+          label: compact ? 'A' : 'A+',
+          size: compact ? 20 : 18,
+          tooltip: l10n.textLarger,
+          onTap: size < maxBookTextSize ? () => change(1) : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({
+    required this.label,
+    required this.size,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final String label;
+  final double size;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radiusCover),
+      side: const BorderSide(color: patraBorder),
+    );
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        type: MaterialType.transparency,
+        shape: shape,
+        child: InkWell(
+          customBorder: shape,
+          onTap: onTap,
+          child: SizedBox(
+            width: 52,
+            height: minHitTarget,
+            child: Center(
+              child: Text(
+                label,
+                style: PatraText.rowTitle(
+                  size: size,
+                  color: onTap == null ? patraTextMuted : patraText,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The room between a book's lines, as three segments: tight, normal, loose.
+///
+/// A height left off the three by the slider this replaced names no segment
+/// rather than the nearest, and the first tap puts it on one.
+class BookSpacingControl extends ConsumerWidget {
+  const BookSpacingControl({super.key, this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final current = BookSpacing.of(ref.watch(bookLineHeightProvider));
+    final notifier = ref.read(bookLineHeightProvider.notifier);
+    String name(BookSpacing spacing) => switch (spacing) {
+      BookSpacing.tight => l10n.spacingTight,
+      BookSpacing.normal => l10n.spacingNormal,
+      BookSpacing.loose => l10n.spacingLoose,
+    };
+    return Row(
+      children: [
+        for (final spacing in BookSpacing.values) ...[
+          if (spacing != BookSpacing.values.first)
+            SizedBox(width: compact ? 6 : 8),
+          Expanded(
+            child: _Segment(
+              selected: spacing == current,
+              tooltip: compact ? l10n.bookLineSpacingExplained : null,
+              onTap: () => notifier.set(spacing.height),
+              height: minHitTarget,
+              builder: (color) => Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (compact) ...[
+                    Icon(Icons.format_line_spacing, size: 16, color: color),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Text(
+                      name(spacing),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: PatraText.rowTitle(
+                        size: compact ? 12.5 : 14,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One choice among a few, drawn as a bordered box: in the accent where it is
+/// the one in force.
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.selected,
+    required this.onTap,
+    required this.height,
+    required this.builder,
+    this.tooltip,
+    this.selectedFill = .14,
+  });
+
+  final bool selected;
+  final VoidCallback onTap;
+  final double height;
+  final Widget Function(Color color) builder;
+  final String? tooltip;
+  final double selectedFill;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? patraAccent : patraText;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radiusCover),
+      side: BorderSide(color: selected ? patraAccent : patraBorder),
+    );
+    final segment = Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected
+            ? patraAccent.withValues(alpha: selectedFill)
+            : Colors.transparent,
+        shape: shape,
+        child: InkWell(
+          customBorder: shape,
+          onTap: onTap,
+          child: SizedBox(height: height, child: builder(color)),
+        ),
+      ),
+    );
+    final tooltip = this.tooltip;
+    return tooltip == null
+        ? segment
+        : Tooltip(message: tooltip, child: segment);
+  }
+}
+
+/// The faces a book can be set in, one row each, every row composed in the
+/// face it offers — the row is the sample, and it is why a row says what
+/// kind of type it is rather than a family's name. The book's own row is set
+/// in the face the book resolved to, the app's sans where it has none; the
+/// check is kept on every row and only shown on the one in force, so a pick
+/// moves nothing.
+///
+/// It is the one deliberate hole in the design system's serif rule: the serif
+/// row, and the book's own row where the book ships a serif, are set in a
+/// serif — see the reader's rules, where the hole is written down as one.
+class BookFaceRows extends ConsumerWidget {
+  const BookFaceRows({super.key, this.bookFamily});
+
+  final String? bookFamily;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final face = ref.watch(bookReadingFaceProvider);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final offered in ReadingFace.values)
+          InkWell(
+            onTap: () =>
+                ref.read(bookReadingFaceProvider.notifier).set(offered),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      offered.label(l10n),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          PatraText.body(
+                            color: offered == face ? patraAccent : patraText,
+                          ).copyWith(
+                            fontSize: 16,
+                            fontFamily: offered
+                                .resolve(bookFamily: bookFamily)
+                                .family,
+                          ),
+                    ),
+                  ),
+                  Opacity(
+                    opacity: offered == face ? 1 : 0,
+                    child: const Icon(
+                      Icons.check,
+                      size: 22,
+                      color: patraAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The same faces as tiles, for the tablet's compact panel: "Aa" set in the
+/// face over a short name, the full one in the tooltip.
+class BookFaceTiles extends ConsumerWidget {
+  const BookFaceTiles({super.key, this.bookFamily});
+
+  final String? bookFamily;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final face = ref.watch(bookReadingFaceProvider);
+    return Row(
+      children: [
+        for (final offered in ReadingFace.values) ...[
+          if (offered != ReadingFace.values.first) const SizedBox(width: 6),
+          Expanded(
+            child: _Segment(
+              selected: offered == face,
+              selectedFill: .10,
+              height: 56,
+              tooltip: offered.label(l10n),
+              onTap: () =>
+                  ref.read(bookReadingFaceProvider.notifier).set(offered),
+              builder: (color) => Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Aa',
+                    style: TextStyle(
+                      fontFamily: offered
+                          .resolve(bookFamily: bookFamily)
+                          .family,
+                      fontSize: 20,
+                      color: color,
+                      height: 1.1,
+                    ),
+                  ),
+                  Text(
+                    offered.shortLabel(l10n),
+                    style: PatraText.rowTitle(size: 10, color: color),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The reader's settings for a book on a tablet: a panel under the button
+/// that opened it rather than a sheet, with **no scrim** — the whole spread
+/// stays in view and reflows with every tap, which is the preview.
+///
+/// Compact: no captions, which go into each control's tooltip or semantics
+/// instead. The direction rows close it, as they close the sheet.
+class BookSettingsPanel extends StatelessWidget {
+  const BookSettingsPanel({
+    super.key,
+    required this.direction,
+    required this.libraryName,
+    required this.onOutcome,
+    this.bookFamily,
+  });
+
+  final ChapterDirection direction;
+  final String libraryName;
+  final ValueChanged<ReaderSettingsOutcome> onOutcome;
+  final String? bookFamily;
+
+  static const width = 360.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .8,
+      ),
+      decoration: BoxDecoration(
+        color: patraSurface,
+        border: Border.all(color: patraBorder),
+        borderRadius: BorderRadius.circular(radiusCard),
+        boxShadow: [
+          BoxShadow(
+            color: patraPanelShadow,
+            blurRadius: 36,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const BookTextSizeControl(compact: true),
+              const SizedBox(height: 12),
+              const BookSpacingControl(compact: true),
+              const SizedBox(height: 12),
+              BookFaceTiles(bookFamily: bookFamily),
+              const SizedBox(height: 4),
+              BookDirectionSection(
+                direction: direction,
+                libraryName: libraryName,
+                onOutcome: onOutcome,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One number a person picks with a slider, in a sheet that stays open.
 ///
-/// The size a book is set at, the room between its lines, and the width a
-/// chapter opens at are three numbers chosen the same way: a row naming the
-/// choice, what it changes, and the value it stands at — then a slider whose
-/// write happens once, when the finger lifts. What they share is not the
-/// shape of the value but everything around it, so one row draws all three
-/// rather than three rows that could drift apart.
+/// The width a chapter of pictures opens at: a row naming the choice, what
+/// it changes, and the value it stands at — then a slider whose write
+/// happens once, when the finger lifts. It drew a book's size and spacing
+/// too, until those became a stepper and three segments
+/// ([BookTextSizeControl], [BookSpacingControl]): a size is changed a step
+/// at a time with the page reflowing behind, and a spacing is one of three.
 class _NumberRow extends StatelessWidget {
   const _NumberRow({
     required this.icon,
@@ -636,173 +1148,6 @@ class _NumberRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// How large the words of a book are, for whoever is reading.
-///
-/// The range it slides over is the setting's own (`reading_settings.dart`)
-/// and not this row's, so every surface that sets a size sets the same one.
-class _BookTextSizeRow extends ConsumerWidget {
-  const _BookTextSizeRow();
-
-  /// One point a step over the range: small print at one end, and a book
-  /// held at arm's length at the other.
-  static const _divisions = 8;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final size = ref.watch(bookTextSizeProvider);
-    final notifier = ref.read(bookTextSizeProvider.notifier);
-    return _NumberRow(
-      icon: Icons.format_size,
-      label: l10n.bookTextSize,
-      explained: l10n.bookTextSizeExplained,
-      value: size,
-      defaultValue: defaultBookTextSize,
-      min: minBookTextSize,
-      max: maxBookTextSize,
-      divisions: _divisions,
-      display: l10n.textSizePoints(size.round()),
-      semantic: (value) => l10n.textSizePoints(value.round()),
-      onPreview: notifier.preview,
-      onSet: notifier.set,
-    );
-  }
-}
-
-/// The room between a book's lines, as a share of the size of its words.
-///
-/// The half of the same choice that decides whether dense text is readable,
-/// and the one shown as a percentage: a leading *is* a share of the type
-/// size, which is what a typographer means by 155%.
-class _BookLineSpacingRow extends ConsumerWidget {
-  const _BookLineSpacingRow();
-
-  /// A twentieth of the range a step: a line pressed against the next at one
-  /// end, and a page of air at the other.
-  static const _divisions = 16;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final height = ref.watch(bookLineHeightProvider);
-    final percent = l10n.percent((height * 100).round());
-    final notifier = ref.read(bookLineHeightProvider.notifier);
-    return _NumberRow(
-      icon: Icons.format_line_spacing,
-      label: l10n.bookLineSpacing,
-      explained: l10n.bookLineSpacingExplained,
-      value: height,
-      defaultValue: defaultBookLineHeight,
-      min: minBookLineHeight,
-      max: maxBookLineHeight,
-      divisions: _divisions,
-      display: percent,
-      semantic: (value) => l10n.percent((value * 100).round()),
-      onPreview: notifier.preview,
-      onSet: notifier.set,
-    );
-  }
-}
-
-/// The face a book is set in, for whoever is reading: the third row a book's
-/// sheet offers, and the one that is not a number.
-///
-/// Three choices, not four families: the reader chooses a kind of type, not a
-/// font by name. Each row says what kind of type it is ("The book's own",
-/// "Serif", "Sans serif") and is **composed in the face it offers** — that is
-/// the sample, and it is why the name is gone. The book's own row is set in
-/// the family the book shipped (or the app's sans where it shipped none), so a
-/// reader sees exactly what "the book's own" means for this book.
-///
-/// It is the one deliberate hole in the design system's serif rule: the serif
-/// row, and the book's own row where the book ships a serif, are set in a
-/// serif. The rule's purpose is to keep the wordmark and the titles of works
-/// distinct from everything else, and a page of prose puts neither at risk —
-/// see the reader's rules, where the hole is written down as one.
-class _BookReadingFaceRow extends ConsumerWidget {
-  const _BookReadingFaceRow({this.bookFamily});
-
-  final String? bookFamily;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final face = ref.watch(bookReadingFaceProvider);
-    final chosen = face != defaultBookReadingFace;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ListTile(
-          leading: Icon(
-            Icons.font_download,
-            size: 22,
-            color: chosen ? patraAccent : patraText,
-          ),
-          title: Text(
-            l10n.bookReadingFace,
-            style: PatraText.body(color: chosen ? patraAccent : patraText),
-          ),
-          subtitle: Text(
-            l10n.bookReadingFaceExplained,
-            style: PatraText.metadata(),
-          ),
-        ),
-        for (final offered in ReadingFace.values)
-          _FaceOption(
-            face: offered,
-            selected: offered == face,
-            bookFamily: bookFamily,
-            onPick: () =>
-                ref.read(bookReadingFaceProvider.notifier).set(offered),
-          ),
-      ],
-    );
-  }
-}
-
-/// One of the faces a book can be set in, composed in the face it offers.
-///
-/// The row is not named after a font — it says what kind of type it is, and
-/// the row itself is the sample. The family is resolved once through
-/// [ReadingFace.resolve], which is the only place the fallback is decided.
-class _FaceOption extends StatelessWidget {
-  const _FaceOption({
-    required this.face,
-    required this.selected,
-    required this.bookFamily,
-    required this.onPick,
-  });
-
-  final ReadingFace face;
-  final bool selected;
-  final String? bookFamily;
-  final VoidCallback onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final resolved = face.resolve(bookFamily: bookFamily);
-    return ListTile(
-      onTap: onPick,
-      // As wide as the header's own icon, so the three names line up under
-      // the row they belong to rather than under its leading edge.
-      leading: SizedBox(
-        width: 22,
-        child: selected
-            ? Icon(Icons.check, size: 18, color: patraAccent)
-            : null,
-      ),
-      title: Text(
-        face.label(l10n),
-        // Set in the face it is offering: choosing a face one cannot see is
-        // a choice made on its name alone.
-        style: PatraText.body(color: selected ? patraAccent : patraText)
-            .copyWith(fontFamily: resolved.family),
-      ),
     );
   }
 }

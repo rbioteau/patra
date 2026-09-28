@@ -98,6 +98,21 @@ final patraOnArtShade = Colors.black.withValues(alpha: .3);
 final patraOnPageFill = Colors.white.withValues(alpha: .12);
 final patraOnPageOutline = Colors.white.withValues(alpha: .18);
 
+/// The scrim under a sheet that changes the page behind it: lighter than a
+/// sheet's usual one, so the page reflowing is still the preview.
+final patraLightScrim = Colors.black.withValues(alpha: .35);
+
+/// The book reader's bars: the chrome, all but opaque, so a page's words
+/// never show through, with a hairline on the edge that meets the page.
+final patraBookBar = patraChrome.withValues(alpha: .97);
+final patraBookBarRule = Colors.white.withValues(alpha: .06);
+
+/// The hairline down the middle of a two-page spread.
+final patraSpreadRule = Colors.white.withValues(alpha: .05);
+
+/// The shadow under a panel laid over a page with no scrim at all.
+final patraPanelShadow = Colors.black.withValues(alpha: .45);
+
 /// Radii
 
 const radiusThumb = 6.0;

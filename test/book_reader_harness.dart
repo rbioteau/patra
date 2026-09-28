@@ -23,6 +23,7 @@ import 'package:patra/src/catalogue/catalogue_store.dart';
 import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/downloads/downloads_service.dart';
 import 'package:patra/src/features/reader/book_web_page.dart';
+import 'package:patra/src/features/reader/book_chrome.dart';
 import 'package:patra/src/features/reader/reader_screen.dart';
 import 'package:patra/src/theme.dart';
 
@@ -269,7 +270,13 @@ Future<(List<int> requested, List<BookPost> posted)> pumpBook(
   List<Volume>? held,
   bool offline = false,
   Locale? locale,
+  // A phone held upright unless a test says otherwise: the default 800x600
+  // surface is a tablet in landscape, which reads two pages at once.
+  Size size = const Size(390, 844),
 }) async {
+  tester.view.physicalSize = size * 2;
+  tester.view.devicePixelRatio = 2;
+  addTearDown(tester.view.reset);
   final dir = mockPathProvider();
   final root = Directory('${dir.path}/downloads')..createSync();
   final downloads = DownloadsService(root: root, profileId: bookProfileId);
@@ -390,8 +397,19 @@ final _reader = Profile(
 
 /// The reader's chrome: a tap in the middle of the screen.
 Future<void> showBookChrome(WidgetTester tester) async {
+  // A book opens with its chrome up; only a test that has put it away has
+  // anything to tap for.
+  if (find.byType(BookTopBar).evaluate().isNotEmpty) return;
   final size = tester.getSize(find.byType(Scaffold));
   await tester.tapAt(Offset(size.width / 2, size.height / 2));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Taps the band down one edge of the page, which is what turns it.
+Future<void> tapBookEdge(WidgetTester tester, {required bool right}) async {
+  final size = tester.getSize(find.byType(Scaffold));
+  await tester.tapAt(Offset(right ? size.width - 10 : 10, size.height / 2));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
 }

@@ -358,12 +358,19 @@ Future<ProviderContainer> _pumpReader(
   Directory room,
   _BookServer server, {
   int initialPage = 0,
-}) => _pump(
-  tester,
-  room,
-  server,
-  ReaderScreen(chapterId: _chapterId, initialPage: initialPage),
-);
+}) {
+  // A phone held upright: the default surface is a tablet on its side, which
+  // reads two pages at once.
+  tester.view.physicalSize = const Size(780, 1688);
+  tester.view.devicePixelRatio = 2;
+  addTearDown(tester.view.reset);
+  return _pump(
+    tester,
+    room,
+    server,
+    ReaderScreen(chapterId: _chapterId, initialPage: initialPage),
+  );
+}
 
 Future<ProviderContainer> _pumpDownloads(
   WidgetTester tester,

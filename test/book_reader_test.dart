@@ -115,7 +115,7 @@ void main() {
     // is a spinner over the whole screen, and that is the flicker: one frame
     // of it here, where the fake server answers at once, and as long as the
     // request takes on a real one.
-    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.drag(find.byType(PageView), const Offset(-300, 0));
     for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 16));
       expect(_waiting(tester), isFalse, reason: 'frame $i of the turn waits');
@@ -139,14 +139,14 @@ void main() {
   testWidgets('the sides of the screen turn the page', (tester) async {
     final (requested, posted) = await pumpBook(tester);
     final size = tester.getSize(find.byType(Scaffold));
-    await tester.tapAt(Offset(size.width * .85, size.height / 2));
+    await tester.tapAt(Offset(size.width - 10, size.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(postedPages(posted), [0, 1], reason: 'the right-hand side reads on');
     // The page it turned to is the page it asked the server for.
     expect(requested, contains(1));
 
-    await tester.tapAt(Offset(size.width * .15, size.height / 2));
+    await tester.tapAt(Offset(10, size.height / 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(postedPages(posted), [
@@ -177,19 +177,19 @@ void main() {
     expect(find.text('Dune'), findsNothing);
   });
 
-  testWidgets('the cog offers how the book is set, then its direction', (
+  testWidgets('Aa offers how the book is set, then its direction', (
     tester,
   ) async {
     await pumpBook(tester);
     await showBookChrome(tester);
-    await tester.tap(find.byIcon(Icons.settings));
+    await tester.tap(find.byTooltip('Reader settings'));
     await tester.pumpAndSettle();
 
     // How a book is set is a question about words; under it, the direction
     // it turns in (#121). Nothing about pictures: no strip, no magnifying.
-    expect(find.text('Text size'), findsOneWidget);
-    expect(find.text('Line spacing'), findsOneWidget);
-    expect(find.text('Reading face'), findsOneWidget);
+    expect(find.text('TEXT SIZE'), findsOneWidget);
+    expect(find.text('LINE SPACING'), findsOneWidget);
+    expect(find.text('READING FACE'), findsOneWidget);
     expect(find.text('READING DIRECTION'), findsOneWidget);
     expect(find.text('Drag to magnify'), findsNothing);
     expect(find.text('Page width'), findsNothing);
@@ -208,7 +208,7 @@ void main() {
     /// Choosing an entry in the contents, and waiting for the page it names
     /// to have been asked for and reported.
     Future<void> choose(WidgetTester tester, String entry) async {
-      await tester.tap(find.text('Contents'));
+      await tester.tap(find.byTooltip('Contents'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(entry));
       await tester.pumpAndSettle();
@@ -221,18 +221,23 @@ void main() {
       await pumpBook(tester);
       await showBookChrome(tester);
 
-      await tester.tap(find.text('Contents'));
+      await tester.tap(find.byTooltip('Contents'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Part one'), findsOneWidget);
-      expect(find.text('The desert'), findsOneWidget);
-      expect(find.text('The worm'), findsOneWidget);
-      expect(find.text('Part two'), findsOneWidget);
+      // In the sheet: the bar under it names the chapter being read too.
+      Finder listed(String title) => find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text(title),
+      );
+      expect(listed('Part one'), findsOneWidget);
+      expect(listed('The desert'), findsOneWidget);
+      expect(listed('The worm'), findsOneWidget);
+      expect(listed('Part two'), findsOneWidget);
       // Hierarchical on the screen and not only in the parsing: a child is
       // set in from the part it belongs to, which a sheet that walked the
       // tree into one flat list would not do however it ordered it.
-      final part = tester.getRect(find.text('Part one'));
-      final child = tester.getRect(find.text('The desert'));
+      final part = tester.getRect(listed('Part one'));
+      final child = tester.getRect(listed('The desert'));
       expect(child.left, greaterThan(part.left));
       expect(child.top, greaterThan(part.top));
       // The page an entry begins on, counted the way the reader's own
@@ -275,7 +280,7 @@ void main() {
 
       // No control, and nothing anywhere saying there is no contents: the
       // absence is not itself a message.
-      expect(find.text('Contents'), findsNothing);
+      expect(find.byTooltip('Contents'), findsNothing);
     });
   });
 
@@ -453,7 +458,7 @@ void main() {
       );
       final size = tester.getSize(find.byType(Scaffold));
 
-      await tester.tapAt(Offset(size.width * .15, size.height / 2));
+      await tester.tapAt(Offset(10, size.height / 2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(postedPages(posted), [
@@ -462,7 +467,7 @@ void main() {
       ], reason: 'the left-hand side reads on in a book that reads that way');
       expect(requested, contains(1));
 
-      await tester.tapAt(Offset(size.width * .85, size.height / 2));
+      await tester.tapAt(Offset(size.width - 10, size.height / 2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(postedPages(posted), [0, 1, 0]);
@@ -530,7 +535,7 @@ void main() {
 
       Future<void> fromTheCog(String row) async {
         await showBookChrome(tester);
-        await tester.tap(find.byIcon(Icons.settings));
+        await tester.tap(find.byTooltip('Reader settings'));
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
           find.text(row),
@@ -807,19 +812,28 @@ void main() {
         patraBookCanvas,
       );
 
-      await tester.tapAt(tester.getCenter(find.byType(ReaderScreen)));
-      await tester.pump(const Duration(milliseconds: 300));
-      final scrims = tester
-          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+      // The bars over it are the app's chrome, solid, and never a scrim of
+      // the picture reader's black fading over the page.
+      final fills = tester
+          .widgetList<DecoratedBox>(
+            find.descendant(
+              of: find.byType(ReaderScreen),
+              matching: find.byType(DecoratedBox),
+            ),
+          )
           .map((box) => box.decoration)
           .whereType<BoxDecoration>()
-          .map((decoration) => decoration.gradient)
-          .whereType<LinearGradient>()
-          .expand((gradient) => gradient.colors)
-          .where((color) => color.a > 0)
+          .expand(
+            (decoration) => [
+              ?decoration.color,
+              ...?decoration.gradient?.colors,
+            ],
+          )
+          .where((color) => color.a > .5)
           .map((color) => color.withValues(alpha: 1))
           .toSet();
-      expect(scrims, {patraBookCanvas});
+      expect(fills, contains(patraChrome));
+      expect(fills, isNot(contains(patraReaderCanvas)));
     });
 
     testWidgets('a book is justified and hyphenated in its own language, '

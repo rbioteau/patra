@@ -248,10 +248,12 @@ void main() {
       expect(read, greaterThan(0), reason: 'the reader did scroll the page');
 
       await showBookChrome(tester);
-      await tester.tap(find.byIcon(Icons.settings));
+      await tester.tap(find.byTooltip('Reader settings'));
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(Slider).first, const Offset(400, 0));
-      await tester.pumpAndSettle();
+      for (var step = 0; step < 6; step++) {
+        await tester.tap(find.byTooltip('Larger'));
+        await tester.pumpAndSettle();
+      }
 
       final after = _pagePosition(tester);
       expect(
@@ -508,7 +510,7 @@ void main() {
       addTearDown(tester.view.reset);
       final (requested, _) = await pumpBook(tester, html: _everyBlock);
       await showBookChrome(tester);
-      await tester.tap(find.byIcon(Icons.settings));
+      await tester.tap(find.byTooltip('Reader settings'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Serif'));
       await tester.pumpAndSettle();
@@ -560,7 +562,7 @@ void main() {
       expect(read, greaterThan(0), reason: 'the reader did scroll the page');
 
       await showBookChrome(tester);
-      await tester.tap(find.byIcon(Icons.settings));
+      await tester.tap(find.byTooltip('Reader settings'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Serif'));
       await tester.pumpAndSettle();

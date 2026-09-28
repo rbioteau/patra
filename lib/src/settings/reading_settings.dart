@@ -121,6 +121,14 @@ enum ReadingFace {
     ReadingFace.sans => l10n.readingFaceSans,
   };
 
+  /// The one word a tile in the tablet's compact panel has room for; the
+  /// full [label] is its tooltip.
+  String shortLabel(AppLocalizations l10n) => switch (this) {
+    ReadingFace.book => l10n.readingFaceBookShort,
+    ReadingFace.serif => l10n.readingFaceSerif,
+    ReadingFace.sans => l10n.readingFaceSansShort,
+  };
+
   /// The names this build no longer uses, and what they stand for.
   ///
   /// The preference used to be a family — `spaceGrotesk`, `sourceSerif4`,
@@ -154,9 +162,9 @@ enum ReadingFace {
 /// and the size every book was set at before there was anything to choose.
 const double defaultBookTextSize = 16;
 
-// The range the sheet offers it over, one point a step.
-const double minBookTextSize = 14;
-const double maxBookTextSize = 22;
+// The range the sheet steps it over, a point at a time (two on a tablet).
+const double minBookTextSize = 12;
+const double maxBookTextSize = 28;
 
 /// The leading between a book's lines, as a share of the size of its words
 /// — `1.55` is a line and a half, which is what dense prose asks for.

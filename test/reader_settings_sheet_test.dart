@@ -325,11 +325,14 @@ void main() {
     ) async {
       await _openBookSheet(tester);
 
-      expect(find.text('Text size'), findsOneWidget);
-      expect(find.text('Line spacing'), findsOneWidget);
-      expect(find.text('Reading face'), findsOneWidget);
+      expect(find.text('TEXT SIZE'), findsOneWidget);
+      expect(find.text('LINE SPACING'), findsOneWidget);
+      expect(find.text('READING FACE'), findsOneWidget);
       expect(find.text('16 pt'), findsOneWidget);
-      expect(find.text('155%'), findsOneWidget);
+      // Three spacings rather than a percentage to slide to.
+      expect(find.text('Tight'), findsOneWidget);
+      expect(find.text('Normal'), findsOneWidget);
+      expect(find.text('Loose'), findsOneWidget);
       // Three choices, each labelled by the kind of type it is — not a font's
       // name. The row itself is the sample, composed in that face.
       expect(find.text("The book's own"), findsOneWidget);
@@ -346,11 +349,10 @@ void main() {
     testWidgets('the face is the third row, and the last', (tester) async {
       await _openBookSheet(tester);
 
-      // Two sliders and no third: the face is picked from a list rather
-      // than slid, so what follows the line spacing is not a number.
-      expect(find.byType(Slider), findsNWidgets(2));
-      final spacing = tester.getCenter(find.text('Line spacing'));
-      final face = tester.getCenter(find.text('Reading face'));
+      // Nothing is slid: a size is stepped, a spacing and a face picked.
+      expect(find.byType(Slider), findsNothing);
+      final spacing = tester.getCenter(find.text('LINE SPACING'));
+      final face = tester.getCenter(find.text('READING FACE'));
       expect(face.dy, greaterThan(spacing.dy));
     });
 
@@ -364,13 +366,20 @@ void main() {
       // open over the page it has just reset — which is why a face is not
       // something the sheet comes back with.
       expect(find.text('16 pt'), findsOneWidget);
-      expect(find.text('155%'), findsOneWidget);
-      // Two checks on the sheet — a face and a direction — and the face's is
-      // the one above the direction's heading.
+      expect(_selected(tester, 'Normal'), isTrue);
+      // Every face row keeps its check and shows only the one in force, so
+      // a pick moves nothing; the face's is the one above the direction's
+      // heading.
       final heading = tester.getCenter(find.text('READING DIRECTION')).dy;
       final faceChecks = tester
-          .widgetList(find.byIcon(Icons.check))
-          .map((icon) => tester.getCenter(find.byWidget(icon)).dy)
+          .widgetList<Opacity>(
+            find.ancestor(
+              of: find.byIcon(Icons.check),
+              matching: find.byType(Opacity),
+            ),
+          )
+          .where((o) => o.opacity == 1)
+          .map((o) => tester.getCenter(find.byWidget(o)).dy)
           .where((dy) => dy < heading)
           .toList();
       expect(faceChecks, [
@@ -386,7 +395,7 @@ void main() {
       // out at a width and its pages have no size to magnify.
       expect(find.text('Drag to magnify'), findsNothing);
       expect(find.text('Page width'), findsNothing);
-      expect(find.byType(Slider), findsNWidgets(2));
+      expect(find.byType(Slider), findsNothing);
     });
 
     testWidgets('offers the two directions a book can turn in (#121)', (
@@ -410,7 +419,7 @@ void main() {
       // corrected; its type is what a reader reaches for.
       await _openBookSheet(tester);
 
-      final face = tester.getCenter(find.text('Reading face'));
+      final face = tester.getCenter(find.text('READING FACE'));
       final direction = tester.getCenter(find.text('READING DIRECTION'));
       expect(direction.dy, greaterThan(face.dy));
     });
@@ -546,25 +555,28 @@ void main() {
       expect(outcomes.single, isA<LibraryDirectionCleared>());
     });
 
-    testWidgets('what the sliders are left at is what a book is set at', (
-      tester,
-    ) async {
+    testWidgets('a tap is a step, and a segment is a spacing', (tester) async {
       await _openBookSheet(tester);
 
-      await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+      await tester.tap(find.byTooltip('Larger'));
       await tester.pumpAndSettle();
-
+      await tester.tap(find.byTooltip('Larger'));
+      await tester.pumpAndSettle();
+      expect(find.text('18 pt'), findsOneWidget);
+      await tester.tap(find.byTooltip('Smaller'));
+      await tester.pumpAndSettle();
+      expect(find.text('17 pt'), findsOneWidget);
       expect(
-        find.text('16 pt'),
-        findsNothing,
-        reason: 'the size a book opens at is not the size it was set to',
-      );
-      expect(find.text('22 pt'), findsOneWidget);
-      expect(
-        find.text('155%'),
-        findsOneWidget,
+        _selected(tester, 'Normal'),
+        isTrue,
         reason: 'setting the size leaves the spacing alone',
       );
+
+      await tester.tap(find.text('Loose'));
+      await tester.pumpAndSettle();
+      expect(_selected(tester, 'Loose'), isTrue);
+      expect(_selected(tester, 'Normal'), isFalse);
+      expect(find.text('17 pt'), findsOneWidget);
     });
   });
 
@@ -684,3 +696,18 @@ Future<List<ReaderSettingsOutcome>> _openBookSheet(
   await tester.pumpAndSettle();
   return outcomes;
 }
+
+/// Whether the segment worded [label] is the one in force.
+bool _selected(WidgetTester tester, String label) => tester
+    .widget<Semantics>(
+      find
+          .ancestor(
+            of: find.text(label),
+            matching: find.byWidgetPredicate(
+              (w) => w is Semantics && w.properties.selected != null,
+            ),
+          )
+          .first,
+    )
+    .properties
+    .selected!;

@@ -830,4 +830,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get imageCacheCleared => 'Image cache cleared';
+
+  @override
+  String get textSmaller => 'Smaller';
+
+  @override
+  String get textLarger => 'Larger';
+
+  @override
+  String get spacingTight => 'Tight';
+
+  @override
+  String get spacingNormal => 'Normal';
+
+  @override
+  String get spacingLoose => 'Loose';
+
+  @override
+  String get readingFaceBookShort => 'Book';
+
+  @override
+  String get readingFaceSansShort => 'Sans';
 }

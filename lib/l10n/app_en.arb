@@ -868,5 +868,33 @@
   "imageCacheCleared": "Image cache cleared",
   "@imageCacheCleared": {
     "description": "SnackBar after Clear cache in Settings › Storage"
+  },
+  "textSmaller": "Smaller",
+  "@textSmaller": {
+    "description": "Tooltip of the button that sets a book a step smaller"
+  },
+  "textLarger": "Larger",
+  "@textLarger": {
+    "description": "Tooltip of the button that sets a book a step larger"
+  },
+  "spacingTight": "Tight",
+  "@spacingTight": {
+    "description": "Line spacing segment: 1.35"
+  },
+  "spacingNormal": "Normal",
+  "@spacingNormal": {
+    "description": "Line spacing segment: 1.55"
+  },
+  "spacingLoose": "Loose",
+  "@spacingLoose": {
+    "description": "Line spacing segment: 1.8"
+  },
+  "readingFaceBookShort": "Book",
+  "@readingFaceBookShort": {
+    "description": "One-word name of the book's own face, on a tile of the tablet reader panel"
+  },
+  "readingFaceSansShort": "Sans",
+  "@readingFaceSansShort": {
+    "description": "One-word name of the app's sans, on a tile of the tablet reader panel"
   }
 }

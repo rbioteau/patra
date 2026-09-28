@@ -229,5 +229,12 @@
   "storageOnDevice": "{size} sur cet appareil",
   "storageSavedLegend": "Chapitres enregistrés · {size}",
   "storageCacheLegend": "Cache d'images · {size}",
-  "imageCacheCleared": "Cache d'images vidé"
+  "imageCacheCleared": "Cache d'images vidé",
+  "textSmaller": "Plus petit",
+  "textLarger": "Plus grand",
+  "spacingTight": "Serré",
+  "spacingNormal": "Normal",
+  "spacingLoose": "Aéré",
+  "readingFaceBookShort": "Livre",
+  "readingFaceSansShort": "Sans"
 }

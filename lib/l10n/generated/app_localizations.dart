@@ -1369,6 +1369,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Image cache cleared'**
   String get imageCacheCleared;
+
+  /// Tooltip of the button that sets a book a step smaller
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller'**
+  String get textSmaller;
+
+  /// Tooltip of the button that sets a book a step larger
+  ///
+  /// In en, this message translates to:
+  /// **'Larger'**
+  String get textLarger;
+
+  /// Line spacing segment: 1.35
+  ///
+  /// In en, this message translates to:
+  /// **'Tight'**
+  String get spacingTight;
+
+  /// Line spacing segment: 1.55
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get spacingNormal;
+
+  /// Line spacing segment: 1.8
+  ///
+  /// In en, this message translates to:
+  /// **'Loose'**
+  String get spacingLoose;
+
+  /// One-word name of the book's own face, on a tile of the tablet reader panel
+  ///
+  /// In en, this message translates to:
+  /// **'Book'**
+  String get readingFaceBookShort;
+
+  /// One-word name of the app's sans, on a tile of the tablet reader panel
+  ///
+  /// In en, this message translates to:
+  /// **'Sans'**
+  String get readingFaceSansShort;
 }
 
 class _AppLocalizationsDelegate
