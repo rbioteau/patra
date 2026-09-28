@@ -25,6 +25,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # After `pub get`, never before: the formatter reads the language
+      # version from the package config, and without one it formats in an
+      # older style and fails files that are right.
+      - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
       - run: flutter test
 
