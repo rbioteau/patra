@@ -1,0 +1,8 @@
+{
+  "name": "patra-brand",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Patra's brand for Claude Design: tokens, faces and guidelines. Patra is a Flutter app; this package carries no components.",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

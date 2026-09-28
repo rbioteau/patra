@@ -1,0 +1,5 @@
+@font-face { font-family: "Space Grotesk"; src: url("../../assets/fonts/SpaceGrotesk-Variable.ttf") format("truetype"); font-weight: 300 700; font-style: normal; }
+@font-face { font-family: "Literata"; src: url("../../assets/fonts/Literata-Variable.ttf") format("truetype"); font-weight: 200 900; font-style: normal; }
+@font-face { font-family: "Literata"; src: url("../../assets/fonts/Literata-Italic-Variable.ttf") format("truetype"); font-weight: 200 900; font-style: italic; }
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("../../assets/fonts/AtkinsonHyperlegibleNext-Variable.ttf") format("truetype"); font-weight: 200 800; font-style: normal; }
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("../../assets/fonts/AtkinsonHyperlegibleNext-Italic-Variable.ttf") format("truetype"); font-weight: 200 800; font-style: italic; }

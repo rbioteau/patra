@@ -1,0 +1,17 @@
+{
+  "projectId": "94fe65da-d7d9-4109-9bf7-f2733070302b",
+  "pkg": "patra-brand",
+  "globalName": "Patra",
+  "shape": "package",
+  "entry": "./.design-sync/brand/index.js",
+  "cssEntry": "tokens.css",
+  "extraFonts": [
+    "fonts.css"
+  ],
+  "guidelinesGlob": [
+    "brand.md",
+    "components.md",
+    "screens.md"
+  ],
+  "readmeHeader": ".design-sync/conventions.md"
+}

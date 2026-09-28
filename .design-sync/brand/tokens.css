@@ -1,0 +1,73 @@
+/* Patra's tokens, mirrored from lib/src/theme.dart (the source of truth).
+   One theme: dark. Change theme.dart first, then this file. */
+:root {
+  color-scheme: dark;
+
+  /* Grounds */
+  --patra-bg: #111722;            /* the page, the icon's ground, the launch window */
+  --patra-chrome: #172131;        /* app bar, bottom navigation bar */
+  --patra-surface: #1c293e;       /* cards, sheets, dialogs, tiles, fields */
+  --patra-surface-hi: #26354b;    /* raised off surface: snack bars, highlighted rows */
+  --patra-border: #35445a;        /* hairlines, card and field borders, dividers */
+  --patra-outline: #79879b;       /* Material's stronger outline */
+
+  /* Ink */
+  --patra-text: #f3eee3;          /* ivory: primary text, and a book's ink */
+  --patra-text-muted: #afb8c7;    /* metadata, section labels, inactive icons */
+  --patra-text-on-art: rgba(243, 238, 227, 0.78); /* secondary text over a picture */
+
+  /* Meaning */
+  --patra-accent: #d7b976;        /* gold: reading progress and identity ONLY */
+  --patra-on-accent: #241d10;     /* ink on gold; never white */
+  --patra-offline: #8eacd8;       /* blue: downloads and offline ONLY */
+  --patra-on-offline: #10243e;    /* ink on an offline fill */
+  --patra-online: #3ddc84;        /* the server-reachable dot */
+  --patra-danger: #ffb4ab;        /* destruction and failure */
+  --patra-on-danger: #690005;
+  --patra-track: rgba(243, 238, 227, 0.14); /* unfilled part of a progress track or ring */
+
+  /* The reader */
+  --patra-reader-canvas: #000000; /* pictures (manga, comics) */
+  --patra-book-canvas: #111722;   /* books: the night blue */
+  --patra-on-page-fill: rgba(255, 255, 255, 0.12);
+  --patra-on-page-outline: rgba(255, 255, 255, 0.18);
+
+  /* Faces */
+  --patra-font-sans: "Space Grotesk", system-ui, sans-serif;           /* the interface */
+  --patra-font-serif: "Literata", Georgia, serif;                      /* titles of works, page numerals */
+  --patra-font-legible: "Atkinson Hyperlegible Next", system-ui, sans-serif; /* a reading face for books */
+
+  /* Spacing */
+  --patra-gutter: 20px;           /* side margin of every screen */
+  --patra-section-gap: 24px;      /* above a section label */
+  --patra-gate-gutter: 32px;      /* profile picker, sign-in form */
+  --patra-book-side-margin: 12px; /* either side of a book's page */
+
+  /* Radii */
+  --patra-radius-track: 2px;
+  --patra-radius-thumb: 6px;      /* covers on rows and tiles */
+  --patra-radius-cover: 10px;     /* hero covers, buttons, fields, snack bars */
+  --patra-radius-card: 12px;      /* cards, sheet tops */
+  --patra-radius-pill: 999px;
+
+  /* Sizes */
+  --patra-min-hit-target: 44px;
+  --patra-control-max-width: 280px; /* a button never grows past this */
+  --patra-read-rail-width: 2px;
+  --patra-row-cover-width: 46px;    /* 80 on a tablet */
+  --patra-row-cover-height: 66px;   /* 115 on a tablet */
+  --patra-hero-cover-width: 124px;  /* 160 on a tablet */
+  --patra-hero-cover-height: 182px; /* 235 on a tablet */
+}
+
+/* The app's text styles (PatraText in theme.dart), as classes. */
+.patra-serif-title   { font-family: var(--patra-font-serif); font-size: 21px; font-weight: 600; line-height: 1.25; color: var(--patra-text); }
+.patra-page-numeral  { font-family: var(--patra-font-serif); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.patra-app-bar-title { font-family: var(--patra-font-sans); font-size: 20px; font-weight: 700; color: var(--patra-text); }
+.patra-body          { font-family: var(--patra-font-sans); font-size: 14px; font-weight: 400; color: var(--patra-text); }
+.patra-row-title     { font-family: var(--patra-font-sans); font-size: 13.5px; font-weight: 600; color: var(--patra-text); }
+.patra-section-label { font-family: var(--patra-font-sans); font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--patra-text-muted); }
+.patra-metadata      { font-family: var(--patra-font-sans); font-size: 11px; font-weight: 400; color: var(--patra-text-muted); }
+.patra-pill-label    { font-family: var(--patra-font-sans); font-size: 11.5px; font-weight: 600; }
+.patra-nav-label     { font-family: var(--patra-font-sans); font-size: 11px; font-weight: 600; }
+.patra-book-body     { font-family: var(--patra-font-sans); font-size: 16px; line-height: 1.55; color: var(--patra-text); }
