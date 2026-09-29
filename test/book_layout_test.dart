@@ -3,8 +3,7 @@ import 'package:patra/src/api/models.dart';
 import 'package:patra/src/features/reader/book_layout.dart';
 
 /// What the book reader decides without drawing anything: how a text size
-/// steps, which line spacing a height is, which chapter a page is in, and
-/// which page a spread starts on.
+/// steps, which line spacing a height is, and which chapter a page is in.
 void main() {
   group('the text size', () {
     test('steps a point at a time, inside 12 to 28', () {
@@ -66,17 +65,5 @@ void main() {
       expect(chapterAt(contents, 0), isNull);
       expect(chapterAt(const [], 4), isNull);
     });
-  });
-
-  group('a spread', () {
-    test(
-      'starts on an even page counted from zero — the odd one on screen',
-      () {
-        expect(spreadStart(0), 0);
-        expect(spreadStart(1), 0);
-        expect(spreadStart(6), 6);
-        expect(spreadStart(7), 6);
-      },
-    );
   });
 }

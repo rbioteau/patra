@@ -600,25 +600,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // --- navigation -----------------------------------------------------------
 
-  /// [span] is how many pages are on screen from [page] on: what is
-  /// reported is the last of them, as a swipe reports it.
-  void _goTo(int page, ChapterInfo info, {int span = 1}) {
+  void _goTo(int page, ChapterInfo info) {
     final clamped = page.clamp(0, info.pages - 1);
     if (clamped == _page) return;
     setState(() => _page = clamped);
-    _saveProgress((clamped + span - 1).clamp(0, info.pages - 1), info);
-  }
-
-  /// A book's step: a page, or a spread — two, landing on the left page of
-  /// the next or the previous one.
-  void _stepBook(bool forward, ChapterInfo info, {required bool spread}) {
-    if (!spread) {
-      _goTo(_page + (forward ? 1 : -1), info);
-      return;
-    }
-    final target = spreadStart(_page) + (forward ? 2 : -2);
-    if (target < 0 || target >= info.pages) return;
-    _goTo(target, info, span: 2);
+    _saveProgress(clamped, info);
   }
 
   /// A step is a screen, not a fixed number of pages: a double-page scan sits
@@ -882,26 +868,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// it is built before it is turned to, and a scroll settled there is not a
   /// place the reader has come to.
   void _onBookScrolled(int page, BookAnchor at, ChapterInfo chapter) {
-    if (!_bookSpread) {
-      if (page != _page) return;
-      _anchors[page] = at;
-      _saveProgress(page, chapter);
-      return;
-    }
-    // A spread: either column is on screen, and each keeps its own place.
-    // What is reported is still the second page of the spread, as a turn
-    // reports it, so the page the server holds does not swing between the
-    // two with whichever column was scrolled last.
-    final first = spreadStart(_page);
-    if (page != first && page != first + 1) return;
+    if (page != _page) return;
     _anchors[page] = at;
-    _saveProgress((first + 1).clamp(0, chapter.pages - 1), chapter);
+    _saveProgress(page, chapter);
   }
-
-  /// Whether the book is being read two pages at a time — a tablet on its
-  /// side. Mirrored out of the build that decides it, for the callbacks it
-  /// hands down.
-  var _bookSpread = false;
 
   /// Opens a book where the reader left it, once.
   ///
@@ -1060,18 +1030,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // against the work — the reader is where a page lands, exactly as it is
     // where a chapter's page dimensions land (#118).
     _recordDeclaredDirection(chapter, currentPage.value?.direction);
-    // A tablet held in landscape reads two of the server's pages side by
-    // side; held upright it reads one, like a phone, at a tablet's sizes.
+    // A tablet wears its own sizes of the same chrome, and its settings in a
+    // panel rather than a sheet; it still reads one of the server's pages.
     final tablet = isTabletLayout(context);
-    final spread =
-        tablet && MediaQuery.orientationOf(context) == Orientation.landscape;
-    _bookSpread = spread;
-    final shown = spread ? spreadStart(_page) : _page;
-    final last = spread ? (shown + 1).clamp(0, chapter.pages - 1) : shown;
     final l10n = AppLocalizations.of(context);
-    final counter = last > shown
-        ? l10n.pageSpreadCounter(shown + 1, last + 1, chapter.pages)
-        : l10n.pageCounter(shown + 1, chapter.pages);
+    final counter = l10n.pageCounter(_page + 1, chapter.pages);
     void settingsOutcome(ReaderSettingsOutcome outcome) =>
         _onSettingsOutcome(outcome, chapter, direction);
     return Stack(
@@ -1086,9 +1049,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         Directionality(
           textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
           child: _BookView(
-            // A rotation between one page and two is a new pager, opened on
-            // the page the reader was on.
-            key: ValueKey(spread),
             chapterId: widget.chapterId,
             // The copy's own language where there is a copy: a saved book is
             // read as it was made (ADR-0009), and with no server the copy is
@@ -1097,27 +1057,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             // knows stands in — the same book, asked the same question.
             language: _savedChapter?.language ?? chapter.language,
             pages: chapter.pages,
-            page: shown,
-            spread: spread,
+            page: _page,
             anchorFor: _anchorFor,
-            onPageChanged: (page) =>
-                _onPageChanged(page, chapter, span: spread ? 2 : 1),
+            onPageChanged: (page) => _onPageChanged(page, chapter),
             onScrolled: (page, at) => _onBookScrolled(page, at, chapter),
           ),
         ),
         // Outside that `Directionality` on purpose: the zones are named for
         // where they are on the screen, so which of them reads on is passed
-        // the other way round rather than mirrored a second time. A spread
-        // steps by two, and always lands on the left page of one.
+        // the other way round rather than mirrored a second time, and through
+        // `_step`, which is the one definition of what advancing is. A book
+        // has no spread, so it steps by a page.
         BookTapZones(
           edge: tablet ? 64 : 48,
           // Anywhere on the page closes the panel first, edges included.
           onLeft: () => _bookPanelOpen
               ? setState(() => _bookPanelOpen = false)
-              : _stepBook(rtl, chapter, spread: spread),
+              : _step(rtl, chapter, null),
           onRight: () => _bookPanelOpen
               ? setState(() => _bookPanelOpen = false)
-              : _stepBook(!rtl, chapter, spread: spread),
+              : _step(!rtl, chapter, null),
           // A tap on the page closes the panel before it does anything else,
           // as a tap on a sheet's scrim closes the sheet.
           onMiddle: () => _bookPanelOpen
@@ -1151,14 +1110,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             },
           ),
           BookBottomBar(
-            chapterName: chapterAt(contents, shown),
+            chapterName: chapterAt(contents, _page),
             counter: counter,
-            page: shown,
+            page: _page,
             pages: chapter.pages,
             tablet: tablet,
-            onSeek: (page) => spread
-                ? _goTo(spreadStart(page), chapter, span: 2)
-                : _goTo(page, chapter),
+            onSeek: (page) => _goTo(page, chapter),
           ),
         ] else
           BookPageNumeral(counter: counter, tablet: tablet),
@@ -1881,7 +1838,6 @@ class _VerticalScrollViewState extends State<_VerticalScrollView> {
 /// page's own view rather than by the reader.
 class _BookView extends StatefulWidget {
   const _BookView({
-    super.key,
     required this.chapterId,
     required this.language,
     required this.pages,
@@ -1889,7 +1845,6 @@ class _BookView extends StatefulWidget {
     required this.anchorFor,
     required this.onPageChanged,
     required this.onScrolled,
-    this.spread = false,
   });
 
   final int chapterId;
@@ -1899,11 +1854,6 @@ class _BookView extends StatefulWidget {
 
   final int pages;
   final int page;
-
-  /// Whether two of the server's pages are laid side by side — a tablet held
-  /// in landscape. A spread is the pages two by two from the first, so what
-  /// the pager turns through is spreads and [page] is the left one of its.
-  final bool spread;
 
   /// Where in [page] the reader was, or null for a page opened at its top.
   /// Asked for as a page is built rather than held here, because the place a
@@ -1921,11 +1871,8 @@ class _BookView extends StatefulWidget {
 
 class _BookViewState extends State<_BookView> {
   late final PageController _controller = PageController(
-    initialPage: _indexOf(widget.page),
+    initialPage: widget.page,
   );
-
-  /// Which item of the pager [page] is on: itself, or its spread.
-  int _indexOf(int page) => widget.spread ? page ~/ 2 : page;
 
   /// The page this view last told the reader about. See
   /// [_PagedViewState._reported], whose trap this is too: a `late` field
@@ -1952,10 +1899,10 @@ class _BookViewState extends State<_BookView> {
     if (widget.page == _reported) return;
     _reported = widget.page;
     if (!_controller.hasClients) return;
-    if (_controller.page?.round() == _indexOf(widget.page)) return;
+    if (_controller.page?.round() == widget.page) return;
     _seeking = true;
     try {
-      _controller.jumpToPage(_indexOf(widget.page));
+      _controller.jumpToPage(widget.page);
     } finally {
       _seeking = false;
     }
@@ -1971,66 +1918,21 @@ class _BookViewState extends State<_BookView> {
   Widget build(BuildContext context) {
     return PageView.builder(
       controller: _controller,
-      itemCount: widget.spread ? (widget.pages + 1) ~/ 2 : widget.pages,
-      onPageChanged: (index) {
+      itemCount: widget.pages,
+      onPageChanged: (page) {
         if (_seeking) return;
-        final page = widget.spread ? index * 2 : index;
         _reported = page;
         widget.onPageChanged(page);
       },
-      itemBuilder: (context, index) {
-        Widget page(int page) => _BookPage(
-          chapterId: widget.chapterId,
-          language: widget.language,
-          page: page,
-          anchor: widget.anchorFor(page),
-          onScroll: (at) => widget.onScrolled(page, at),
-        );
-        if (!widget.spread) return page(index);
-        final right = index * 2 + 1;
-        return _BookSpread(
-          first: page(index * 2),
-          second: right < widget.pages ? page(right) : null,
-        );
-      },
+      itemBuilder: (context, page) => _BookPage(
+        chapterId: widget.chapterId,
+        language: widget.language,
+        page: page,
+        anchor: widget.anchorFor(page),
+        onScroll: (at) => widget.onScrolled(page, at),
+      ),
     );
   }
-}
-
-/// Two of the server's pages side by side, with a hairline between them.
-///
-/// The padding is the chrome's room, kept whether the chrome is up or not,
-/// so the words never reflow when it comes and goes. It is the mock's 64 at
-/// the sides and 72 between, less what each page already keeps of its own
-/// (`bookSideMargin` either side of its column). A last page with no partner
-/// leaves the second column empty rather than centring itself: where a page
-/// sits is what a reader finds it by. [first] reads first in the book's own
-/// direction — on the left, or on the right of a book turned from the right,
-/// the `Directionality` around the pager laying the row out.
-class _BookSpread extends StatelessWidget {
-  const _BookSpread({required this.first, required this.second});
-
-  final Widget first;
-  final Widget? second;
-
-  static const _side = 64.0 - bookSideMargin;
-  static const _gap = 72.0 - 2 * bookSideMargin;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(_side, 84, _side, 88),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: first),
-        SizedBox(
-          width: _gap,
-          child: Center(child: Container(width: 1, color: patraSpreadRule)),
-        ),
-        Expanded(child: second ?? const SizedBox.shrink()),
-      ],
-    ),
-  );
 }
 
 /// One page of a book, set the way whoever is reading chose.

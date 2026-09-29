@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Patra is a Flutter mobile client (iOS + iPadOS + Android) for [Kavita](https://www.kavitareader.com/), a self-hosted manga/comics/book server. Login (multi-server), home shelves, library grid, series detail, an image reader with three reading directions, and offline downloads work. A book is read too — on the pages Kavita lays its words out into, two at a time on a tablet held sideways (see README.md).
+Patra is a Flutter mobile client (iOS + iPadOS + Android) for [Kavita](https://www.kavitareader.com/), a self-hosted manga/comics/book server. Login (multi-server), home shelves, library grid, series detail, an image reader with three reading directions, and offline downloads work. A book is read too — on the pages Kavita lays its words out into (see README.md).
 
 ## Commands
 

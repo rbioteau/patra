@@ -7,8 +7,8 @@ import 'book_reader_harness.dart';
 
 /// The book reader's chrome: what is on screen when a book opens, where a
 /// tap turns the page and where it does not, the bar that says where in the
-/// book the reader is — and, on a tablet held sideways, two of the server's
-/// pages at once with the settings in a panel rather than a sheet.
+/// book the reader is — and, on a tablet, the settings in a panel rather
+/// than a sheet.
 
 const _tabletLandscape = Size(1180, 820);
 const _tabletPortrait = Size(820, 1180);
@@ -99,32 +99,14 @@ void main() {
   });
 
   group('on a tablet held sideways', () {
-    testWidgets('two of the server\'s pages are read at once', (tester) async {
-      final (requested, posted) = await pumpBook(
-        tester,
-        size: _tabletLandscape,
-      );
-
-      expect(find.text('1–2 / $bookPages'), findsOneWidget);
-      // Both pages of the spread, and the pages either side of it.
-      expect(askedPages(requested), containsAll([0, 1]));
-
-      await tapBookEdge(tester, right: true);
-      // A spread is two pages: the next one starts on the third, and what is
-      // reported is the right-hand page, the last one on screen.
-      expect(find.text('3–4 / $bookPages'), findsOneWidget);
-      expect(postedPages(posted).last, 3);
-
-      await tapBookEdge(tester, right: false);
-      expect(find.text('1–2 / $bookPages'), findsOneWidget);
-    });
-
-    testWidgets('a book opened on an even page opens on its spread', (
+    testWidgets('one of the server\'s pages at a time, as on a phone', (
       tester,
     ) async {
-      // Page 5 counted from zero is the right-hand page of the third spread.
-      await pumpBook(tester, size: _tabletLandscape, progressPage: 5);
-      expect(find.text('5–6 / $bookPages'), findsOneWidget);
+      final (_, posted) = await pumpBook(tester, size: _tabletLandscape);
+      expect(find.text('1 / $bookPages'), findsOneWidget);
+      await tapBookEdge(tester, right: true);
+      expect(find.text('2 / $bookPages'), findsOneWidget);
+      expect(postedPages(posted), [0, 1]);
     });
 
     testWidgets('Aa opens a panel with no scrim, and the page closes it', (

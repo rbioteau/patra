@@ -51,9 +51,3 @@ String? chapterAt(List<BookContentsEntry> contents, int page) {
   walk(contents);
   return found;
 }
-
-/// The page a two-page spread showing [page] starts on: counted from zero it
-/// is even, which is the odd page on screen — a spread is the server's pages
-/// two by two from the first, and never shifts by one to put a chapter on
-/// the right.
-int spreadStart(int page) => page - page % 2;

@@ -107,9 +107,6 @@ final patraLightScrim = Colors.black.withValues(alpha: .35);
 final patraBookBar = patraChrome.withValues(alpha: .97);
 final patraBookBarRule = Colors.white.withValues(alpha: .06);
 
-/// The hairline down the middle of a two-page spread.
-final patraSpreadRule = Colors.white.withValues(alpha: .05);
-
 /// The shadow under a panel laid over a page with no scrim at all.
 final patraPanelShadow = Colors.black.withValues(alpha: .45);
 
