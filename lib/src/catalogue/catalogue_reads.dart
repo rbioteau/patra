@@ -230,9 +230,10 @@ final onDeck = CatalogueRead.onDeck(
 
 /// A series' volumes and their chapters, and the catalogue's copy of them.
 ///
-/// Volumes stay a **trace of what was actually opened**: nothing prefetches
-/// them, because a device that browsed a 2000-series library would otherwise
-/// hold every chapter of all of it.
+/// Volumes stay a **trace of what was actually opened, or kept**: the eager
+/// fill prefetches them only for a series the device holds a saved copy of
+/// (`CataloguePrefetch`), because a device that browsed a 2000-series library
+/// would otherwise hold every chapter of all of it.
 ///
 /// A [StoredRead], because the series screen's rows need the second fact —
 /// what is laid over a row depends on whether the server answered for it. Its

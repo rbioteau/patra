@@ -13,6 +13,7 @@ import 'package:patra/src/auth/session.dart';
 import 'package:patra/src/catalogue/catalogue_provider.dart';
 import 'package:patra/src/catalogue/catalogue_reads.dart' as catalogue;
 import 'package:patra/src/catalogue/catalogue_store.dart';
+import 'package:patra/src/downloads/downloads_provider.dart';
 import 'package:patra/src/session_scope.dart';
 
 import 'test_support.dart';
@@ -42,6 +43,9 @@ class _Adapter implements HttpClientAdapter {
 
   /// How many pages of each library were asked for.
   final asked = <int, int>{};
+
+  /// Every series whose volumes were asked for, in order.
+  final volumesAsked = <int>[];
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, _, _) async {
@@ -79,6 +83,7 @@ class _Adapter implements HttpClientAdapter {
     }
     if (options.path == '/api/Series/on-deck') return json(onDeck);
     if (options.path == '/api/Series/volumes') {
+      volumesAsked.add(int.parse('${options.queryParameters['seriesId']}'));
       return json([
         {
           'id': 1,
@@ -157,6 +162,7 @@ ProviderContainer _container({
   required Directory root,
   required _Adapter adapter,
   Profile? profile,
+  Directory? downloadsRoot,
 }) {
   final who = profile ?? _romain;
   final client = KavitaClient(
@@ -174,6 +180,9 @@ ProviderContainer _container({
       ),
       kavitaClientProvider.overrideWithValue(client),
       catalogueRootProvider.overrideWithValue(root),
+      // Never the catalogue's own root: both stores file by profile, and one
+      // root would put a spine where the downloads scan sweeps.
+      downloadsRootProvider.overrideWithValue(downloadsRoot ?? _root()),
     ],
   );
   addTearDown(container.dispose);
@@ -202,7 +211,7 @@ void main() {
       await container.read(catalogue.libraries.refreshable);
       // The eager fill is fire-and-forget behind the answer, and sequential:
       // a library never opened has to be navigable offline all the same.
-      await pumpEventQueue();
+      await container.read(cataloguePrefetchProvider).idle;
 
       final spine = await CatalogueStore(
         root: root,
@@ -281,7 +290,7 @@ void main() {
       // library and for the list at once, and the selected one lands first.
       await container.read(catalogue.seriesForLibrary(1).refreshable);
       await container.read(catalogue.libraries.refreshable);
-      await pumpEventQueue();
+      await container.read(cataloguePrefetchProvider).idle;
 
       expect(
         adapter.asked[1],
@@ -300,6 +309,71 @@ void main() {
         profileId: _romain.id,
       ).loadSpine();
       expect(spine.series.keys, containsAll(<int>[1, 2]));
+    });
+  });
+
+  group('what the device keeps is navigable offline', () {
+    test(
+      'a series with a saved copy is stored, though nobody opened it',
+      () async {
+        // A copy on the device is the one thing somebody chose to keep, so its
+        // series must never be a retry button offline. Opening a series is not
+        // enough to guarantee that: a version bump discards every stored series
+        // (v0.6.0 did), and a copy saved before the catalogue existed was never
+        // written at all. The fill is what puts it back, on the first session
+        // that reaches the server.
+        final root = _root();
+        final downloadsRoot = _root();
+        await saveChapterFixture(downloadsRoot, _romain.id, chapterId: 10);
+        final adapter = _Adapter(
+          seriesPages: {
+            1: [
+              [_seriesJson(5), _seriesJson(9, name: 'Berserk')],
+            ],
+          },
+        );
+        final container = _container(
+          root: root,
+          adapter: adapter,
+          downloadsRoot: downloadsRoot,
+        );
+
+        await container.read(catalogue.libraries.refreshable);
+        await container.read(cataloguePrefetchProvider).idle;
+
+        final stored = await CatalogueStore(
+          root: root,
+          profileId: _romain.id,
+        ).loadSeries(5);
+        expect(stored?.volumes?.single.chapters.single.id, 10);
+        expect(stored?.series?.name, 'Blame!');
+        expect(stored?.metadata?.writers, ['Nihei']);
+        expect(
+          adapter.volumesAsked,
+          [5],
+          reason: 'volumes stay a trace of what was opened or kept, never all',
+        );
+      },
+    );
+
+    test('a series already held is not asked for again', () async {
+      final root = _root();
+      final downloadsRoot = _root();
+      await saveChapterFixture(downloadsRoot, _romain.id, chapterId: 10);
+      final adapter = _Adapter();
+      final container = _container(
+        root: root,
+        adapter: adapter,
+        downloadsRoot: downloadsRoot,
+      );
+
+      await container.read(catalogue.volumes(5).refreshable);
+      await container.read(catalogue.series(5).refreshable);
+      await container.read(catalogue.seriesMetadata(5).refreshable);
+      await container.read(catalogue.libraries.refreshable);
+      await container.read(cataloguePrefetchProvider).idle;
+
+      expect(adapter.volumesAsked, [5]);
     });
   });
 
@@ -381,7 +455,7 @@ void main() {
         final container = _container(root: root, adapter: adapter);
 
         await container.read(catalogue.libraries.refreshable);
-        await pumpEventQueue();
+        await container.read(cataloguePrefetchProvider).idle;
 
         final spine = await CatalogueStore(
           root: root,

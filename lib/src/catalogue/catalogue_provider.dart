@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/kavita_client.dart';
 import '../api/models.dart';
 import '../auth/session.dart';
+import '../downloads/downloads_provider.dart';
 import 'catalogue_store.dart';
 
 /// Where every profile's catalogue lives, which the **device** owns — null
@@ -69,7 +71,8 @@ final catalogueStoreProvider = Provider<CatalogueStore>(
   },
 );
 
-/// Which libraries this container has already filled the catalogue for.
+/// What this container has already filled the catalogue with: libraries,
+/// and the series the device keeps copies of.
 ///
 /// The prefetch below is triggered by the library list landing, and that list
 /// lands again on every pull-to-refresh — so without this a household's
@@ -78,11 +81,24 @@ final catalogueStoreProvider = Provider<CatalogueStore>(
 /// could not reach is tried again the next time the list lands, which is what
 /// makes coming back online enough.
 class CataloguePrefetch {
-  final _done = <int>{};
-  var _running = false;
+  CataloguePrefetch({required this.savedSeries});
 
-  /// Fetches the series list of every library that has not been stored yet,
-  /// **one after another**, and writes each into [store].
+  /// The series this profile holds a saved copy of — asked when a run starts
+  /// rather than once, since a copy saved mid-session counts on the next run.
+  final Future<Set<int>> Function() savedSeries;
+
+  final _done = <int>{};
+  final _seriesDone = <int>{};
+  Future<void>? _run;
+
+  /// Settles when no run is in flight — for a test, since the library list's
+  /// write starts a run and never waits on it.
+  @visibleForTesting
+  Future<void> get idle => _run ?? Future.value();
+
+  /// Fills what the catalogue is missing, **one request after another**, and
+  /// writes each answer into [store]: first every series the device keeps a
+  /// copy of, then the series list of every library.
   ///
   /// One trigger for both screens rather than a rule per tab: the Library tab
   /// and Home both ask for the library list, and this hangs off that answer
@@ -97,24 +113,77 @@ class CataloguePrefetch {
     required KavitaClient client,
     required CatalogueStore store,
     required List<Library> libraries,
-  }) async {
-    if (_running) return;
-    _running = true;
-    try {
-      for (final library in libraries) {
-        if (_done.contains(library.id)) continue;
-        try {
-          await store.putSeriesList(
-            library.id,
-            await client.allSeriesForLibrary(library.id),
-          );
-          _done.add(library.id);
-        } on Object {
-          continue;
-        }
+  }) {
+    if (_run != null) return Future.value();
+    return _run = _fill(
+      client,
+      store,
+      libraries,
+    ).whenComplete(() => _run = null);
+  }
+
+  Future<void> _fill(
+    KavitaClient client,
+    CatalogueStore store,
+    List<Library> libraries,
+  ) async {
+    await _fillSavedSeries(client, store);
+    for (final library in libraries) {
+      if (_done.contains(library.id)) continue;
+      try {
+        await store.putSeriesList(
+          library.id,
+          await client.allSeriesForLibrary(library.id),
+        );
+        _done.add(library.id);
+      } on Object {
+        continue;
       }
-    } finally {
-      _running = false;
+    }
+  }
+
+  /// Stores the volumes, the row and the description of every series the
+  /// device keeps a copy of, wherever the catalogue does not hold them yet.
+  ///
+  /// Volumes are otherwise a trace of what was *opened*, and that is not
+  /// enough for a series somebody chose to keep: a version bump discards every
+  /// stored series, and a copy saved before the catalogue existed was never
+  /// written at all — so offline its series was a retry button over chapters
+  /// sitting on the device. First, because these are a handful of small
+  /// requests where a library can be forty pages of series.
+  ///
+  /// Only what is missing is asked for: a stored series is refreshed by
+  /// opening it, like any other, and this is a floor rather than a sync.
+  Future<void> _fillSavedSeries(
+    KavitaClient client,
+    CatalogueStore store,
+  ) async {
+    final Set<int> kept;
+    try {
+      kept = await savedSeries();
+    } on Object {
+      return;
+    }
+    for (final seriesId in kept) {
+      if (_seriesDone.contains(seriesId)) continue;
+      try {
+        final held = await store.loadSeries(seriesId);
+        if (held?.volumes == null) {
+          await store.putVolumes(seriesId, await client.volumes(seriesId));
+        }
+        if (held?.series == null) {
+          await store.putSeries(await client.series(seriesId));
+        }
+        if (held?.metadata == null) {
+          await store.putSeriesMetadata(
+            seriesId,
+            await client.seriesMetadata(seriesId),
+          );
+        }
+        _seriesDone.add(seriesId);
+      } on Object {
+        continue;
+      }
     }
   }
 
@@ -123,6 +192,16 @@ class CataloguePrefetch {
   void markStored(int libraryId) => _done.add(libraryId);
 }
 
+/// The fill, reading which series are kept off the downloads store.
+///
+/// That store is read through its provider when a run starts, not before:
+/// this provider lives as long as the session's container, so the `ref` is
+/// still good by the time the library list has landed.
 final cataloguePrefetchProvider = Provider<CataloguePrefetch>(
-  (ref) => CataloguePrefetch(),
+  (ref) => CataloguePrefetch(
+    savedSeries: () async {
+      final state = await ref.read(downloadsProvider.future);
+      return {for (final copy in state.saved.values) copy.seriesId};
+    },
+  ),
 );
