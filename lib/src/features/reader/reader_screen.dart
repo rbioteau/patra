@@ -246,6 +246,8 @@ class ReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
+  /// The page on screen, mirrored out of [build]'s watch of the reading
+  /// session, which is what moves it — see [ReadingSession].
   int _page = 0;
   bool _showChrome = false;
 
@@ -257,30 +259,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// Whether a book's chrome has been put up for its opening, which is done
   /// once: a book opens with its title and its place on screen.
   var _bookChromeShown = false;
-  bool _initialProgressSaved = false;
-
-  /// Where in each page of a book the reader is, by page.
-  ///
-  /// A book's page can be longer than the screen, so where a reader is is a
-  /// page and a place within it, and the place is what travels to the server
-  /// with the page number. Keyed by page rather than held as one number
-  /// because turning a page is arriving at its beginning while coming back
-  /// to one is not; a page with no entry is a page opened at its top.
-  final Map<int, BookAnchor> _anchors = {};
-
-  /// Whether a book has been put where the reader left it. Once, and from
-  /// what the server says rather than from the page the route named: a
-  /// reader who has turned a page has said where they are.
-  var _opened = false;
-
-  /// Whether the copy's page total has been put to the server's own count,
-  /// which is asked once and never from inside a build.
-  var _pageTotalNoted = false;
-
-  /// Serializes progress posts so a slow request for an earlier page can't
-  /// overwrite a later one, and swallows failures (a lost save is resent on
-  /// the next page turn).
-  Future<void> _progressQueue = Future.value();
 
   /// The client the page and thumbnail URLs are built from, resolved off the
   /// layout path for the same reason as [_thumbCacheWidth]: [_imageProvider] is
@@ -290,7 +268,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// (base URL, api key) only changes with the session, and changing the
   /// session leaves the reader.
   KavitaClient? _client;
-  DownloadsNotifier? _downloads;
+
+  /// The chapter as it is being read: where the reader is, and what the
+  /// server and the copy are told of it (`reading_session.dart`).
+  ReadingSessionKey get _sessionKey =>
+      (chapterId: widget.chapterId, initialPage: widget.initialPage);
+  ReadingSession get _session =>
+      ref.read(readingSessionProvider(_sessionKey).notifier);
 
   @override
   void didChangeDependencies() {
@@ -310,13 +294,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   void initState() {
     super.initState();
-    _page = widget.initialPage;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final downloads = ref.read(downloadsProvider.notifier);
-      _downloads = downloads;
-      downloads.prioritizeReadingChapter(widget.chapterId);
-    });
     // Which direction the chapter opens in is the chain's to answer and the
     // chain's alone (`reading_direction.dart`): it is a function of the
     // series, of whoever is reading and of what they have stored, so the
@@ -329,7 +306,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
-    _downloads?.clearReadingChapterPriority(widget.chapterId);
     // The clock belongs to the rest of the app: hand it back on the way out.
     // `edgeToEdge` is what every other screen runs under — it is Flutter's
     // default on iOS and on the Android SDK level we target.
@@ -364,63 +340,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // --- progress -------------------------------------------------------------
 
-  void _saveProgress(int page, ChapterInfo info) {
-    if (info.pages == 0) return;
-    // Kavita counts pagesRead from the saved pageNum, so reaching the last
-    // page must report the total for the chapter to be marked read — the
-    // official web reader does the same.
-    final pageNum = page >= info.pages - 1 ? info.pages : page;
-    // Where in the page the reader is, for a book whose page can be longer
-    // than the screen: a page number alone opens it again at the top, which
-    // is words already read. A chapter of pictures has no place within a page
-    // to report.
-    final anchor = info.content == ChapterContent.reflowable
-        ? (_anchors[page] ?? BookAnchor.top).id
-        : null;
-    // Written into the copy *before* it is sent, so a journey is not a hole
-    // in what the server knows. The copy is the one thing on the device that
-    // outlives the app being closed with a page still to post, and what it
-    // is holding is sent the moment there is a server to send it to — the
-    // number and the place within the page together, which is the only shape
-    // in which a book's progress means anything.
-    if (ref.read(savedChapterProvider(widget.chapterId)) != null) {
-      ref
-          .read(downloadsProvider.notifier)
-          .recordProgress(
-            widget.chapterId,
-            pageNum,
-            pending: PendingProgress(pageNum: pageNum, bookScrollId: anchor),
-          );
-    }
-    final KavitaClient client;
-    try {
-      client = ref.read(kavitaClientProvider);
-    } on StateError {
-      return; // signed out mid-read
-    }
-    _progressQueue = _progressQueue
-        .then((_) async {
-          await client.saveProgress(
-            libraryId: info.libraryId,
-            seriesId: info.seriesId,
-            volumeId: info.volumeId,
-            chapterId: widget.chapterId,
-            pageNum: pageNum,
-            bookScrollId: anchor,
-          );
-          // Taken, so the copy has nothing left to send. Where the reader has
-          // turned a page since, this is a no-op rather than a loss: the copy
-          // is holding the newer one, and only that one is cleared.
-          await ref
-              .read(downloadsProvider.notifier)
-              .clearPendingProgress(
-                widget.chapterId,
-                PendingProgress(pageNum: pageNum, bookScrollId: anchor),
-              );
-        })
-        .catchError((Object _) {});
-  }
-
   /// The view reports the first page it shows; a landscape spread has read
   /// both pages of the pair.
   ///
@@ -435,8 +354,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     int? precacheWidth,
   }) {
     if (page == _page) return;
-    setState(() => _page = page);
-    _saveProgress((page + span - 1).clamp(0, info.pages - 1), info);
+    _session.arrived(page, span: span);
     _precache(page + span, info, cacheWidth: precacheWidth);
     // Reading is what fills the image cache; this is where it has to be kept
     // inside its budget. The store throttles the sweeps.
@@ -453,20 +371,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (page < 0 || page >= info.pages) return;
     final provider = _imageProvider(page, cacheWidth: cacheWidth);
     if (provider != null) precacheImage(provider, context);
-  }
-
-  /// onPageChanged never fires for the initial page; without this a one-page
-  /// chapter would record no progress at all.
-  ///
-  /// Deferred a frame because it is reached from `build`, and saving mirrors
-  /// progress into the stored copy — writing to a provider while the tree is
-  /// building is what Riverpod refuses outright.
-  void _saveInitialProgress(ChapterInfo info) {
-    if (_initialProgressSaved) return;
-    _initialProgressSaved = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _saveProgress(_page, info);
-    });
   }
 
   // --- images ---------------------------------------------------------------
@@ -599,46 +503,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     });
   }
 
-  // --- navigation -----------------------------------------------------------
-
-  void _goTo(int page, ChapterInfo info) {
-    final clamped = page.clamp(0, info.pages - 1);
-    if (clamped == _page) return;
-    setState(() => _page = clamped);
-    _saveProgress(clamped, info);
-  }
-
-  /// A step is a screen, not a fixed number of pages: a double-page scan sits
-  /// on one of its own, so stepping back from it lands on the *first* page of
-  /// the pair before it rather than on the second.
-  void _step(bool forward, ChapterInfo info, SpreadLayout? spread) {
-    if (spread == null) {
-      _goTo(_page + (forward ? 1 : -1), info);
-      return;
-    }
-    final index = spread.indexOf(_page) + (forward ? 1 : -1);
-    if (index < 0 || index >= spread.length) return;
-    _goTo(spread.firstOf(index), info);
-  }
-
-  /// Puts the copy's page total to the server's own count, once: the number
-  /// [total] is what the server says the chapter is made of, and a copy was
-  /// made with a number of its own.
-  ///
-  /// Deferred a frame because it is reached from `build`, and it writes to a
-  /// provider — which is what Riverpod refuses outright while the tree is
-  /// building.
-  void _notePageTotal(int total) {
-    if (_pageTotalNoted) return;
-    _pageTotalNoted = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref
-          .read(downloadsProvider.notifier)
-          .notePageTotal(widget.chapterId, total);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final info = ref.watch(chapterInfoProvider(widget.chapterId));
@@ -652,15 +516,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final resolved = ref.watch(readerChapterProvider(widget.chapterId));
     final chapter = resolved.value?.info;
 
-    // A saved copy keeps the pagination it was made with (ADR-0009), so what
-    // the server counts now is a fact about the copy: where the two disagree
-    // it is named out of date and offered for a refresh, rather than being
-    // refetched behind the reader's back or left to resume at the wrong page
-    // in silence. Asked here because this is where the two are in one place —
-    // the copy on the device, and the count only the server gives.
-    if (saved != null && info.value != null) {
-      _notePageTotal(info.value!.pages);
-    }
+    // Where the reader is, and everything that is worth to the server and to
+    // the copy, is the session's: it opens once, reports every page reached
+    // and puts a saved copy's count to the server's (ADR-0009).
+    _page = ref.watch(readingSessionProvider(_sessionKey));
 
     return Scaffold(
       // A book is read on the app's own night blue and pictures on black —
@@ -691,7 +550,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (chapter.content == ChapterContent.reflowable) {
       return _buildBookReader(context, chapter);
     }
-    _saveInitialProgress(chapter);
     _resolveLocalDir();
 
     // The whole chain, resolved for this chapter's series and its library,
@@ -785,8 +643,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         // passes them the other way round.
         if (!direction.isVerticalScroll)
           _TapZones(
-            onLeft: () => _step(rtl, chapter, spread),
-            onRight: () => _step(!rtl, chapter, spread),
+            onLeft: () => _session.step(forward: rtl, spread: spread),
+            onRight: () => _session.step(forward: !rtl, spread: spread),
             onMiddle: () => _showChromeAndBars(!_showChrome),
           )
         else
@@ -816,47 +674,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               cacheWidth: _thumbCacheWidth,
               thumbnail: true,
             ),
-            onSeek: (page) => _goTo(page, chapter),
+            onSeek: _session.goTo,
           ),
         ],
       ],
     );
-  }
-
-  /// Where in [page] a book is opened, or null for a page opened at its top.
-  BookAnchor? _anchorFor(int page) => _anchors[page];
-
-  /// The reader has come to rest [at] in [page]: where that page is opened
-  /// next time, and what travels to the server with its number.
-  ///
-  /// A page other than the one being read is not reading — the page beside
-  /// it is built before it is turned to, and a scroll settled there is not a
-  /// place the reader has come to.
-  void _onBookScrolled(int page, BookAnchor at, ChapterInfo chapter) {
-    if (page != _page) return;
-    _anchors[page] = at;
-    _saveProgress(page, chapter);
-  }
-
-  /// Opens a book where the reader left it, once.
-  ///
-  /// Asked of the server rather than taken from the route, because the two
-  /// ways in do not say the same thing: the series screen names a page and a
-  /// link names none, so a book opened from a link would otherwise open at
-  /// its first page while the place it was left at belongs to another one.
-  /// Where the server was not asked, or has nothing recorded, a book opens
-  /// at the page the route named and at the top of it.
-  void _openBook(ChapterInfo chapter) {
-    if (_opened) return;
-    _opened = true;
-    final progress = chapter.progress;
-    if (progress == null) return;
-    // A book read to its end is remembered at the page *past* it, which is
-    // not a page it has — Kavita marks a chapter read at `pagesRead >=
-    // pages` — so the last page is where it opens.
-    _page = progress.pageNum.clamp(0, chapter.pages - 1);
-    final anchor = BookAnchor.from(progress.bookScrollId);
-    if (anchor != null) _anchors[_page] = anchor;
   }
 
   /// A book opens with its chrome up — its title, the chapter and where in
@@ -935,9 +757,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// a book has. Only whether the pages read from the right is asked of the
   /// chain.
   Widget _buildBookReader(BuildContext context, ChapterInfo chapter) {
-    _openBook(chapter);
     _showBookChrome();
-    _saveInitialProgress(chapter);
     // The same chain a chapter of pictures is resolved through: the series'
     // own choice, then the library's, then what the work itself suggests —
     // which for a book is what the book declared of itself (#118).
@@ -1023,9 +843,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             language: _savedChapter?.language ?? chapter.language,
             pages: chapter.pages,
             page: _page,
-            anchorFor: _anchorFor,
+            anchorFor: _session.anchorFor,
             onPageChanged: (page) => _onPageChanged(page, chapter),
-            onScrolled: (page, at) => _onBookScrolled(page, at, chapter),
+            onScrolled: _session.settled,
           ),
         ),
         // Outside that `Directionality` on purpose: the zones are named for
@@ -1038,10 +858,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           // Anywhere on the page closes the panel first, edges included.
           onLeft: () => _bookPanelOpen
               ? setState(() => _bookPanelOpen = false)
-              : _step(rtl, chapter, null),
+              : _session.step(forward: rtl, spread: null),
           onRight: () => _bookPanelOpen
               ? setState(() => _bookPanelOpen = false)
-              : _step(!rtl, chapter, null),
+              : _session.step(forward: !rtl, spread: null),
           // A tap on the page closes the panel before it does anything else,
           // as a tap on a sheet's scrim closes the sheet.
           onMiddle: () => _bookPanelOpen
@@ -1080,7 +900,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             page: _page,
             pages: chapter.pages,
             tablet: tablet,
-            onSeek: (page) => _goTo(page, chapter),
+            onSeek: _session.goTo,
           ),
         ] else
           BookPageNumeral(counter: counter, tablet: tablet),
@@ -1121,7 +941,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   ) async {
     final page = await showBookContentsSheet(context, entries: contents);
     if (!mounted || page == null) return;
-    _goTo(page, chapter);
+    _session.goTo(page);
     _showChromeAndBars(false);
   }
 
