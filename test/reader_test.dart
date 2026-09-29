@@ -1042,16 +1042,6 @@ void main() {
     }, reason: 'a chapter opens at the width the preference says');
   });
 
-  testWidgets('a paged chapter opens where it was left too', (tester) async {
-    final posted = await _pumpReader(
-      tester,
-      initialPage: 20,
-      direction: ReadingDirection.leftToRight,
-    );
-
-    expect(posted, [20]);
-  });
-
   testWidgets('right-to-left mirrors the sides, as it mirrors the layout', (
     tester,
   ) async {

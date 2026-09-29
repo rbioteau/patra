@@ -156,18 +156,6 @@ void main() {
     ], reason: 'the left-hand side reads back');
   });
 
-  testWidgets('the last page reports the whole book', (tester) async {
-    final (_, posted) = await pumpBook(
-      tester,
-      initialPage: bookPages - 1,
-      progressPage: bookPages - 1,
-    );
-
-    // Kavita marks a chapter read at `pagesRead >= pages`, so the last page
-    // is posted as the total rather than as its own number.
-    expect(postedPages(posted), [bookPages]);
-  });
-
   testWidgets('the bar names the book', (tester) async {
     await pumpBook(tester);
 

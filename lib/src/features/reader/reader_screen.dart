@@ -683,7 +683,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   /// A book opens with its chrome up — its title, the chapter and where in
   /// the book the reader is — where a chapter of pictures opens on the page
-  /// alone. Once, like [_openBook]: after that the chrome is the reader's.
+  /// alone. Once: after that the chrome is the reader's.
   void _showBookChrome() {
     if (_bookChromeShown) return;
     _bookChromeShown = true;
@@ -696,7 +696,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// Records what a page of [chapter]'s book declared about the direction it
   /// is written in, against the work it belongs to (#118).
   ///
-  /// Deferred a frame for the reason [_saveInitialProgress] is: this is
+  /// Deferred a frame because it is
   /// reached from `build`, and writing to a provider while the tree is
   /// building is what Riverpod refuses outright. What it costs is a book
   /// drawn left-to-right for the frame its first page lands on — the same
@@ -707,12 +707,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// page still coming has said nothing at all, and the two must not look
   /// alike.
   ///
-  /// Recorded **once**, like [_openBook] and [_saveInitialProgress] before
-  /// it: this is reached from every build of the reader — a scroll settling,
-  /// a page turn, progress saved — and the notifier would answer the second
+  /// Recorded **once**: this is reached from every build of the reader — a
+  /// scroll settling, a page turn — and the notifier would answer the second
   /// one with the record it already holds anyway. What the field saves is a
-  /// callback per build, and it keeps the same shape the two effects beside
-  /// it have.
+  /// callback per build. (The progress effects that used to sit beside it the
+  /// same way are the reading session's now, out of any build.)
   void _recordDeclaredDirection(
     ChapterInfo chapter,
     ReadingDirection? declared,

@@ -55,7 +55,7 @@ The one secret a profile keeps: Kavita's non-expiring `opds` key, which signs a 
 _Avoid_: API key, token, password
 
 **Session**:
-The profile the app is currently reading as. Exactly one profile can be the active session, and every request the app makes is made as that one.
+The profile the app is currently reading as. Exactly one profile can be the active session, and every request the app makes is made as that one. Not a [[Reading session]], which is one chapter being read.
 _Avoid_: login
 
 **Switch**:
@@ -142,6 +142,10 @@ _Avoid_: category, type, tag (for a genre), library type
 **Reading progress**:
 How much has been read, counted in pages. It exists per chapter and per series, and the two answer different questions: finishing a volume leaves the next one untouched, so whether a *series* is under way is not what the chapter you would open next says. For [[Reflowable content]] the pages are **the server's**: it counts them, and it can count them again differently, so a copy kept on the device keeps the count it was made with — and there is a second half a page count cannot hold, which is *where in the page* the reader had come to: a page longer than the screen is not a page reopened at its top. That place is **a fraction of the room there is to scroll**, not a distance down a screen of them: the words move under another reading size and another window, and an offset saved at one size opens at another place entirely at another.
 _Avoid_: completion, status, read state
+
+**Reading session**:
+One [[Chapter]] as it is being read: the page on screen, the place within each page of [[Reflowable content]], and what the server and the [[Saved chapter]] have been told of it. It opens once — a chapter of pictures at the page it was opened from, a book where the server says — reports every page reached, the last one as the chapter's total, and writes into the saved copy before it posts. It lasts as long as the reader is open on that chapter, and while it lasts that chapter goes first in the download queue. Always the whole term: a [[Session]] alone is the profile the app is reading as.
+_Avoid_: session (that is the profile's), reading state, cursor
 
 **Continue**:
 The series read most recently that has been started and not finished — one series, not a set. It is what the home screen promotes above everything else, and the only thing that promotion is for is opening it again. It is picked **out of** [[On deck]] rather than fetched: one request answers both, so the card and the shelf beneath it can never disagree about what is being read.
