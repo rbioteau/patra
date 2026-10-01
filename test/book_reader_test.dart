@@ -750,7 +750,22 @@ void main() {
 
     /// Lets the files a page is written into land: real I/O, which a test's
     /// clock does not move.
-    Future<void> settle(WidgetTester tester) => settleBookFiles(tester);
+    ///
+    /// And then waits for the engine to have been **handed** the page, which
+    /// is a step later than the widget appearing: the document is written to
+    /// a file before `loadFile` is called with it, and on a CI runner that
+    /// write could outlast the harness's last few frames — `pageShowing`
+    /// answered null in a different test on every run. A page never handed
+    /// over (one the server refused) costs the wait and nothing else.
+    Future<void> settle(WidgetTester tester) async {
+      await settleBookFiles(tester);
+      for (var i = 0; i < 100 && engine.pages.lastOrNull?.file == null; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
 
     testWidgets('draws the page it was handed, made inert, from a file', (
       tester,
