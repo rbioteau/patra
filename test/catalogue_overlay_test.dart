@@ -539,6 +539,12 @@ void main() {
         isNotNull,
         reason: 'the card must not vanish with the volumes sitting on disk',
       );
+      // And it has to arrive as data, not merely carry some: Riverpod keeps
+      // the old value *inside* the refresh's error, and both the series
+      // screen's `switch` and the card's `hasError` read that as a failure —
+      // a retry button over a list the device is holding.
+      expect(subscription.read(), isA<AsyncData<List<Volume>>>());
+      expect(subscription.read().hasError, isFalse);
     });
 
     test('a series the catalogue has never held keeps its failure', () async {

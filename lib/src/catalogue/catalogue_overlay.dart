@@ -242,13 +242,24 @@ typedef Overlaid<T> = ({AsyncValue<T> value, bool fromCatalogue});
 /// - **`hasValue`, not `isLoading`, is what "live wins" asks.** A refresh in
 ///   flight carries the answer it is refreshing, and falling through to the
 ///   catalogue there would swap the list under the person pulling it.
+/// - **A refresh that failed is answered as data.** Riverpod keeps the value
+///   it was refreshing *inside* the error, so `hasValue` holds — and handed on
+///   as that error, every screen reading it saw a failure: the series screen
+///   switches on `AsyncData`/`AsyncError` and drew its retry button over the
+///   volumes it was holding, and Home's card collapses on `hasError`. One pull
+///   with the connection gone was enough. The value it carries is the one
+///   this session already drew, and the app bar's cloud already says the
+///   server is not answering; the pull itself still sees the failure, since
+///   it awaits the fetch and not this.
 /// - **A catalogue still being read counts as loading**, never as an absence.
 ///   Otherwise a cold offline start draws its error state and replaces it
 ///   with the shelves one frame later. This is a fifth branch the issue's
 ///   four did not name, and it is deliberate: the alternative is not a
 ///   simpler rule but a visible flash.
 AsyncValue<T> overlaid<T>(AsyncValue<T> live, AsyncValue<T?> stored) {
-  if (live.hasValue) return live;
+  if (live.hasValue) {
+    return live.hasError ? AsyncValue.data(live.requireValue) : live;
+  }
   final held = stored.value;
   if (held != null) return AsyncValue.data(held);
   if (stored.isLoading) return AsyncValue<T>.loading();
