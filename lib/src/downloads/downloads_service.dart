@@ -397,8 +397,22 @@ typedef _QueueSnapshot = ({
 /// `meta.json` is written last, so a chapter directory without one is a
 /// partial download and gets cleaned up on the next scan.
 class DownloadsService {
-  DownloadsService({Directory? root, required this.profileId})
-    : _rootOverride = root;
+  DownloadsService({
+    Directory? root,
+    required this.profileId,
+    this.retryDelays = defaultRetryDelays,
+  }) : _rootOverride = root;
+
+  /// How long a page waits before each further try, after the server or the
+  /// network failed it in a way that may pass: one entry per try, so their
+  /// count is how many more a page gets before its copy stops (#145).
+  final List<Duration> retryDelays;
+
+  static const defaultRetryDelays = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+  ];
 
   /// Whose store this is — [Profile.id], the only thing anything keys a
   /// profile on. Fixed for the life of the service, because the container it
@@ -724,10 +738,13 @@ class DownloadsService {
           await _runPageWorkers(pages, (page) async {
             final file = stored[page];
             if (_isCompletePage(file)) return;
-            final data = await client.readerImageBytes(
-              chapter.chapterId,
-              page,
-              cancelToken: cancelToken,
+            final data = await _retrying(
+              () => client.readerImageBytes(
+                chapter.chapterId,
+                page,
+                cancelToken: cancelToken,
+              ),
+              cancelToken,
             );
             await _writePage(file, data);
             bytes += data.length;
@@ -739,9 +756,12 @@ class DownloadsService {
           // Kavita may repaginate the book between attempts (ADR-0009).
           pages =
               knownTotalPages ??
-              (await client.bookInfo(
-                chapter.chapterId,
-                cancelToken: cancelToken,
+              (await _retrying(
+                () => client.bookInfo(
+                  chapter.chapterId,
+                  cancelToken: cancelToken,
+                ),
+                cancelToken,
               )).pages;
           if (knownTotalPages == null) await onProgress(0, pages);
           final stored = <File>[];
@@ -881,6 +901,47 @@ class DownloadsService {
     await temp.rename(file.path);
   }
 
+  /// Makes [request], and makes it again after each of [retryDelays] while
+  /// it fails in a way that may pass. One request failing used to stop the
+  /// whole copy, and a dozen are in flight at once (#145).
+  ///
+  /// A pause or a cancel is never tried again, and is not waited out either:
+  /// a copy paused during a backoff stops then, not when the wait is over.
+  Future<T> _retrying<T>(
+    Future<T> Function() request,
+    CancelToken? cancelToken,
+  ) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await request();
+      } on DioException catch (error) {
+        if (attempt >= retryDelays.length || !_mayPass(error)) rethrow;
+        await Future.any([
+          Future<void>.delayed(retryDelays[attempt]),
+          ?cancelToken?.whenCancel,
+        ]);
+        if (cancelToken?.cancelError case final cancelled?) throw cancelled;
+      }
+    }
+  }
+
+  /// Whether trying again can be answered differently: the connection, a
+  /// timeout, or the server saying it is struggling. A server saying the
+  /// thing is not there, or not this account's, says the same thing twice.
+  static bool _mayPass(DioException error) => switch (error.type) {
+    DioExceptionType.connectionError ||
+    DioExceptionType.connectionTimeout ||
+    DioExceptionType.sendTimeout ||
+    DioExceptionType.receiveTimeout => true,
+    // A socket the OS closed while the app was away surfaces here.
+    DioExceptionType.unknown => error.error is IOException,
+    DioExceptionType.badResponse => switch (error.response?.statusCode) {
+      final status? => status >= 500 || status == 429,
+      null => false,
+    },
+    _ => false,
+  };
+
   static Future<void> _runPageWorkers(
     int pages,
     Future<void> Function(int page) work,
@@ -975,10 +1036,9 @@ class DownloadsService {
     required Map<String, Future<void>> carried,
     CancelToken? cancelToken,
   }) async {
-    final html = await client.bookPage(
-      chapterId,
-      page,
-      cancelToken: cancelToken,
+    final html = await _retrying(
+      () => client.bookPage(chapterId, page, cancelToken: cancelToken),
+      cancelToken,
     );
 
     // The book's face is the same on every page; parse it on the first page

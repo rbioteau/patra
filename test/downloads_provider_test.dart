@@ -32,6 +32,15 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   int maxActive = 0;
   int active = 0;
   int? failOnPage;
+
+  /// What a page in [failOnPage] is answered with — a server error unless a
+  /// test says otherwise.
+  int failStatus = 500;
+
+  /// How many more times each page is answered with a dropped connection
+  /// before it is served: the stale socket, or the server that went away for
+  /// a moment.
+  final dropPage = <int, int>{};
   final requestedPages = <int>[];
   final activeChapterRequests = <int, int>{};
   int maxActiveChapters = 0;
@@ -89,7 +98,14 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
     final page = int.parse('${options.queryParameters['page']}');
     requestedPages.add(page);
     if (page == failOnPage) {
-      return ResponseBody.fromBytes(const [], 500);
+      return ResponseBody.fromBytes(const [], failStatus);
+    }
+    if ((dropPage[page] ?? 0) > 0) {
+      dropPage[page] = dropPage[page]! - 1;
+      throw DioException.connectionError(
+        requestOptions: options,
+        reason: 'connection reset by peer',
+      );
     }
     active++;
     final activeForChapter = activeChapterRequests[chapterId] ?? 0;
@@ -201,6 +217,10 @@ SignIn _signInAs(Profile profile) =>
       apiKey: profile.apiKey,
     );
 
+/// A page tried again at once rather than after a backoff: what is being
+/// tested is that it is tried again, and a test does not wait out the seconds.
+const _noWait = [Duration.zero, Duration.zero, Duration.zero];
+
 /// Holds the next queue write it is asked for until the test lets it go.
 ///
 /// That write is awaited inside a page worker — a page landing reports its
@@ -209,7 +229,8 @@ SignIn _signInAs(Profile profile) =>
 /// outcome. That is an isolate iOS froze with a write still pending, which
 /// thaws only once the app is back in the foreground (#145).
 class _HeldWriteService extends DownloadsService {
-  _HeldWriteService({required super.root, required super.profileId});
+  _HeldWriteService({required super.root, required super.profileId})
+    : super(retryDelays: _noWait);
 
   Completer<void>? _hold;
   bool holding = false;
@@ -252,7 +273,12 @@ ProviderContainer _downloadsContainer(
     overrides: [
       kavitaClientProvider.overrideWithValue(client),
       downloadsServiceProvider.overrideWithValue(
-        service ?? DownloadsService(root: root, profileId: profileId),
+        service ??
+            DownloadsService(
+              root: root,
+              profileId: profileId,
+              retryDelays: _noWait,
+            ),
       ),
       // A session, for the tests about a profile being left and entered
       // again: everything a real one needs to be written down is the
@@ -699,7 +725,10 @@ void main() {
   });
 
   test('retry fetches only pages the failed partial is missing', () async {
-    adapter.failOnPage = 1;
+    // Refused outright, so the attempt stops on the page's first try.
+    adapter
+      ..failOnPage = 1
+      ..failStatus = 404;
     await container.read(downloadsProvider.notifier).save(_chapter);
 
     final service = DownloadsService(root: root, profileId: _profileId);
@@ -728,6 +757,39 @@ void main() {
     expect(adapter.requestedPages, [1]);
     expect((await service.pageFile(12, 0)).lastModifiedSync(), firstWrite);
     expect(restarted.read(downloadsProvider).value!.saved, contains(12));
+  });
+
+  test('a page the connection dropped is tried again, and the copy is '
+      'saved', () async {
+    adapter.dropPage[1] = 2;
+
+    await container.read(downloadsProvider.notifier).save(_chapter);
+
+    final state = container.read(downloadsProvider).value!;
+    expect(state.failed, isEmpty);
+    expect(state.saved, contains(12));
+    expect(adapter.requestedPages.where((page) => page == 1), hasLength(3));
+  });
+
+  test('a page the server keeps failing stops the copy after three more '
+      'tries', () async {
+    adapter.failOnPage = 1;
+
+    await container.read(downloadsProvider.notifier).save(_chapter);
+
+    expect(container.read(downloadsProvider).value!.failed, contains(12));
+    expect(adapter.requestedPages.where((page) => page == 1), hasLength(4));
+  });
+
+  test('a page the server says is not there is not asked for again', () async {
+    adapter
+      ..failOnPage = 1
+      ..failStatus = 404;
+
+    await container.read(downloadsProvider.notifier).save(_chapter);
+
+    expect(container.read(downloadsProvider).value!.failed, contains(12));
+    expect(adapter.requestedPages.where((page) => page == 1), hasLength(1));
   });
 
   test('a failed download is still failed after a restart', () async {
