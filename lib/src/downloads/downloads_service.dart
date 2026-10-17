@@ -932,6 +932,11 @@ class DownloadsService {
     CancelToken? cancelToken,
   ) async {
     for (var attempt = 0; ; attempt++) {
+      // Not sent at all once the copy is paused: Dio fails a request made
+      // with a cancelled token at once, but its pipeline goes on and still
+      // reaches the server after the attempt has ended. A pause landing
+      // between the first page and the rest is exactly that request.
+      if (cancelToken?.cancelError case final cancelled?) throw cancelled;
       try {
         return await request();
       } on DioException catch (error) {
