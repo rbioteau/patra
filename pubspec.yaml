@@ -10,7 +10,7 @@ environment:
   sdk: ^3.13.2
 
 dependencies:
-  cached_network_image: ^4.0.0
+  cached_network_image: ^4.0.4
   connectivity_plus: ^7.3.2
   crypto: ^3.0.6
   device_info_plus: ^13.3.0
