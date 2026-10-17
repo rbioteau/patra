@@ -282,6 +282,10 @@ enum DownloadFailureCause {
           DioExceptionType.connectionTimeout,
     ) =>
       unreachable,
+    // A socket the OS closed while the app was away, which a page is tried
+    // again for like any other connection that went (`_mayPass`).
+    DioException(type: DioExceptionType.unknown, error: IOException()) =>
+      unreachable,
     DioException(type: DioExceptionType.badResponse) => notProvided,
     // ENOSPC, on every platform the app runs on.
     FileSystemException(osError: OSError(errorCode: 28)) => noRoom,

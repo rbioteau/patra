@@ -268,9 +268,7 @@ class _HeldWriteService extends DownloadsService {
   }
 
   @override
-  Future<void> writeQueueAsynchronously(
-    Map<int, DownloadQueueRecord> records,
-  ) {
+  Future<void> writeQueueAsynchronously(Map<int, DownloadQueueRecord> records) {
     final arrived = {
       for (final MapEntry(:key, :value) in records.entries)
         if (value.completedPages == _at && !_arrived.contains(key)) key,

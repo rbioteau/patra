@@ -769,11 +769,6 @@ void main() {
     expect((await service.scan()).keys, [42]);
   });
 
-  // A book is stored the way ADR-0009 says it must be: the pages the server
-  // rendered and the total it was made with — because with no server there is
-  // nothing left to lay the words out. And a copy is a directory (#129): each
-  // page as the server wrote it, beside the pictures it names, so a stored
-  // page is the same page a streamed one is.
   test('a device out of room is a failure that says so', () {
     // ENOSPC: what the OS answers a write with when the disk is full, which
     // a test cannot cause and a reader can do nothing about but make room.
@@ -793,6 +788,23 @@ void main() {
     );
   });
 
+  test('a socket closed under a page is a server out of reach', () {
+    // What a connection the OS closed while the app was away surfaces as: a
+    // page is tried again for it, so when the tries run out it has to be
+    // named as what it is rather than as no cause at all.
+    final closed = DioException(
+      requestOptions: RequestOptions(path: '/api/Reader/image'),
+      error: const SocketException('Connection reset by peer'),
+    );
+
+    expect(DownloadFailureCause.of(closed), DownloadFailureCause.unreachable);
+  });
+
+  // A book is stored the way ADR-0009 says it must be: the pages the server
+  // rendered and the total it was made with — because with no server there is
+  // nothing left to lay the words out. And a copy is a directory (#129): each
+  // page as the server wrote it, beside the pictures it names, so a stored
+  // page is the same page a streamed one is.
   group('saving a book', () {
     test(
       'the copy is the pages the server rendered, beside their pictures',
