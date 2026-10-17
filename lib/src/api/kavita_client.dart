@@ -520,10 +520,12 @@ class KavitaClient {
     int chapterId,
     int page, {
     CancelToken? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     final res = await _dio.get<dynamic>(
       '/api/Book/$chapterId/book-page',
       queryParameters: {'page': page},
+      options: Options(receiveTimeout: receiveTimeout),
       cancelToken: cancelToken,
     );
     final body = res.data;
@@ -707,10 +709,14 @@ class KavitaClient {
   }
 
   /// Downloads one reader page as bytes, for offline storage.
+  /// [receiveTimeout] stands in for the client's own where the caller knows
+  /// the answer can be slow to start: the first page of a chapter waits for
+  /// the server to unpack or render all of it.
   Future<List<int>> readerImageBytes(
     int chapterId,
     int page, {
     CancelToken? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     final res = await _dio.get<List<int>>(
       '/api/Reader/image',
@@ -718,7 +724,10 @@ class KavitaClient {
       // parameter, so omitting it answers 400 rather than falling back to the
       // bearer token.
       queryParameters: _readerImageQuery(chapterId, page),
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: receiveTimeout,
+      ),
       cancelToken: cancelToken,
     );
     return res.data!;
