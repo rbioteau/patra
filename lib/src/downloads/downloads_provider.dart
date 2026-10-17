@@ -731,12 +731,23 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     _records[id] = queued.copyWith(status: DownloadQueueStatus.downloading);
     await _persist();
     _writeState();
-    // Whether this attempt is still the chapter's own. One the app paused can
-    // end only after the app is back and has sent the copy on again — iOS
-    // freezes the isolate with a page or queue write still pending — and by
-    // then a newer attempt owns the record, the token and the waiter. What
-    // the old one has to say about the copy is no longer true (#145).
-    bool ours() => identical(_cancelTokens[id], cancelToken);
+    // An attempt the app paused can end only after the app is back and has
+    // sent the copy on again — iOS freezes the isolate with a page or queue
+    // write still pending — and what it has to say then is no longer true
+    // (#145). Two questions, because they part company: whether it still
+    // holds the chapter's slot, which only a newer attempt takes from it, and
+    // whether it still speaks for the copy, which it stops doing as soon as
+    // the copy has been sent on, even while no slot is free for the attempt
+    // that will carry it.
+    bool holdsChapter() => identical(_cancelTokens[id], cancelToken);
+    bool speaksForCopy() =>
+        holdsChapter() &&
+        switch (_records[id]?.status) {
+          DownloadQueueStatus.downloading ||
+          DownloadQueueStatus.paused ||
+          DownloadQueueStatus.pausedByUser => true,
+          _ => false,
+        };
 
     try {
       final saved = await _service.download(
@@ -744,7 +755,9 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         chapter: queued.request,
         onProgress: (completedPages, totalPages) async {
           final current = _records[id];
-          if (!ours() || current == null || !current.isInFlight) return;
+          if (!speaksForCopy() || current == null || !current.isInFlight) {
+            return;
+          }
           _records[id] = current.copyWith(
             completedPages: completedPages,
             totalPages: totalPages,
@@ -755,6 +768,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         knownTotalPages: queued.totalPages > 0 ? queued.totalPages : null,
         cancelToken: cancelToken,
       );
+      if (!speaksForCopy()) return;
       _records[id] = DownloadQueueRecord.completed(
         saved,
         priority: queued.priority,
@@ -763,7 +777,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       await _persist();
       _writeState();
     } on Object catch (error) {
-      if (!ours()) return;
+      if (!speaksForCopy()) return;
       final current = _records[id] ?? queued;
       final cancelled =
           error is DioException && error.type == DioExceptionType.cancel;
@@ -799,7 +813,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       await _persist();
       _writeState();
     } finally {
-      if (ours()) {
+      if (holdsChapter()) {
         _cancelTokens.remove(id);
         _userCancelled.remove(id);
         _complete(id);

@@ -237,9 +237,9 @@ SignIn _signInAs(Profile profile) =>
 /// tested is that it is tried again, and a test does not wait out the seconds.
 const _noWait = [Duration.zero, Duration.zero, Duration.zero];
 
-/// Holds a queue write until the test lets it go.
+/// Holds queue writes until the test lets them go.
 ///
-/// That write is awaited inside a page worker — a page landing reports its
+/// A held write is awaited inside a page worker — a page landing reports its
 /// progress — and the copy's attempt cannot end until every worker has, so
 /// while it is held the attempt the app has just paused cannot reach its own
 /// outcome. That is an isolate iOS froze with a write still pending, which
@@ -248,36 +248,40 @@ class _HeldWriteService extends DownloadsService {
   _HeldWriteService({required super.root, required super.profileId})
     : super(retryDelays: _noWait);
 
-  bool Function(Map<int, DownloadQueueRecord> records)? _when;
+  int? _at;
+  final _arrived = <int>{};
   final _hold = Completer<void>();
-  final _written = Completer<void>();
-  bool holding = false;
+  final _held = <Future<void>>[];
 
-  /// Completes once the held write has been let go and has reached the disk.
-  Future<void> get written => _written.future;
+  /// How many writes are being held.
+  int get holding => _held.length;
 
-  /// Holds the first queue write whose records satisfy [when]; complete the
-  /// returned completer to let it go.
-  Completer<void> holdWriteWhere(
-    bool Function(Map<int, DownloadQueueRecord> records) when,
-  ) {
-    _when = when;
+  /// Completes once every held write has been let go and has reached the
+  /// disk.
+  Future<void> get written => Future.wait(_held);
+
+  /// Holds each write in which a chapter has just reached [completedPages];
+  /// complete the returned completer to let them all go.
+  Completer<void> holdWritesAt(int completedPages) {
+    _at = completedPages;
     return _hold;
   }
 
   @override
   Future<void> writeQueueAsynchronously(
     Map<int, DownloadQueueRecord> records,
-  ) async {
-    if (_when case final holds? when holds(records)) {
-      _when = null;
-      holding = true;
-      await _hold.future;
-      await super.writeQueueAsynchronously(records);
-      _written.complete();
-      return;
-    }
-    return super.writeQueueAsynchronously(records);
+  ) {
+    final arrived = {
+      for (final MapEntry(:key, :value) in records.entries)
+        if (value.completedPages == _at && !_arrived.contains(key)) key,
+    };
+    if (arrived.isEmpty) return super.writeQueueAsynchronously(records);
+    _arrived.addAll(arrived);
+    final write = _hold.future.then(
+      (_) => super.writeQueueAsynchronously(records),
+    );
+    _held.add(write);
+    return write;
   }
 }
 
@@ -1272,11 +1276,9 @@ void main() {
     adapter
       ..gate = Completer<void>().future
       ..holdPages = {2};
-    final write = service.holdWriteWhere(
-      (records) => records[12]?.completedPages == 2,
-    );
+    final write = service.holdWritesAt(2);
     final saving = container.read(downloadsProvider.notifier).save(_chapter);
-    await _waitFor(() => service.holding);
+    await _waitFor(() => service.holding == 1);
     await _waitFor(() => adapter.activeChapterRequests[12] == 1);
     return (write: write, saving: saving);
   }
@@ -1331,6 +1333,55 @@ void main() {
     await _waitFor(
       () => mine.read(downloadsProvider).value?.saved.containsKey(12) ?? false,
     );
+  });
+
+  test('copies the app paused together all go on when it comes back, '
+      'whichever attempt ends first', () async {
+    // The issue's own scenario: several on their way, the app left, and
+    // every attempt still held when it comes back — so no slot is free for
+    // the copies it sends on, and each old attempt finds its copy waiting
+    // its turn rather than paused.
+    final service = _HeldWriteService(root: root, profileId: _profileId);
+    final mine = _downloadsContainer(
+      root,
+      adapter,
+      session: _profile,
+      service: service,
+    );
+    addTearDown(mine.dispose);
+    await mine.read(downloadsProvider.future);
+    const ids = [12, 13, 14];
+    adapter
+      ..gate = Completer<void>().future
+      ..holdPages = {2};
+    final writes = service.holdWritesAt(2);
+    final saving = [
+      for (final id in ids)
+        mine.read(downloadsProvider.notifier).save(_chapterWithId(id)),
+    ];
+    await _waitFor(() => service.holding == ids.length);
+    await _waitFor(() => adapter.activeChapterRequests.length == ids.length);
+
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+    adapter
+      ..gate = null
+      ..holdPages = null;
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
+    await pumpEventQueue();
+    writes.complete();
+    await service.written;
+    await Future.wait(saving);
+    await _waitFor(() {
+      final state = mine.read(downloadsProvider).value!;
+      return state.interrupted.isNotEmpty ||
+          state.failed.isNotEmpty ||
+          ids.every(state.saved.containsKey);
+    });
+
+    final state = mine.read(downloadsProvider).value!;
+    expect(state.interrupted, isEmpty, reason: 'nothing died; the app paused');
+    expect(state.failed, isEmpty);
+    expect(state.saved.keys, containsAll(ids));
   });
 
   test('an attempt the app paused never rewords the copy that finished '
