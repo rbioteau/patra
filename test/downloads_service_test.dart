@@ -334,7 +334,13 @@ void main() {
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('patra-downloads-test');
-    service = DownloadsService(root: root, profileId: _romain);
+    // No second tries: these tests are about what a failed attempt leaves
+    // behind, and a page tried again is the provider's tests' subject.
+    service = DownloadsService(
+      root: root,
+      profileId: _romain,
+      retryDelays: const [],
+    );
   });
 
   tearDown(() {
