@@ -225,6 +225,22 @@ _Avoid_: word wrap (that is where a line ends, not where a word may be cut), sof
 A chapter whose pages are stored on the device because a profile asked for them. Chosen deliberately, never evicted, and readable with no server at all. It belongs to the profile that saved it, so two people sharing a device do not share what each has saved. This is what the Downloads tab counts. For [[Reflowable content]] what is stored is the pages **as the server rendered them**, so a copy is a pagination frozen on the day it was made. Two things follow from that freeze: a copy is where progress made with no server waits to be sent, and a server that has recounted the book since leaves it **out of date** — named, offered for another go, and still readable.
 _Avoid_: download (that is the act of fetching one), cached chapter, offline chapter
 
+**Download**:
+The act of fetching a [[Saved chapter]]'s pages for a profile: asked for, waiting its turn, being prepared by the server — which unpacks or renders a whole chapter before it hands over its first page, and can take a minute doing it — then on its way, and ending either as a copy on the device or as one of three stops — a [[Pause]], an [[Interruption]] or a [[Failure]]. Several are on their way at once, and each fetches several pages at once. A stop keeps every page already fetched, so going on again fetches only what is missing; what tells the three apart is **who stopped it**, because that decides who may start it again. A download the reader takes back is neither a copy nor a stop: it is gone, with its pages.
+_Avoid_: saved chapter (that is what a download produces), job, task
+
+**Pause**:
+A [[Download]] stopped deliberately. Either the **app's** — it left the foreground, or the reader left their profile — which goes on by itself when the app or the profile comes back, or the **reader's** own, which goes on only when the reader says so. Both are one word to the reader, because the fact is the same and only the resumption differs. A stop the app's pause caused is a pause whatever form it arrives in; it never turns into an [[Interruption]] or a [[Failure]] on its way.
+_Avoid_: interruption, cancellation, suspension
+
+**Interruption**:
+A [[Download]] the app stopped without saying so — it was closed or killed with the download on its way. Nobody chose it, so it is named as needing attention, and only the reader's word starts it again. A pause becomes one only by the reader's decision: declining to go on with what a launch found paused.
+_Avoid_: pause, crash, failure
+
+**Failure**:
+A [[Download]] the server or the network refused, after the app has tried each page again a few times on its own. Nobody chose it, so it is named as needing attention, and only the reader's word starts it again. A server that cannot be reached is a failure, not a pause: [[Offline]] says nothing about who stopped it. A failure keeps its **cause**, said in words the reader can act on — the server too slow, out of reach, unable to provide it, or the device out of room — because a stop that says only that it stopped cannot tell anyone whether trying again is worth it.
+_Avoid_: error, interruption
+
 **Image cache**:
 The covers and pages kept on disk merely because they were looked at online. It fills on its own, is capped, and the OS may reclaim it. It is not the offline library and must never be counted as one. It belongs to the **device** and is shared by every profile on it — one budget, and one copy of a cover however many people look at that series.
 _Avoid_: downloads, offline storage
