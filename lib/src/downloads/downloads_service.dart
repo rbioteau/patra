@@ -380,6 +380,16 @@ typedef DownloadProgressCallback = FutureOr<void> Function(
 /// chapter queue so one long chapter cannot flood a Kavita server.
 const maxConcurrentPageDownloads = 4;
 
+/// How long the first page a copy is missing may take to start arriving.
+///
+/// Kavita unpacks an archive, or renders a PDF, into its cache before it hands
+/// over the first page of a chapter: half a minute for a PDF on its own, and
+/// three times that with two other chapters being prepared beside it, where
+/// every later page takes a fraction of a second. So that page is asked for
+/// alone and given this long, and the rest keep the client's own timeout, which
+/// is what still tells a stalled server from a busy one (#145).
+const firstPageReceiveTimeout = Duration(minutes: 2);
+
 typedef _QueueSnapshot = ({
   Map<int, DownloadQueueRecord> records,
   bool authoritative,
@@ -735,22 +745,27 @@ class DownloadsService {
             }
           }
           if (completed > 0) await onProgress(completed, pages);
-          await _runPageWorkers(pages, (page) async {
-            final file = stored[page];
-            if (_isCompletePage(file)) return;
-            final data = await _retrying(
-              () => client.readerImageBytes(
-                chapter.chapterId,
-                page,
-                cancelToken: cancelToken,
-              ),
-              cancelToken,
-            );
-            await _writePage(file, data);
-            bytes += data.length;
-            completed++;
-            await onProgress(completed, pages);
-          });
+          await _runPageWorkers(
+            pages,
+            (page) => _isCompletePage(stored[page]),
+            (page, receiveTimeout) async {
+              final file = stored[page];
+              if (_isCompletePage(file)) return;
+              final data = await _retrying(
+                () => client.readerImageBytes(
+                  chapter.chapterId,
+                  page,
+                  cancelToken: cancelToken,
+                  receiveTimeout: receiveTimeout,
+                ),
+                cancelToken,
+              );
+              await _writePage(file, data);
+              bytes += data.length;
+              completed++;
+              await onProgress(completed, pages);
+            },
+          );
         case ChapterContent.reflowable:
           // Once a rendered page exists, its page count is part of the copy:
           // Kavita may repaginate the book between attempts (ADR-0009).
@@ -777,23 +792,28 @@ class DownloadsService {
           // A picture named on several newly fetched pages is fetched once,
           // including while those pages are being fetched concurrently.
           final carried = <String, Future<void>>{};
-          await _runPageWorkers(pages, (page) async {
-            if (_isCompletePage(stored[page])) return;
-            // Awaited before it is added: `bytes += await …` reads the total
-            // before the wait, and pages fetched together would each add to
-            // the total as it was when they started.
-            final size = await _storeBookPage(
-              staging,
-              client: client,
-              chapterId: chapter.chapterId,
-              page: page,
-              cancelToken: cancelToken,
-              carried: carried,
-            );
-            bytes += size;
-            completed++;
-            await onProgress(completed, pages);
-          });
+          await _runPageWorkers(
+            pages,
+            (page) => _isCompletePage(stored[page]),
+            (page, receiveTimeout) async {
+              if (_isCompletePage(stored[page])) return;
+              // Awaited before it is added: `bytes += await …` reads the total
+              // before the wait, and pages fetched together would each add to
+              // the total as it was when they started.
+              final size = await _storeBookPage(
+                staging,
+                client: client,
+                chapterId: chapter.chapterId,
+                page: page,
+                cancelToken: cancelToken,
+                receiveTimeout: receiveTimeout,
+                carried: carried,
+              );
+              bytes += size;
+              completed++;
+              await onProgress(completed, pages);
+            },
+          );
           // The cover the chapter is drawn with, which a book's pages do
           // not give the row it is listed in. Refused, the row keeps its
           // stand-in and the copy is still a copy.
@@ -942,10 +962,19 @@ class DownloadsService {
     _ => false,
   };
 
+  /// Fetches every page through [work], the first one [isComplete] says is
+  /// missing on its own and with [firstPageReceiveTimeout], then the rest
+  /// [maxConcurrentPageDownloads] at a time with the client's own timeout.
   static Future<void> _runPageWorkers(
     int pages,
-    Future<void> Function(int page) work,
+    bool Function(int page) isComplete,
+    Future<void> Function(int page, Duration? receiveTimeout) work,
   ) async {
+    for (var page = 0; page < pages; page++) {
+      if (isComplete(page)) continue;
+      await work(page, firstPageReceiveTimeout);
+      break;
+    }
     var nextPage = 0;
     var stopped = false;
     Object? firstError;
@@ -956,7 +985,7 @@ class DownloadsService {
         final page = nextPage++;
         if (page >= pages) return;
         try {
-          await work(page);
+          await work(page, null);
         } on Object catch (error, stack) {
           firstError ??= error;
           firstStack ??= stack;
@@ -1035,9 +1064,15 @@ class DownloadsService {
     required int page,
     required Map<String, Future<void>> carried,
     CancelToken? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     final html = await _retrying(
-      () => client.bookPage(chapterId, page, cancelToken: cancelToken),
+      () => client.bookPage(
+        chapterId,
+        page,
+        cancelToken: cancelToken,
+        receiveTimeout: receiveTimeout,
+      ),
       cancelToken,
     );
 

@@ -41,6 +41,9 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   /// before it is served: the stale socket, or the server that went away for
   /// a moment.
   final dropPage = <int, int>{};
+
+  /// How long each page request was allowed to wait for its answer, by page.
+  final receiveTimeouts = <int, Duration?>{};
   final requestedPages = <int>[];
   final activeChapterRequests = <int, int>{};
   int maxActiveChapters = 0;
@@ -97,6 +100,7 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
     final chapterId = int.parse('${options.queryParameters['chapterId']}');
     final page = int.parse('${options.queryParameters['page']}');
     requestedPages.add(page);
+    receiveTimeouts[page] = options.receiveTimeout;
     if (page == failOnPage) {
       return ResponseBody.fromBytes(const [], failStatus);
     }
@@ -109,7 +113,9 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
     }
     active++;
     final activeForChapter = activeChapterRequests[chapterId] ?? 0;
-    if (activeForChapter == 0) startedChapters.add(chapterId);
+    // Once per chapter: its first page is asked for alone, so the count
+    // passes through nought between that page and the rest.
+    if (!startedChapters.contains(chapterId)) startedChapters.add(chapterId);
     activeChapterRequests[chapterId] = activeForChapter + 1;
     if (activeChapterRequests.length > maxActiveChapters) {
       maxActiveChapters = activeChapterRequests.length;
@@ -221,7 +227,7 @@ SignIn _signInAs(Profile profile) =>
 /// tested is that it is tried again, and a test does not wait out the seconds.
 const _noWait = [Duration.zero, Duration.zero, Duration.zero];
 
-/// Holds the next queue write it is asked for until the test lets it go.
+/// Holds a queue write until the test lets it go.
 ///
 /// That write is awaited inside a page worker — a page landing reports its
 /// progress — and the copy's attempt cannot end until every worker has, so
@@ -232,20 +238,27 @@ class _HeldWriteService extends DownloadsService {
   _HeldWriteService({required super.root, required super.profileId})
     : super(retryDelays: _noWait);
 
-  Completer<void>? _hold;
+  bool Function(Map<int, DownloadQueueRecord> records)? _when;
+  final _hold = Completer<void>();
   bool holding = false;
 
-  /// Holds the next queue write; complete the returned completer to let it go.
-  Completer<void> holdNextWrite() => _hold = Completer<void>();
+  /// Holds the first queue write whose records satisfy [when]; complete the
+  /// returned completer to let it go.
+  Completer<void> holdWriteWhere(
+    bool Function(Map<int, DownloadQueueRecord> records) when,
+  ) {
+    _when = when;
+    return _hold;
+  }
 
   @override
   Future<void> writeQueueAsynchronously(
     Map<int, DownloadQueueRecord> records,
   ) async {
-    if (_hold case final hold?) {
-      _hold = null;
+    if (_when case final holds? when holds(records)) {
+      _when = null;
       holding = true;
-      await hold.future;
+      await _hold.future;
     }
     return super.writeQueueAsynchronously(records);
   }
@@ -434,7 +447,9 @@ void main() {
 
   test('pages of one chapter are fetched concurrently', () async {
     final gate = Completer<void>();
-    adapter.gate = gate.future;
+    adapter
+      ..gate = gate.future
+      ..holdPages = {1, 2};
 
     final saving = container.read(downloadsProvider.notifier).save(_chapter);
     await _waitFor(() => adapter.maxActive > 1);
@@ -757,6 +772,31 @@ void main() {
     expect(adapter.requestedPages, [1]);
     expect((await service.pageFile(12, 0)).lastModifiedSync(), firstWrite);
     expect(restarted.read(downloadsProvider).value!.saved, contains(12));
+  });
+
+  test('a chapter\'s first page is asked for alone, and given the time the '
+      'server takes to prepare it', () async {
+    // Kavita unpacks an archive, or renders a PDF, before it hands over the
+    // first page of a chapter — half a minute alone, three times that with
+    // two others being prepared beside it.
+    final first = Completer<void>();
+    adapter
+      ..gate = first.future
+      ..holdPages = {0};
+    final saving = container.read(downloadsProvider.notifier).save(_chapter);
+    await _waitFor(() => adapter.requestedPages.isNotEmpty);
+    await pumpEventQueue();
+
+    expect(adapter.requestedPages, [0], reason: 'the others wait for it');
+    first.complete();
+    await saving;
+
+    expect(container.read(downloadsProvider).value!.saved, contains(12));
+    expect(adapter.receiveTimeouts, {
+      0: const Duration(minutes: 2),
+      1: const Duration(seconds: 30),
+      2: const Duration(seconds: 30),
+    });
   });
 
   test('a page the connection dropped is tried again, and the copy is '
@@ -1121,9 +1161,9 @@ void main() {
     expect(mine.read(downloadsProvider).value!.awaitingResume, isEmpty);
   });
 
-  /// Starts chapter 12 with page 0 landed and its progress write held, and
-  /// pages 1 and 2 held at the server: an attempt that cannot end until the
-  /// test lets the write go, whatever is cancelled meanwhile (#145).
+  /// Starts chapter 12 with pages 0 and 1 landed and page 1's progress write
+  /// held, and page 2 held at the server: an attempt that cannot end until
+  /// the test lets the write go, whatever is cancelled meanwhile (#145).
   Future<({Completer<void> write, Future<void> saving})> beginHeld(
     ProviderContainer container,
     _HeldWriteService service,
@@ -1131,11 +1171,13 @@ void main() {
     await container.read(downloadsProvider.future);
     adapter
       ..gate = Completer<void>().future
-      ..holdPages = {1, 2};
-    final write = service.holdNextWrite();
+      ..holdPages = {2};
+    final write = service.holdWriteWhere(
+      (records) => records[12]?.completedPages == 2,
+    );
     final saving = container.read(downloadsProvider.notifier).save(_chapter);
     await _waitFor(() => service.holding);
-    await _waitFor(() => adapter.activeChapterRequests[12] == 2);
+    await _waitFor(() => adapter.activeChapterRequests[12] == 1);
     return (write: write, saving: saving);
   }
 
