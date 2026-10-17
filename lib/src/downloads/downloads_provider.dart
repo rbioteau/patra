@@ -731,6 +731,12 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
     _records[id] = queued.copyWith(status: DownloadQueueStatus.downloading);
     await _persist();
     _writeState();
+    // Whether this attempt is still the chapter's own. One the app paused can
+    // end only after the app is back and has sent the copy on again — iOS
+    // freezes the isolate with a page or queue write still pending — and by
+    // then a newer attempt owns the record, the token and the waiter. What
+    // the old one has to say about the copy is no longer true (#145).
+    bool ours() => identical(_cancelTokens[id], cancelToken);
 
     try {
       final saved = await _service.download(
@@ -738,7 +744,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
         chapter: queued.request,
         onProgress: (completedPages, totalPages) async {
           final current = _records[id];
-          if (current == null || !current.isInFlight) return;
+          if (!ours() || current == null || !current.isInFlight) return;
           _records[id] = current.copyWith(
             completedPages: completedPages,
             totalPages: totalPages,
@@ -757,6 +763,7 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       await _persist();
       _writeState();
     } on Object catch (error) {
+      if (!ours()) return;
       final current = _records[id] ?? queued;
       final cancelled =
           error is DioException && error.type == DioExceptionType.cancel;
@@ -787,9 +794,11 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
       await _persist();
       _writeState();
     } finally {
-      _cancelTokens.remove(id);
-      _userCancelled.remove(id);
-      _complete(id);
+      if (ours()) {
+        _cancelTokens.remove(id);
+        _userCancelled.remove(id);
+        _complete(id);
+      }
       _drain();
     }
   }
