@@ -201,6 +201,35 @@ SignIn _signInAs(Profile profile) =>
       apiKey: profile.apiKey,
     );
 
+/// Holds the next queue write it is asked for until the test lets it go.
+///
+/// That write is awaited inside a page worker — a page landing reports its
+/// progress — and the copy's attempt cannot end until every worker has, so
+/// while it is held the attempt the app has just paused cannot reach its own
+/// outcome. That is an isolate iOS froze with a write still pending, which
+/// thaws only once the app is back in the foreground (#145).
+class _HeldWriteService extends DownloadsService {
+  _HeldWriteService({required super.root, required super.profileId});
+
+  Completer<void>? _hold;
+  bool holding = false;
+
+  /// Holds the next queue write; complete the returned completer to let it go.
+  Completer<void> holdNextWrite() => _hold = Completer<void>();
+
+  @override
+  Future<void> writeQueueAsynchronously(
+    Map<int, DownloadQueueRecord> records,
+  ) async {
+    if (_hold case final hold?) {
+      _hold = null;
+      holding = true;
+      await hold.future;
+    }
+    return super.writeQueueAsynchronously(records);
+  }
+}
+
 ProviderContainer _downloadsContainer(
   Directory root,
   _KavitaLikeAdapter adapter, {
@@ -208,6 +237,7 @@ ProviderContainer _downloadsContainer(
   String profileId = _profileId,
   Profile? session,
   bool launching = true,
+  DownloadsService? service,
 }) {
   final client = KavitaClient(
     baseUrl: 'http://kavita.test',
@@ -222,7 +252,7 @@ ProviderContainer _downloadsContainer(
     overrides: [
       kavitaClientProvider.overrideWithValue(client),
       downloadsServiceProvider.overrideWithValue(
-        DownloadsService(root: root, profileId: profileId),
+        service ?? DownloadsService(root: root, profileId: profileId),
       ),
       // A session, for the tests about a profile being left and entered
       // again: everything a real one needs to be written down is the
@@ -1027,6 +1057,108 @@ void main() {
     // stands between the reader and their batch.
     expect(adapter.requestedPages, [1, 2]);
     expect(mine.read(downloadsProvider).value!.awaitingResume, isEmpty);
+  });
+
+  /// Starts chapter 12 with page 0 landed and its progress write held, and
+  /// pages 1 and 2 held at the server: an attempt that cannot end until the
+  /// test lets the write go, whatever is cancelled meanwhile (#145).
+  Future<({Completer<void> write, Future<void> saving})> beginHeld(
+    ProviderContainer container,
+    _HeldWriteService service,
+  ) async {
+    await container.read(downloadsProvider.future);
+    adapter
+      ..gate = Completer<void>().future
+      ..holdPages = {1, 2};
+    final write = service.holdNextWrite();
+    final saving = container.read(downloadsProvider.notifier).save(_chapter);
+    await _waitFor(() => service.holding);
+    await _waitFor(() => adapter.activeChapterRequests[12] == 2);
+    return (write: write, saving: saving);
+  }
+
+  test('an attempt the app paused never speaks for the one that resumed '
+      'after it', () async {
+    final service = _HeldWriteService(root: root, profileId: _profileId);
+    final mine = _downloadsContainer(
+      root,
+      adapter,
+      session: _profile,
+      service: service,
+    );
+    addTearDown(mine.dispose);
+    final paused = await beginHeld(mine, service);
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+
+    // Back in the foreground before the paused attempt has ended: the copy
+    // goes on, and its pages are held so it is still on its way when the
+    // paused attempt finally does.
+    final resumedGate = Completer<void>();
+    adapter
+      ..chapterGates[12] = resumedGate.future
+      ..gate = null
+      ..holdPages = null
+      ..requestedPages.clear();
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
+    await _waitFor(() => adapter.requestedPages.isNotEmpty);
+    paused.write.complete();
+    await pumpEventQueue();
+
+    expect(
+      mine.read(downloadRecordProvider(12))?.status,
+      DownloadQueueStatus.downloading,
+      reason: 'the copy is on its way; nothing about it was interrupted',
+    );
+
+    // The attempt still running is still the one the queue counts: three
+    // more copies are not four on their way at once.
+    for (final id in [21, 22, 23]) {
+      adapter.chapterGates[id] = resumedGate.future;
+    }
+    final others = [
+      for (final id in [21, 22, 23])
+        mine.read(downloadsProvider.notifier).save(_chapterWithId(id)),
+    ];
+    await pumpEventQueue();
+    expect(adapter.maxActiveChapters, maxConcurrentChapterDownloads);
+
+    resumedGate.complete();
+    await Future.wait([paused.saving, ...others]);
+    await _waitFor(
+      () => mine.read(downloadsProvider).value?.saved.containsKey(12) ?? false,
+    );
+  });
+
+  test('an attempt the app paused never rewords the copy that finished '
+      'after it', () async {
+    final service = _HeldWriteService(root: root, profileId: _profileId);
+    final mine = _downloadsContainer(
+      root,
+      adapter,
+      session: _profile,
+      service: service,
+    );
+    addTearDown(mine.dispose);
+    final paused = await beginHeld(mine, service);
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.paused);
+
+    adapter
+      ..gate = null
+      ..holdPages = null;
+    mine.read(appLifecycleProvider.notifier).report(AppLifecycleState.resumed);
+    await _waitFor(
+      () =>
+          mine.read(downloadRecordProvider(12))?.status ==
+          DownloadQueueStatus.saved,
+    );
+    paused.write.complete();
+    await paused.saving;
+    await pumpEventQueue();
+
+    expect(
+      mine.read(downloadRecordProvider(12))?.status,
+      DownloadQueueStatus.saved,
+    );
   });
 
   test('a pause the reader made survives the app going away', () async {
