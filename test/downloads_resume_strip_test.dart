@@ -137,7 +137,9 @@ void main() {
       () => container.read(downloadsProvider).value?.saved.length == 2,
     );
 
-    expect(server.requested, [0, 1, 2, 0, 1, 2]);
+    // Every page of both, once each: the two run side by side, each asking
+    // for its first page alone, so the order is theirs to interleave.
+    expect(server.requested, unorderedEquals([0, 1, 2, 0, 1, 2]));
     expect(
       container.read(downloadsProvider).value!.saved.keys,
       containsAll([12, 13]),
