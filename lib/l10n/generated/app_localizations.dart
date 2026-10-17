@@ -848,6 +848,24 @@ abstract class AppLocalizations {
   /// **'Could not finish'**
   String get downloadsFailed;
 
+  /// What a copy that failed because the server did not answer in time says, beside its Retry control
+  ///
+  /// In en, this message translates to:
+  /// **'The server took too long to answer'**
+  String get downloadsFailedTooSlow;
+
+  /// What a copy that failed because the server refused or broke on it says, beside its Retry control. 'It' is the chapter, volume, issue or book: the unit is left unnamed on purpose
+  ///
+  /// In en, this message translates to:
+  /// **'The server could not provide it'**
+  String get downloadsFailedNotProvided;
+
+  /// What a copy that failed because the device was full says, beside its Retry control
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough space left on the device'**
+  String get downloadsFailedNoRoom;
+
   /// What a copy that stopped deliberately says — the app left the foreground, the reader left their profile, or the reader paused it themselves. It keeps the pages it has, and the tap sends it on again
   ///
   /// In en, this message translates to:

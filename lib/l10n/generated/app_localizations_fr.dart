@@ -498,6 +498,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get downloadsFailed => 'N\'a pas pu finir';
 
   @override
+  String get downloadsFailedTooSlow =>
+      'Le serveur a mis trop de temps à répondre';
+
+  @override
+  String get downloadsFailedNotProvided => 'Le serveur n\'a pas pu le fournir';
+
+  @override
+  String get downloadsFailedNoRoom => 'Plus assez de place sur l\'appareil';
+
+  @override
   String get downloadsPaused => 'En pause';
 
   @override

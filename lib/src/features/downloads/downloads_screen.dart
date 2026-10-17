@@ -260,6 +260,9 @@ class _CopyRow extends ConsumerWidget {
         downloadRecordProvider(chapterId).select((record) => record?.status),
       ),
       l10n,
+      failure: ref.watch(
+        downloadRecordProvider(chapterId).select((record) => record?.failure),
+      ),
     );
     final tablet = isTabletLayout(context);
     // A copy of a volume with no chapter breakdown was stored before the

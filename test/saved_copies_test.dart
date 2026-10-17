@@ -196,6 +196,7 @@ class _QueueScreenNotifier extends DownloadsNotifier {
       priority: 3,
       totalPages: 4,
       batchId: 10,
+      failure: DownloadFailureCause.tooSlow,
     ),
   };
 
@@ -475,6 +476,22 @@ void main() {
     await tester.scrollUntilVisible(find.text('SAVED'), 200);
     expect(find.text('SAVED'), findsOneWidget);
     expect(find.text('Dune Messiah'), findsOneWidget);
+  });
+
+  testWidgets('a copy that could not finish says what stopped it', (
+    tester,
+  ) async {
+    // A stop that says only that it stopped cannot tell anyone whether the
+    // retry beside it is worth the tap (#145).
+    await _pumpDownloads(
+      tester,
+      _room(),
+      _BookServer(),
+      downloadsNotifier: _QueueScreenNotifier(),
+    );
+
+    expect(find.text('The server took too long to answer'), findsOneWidget);
+    expect(find.text('Could not finish'), findsNothing);
   });
 
   testWidgets('a paused copy is listed as paused, not as missing', (

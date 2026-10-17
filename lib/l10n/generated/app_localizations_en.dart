@@ -497,6 +497,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadsFailed => 'Could not finish';
 
   @override
+  String get downloadsFailedTooSlow => 'The server took too long to answer';
+
+  @override
+  String get downloadsFailedNotProvided => 'The server could not provide it';
+
+  @override
+  String get downloadsFailedNoRoom => 'Not enough space left on the device';
+
+  @override
   String get downloadsPaused => 'Paused';
 
   @override

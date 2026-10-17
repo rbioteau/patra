@@ -532,6 +532,18 @@
   "@downloadsFailed": {
     "description": "What a copy whose fetch was refused or failed says, beside its Retry control"
   },
+  "downloadsFailedTooSlow": "The server took too long to answer",
+  "@downloadsFailedTooSlow": {
+    "description": "What a copy that failed because the server did not answer in time says, beside its Retry control"
+  },
+  "downloadsFailedNotProvided": "The server could not provide it",
+  "@downloadsFailedNotProvided": {
+    "description": "What a copy that failed because the server refused or broke on it says, beside its Retry control. 'It' is the chapter, volume, issue or book: the unit is left unnamed on purpose"
+  },
+  "downloadsFailedNoRoom": "Not enough space left on the device",
+  "@downloadsFailedNoRoom": {
+    "description": "What a copy that failed because the device was full says, beside its Retry control"
+  },
   "downloadsPaused": "Paused",
   "@downloadsPaused": {
     "description": "What a copy that stopped deliberately says — the app left the foreground, the reader left their profile, or the reader paused it themselves. It keeps the pages it has, and the tap sends it on again"

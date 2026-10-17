@@ -252,6 +252,43 @@ enum DownloadQueueStatus {
   saved,
 }
 
+/// What stopped a copy that failed, in the terms a reader can act on — kept
+/// with it, because a stop that says only that it stopped cannot tell anyone
+/// whether trying again is worth it (#145). A failure with none is one written
+/// before causes were kept, or stopped by something none of these name.
+enum DownloadFailureCause {
+  /// The server took longer to answer than the app would wait.
+  tooSlow,
+
+  /// The server could not be reached at all.
+  unreachable,
+
+  /// The server answered, and the answer was not the page: it refused it, or
+  /// broke trying. Either way it did not give the page, and the reader has
+  /// no use for telling a 404 from a 500.
+  notProvided,
+
+  /// The device had no room left to write the page.
+  noRoom;
+
+  /// The cause [error] names, or null where it names none of them.
+  static DownloadFailureCause? of(Object error) => switch (error) {
+    DioException(
+      type: DioExceptionType.receiveTimeout || DioExceptionType.sendTimeout,
+    ) =>
+      tooSlow,
+    DioException(
+      type: DioExceptionType.connectionError ||
+          DioExceptionType.connectionTimeout,
+    ) =>
+      unreachable,
+    DioException(type: DioExceptionType.badResponse) => notProvided,
+    // ENOSPC, on every platform the app runs on.
+    FileSystemException(osError: OSError(errorCode: 28)) => noRoom,
+    _ => null,
+  };
+}
+
 /// One chapter's durable download state. The request is enough to retry it;
 /// [saved] is the finished copy, where one exists independently of the current
 /// attempt (a refresh can fail without spending the copy it was replacing).
@@ -283,6 +320,7 @@ class DownloadQueueRecord {
     this.totalPages = 0,
     this.saved,
     this.batchId,
+    this.failure,
   });
 
   factory DownloadQueueRecord.completed(
@@ -311,6 +349,9 @@ class DownloadQueueRecord {
   /// that request is done while its remaining chapters are still running.
   final int? batchId;
 
+  /// What stopped this copy, where it [DownloadQueueStatus.failed].
+  final DownloadFailureCause? failure;
+
   double get progress =>
       totalPages == 0 ? 0 : (completedPages / totalPages).clamp(0.0, 1.0);
 
@@ -327,6 +368,7 @@ class DownloadQueueRecord {
     SavedChapter? saved,
     int? batchId,
     bool clearSaved = false,
+    DownloadFailureCause? failure,
   }) => DownloadQueueRecord(
     request: request ?? this.request,
     status: status ?? this.status,
@@ -335,6 +377,9 @@ class DownloadQueueRecord {
     totalPages: totalPages ?? this.totalPages,
     saved: clearSaved ? null : saved ?? this.saved,
     batchId: batchId ?? this.batchId,
+    // A cause belongs to the failure it explains: a copy that moves on to any
+    // other state leaves it behind, unless it moves on to another failure.
+    failure: status == null ? failure ?? this.failure : failure,
   );
 
   Map<String, dynamic> toJson() => {
@@ -345,6 +390,7 @@ class DownloadQueueRecord {
     'totalPages': totalPages,
     'saved': saved?.toJson(),
     'batchId': batchId,
+    'failure': failure?.name,
   };
 
   static DownloadQueueRecord? fromJson(Object? json) {
@@ -367,6 +413,9 @@ class DownloadQueueRecord {
       totalPages: json['totalPages'] as int? ?? 0,
       saved: SavedChapter.fromJson(json['saved']),
       batchId: json['batchId'] as int?,
+      failure: DownloadFailureCause.values
+          .where((one) => one.name == json['failure'])
+          .firstOrNull,
     );
   }
 }

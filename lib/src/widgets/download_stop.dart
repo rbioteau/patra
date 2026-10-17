@@ -34,28 +34,38 @@ class DownloadStop {
   final Color color;
 
   /// Null where nothing stopped: a copy that is on its way, one that is here,
-  /// or one nobody asked for.
-  static DownloadStop? of(DownloadQueueStatus? status, AppLocalizations l10n) =>
-      switch (status) {
-        DownloadQueueStatus.paused ||
-        DownloadQueueStatus.pausedByUser => DownloadStop(
-          state: l10n.downloadsPaused,
-          action: l10n.resumeDownload,
-          icon: Icons.play_arrow,
-          color: patraOffline,
-        ),
-        DownloadQueueStatus.failed => DownloadStop(
-          state: l10n.downloadsFailed,
-          action: l10n.retry,
-          icon: Icons.refresh,
-          color: patraDanger,
-        ),
-        DownloadQueueStatus.interrupted => DownloadStop(
-          state: l10n.downloadsStoppedShort,
-          action: l10n.retry,
-          icon: Icons.refresh,
-          color: patraDanger,
-        ),
-        _ => null,
-      };
+  /// or one nobody asked for. A failure is named by its [failure] where one
+  /// was kept, since that is what says whether the retry is worth the tap.
+  static DownloadStop? of(
+    DownloadQueueStatus? status,
+    AppLocalizations l10n, {
+    DownloadFailureCause? failure,
+  }) => switch (status) {
+    DownloadQueueStatus.paused ||
+    DownloadQueueStatus.pausedByUser => DownloadStop(
+      state: l10n.downloadsPaused,
+      action: l10n.resumeDownload,
+      icon: Icons.play_arrow,
+      color: patraOffline,
+    ),
+    DownloadQueueStatus.failed => DownloadStop(
+      state: switch (failure) {
+        DownloadFailureCause.tooSlow => l10n.downloadsFailedTooSlow,
+        DownloadFailureCause.unreachable => l10n.serverUnreachable,
+        DownloadFailureCause.notProvided => l10n.downloadsFailedNotProvided,
+        DownloadFailureCause.noRoom => l10n.downloadsFailedNoRoom,
+        null => l10n.downloadsFailed,
+      },
+      action: l10n.retry,
+      icon: Icons.refresh,
+      color: patraDanger,
+    ),
+    DownloadQueueStatus.interrupted => DownloadStop(
+      state: l10n.downloadsStoppedShort,
+      action: l10n.retry,
+      icon: Icons.refresh,
+      color: patraDanger,
+    ),
+    _ => null,
+  };
 }
