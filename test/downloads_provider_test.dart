@@ -240,7 +240,11 @@ class _HeldWriteService extends DownloadsService {
 
   bool Function(Map<int, DownloadQueueRecord> records)? _when;
   final _hold = Completer<void>();
+  final _written = Completer<void>();
   bool holding = false;
+
+  /// Completes once the held write has been let go and has reached the disk.
+  Future<void> get written => _written.future;
 
   /// Holds the first queue write whose records satisfy [when]; complete the
   /// returned completer to let it go.
@@ -259,6 +263,9 @@ class _HeldWriteService extends DownloadsService {
       _when = null;
       holding = true;
       await _hold.future;
+      await super.writeQueueAsynchronously(records);
+      _written.complete();
+      return;
     }
     return super.writeQueueAsynchronously(records);
   }
@@ -1098,6 +1105,12 @@ void main() {
       await _waitFor(
         () => (reading.read(downloadRecordProvider(12))?.progress ?? 0) > 0,
       );
+      // And the held pages asked for: the first page goes alone, so a pause
+      // landing before the rest are out would stop requests still on their
+      // way to the server rather than ones waiting at it.
+      await _waitFor(
+        () => adapter.activeChapterRequests[12] == holdPages.length,
+      );
     }
     return (gate: gate, saving: saving);
   }
@@ -1256,7 +1269,7 @@ void main() {
           DownloadQueueStatus.saved,
     );
     paused.write.complete();
-    await paused.saving;
+    await service.written;
     await pumpEventQueue();
 
     expect(
