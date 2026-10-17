@@ -789,7 +789,12 @@ class DownloadsNotifier extends AsyncNotifier<DownloadsState> {
           _ when cancelled => DownloadQueueStatus.interrupted,
           _ => DownloadQueueStatus.failed,
         };
-        _records[id] = current.copyWith(status: stopped);
+        _records[id] = current.copyWith(
+          status: stopped,
+          failure: stopped == DownloadQueueStatus.failed
+              ? DownloadFailureCause.of(error)
+              : null,
+        );
       }
       await _persist();
       _writeState();

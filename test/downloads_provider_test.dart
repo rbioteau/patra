@@ -42,6 +42,10 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
   /// a moment.
   final dropPage = <int, int>{};
 
+  /// Whether every page request waits out its timeout: a server too busy to
+  /// answer, as opposed to one that cannot be reached.
+  bool timesOut = false;
+
   /// How long each page request was allowed to wait for its answer, by page.
   final receiveTimeouts = <int, Duration?>{};
   final requestedPages = <int>[];
@@ -101,6 +105,12 @@ class _KavitaLikeAdapter implements HttpClientAdapter {
     final page = int.parse('${options.queryParameters['page']}');
     requestedPages.add(page);
     receiveTimeouts[page] = options.receiveTimeout;
+    if (timesOut) {
+      throw DioException.receiveTimeout(
+        timeout: options.receiveTimeout ?? Duration.zero,
+        requestOptions: options,
+      );
+    }
     if (page == failOnPage) {
       return ResponseBody.fromBytes(const [], failStatus);
     }
@@ -839,6 +849,78 @@ void main() {
     expect(adapter.requestedPages.where((page) => page == 1), hasLength(1));
   });
 
+  test('a copy the server was too slow for says so', () async {
+    adapter.timesOut = true;
+
+    await container.read(downloadsProvider.notifier).save(_chapter);
+
+    final record = container.read(downloadRecordProvider(12))!;
+    expect(record.status, DownloadQueueStatus.failed);
+    expect(record.failure, DownloadFailureCause.tooSlow);
+  });
+
+  test('a copy the server could not be reached for says so', () async {
+    adapter.unreachable = true;
+
+    await container.read(downloadsProvider.notifier).save(_chapter);
+
+    expect(
+      container.read(downloadRecordProvider(12))?.failure,
+      DownloadFailureCause.unreachable,
+    );
+  });
+
+  test('a copy the server could not provide says so, whether it refused or '
+      'broke', () async {
+    adapter
+      ..failOnPage = 1
+      ..failStatus = 404;
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    adapter.failStatus = 500;
+    await container.read(downloadsProvider.notifier).save(_otherChapter);
+
+    expect(
+      container.read(downloadRecordProvider(12))?.failure,
+      DownloadFailureCause.notProvided,
+    );
+    expect(
+      container.read(downloadRecordProvider(13))?.failure,
+      DownloadFailureCause.notProvided,
+    );
+  });
+
+  test('a failure written before its cause was kept reads as one that says '
+      'none', () async {
+    adapter.timesOut = true;
+    await container.read(downloadsProvider.notifier).save(_chapter);
+    container.dispose();
+    await pumpEventQueue();
+    final queue = root
+        .listSync(recursive: true)
+        .whereType<File>()
+        .singleWhere((file) => file.path.endsWith('queue.json'));
+    final json = jsonDecode(queue.readAsStringSync());
+    void forget(Object? node) {
+      if (node is Map) {
+        node.remove('failure');
+        node.values.forEach(forget);
+      } else if (node is List) {
+        node.forEach(forget);
+      }
+    }
+
+    forget(json);
+    queue.writeAsStringSync(jsonEncode(json));
+
+    final restarted = _downloadsContainer(root, adapter);
+    addTearDown(restarted.dispose);
+    await restarted.read(downloadsProvider.future);
+
+    final record = restarted.read(downloadRecordProvider(12))!;
+    expect(record.status, DownloadQueueStatus.failed);
+    expect(record.failure, isNull);
+  });
+
   test('a failed download is still failed after a restart', () async {
     final failing = _downloadsContainer(root, adapter, refuses: true);
     await failing.read(downloadsProvider.future);
@@ -851,6 +933,11 @@ void main() {
     final state = await restarted.read(downloadsProvider.future);
     expect(state.failed, contains(12));
     expect(state.inFlight, isEmpty);
+    expect(
+      restarted.read(downloadRecordProvider(12))?.failure,
+      DownloadFailureCause.notProvided,
+      reason: 'what stopped it is written down with it',
+    );
     final otherProfile = _downloadsContainer(
       root,
       adapter,

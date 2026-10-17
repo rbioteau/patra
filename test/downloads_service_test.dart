@@ -774,6 +774,25 @@ void main() {
   // nothing left to lay the words out. And a copy is a directory (#129): each
   // page as the server wrote it, beside the pictures it names, so a stored
   // page is the same page a streamed one is.
+  test('a device out of room is a failure that says so', () {
+    // ENOSPC: what the OS answers a write with when the disk is full, which
+    // a test cannot cause and a reader can do nothing about but make room.
+    const full = FileSystemException(
+      'Cannot write file',
+      '/downloads/12/staging/0',
+      OSError('No space left on device', 28),
+    );
+
+    expect(DownloadFailureCause.of(full), DownloadFailureCause.noRoom);
+    expect(
+      DownloadFailureCause.of(
+        const FileSystemException('Cannot open file', '/x', OSError('', 13)),
+      ),
+      isNull,
+      reason: 'a file the app may not write is not a disk that is full',
+    );
+  });
+
   group('saving a book', () {
     test(
       'the copy is the pages the server rendered, beside their pictures',
